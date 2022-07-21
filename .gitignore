@@ -1,0 +1,8 @@
+.idea
+superpoint_transformer/partition/parallel-cut-pursuit
+superpoint_transformer/partition/grid-graph
+superpoint_transformer/partition/ply_c/build
+*.pyc
+*DS_Store*
+*.vscode
+*.so
