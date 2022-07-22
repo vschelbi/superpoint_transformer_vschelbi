@@ -93,22 +93,24 @@ pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geo
 pip install plyfile
 pip install h5py
 
-
-
-#conda install -c pytorch faiss-gpu cudatoolkit=10.2
-#pip install faiss-gpu cudatoolkit==10.2
-#pip install pykeops
-#pip install flann
-#pip install grispy
-#pip install pytorch3d
-
-
 #*********************************
 
+echo
+echo "___________________ FRNN ___________________"
+echo
+git clone --recursive https://github.com/lxxue/FRNN.git superpoint_transformer/partition/FRNN
+
+# install a prefix_sum routine first
+cd superpoint_transformer/partition/FRNN/external/prefix_sum
+python setup.py install
+
+# install FRNN
+cd ../../ # back to the {FRNN} directory
+python setup.py install
+cd ../../
 
 
-
-
+echo
 echo "________________ Point Utils _______________"
 echo
 conda install -c anaconda boost -y
@@ -121,6 +123,8 @@ cmake . -DPYTHON_LIBRARY=$CONDA_PREFIX/lib/libpython$PYTHON.so -DPYTHON_INCLUDE_
 make
 cd ../../..
 
+
+echo
 echo "________________ Cut-Pursuit _______________"
 echo
 
