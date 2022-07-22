@@ -2,11 +2,11 @@
 superpoint_transformer/partition/parallel-cut-pursuit
 superpoint_transformer/partition/grid-graph
 superpoint_transformer/partition/FRNN
-superpoint_transformer/partition/ply_c/build
-superpoint_transformer/partition/ply_c/utils/CmakeFiles
-superpoint_transformer/partition/ply_c/utils/cmake_install.cmake
-superpoint_transformer/partition/ply_c/utils/Makefile
-superpoint_transformer/partition/ply_c/utils/CMakeCache.txt
+superpoint_transformer/partition/point_utils/build
+superpoint_transformer/partition/point_utils/utils/CmakeFiles
+superpoint_transformer/partition/point_utils/utils/cmake_install.cmake
+superpoint_transformer/partition/point_utils/utils/Makefile
+superpoint_transformer/partition/point_utils/utils/CMakeCache.txt
 *.pyc
 *DS_Store*
 *.vscode
