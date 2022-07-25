@@ -63,7 +63,7 @@ def purge(dir, pattern):
 ################################################
 
 # Move the appropriate working directory
-os.chdir(osp.join(PARTITION_DIR, './grid-graph/python'))
+os.chdir(osp.join(PARTITION_DIR, 'grid_graph/python'))
 name = "grid_graph"
 if not osp.exists("bin"):
     os.mkdir("bin")
@@ -97,7 +97,7 @@ except FileNotFoundError:
 ################################################
 
 # Move the appropriate working directory
-os.chdir(osp.join(PARTITION_DIR, './parallel-cut-pursuit/python'))
+os.chdir(osp.join(PARTITION_DIR, 'parallel_cut_pursuit/python'))
 name = "cp_kmpp_d0_dist_cpy"
 
 if not osp.exists("bin"):
