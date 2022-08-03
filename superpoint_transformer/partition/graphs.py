@@ -86,18 +86,23 @@ def compute_sp_graph(xyz, d_max, in_component, components, labels, n_labels):
     interface = in_component[tri.vertices[:, 0]] != in_component[tri.vertices[:, 1]]
     edg1 = np.vstack((tri.vertices[interface, 0], tri.vertices[interface, 1]))
     edg1r = np.vstack((tri.vertices[interface, 1], tri.vertices[interface, 0]))
+
     interface = in_component[tri.vertices[:, 0]] != in_component[tri.vertices[:, 2]]
     edg2 = np.vstack((tri.vertices[interface, 0], tri.vertices[interface, 2]))
     edg2r = np.vstack((tri.vertices[interface, 2], tri.vertices[interface, 0]))
+
     interface = in_component[tri.vertices[:, 0]] != in_component[tri.vertices[:, 3]]
     edg3 = np.vstack((tri.vertices[interface, 0], tri.vertices[interface, 3]))
     edg3r = np.vstack((tri.vertices[interface, 3], tri.vertices[interface, 0]))
+
     interface = in_component[tri.vertices[:, 1]] != in_component[tri.vertices[:, 2]]
     edg4 = np.vstack((tri.vertices[interface, 1], tri.vertices[interface, 2]))
     edg4r = np.vstack((tri.vertices[interface, 2], tri.vertices[interface, 1]))
+
     interface = in_component[tri.vertices[:, 1]] != in_component[tri.vertices[:, 3]]
     edg5 = np.vstack((tri.vertices[interface, 1], tri.vertices[interface, 3]))
     edg5r = np.vstack((tri.vertices[interface, 3], tri.vertices[interface, 1]))
+
     interface = in_component[tri.vertices[:, 2]] != in_component[tri.vertices[:, 3]]
     edg6 = np.vstack((tri.vertices[interface, 2], tri.vertices[interface, 3]))
     edg6r = np.vstack((tri.vertices[interface, 3], tri.vertices[interface, 2]))
@@ -147,8 +152,7 @@ def compute_sp_graph(xyz, d_max, in_component, components, labels, n_labels):
     for i_com in range(0, n_com):
         comp = components[i_com]
         if has_labels and not label_hist:
-            graph["sp_labels"][i_com, :] = np.histogram(labels[comp]
-                , bins=[float(i)-0.5 for i in range(0, n_labels + 2)])[0]
+            graph["sp_labels"][i_com, :] = np.histogram(labels[comp], bins=[float(i)-0.5 for i in range(0, n_labels + 2)])[0]
         if has_labels and label_hist:
             graph["sp_labels"][i_com, :] = sum(labels[comp,:])
         graph["sp_point_count"][i_com] = len(comp)

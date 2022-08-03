@@ -1,7 +1,23 @@
-import os
 import re
 import subprocess
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
+
+#-----------------------------------------------------------------------
+
+# voxel = 5
+voxel = 0.05
+radius = 1
+# radius = 10
+k_min = 5
+# k_min = 2
+k_feat = 30
+# k_feat = 5
+k_adjacency = 10
+# k_adjacency = 3
+lambda_edge_weight = 1
+
+#-----------------------------------------------------------------------
 
 def available_cpu_count():
     """ Number of available virtual or physical CPUs on this system, i.e.
@@ -115,32 +131,34 @@ def available_cpu_count():
 
     raise Exception('Can not determine number of CPUs on this system')
 
-print(available_cpu_count())
+print(f'CPUs available: {available_cpu_count()}')
 
 import numpy as np
+import torch
 import sys, os
-import matplotlib.image as mpimg
-import argparse
-import ast
 
 file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # this is for the .py script but does not work in a notebook
-# file_path = os.path.dirname(os.path.abspath('')) # this is for a notebook
+# file_path = os.path.dirname(os.path.abspath(''))
 sys.path.append(file_path)
 # sys.path.append(os.path.join(file_path, "grid-graph/python/bin"))
 # sys.path.append(os.path.join(file_path, "parallel-cut-pursuit/python/wrappers"))
-
+sys.path.append(os.path.join(file_path, "superpoint_transformer/partition/grid_graph/python/bin"))
+sys.path.append(os.path.join(file_path, "superpoint_transformer/partition/parallel_cut_pursuit/python/wrappers"))
 
 #-----------------------------------------------------------------------
 
-# Data loading
 from time import time
 import glob
-from torch_geometric.data import Data
+from superpoint_transformer.data import Data
 from superpoint_transformer.datasets.kitti360 import read_kitti360_window
 from superpoint_transformer.datasets.kitti360_config import KITTI360_NUM_CLASSES
 
+# DATA_ROOT
+DATA_ROOT = '/media/drobert-admin/DATA2'
+# DATA_ROOT = '/var/data/drobert'
+
 i_window = 0
-all_filepaths = sorted(glob.glob('/media/drobert-admin/DATA2/datasets/kitti360/shared/data_3d_semantics/*/static/*.ply'))
+all_filepaths = sorted(glob.glob(DATA_ROOT + '/datasets/kitti360/shared/data_3d_semantics/*/static/*.ply'))
 filepath = all_filepaths[i_window]
 
 start = time()
@@ -148,203 +166,135 @@ data = read_kitti360_window(filepath, semantic=True, instance=False, remap=True)
 print(f'Loading data {i_window+1}/{len(all_filepaths)}: {time() - start:0.3f}s')
 print(f'Number of loaded points: {data.num_nodes} ({data.num_nodes // 10**6:0.2f}M)')
 
+# Offset labels by 1 to account for unlabelled points -> !!!!!!!!!!!!!!!! IMPORTANT !!!!!!!!!!!!!!!!
+data.y += 1
+KITTI360_NUM_CLASSES += 1
+
 #-----------------------------------------------------------------------
 
-# Voxelization
+from superpoint_transformer.transforms import GridSampling3D
+
 voxel = 0.05
+# voxel = 1
 
-### Pytorch Geometric
-from torch_geometric.nn.pool import voxel_grid
+# GPU
+torch.cuda.synchronize()
+start = time()
+n_in = data.num_nodes
+data = GridSampling3D(size=voxel, bins={'y': KITTI360_NUM_CLASSES})(data.cuda()).cpu()
+torch.cuda.synchronize()
+print(f'Data voxelization at {voxel}m: {time() - start:0.3f}s')
+print(f'Number of sampled points: {data.num_nodes} ({data.num_nodes / 10**6:0.2f}M, {100 * data.num_nodes / n_in:0.1f}%)')
+
+#-----------------------------------------------------------------------
+
+from superpoint_transformer.transforms import search_outliers, search_neighbors
+
+radius = 1
+# radius = 10
+k_min = 5
+k_feat = 30
+k_adjacency = 10
+
+data = data.cuda()
+
+torch.cuda.synchronize()
+start = time()
+data, data_outliers = search_outliers(data, k_min, r_max=radius, recursive=True)
+data_outliers = data_outliers.cpu()
+torch.cuda.synchronize()
+print(f'Outliers search: {time() - start:0.3f}s')
+
+torch.cuda.synchronize()
+start = time()
+data = search_neighbors(data, k_feat, r_max=radius)
+# Make sure all points have k neighbors (no "-1" missing neighbors)
+assert (data.neighbors != -1).all(), "Some points have incomplete neighborhoods, make sure to remove the outliers to avoid this issue."
+torch.cuda.synchronize()
+print(f'Neighbor search: {time() - start:0.3f}s')
+
+#-----------------------------------------------------------------------
+
+# from superpoint_transformer.transforms import compute_pointfeatures
+
+# data = data.cpu()
+# torch.cuda.synchronize()
+
+# start = time()
+# data = compute_pointfeatures(data, pos=True, radius=5, rgb=True, linearity=True, planarity=True, scattering=True, verticality=True, normal=False, length=False, surface=False, volume=False)
+# print(f'Geometric features: {time() - start:0.3f}s')
+
+data.x = torch.cat((data.pos / 5, data.rgb), dim=1)
+data = data.cpu()
+
+#-----------------------------------------------------------------------
+
+from superpoint_transformer.transforms import compute_ajacency_graph
+
+k_adjacency = 10
+lambda_edge_weight = 1
+
 
 start = time()
-data_sub = voxel_grid(data.pos, size=0.1)
-print(f'Data  voxelization at {voxel}m: {time() - start:0.3f}s')
-print(f'Number of sampled points: {data_sub.shape[0]} ({data_sub.shape[0] // 10**6:0.2f}M, {100 * data_sub.shape[0] / data.num_nodes:0.1f}%)')
 
-### TorchPoints3D
-import torch
-import re
-from torch_geometric.nn.pool import voxel_grid
-from torch_cluster import grid_cluster
-from torch_scatter import scatter_mean, scatter_add
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
+data = compute_ajacency_graph(data, k_adjacency, lambda_edge_weight)
 
-MAPPING_KEY = 'mapping_index'
+print(f'Adjacency graph: {time() - start:0.3f}s')
 
-# Label will be the majority label in each voxel
-_INTEGER_LABEL_KEYS = ["y", "instance_labels"]
+#-----------------------------------------------------------------------
 
+from superpoint_transformer.transforms import compute_partition
 
-def group_data(data, cluster=None, unique_pos_indices=None, mode="last", skip_keys=[]):
-    """ Group data based on indices in cluster.
-    The option ``mode`` controls how data gets agregated within each cluster.
-
-    Parameters
-    ----------
-    data : Data
-        [description]
-    cluster : torch.Tensor
-        Tensor of the same size as the number of points in data. Each element is the cluster index of that point.
-    unique_pos_indices : torch.tensor
-        Tensor containing one index per cluster, this index will be used to select features and labels
-    mode : str
-        Option to select how the features and labels for each voxel is computed. Can be ``last`` or ``mean``.
-        ``last`` selects the last point falling in a voxel as the representent, ``mean`` takes the average.
-    skip_keys: list
-        Keys of attributes to skip in the grouping
-    """
-
-    assert mode in ["mean", "last"]
-    if mode == "mean" and cluster is None:
-        raise ValueError("In mean mode the cluster argument needs to be specified")
-    if mode == "last" and unique_pos_indices is None:
-        raise ValueError("In last mode the unique_pos_indices argument needs to be specified")
-
-    num_nodes = data.num_nodes
-    for key, item in data:
-        if bool(re.search("edge", key)):
-            raise ValueError("Edges not supported. Wrong data type.")
-        if key in skip_keys:
-            continue
-
-        if torch.is_tensor(item) and item.size(0) == num_nodes:
-            if mode == "last" or key == "batch" \
-                    or key == SaveOriginalPosId.KEY \
-                    or key == MAPPING_KEY:
-                data[key] = item[unique_pos_indices]
-            elif mode == "mean":
-                is_item_bool = item.dtype == torch.bool
-                if is_item_bool:
-                    item = item.int()
-                if key in _INTEGER_LABEL_KEYS:
-                    item_min = item.min()
-                    item = torch.nn.functional.one_hot(item - item_min)
-                    item = scatter_add(item, cluster, dim=0)
-                    data[key] = item.argmax(dim=-1) + item_min
-                else:
-                    data[key] = scatter_mean(item, cluster, dim=0)
-                if is_item_bool:
-                    data[key] = data[key].bool()
-    return data
-
-
-class SaveOriginalPosId:
-    """ Transform that adds the index of the point to the data object
-    This allows us to track this point from the output back to the input data object
-    """
-
-    KEY = "origin_id"
-
-    def __init__(self, key=None):
-        self.KEY = key if key is not None else self.KEY
-
-    def _process(self, data):
-        if hasattr(data, self.KEY):
-            return data
-
-        setattr(data, self.KEY, torch.arange(0, data.pos.shape[0]))
-        return data
-
-    def __call__(self, data):
-        if isinstance(data, list):
-            data = [self._process(d) for d in data]
-        else:
-            data = self._process(data)
-        return data
-
-    def __repr__(self):
-        return self.__class__.__name__
-
-
-class GridSampling3D:
-    """ Clusters points into voxels with size :attr:`size`.
-    Parameters
-    ----------
-    size: float
-        Size of a voxel (in each dimension).
-    quantize_coords: bool
-        If True, it will convert the points into their associated sparse
-        coordinates within the grid and store the value into a new
-        `coords` attribute.
-    mode: string:
-        The mode can be either `last` or `mean`.
-        If mode is `mean`, all the points and their features within a
-        cell will be averaged. If mode is `last`, one random points per
-        cell will be selected with its associated features.
-    setattr_full_pos: bool
-        If True, the input point positions will be saved into a new
-        'full_pos' attribute. This memory-costly step may reveal
-        necessary for subsequent local feature computation.
-    """
-
-    def __init__(self, size, quantize_coords=False, mode="mean", verbose=False,
-                 setattr_full_pos=False):
-        self._grid_size = size
-        self._quantize_coords = quantize_coords
-        self._mode = mode
-        self._setattr_full_pos = setattr_full_pos
-        if verbose:
-            log.warning(
-                "If you need to keep track of the position of your points, use "
-                "SaveOriginalPosId transform before using GridSampling3D.")
-
-            if self._mode == "last":
-                log.warning(
-                    "The tensors within data will be shuffled each time this "
-                    "transform is applied. Be careful that if an attribute "
-                    "doesn't have the size of num_points, it won't be shuffled")
-
-    def _process(self, data):
-        if self._mode == "last":
-            data = shuffle_data(data)
-
-        full_pos = data.pos
-        coords = torch.round((data.pos) / self._grid_size)
-        if "batch" not in data:
-            cluster = grid_cluster(coords, torch.tensor([1, 1, 1]))
-        else:
-            cluster = voxel_grid(coords, data.batch, 1)
-        cluster, unique_pos_indices = consecutive_cluster(cluster)
-
-        data = group_data(data, cluster, unique_pos_indices, mode=self._mode)
-        if self._quantize_coords:
-            data.coords = coords[unique_pos_indices].int()
-
-        data.grid_size = torch.tensor([self._grid_size])
-
-        # Keep track of the initial full-resolution point cloud for
-        # later use. Typically needed for local features computation.
-        # However, for obvious memory-wary considerations, it is
-        # recommended to delete the 'full_pos' attribute as soon as it
-        # is no longer needed.
-        if self._setattr_full_pos:
-            data.full_pos = full_pos
-
-        return data
-
-    def __call__(self, data):
-        if isinstance(data, list):
-            data = [self._process(d) for d in data]
-        else:
-            data = self._process(data)
-        return data
-
-    def __repr__(self):
-        return "{}(grid_size={}, quantize_coords={}, mode={})".format(
-            self.__class__.__name__, self._grid_size, self._quantize_coords, self._mode
-        )
-
+torch.cuda.synchronize()
 start = time()
-data_sub = GridSampling3D(size=voxel)(data.clone())
-print(f'Data  voxelization at {voxel}m: {time() - start:0.3f}s')
-print(f'Number of sampled points: {data_sub.num_nodes} ({data_sub.num_nodes // 10**6:0.2f}M, {100 * data_sub.num_nodes / data.num_nodes:0.1f}%)')
 
-### Loïc's C implem
-import superpoint_transformer.partition.utils.libpoint_utils as point_utils
+# Parallel cut-pursuit
+# data, data_c = compute_partition(data, 0.5, cutoff=10, verbose=True, iterations=10)
+nag = compute_partition(data, 0.5, cutoff=10, verbose=True, iterations=5)
 
-# WARNING: the pruning must know the number of classes. All labels are
-# offset to account for the -1 unlabeled points !
-start = time()
-xyz, rgb, labels, dump = point_utils.prune(data.pos.float().numpy(), voxel, (data.rgb * 255).byte().numpy(), data.y.byte().numpy() + 1, np.zeros(1, dtype='uint8'), KITTI360_NUM_CLASSES + 1, 0)
-print(f'Data  voxelization at {voxel}m: {time() - start:0.3f}s')
-print(f'Number of sampled points: {xyz.shape[0]} ({xyz.shape[0] // 10**6:0.2f}M, {100 * xyz.shape[0] / data.num_nodes:0.1f}%)')
+torch.cuda.synchronize()
+print(f'Partition num_nodes={data.num_nodes}, num_edges={data.num_edges}: {time() - start:0.3f}s')
+
+#-----------------------------------------------------------------------
+
+from superpoint_transformer.transforms import compute_cluster_graph
+
+nag = compute_cluster_graph(nag, high_node=32, high_edge=64, low=5)
+
+
+#-----------------------------------------------------------------------
+
+from superpoint_transformer.transforms import sample_clusters
+
+# Sample points among the clusters. These will be used to compute
+# cluster geometric features as well as cluster adjacency graph and
+# edge features
+idx_samples, ptr_samples = sample_clusters(
+    data_c, high=32, low=5, pointers=True)
+
+# Compute cluster geometric features
+xyz = data.pos[idx_samples].cpu().numpy()
+nn = np.arange(idx_samples.shape[0]).astype(
+    'uint32')  # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
+nn_ptr = ptr_samples.cpu().numpy().astype(
+    'uint32')  # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
+
+# -***************************************
+xyz = xyz + torch.rand(xyz.shape).numpy() * 1e-5
+
+torch.cuda.synchronize()
+
+print()
+print(f'xyz={xyz.shape}')
+print(f'nn={nn.shape}')
+print(f'nn_ptr={nn_ptr.shape}, max={np.max(nn_ptr)}, nn_ptr[-1]={nn_ptr[-1]}, nn_ptr[0]={nn_ptr[0]}')
+print(f'torch ptr_samples={ptr_samples.shape}, max={ptr_samples.max()}, ptr_samples[-1]={ptr_samples[-1]}, ptr_samples[0]={ptr_samples[0]}')
+print()
+
+# C++ geometric features computation on CPU
+f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, False)
+f = torch.from_numpy(f.astype('float32'))
+
+print('done')
+
+#-----------------------------------------------------------------------

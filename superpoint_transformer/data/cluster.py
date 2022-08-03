@@ -1,0 +1,85 @@
+import torch
+from superpoint_transformer.data.csr import CSRData
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
+
+
+class Cluster(CSRData):
+    """Child class of CSRData to simplify some common operations
+    dedicated to cluster-point indexing.
+    """
+
+    def __init__(self, pointers, points, dense=False):
+        super().__init__(pointers, points, dense=dense, is_index_value=[True])
+
+    @property
+    def points(self):
+        return self.values[0]
+
+    @points.setter
+    def points(self, points):
+        assert points.device == self.device, \
+            f"Points is on {points.device} while self is on {self.device}"
+        self.values[0] = points
+        self.debug()
+
+    def to_dense(self):
+        """Return a 1D tensor of indices converting the CSR-formatted
+        clustering structure in 'self' into a dense format.
+        """
+        # TODO: this assumes 'self.point' is a permutation, shall we
+        #  check this (although it requires sorting) ?
+        device = self.device
+        out = torch.empty((self.num_items,), dtype=torch.long, device=device)
+        cluster_idx = torch.arange(self.num_groups, device=device)
+        out[self.points] = cluster_idx.repeat_interleave(self.sizes)
+        return out
+
+    def select(self, idx, update_sub=True):
+        """Returns a new Cluster with updated clusters and points, which
+        indexes `self` using entries in `idx`. Supports torch and numpy
+        fancy indexing. `idx` must NOT contain duplicate entries, as
+        this would cause ambiguities in super- and sub- indices.
+
+        NB: if `self` belongs to a NAG, calling this function in
+        isolation may break compatibility with point and cluster indices
+        in the other hierarchy levels. If consistency matters, prefer
+        using NAG indexing instead.
+
+        :parameter
+        idx: int or 1D torch.LongTensor or numpy.NDArray
+            Cluster indices to select from 'self'. Must NOT contain
+            duplicates
+        update_sub: bool
+            If True, the point (ie subpoint) indices will also be
+            updated to maintain dense indices. The output will then
+            contain '(idx_sub, sub_super)' which can help apply these
+            changes to maintain consistency with lower hierarchy levels
+            of a NAG.
+
+        :returns cluster, (idx_sub, sub_super)
+        clusters: Cluster
+            indexed cluster
+        idx_sub: torch.LongTensor
+            to be used with 'Data.select()' on the sub-level
+        sub_super: torch.LongTensor
+            to replace 'Data.super_index' on the sub-level
+        """
+        # Normal CSRData indexing, creates a new object in memory
+        cluster = self[idx]
+
+        if not update_sub:
+            return cluster, (None, None)
+
+        # Convert subpoint indices, in case some subpoints have
+        # disappeared. 'idx_sub' is intended to be used with
+        # Data.select() on the level below
+        cluster.points, perm = consecutive_cluster(self.points)
+        idx_sub = self.points[perm]
+
+        # Selecting the subpoints with 'idx_sub' will not be
+        # enough to maintain consistency with the current points. We
+        # also need to update the sub-level's 'Data.super_index', which
+        # can be computed from 'cluster'
+        sub_super = self.to_dense()
+
+        return cluster, (idx_sub, sub_super)

@@ -7,6 +7,7 @@ superpoint_transformer/partition/point_utils/utils/CmakeFiles
 superpoint_transformer/partition/point_utils/utils/cmake_install.cmake
 superpoint_transformer/partition/point_utils/utils/Makefile
 superpoint_transformer/partition/point_utils/utils/CMakeCache.txt
+superpoint_transformer/partition/utils/CMakeFiles
 *.pyc
 *DS_Store*
 *.vscode

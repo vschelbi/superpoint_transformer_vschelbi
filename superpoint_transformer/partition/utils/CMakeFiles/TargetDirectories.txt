@@ -1,3 +1,0 @@
-/home/ign.fr/drobert-admin/projects/superpoint_transformer/superpoint_transformer/partition/utils/CMakeFiles/rebuild_cache.dir
-/home/ign.fr/drobert-admin/projects/superpoint_transformer/superpoint_transformer/partition/utils/CMakeFiles/point_utils.dir
-/home/ign.fr/drobert-admin/projects/superpoint_transformer/superpoint_transformer/partition/utils/CMakeFiles/edit_cache.dir

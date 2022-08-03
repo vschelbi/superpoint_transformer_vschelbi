@@ -3,7 +3,6 @@ import os.path as osp
 import numpy as np
 import torch
 from plyfile import PlyData
-from torch_geometric.data import InMemoryDataset, Data
 from torch.utils.data import Sampler
 import logging
 from sklearn.neighbors import KDTree
@@ -11,6 +10,7 @@ from tqdm.auto import tqdm as tq
 from random import shuffle
 from datetime import datetime
 
+from superpoint_transformer.data import Data
 # import superpoint_transformer.core.data_transform as cT
 # from superpoint_transformer.datasets.base_dataset import BaseDataset
 from superpoint_transformer.datasets.kitti360_config import *

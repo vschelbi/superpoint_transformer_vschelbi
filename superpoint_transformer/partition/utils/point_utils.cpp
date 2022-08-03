@@ -380,84 +380,166 @@ PyObject *  prune(const bpn::ndarray & xyz ,float voxel_size, const bpn::ndarray
 
 
 
-PyObject * compute_geof(const bpn::ndarray & xyz ,const bpn::ndarray & target, int k_nn)
-{//compute the following geometric features (geof) features of a point cloud:
- //linearity planarity scattering verticality
-    std::size_t n_ver = bp::len(xyz);
-    std::vector< std::vector< float > > geof(n_ver, std::vector< float >(4,0));
-    //--- read numpy array data---
-    const uint32_t * target_data = reinterpret_cast<uint32_t*>(target.get_data());
-    const float * xyz_data = reinterpret_cast<float*>(xyz.get_data());
-    std::size_t s_ver = 0;
+PyObject * compute_geometric_features(
+    const bpn::ndarray & xyz_boost, const bpn::ndarray & nn_boost,
+    const bpn::ndarray & nn_ptr_boost, bool verbose)
+{
+    /*
+    Compute the geometric features associated with each point's
+    neighborhood. The following features are computed:
+     - linearity
+     - planarity
+     - scattering
+     - verticality
+     - normal vector
+     - length
+     - surface
+     - volume
+
+    Parameters
+    ----------
+    xyz_boost : bpn::ndarray
+        Array of size (n_points, 3) holding the XYZ coordinates for N
+        points
+    nn_boost : bpn::ndarray
+        Array of size (n_neighbors) holding the points' neighbor indices
+        flattened for CSR format
+    nn_ptr_boost : bpn::ndarray
+        Array of size (n_points + 1) indicating the start and end
+        indices of each point's neighbors in nn_boost
+    verbose: bool
+        Whether computation progress should be printed out
+    */
+
+    // Initialize the features
+    std::size_t n_points = bp::len(nn_ptr_boost) - 1;
+    std::vector<std::vector<float>> features(n_points, std::vector<float>(10, 0));
+
+    // Read numpy array data
+    const float * xyz = reinterpret_cast<float*>(xyz_boost.get_data());
+    const uint32_t * nn = reinterpret_cast<uint32_t*>(nn_boost.get_data());
+    const uint32_t * nn_ptr = reinterpret_cast<uint32_t*>(nn_ptr_boost.get_data());
+
+    // Each point can be treated in parallel
+    std::size_t s_point = 0;
     #pragma omp parallel for schedule(static)
-    for (std::size_t i_ver = 0; i_ver < n_ver; i_ver++)
-    {//each point can be treated in parallell independently
-        //--- compute 3d covariance matrix of neighborhood ---
-        ei::MatrixXf position(k_nn+1,3);
-        std::size_t i_edg = k_nn * i_ver;
-        std::size_t ind_nei;
-        position(0,0) = xyz_data[3 * i_ver];
-        position(0,1) = xyz_data[3 * i_ver + 1];
-        position(0,2) = xyz_data[3 * i_ver + 2];
+    for (std::size_t i_point = 0; i_point < n_points; i_point++)
+    {
+        // Compute the cloud (n_neighbors + 1, 3) matrix holding the
+        // points' neighbors XYZ coordinates. The first row of the
+        // matrix holds the point itself
+        std::size_t k_nn = nn_ptr[i_point + 1] - nn_ptr[i_point];
+        ei::MatrixXf cloud(k_nn + 1, 3);
+
+        // The first row of the matrix holds the point itself
+        cloud(0,0) = xyz[3 * i_point];
+        cloud(0,1) = xyz[3 * i_point + 1];
+        cloud(0,2) = xyz[3 * i_point + 2];
+
+        // Recover the neighbors' XYZ coordinates using nn and xyz
+        std::size_t idx_nei;
         for (std::size_t i_nei = 0; i_nei < k_nn; i_nei++)
         {
-                //add the neighbors to the position matrix
-            ind_nei = target_data[i_edg];
-            position(i_nei+1,0) = xyz_data[3 * ind_nei];
-            position(i_nei+1,1) = xyz_data[3 * ind_nei + 1];
-            position(i_nei+1,2) = xyz_data[3 * ind_nei + 2];
-            i_edg++;
+            // Recover the neighbor's position in the xyz vector
+            idx_nei = nn[nn_ptr[i_point] + i_nei];
+
+            // Recover the corresponding xyz coordinates
+            cloud(i_nei + 1, 0) = xyz[3 * idx_nei];
+            cloud(i_nei + 1, 1) = xyz[3 * idx_nei + 1];
+            cloud(i_nei + 1, 2) = xyz[3 * idx_nei + 2];
         }
-        // compute the covariance matrix
-        ei::MatrixXf centered_position = position.rowwise() - position.colwise().mean();
-        ei::Matrix3f cov = (centered_position.adjoint() * centered_position) / float(k_nn + 1);
+
+        // Compute the (3, 3) covariance matrix
+        ei::MatrixXf centered_cloud = cloud.rowwise() - cloud.colwise().mean();
+        ei::Matrix3f cov =
+            (centered_cloud.adjoint() * centered_cloud) / float(k_nn + 1);
+
+        // Compute the eigenvalues and eigenvectors of the covariance
         ei::EigenSolver<Matrix3f> es(cov);
-        //--- compute the eigen values and vectors---
-        std::vector<float> ev = {es.eigenvalues()[0].real(),es.eigenvalues()[1].real(),es.eigenvalues()[2].real()};
+
+        // Sort the values and vectors in order of increasing eigenvalue
+        std::vector<float> ev = {
+            es.eigenvalues()[0].real(),
+            es.eigenvalues()[1].real(),
+            es.eigenvalues()[2].real()};
         std::vector<int> indices(3);
         std::size_t n(0);
-        std::generate(std::begin(indices), std::end(indices), [&]{ return n++; });
-        std::sort(std::begin(indices),std::end(indices),
-                       [&](int i1, int i2) { return ev[i1] > ev[i2]; } );
-        std::vector<float> lambda = {(std::max(ev[indices[0]],0.f)),
-                                    (std::max(ev[indices[1]],0.f)),
-                                    (std::max(ev[indices[2]],0.f))};
-        std::vector<float> v1 = {es.eigenvectors().col(indices[0])(0).real()
-                               , es.eigenvectors().col(indices[0])(1).real()
-                               , es.eigenvectors().col(indices[0])(2).real()};
-        std::vector<float> v2 = {es.eigenvectors().col(indices[1])(0).real()
-                               , es.eigenvectors().col(indices[1])(1).real()
-                               , es.eigenvectors().col(indices[1])(2).real()};
-        std::vector<float> v3 = {es.eigenvectors().col(indices[2])(0).real()
-                               , es.eigenvectors().col(indices[2])(1).real()
-                               , es.eigenvectors().col(indices[2])(2).real()};
-        //--- compute the dimensionality features---
-        float linearity  = (sqrtf(lambda[0]) - sqrtf(lambda[1])) / sqrtf(lambda[0]);
-        float planarity  = (sqrtf(lambda[1]) - sqrtf(lambda[2])) / sqrtf(lambda[0]);
-        float scattering =  sqrtf(lambda[2]) / sqrtf(lambda[0]);
-        //--- compute the verticality feature---
-        std::vector<float> unary_vector =
-            {lambda[0] * fabsf(v1[0]) + lambda[1] * fabsf(v2[0]) + lambda[2] * fabsf(v3[0])
-            ,lambda[0] * fabsf(v1[1]) + lambda[1] * fabsf(v2[1]) + lambda[2] * fabsf(v3[1])
-            ,lambda[0] * fabsf(v1[2]) + lambda[1] * fabsf(v2[2]) + lambda[2] * fabsf(v3[2])};
-        float norm = sqrt(unary_vector[0] * unary_vector[0] + unary_vector[1] * unary_vector[1]
-                        + unary_vector[2] * unary_vector[2]);
+        std::generate(
+            std::begin(indices),
+            std::end(indices),
+            [&]{ return n++; });
+        std::sort(
+            std::begin(indices),
+            std::end(indices),
+            [&](int i1, int i2) { return ev[i1] > ev[i2]; } );
+        std::vector<float> val = {
+            (std::max(ev[indices[0]],0.f)),
+            (std::max(ev[indices[1]],0.f)),
+            (std::max(ev[indices[2]],0.f))};
+        std::vector<float> v0 = {
+            es.eigenvectors().col(indices[0])(0).real(),
+            es.eigenvectors().col(indices[0])(1).real(),
+            es.eigenvectors().col(indices[0])(2).real()};
+        std::vector<float> v1 = {
+            es.eigenvectors().col(indices[1])(0).real(),
+            es.eigenvectors().col(indices[1])(1).real(),
+            es.eigenvectors().col(indices[1])(2).real()};
+        std::vector<float> v2 = {
+            es.eigenvectors().col(indices[2])(0).real(),
+            es.eigenvectors().col(indices[2])(1).real(),
+            es.eigenvectors().col(indices[2])(2).real()};
+
+        // Compute the dimensionality features. The 1e-3 term is meant
+        // to stabilize the division when the cloud's 3rd eigenvalue is
+        // near 0 (points lie in 1D or 2D)
+        float linearity  = (sqrtf(val[0]) - sqrtf(val[1])) / (sqrtf(val[0]) + 1e-3);
+        float planarity  = (sqrtf(val[1]) - sqrtf(val[2])) / (sqrtf(val[0]) + 1e-3);
+        float scattering =  sqrtf(val[2]) / (sqrtf(val[0]) + 1e-3);
+        float length     = sqrtf(val[3]);
+        float surface    = sqrtf(val[1] * val[2] + 1e-10);
+        float volume     = sqrtf(val[0] * val[1] * val[2] + 1e-10);
+
+        // Compute the verticality
+        std::vector<float> unary_vector = {
+            val[0] * fabsf(v0[0]) + val[1] * fabsf(v1[0]) + val[2] * fabsf(v2[0]),
+            val[0] * fabsf(v0[1]) + val[1] * fabsf(v1[1]) + val[2] * fabsf(v2[1]),
+            val[0] * fabsf(v0[2]) + val[1] * fabsf(v1[2]) + val[2] * fabsf(v2[2])};
+        float norm = sqrt(
+            unary_vector[0] * unary_vector[0]
+            + unary_vector[1] * unary_vector[1]
+            + unary_vector[2] * unary_vector[2]);
         float verticality = unary_vector[2] / norm;
-        //---fill the geof vector---
-        geof[i_ver][0] = linearity;
-        geof[i_ver][1] = planarity;
-        geof[i_ver][2] = scattering;
-        geof[i_ver][3] = verticality;
-        //---progression---
-        s_ver++;//if run in parellel s_ver behavior is udnefined, but gives a good indication of progress
-        if (s_ver % 10000 == 0)
+
+        // Populate the final feature vector
+        features[i_point][0] = linearity;
+        features[i_point][1] = planarity;
+        features[i_point][2] = scattering;
+        features[i_point][3] = verticality;
+        features[i_point][4] = v0[0];
+        features[i_point][5] = v0[1];
+        features[i_point][6] = v0[2];
+        features[i_point][7] = length;
+        features[i_point][8] = surface;
+        features[i_point][9] = volume;
+
+        // Print progress
+        // NB: when in parallel s_point behavior is undefined, but gives
+        // a good indication of progress
+        s_point++;
+        if (s_point % 10000 == 0 && verbose)
         {
-            std::cout << s_ver << "% done          \r" << std::flush;
-            std::cout << ceil(s_ver*100/n_ver) << "% done          \r" << std::flush;
+            std::cout << s_point << "% done          \r" << std::flush;
+            std::cout << ceil(s_point * 100 / n_points) << "% done          \r" << std::flush;
         }
     }
-    std::cout <<  std::endl;
-    return VecvecToArray<float>::convert(geof);
+
+    // Final print to start on a new line
+    if (verbose)
+    {
+        std::cout << std::endl;
+    }
+
+    return VecvecToArray<float>::convert(features);
 }
 
 
@@ -467,12 +549,12 @@ PyObject * random_subgraph(const int n_ver, const bpn::ndarray & source, const b
 
     const int n_edg = bp::len(source);
     const uint32_t * source_data = reinterpret_cast<uint32_t*>(source.get_data());
-    const uint32_t * target_data = reinterpret_cast<uint32_t*>(target.get_data());
+    const uint32_t * neighbors = reinterpret_cast<uint32_t*>(target.get_data());
 
     std::vector<uint8_t> selected_edges(n_edg,0);
     std::vector<uint8_t> selected_vertices(n_ver,0);
 
-    subgraph::random_subgraph(n_ver, n_edg, source_data, target_data, subgraph_size, selected_edges.data(), selected_vertices.data());
+    subgraph::random_subgraph(n_ver, n_edg, source_data, neighbors, subgraph_size, selected_edges.data(), selected_vertices.data());
 
     return to_py_tuple_subgraph::convert(Subgraph_tuple(selected_edges,selected_vertices));
 }
@@ -485,7 +567,7 @@ BOOST_PYTHON_MODULE(libpoint_utils)
     bp::to_python_converter< Custom_tuple, to_py_tuple>();
     Py_Initialize();
     bpn::initialize();
-    def("compute_geof", compute_geof);
+    def("compute_geometric_features", compute_geometric_features);
     def("prune", prune);
     def("random_subgraph", random_subgraph);
 }
