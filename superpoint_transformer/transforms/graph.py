@@ -90,6 +90,8 @@ def _compute_cluster_graph(
     # Heuristic to avoid issues when a cluster sampling is such that
     # it produces singular covariance matrix (eg the sampling only
     # contains the same point repeated multiple times)
+    #TODO: modify sampling to prevent duplicates using
+    # "choice = torch.randperm(num_nodes)[:self.num]" ?
     xyz = xyz + torch.rand(xyz.shape).numpy() * 1e-5
 
     # C++ geometric features computation on CPU

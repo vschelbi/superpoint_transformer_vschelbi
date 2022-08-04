@@ -4,8 +4,7 @@ import os.path as osp
 import plotly
 import plotly.graph_objects as go
 from superpoint_transformer.data import Data, NAG
-from superpoint_transformer.transforms import GridSampling3D
-from torch_geometric.transforms import FixedPoints
+from superpoint_transformer.transforms import GridSampling3D, SaveOriginalPosId
 from torch_scatter import scatter_mean
 
 
@@ -112,7 +111,7 @@ def identity_PCA(x, dim=3, normalize=False):
 
 def visualize_3d(
         input, figsize=800, width=None, height=None, class_names=None,
-        class_colors=None, class_opacities=None, voxel=0.1, max_points=100000,
+        class_colors=None, class_opacities=None, voxel=-1, max_points=100000,
         pointsize=5, error_color=None, show_superpoint_number=False, **kwargs):
     """3D data interactive visualization.
 
@@ -147,16 +146,35 @@ def visualize_3d(
     data_0 = input[0] if is_nag else input
 
     # Subsample to limit the drawing time
-    #TODO: use PointID to cleanly GridSampling3D or FixedPoints and update NAG accordingly ?
-    #TODO: note that sampling/voxelization will probably break the graph, in particular at level-0, so what you see is not what you get...
-    #TODO: option to sample from clusters instead ? basic indexation... ?
+    # If the level-0 cloud needs to be voxelized or sampled, a NAG
+    # structure will be affected too. To maintain NAG consistency, we
+    # only support 'GridSampling3D' with mode='last' and random sampling
+    # without replacement. To keep track of the sampled points and index
+    # the NAG accordingly, we use 'SaveOriginalPosId'
+    idx = torch.arange(data_0.num_points)
 
-    # data_0.edge_index = None
-    # data_0.edge_attr = None
-    # data_0 = GridSampling3D(voxel, mode='last')(data_0)
-    # if data_0.num_nodes > max_points:
-    #     data_0 = FixedPoints(
-    #         max_points, replace=False, allow_duplicates=False)(data_0)
+    # If a voxel size is specified, voxelize the level-0
+    if voxel > 0:
+        # We only need the 'pos' and the input indices here
+        data_temp = SaveOriginalPosId()(Data(pos=data_0.pos.clone()))
+
+        # Voxelize
+        data_temp = GridSampling3D(voxel, mode='last')(data_temp)
+
+        # Recover the original indices of the sampled points
+        idx = data_temp[SaveOriginalPosId.KEY]
+        del data_temp
+
+    # If the cloud is too large with respect to required 'max_points',
+    # sample without replacement
+    if idx.shape[0] > max_points:
+        idx = idx[torch.randperm(idx.shape[0])[:max_points]]
+
+    # If a sampling is needed, apply it to the input Data or NAG,
+    # depending on the structure
+    if idx.shape[0] < data_0.num_points:
+        input = input.select(0, idx) if is_nag else input.select(idx)
+        data_0 = input[0] if is_nag else input
 
     # Round to the cm for cleaner hover info
     data_0.pos = (data_0.pos * 100).round() / 100
