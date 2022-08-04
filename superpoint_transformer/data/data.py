@@ -150,7 +150,12 @@ class Data(PyGData):
             "Duplicate indices are not supported. This would cause " \
             "ambiguities in edges and super- and sub- indices."
 
-        # Output Data will not share memory with input Data
+        # Output Data will not share memory with input Data.
+        # NB: it is generally not recommended to instantiate en empty
+        # Data like this, as it might cause issues when calling
+        # 'data.num_nodes' later on. Need to be careful when calling
+        # 'data.num_nodes' before having set any of the pointwise
+        # attributes (eg 'x', 'pos', 'rgb', 'y', etc)
         data = self.__class__()
 
         # If Data contains edges, we will want to update edge indices
@@ -200,7 +205,7 @@ class Data(PyGData):
             # also need to update the super-level's 'Data.sub', which
             # can be computed from 'super_index'
             super_sub = Cluster(
-                data.super_index, torch.arange(data.num_nodes, device=device),
+                data.super_index, torch.arange(idx.shape[0], device=device),
                 dense=True)
 
             out_super = (idx_super, super_sub)
