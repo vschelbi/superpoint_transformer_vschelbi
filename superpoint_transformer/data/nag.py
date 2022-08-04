@@ -50,7 +50,7 @@ class NAG:
     @property
     def num_points(self):
         """Number of points/nodes in the lower-level graph."""
-        return self._list[0].num_nodes if len(self) > 0 else 0
+        return [d.num_points for d in self] if len(self) > 0 else 0
 
     def to_list(self):
         """Return the Data list"""

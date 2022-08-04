@@ -1,19 +1,22 @@
-from superpoint_transformer.data import Data
-from superpoint_transformer.transforms import GridSampling3D
-from torch_geometric.transforms import FixedPoints
+import torch
+import numpy as np
 import os.path as osp
 import plotly
 import plotly.graph_objects as go
-import numpy as np
-import torch
-from itertools import chain
+from superpoint_transformer.data import Data, NAG
+from superpoint_transformer.transforms import GridSampling3D
+from torch_geometric.transforms import FixedPoints
+from torch_scatter import scatter_mean
+
 
 # TODO: To go further with ipwidgets :
 #  - https://plotly.com/python/figurewidget-app/
 #  - https://ipywidgets.readthedocs.io/en/stable/
 
 
-PALETTE = plotly.colors.qualitative.Plotly
+# PALETTE = np.array(plotly.colors.qualitative.Plotly)
+# PALETTE = np.array(plotly.colors.qualitative.Dark24)
+PALETTE = np.array(plotly.colors.qualitative.Light24)
 
 
 def rgb_to_plotly_rgb(rgb):
@@ -63,7 +66,7 @@ def feats_to_rgb(feats, normalize=False):
         # Heuristics for clamping
         #   - most features live in [0, 1]
         #   - most n-simplex PCA features live in [-0.5, 0.6]
-        color = identity_PCA(feats, dim=3)
+        color = identity_PCA(feats, dim=3, normalize=normalize)
         color = (torch.clamp(color, -0.5, 0.6) + 0.5) / 1.1
         is_normalized = True
 
@@ -77,7 +80,7 @@ def feats_to_rgb(feats, normalize=False):
     return color
 
 
-def identity_PCA(x, dim=3):
+def identity_PCA(x, dim=3, normalize=False):
     """Reduce dimension of x based on PCA on the union of the n-simplex.
     This is a way of reducing the dimension of x while treating all
     input dimensions with the same importance, independently of the
@@ -93,7 +96,13 @@ def identity_PCA(x, dim=3):
     z_offset = z.mean(axis=0)
     z_centered = z - z_offset
     cov_matrix = z_centered.T.mm(z_centered) / len(z_centered)
-    _, eigenvectors = torch.symeig(cov_matrix, eigenvectors=True)
+    _, eigenvectors = torch.linalg.eigh(cov_matrix)
+    
+    # Normalize x if need be
+    if normalize:
+        high = x.max(dim=0).values
+        low = x.min(dim=0).values
+        x = (x - low) / (high - low)
 
     # Apply the PCA on x
     x_reduced = (x - z_offset).mm(eigenvectors[:, -dim:])
@@ -102,12 +111,12 @@ def identity_PCA(x, dim=3):
 
 
 def visualize_3d(
-        data, figsize=800, width=None, height=None, class_names=None,
+        input, figsize=800, width=None, height=None, class_names=None,
         class_colors=None, class_opacities=None, voxel=0.1, max_points=100000,
-        pointsize=5, error_color=None, show_image_number=True, **kwargs):
+        pointsize=5, error_color=None, show_superpoint_number=False, **kwargs):
     """3D data interactive visualization.
 
-    :param data: Data object holding 3d points
+    :param input: Data or NAG object
     :param figsize: figure dimensions will be (figsize, figsize/2) if
       `width` and `height` are not specified
     :param width: figure width
@@ -121,42 +130,36 @@ def visualize_3d(
       visualization
     :param pointsize: size of points
     :param error_color: color used to identify mis-predicted points
-    :param show_image_number: whether image numbers should be displayed
-    :param kwargs:
+    :param show_superpoint_number: whether superpoint numbers should be
+      displayed
+    :param kwargs
+
     :return:
     """
-    assert isinstance(mm_data, MMData)
+    assert isinstance(input, (Data, NAG))
 
-    # 3D visualization modes
-    modes = {'name': [], 'key': [], 'num_traces': []}
-
-    # Make copies of the data and images to be modified in this scope
-    data = mm_data.data.clone()
-    has_2d = mm_data.modalities.get('image', None) is not None \
-             and mm_data.modalities['image'].num_views > 0
-    if has_2d:
-        images = mm_data.modalities['image'].clone()
-
-    # Convert images to ImageData for convenience
-    # if isinstance(images, SameSettingImageData):
-    #     images = ImageData([images])
+    # We work on copies of the input data, to allow modified in this
+    # scope. Data_0 accounts for the lowest level of hierarchy, the
+    # points themselves.
+    input = input.clone()
+    input = NAG([input]) if isinstance(input, Data) and input.is_sub else input
+    is_nag = isinstance(input, NAG)
+    data_0 = input[0] if is_nag else input
 
     # Subsample to limit the drawing time
-    data = GridSampling3D(voxel, mode='last')(data)
-    if data.num_nodes > max_points:
-        data = FixedPoints(
-            max_points, replace=False, allow_duplicates=False)(data)
+    #TODO: use PointID to cleanly GridSampling3D or FixedPoints and update NAG accordingly ?
+    #TODO: note that sampling/voxelization will probably break the graph, in particular at level-0, so what you see is not what you get...
+    #TODO: option to sample from clusters instead ? basic indexation... ?
 
-    # Subsample the mappings accordingly
-    if has_2d and images[0].mappings is not None:
-        transform = SelectMappingFromPointId()
-        data, images = transform(data, images)
+    # data_0.edge_index = None
+    # data_0.edge_attr = None
+    # data_0 = GridSampling3D(voxel, mode='last')(data_0)
+    # if data_0.num_nodes > max_points:
+    #     data_0 = FixedPoints(
+    #         max_points, replace=False, allow_duplicates=False)(data_0)
 
     # Round to the cm for cleaner hover info
-    data.pos = (data.pos * 100).round() / 100
-    if has_2d:
-        for im in images:
-            im.pos = (im.pos * 100).round() / 100
+    data_0.pos = (data_0.pos * 100).round() / 100
 
     # Class colors initialization
     if class_colors is not None and not isinstance(class_colors[0], str):
@@ -177,18 +180,21 @@ def visualize_3d(
     fig = go.Figure(layout=layout)
     initialized_visibility = False
 
+    # Prepare 3D visualization modes
+    modes = {'name': [], 'key': [], 'num_traces': []}
+
     # Draw a trace for RGB 3D point cloud
-    if getattr(data, 'rgb', None) is not None:
+    if data_0.rgb is not None:
         fig.add_trace(
             go.Scatter3d(
                 name='RGB',
-                x=data.pos[:, 0],
-                y=data.pos[:, 1],
-                z=data.pos[:, 2],
+                x=data_0.pos[:, 0],
+                y=data_0.pos[:, 1],
+                z=data_0.pos[:, 2],
                 mode='markers',
                 marker=dict(
                     size=pointsize,
-                    color=rgb_to_plotly_rgb(data.rgb), ),
+                    color=rgb_to_plotly_rgb(data_0.rgb), ),
                 hoverinfo='x+y+z',
                 showlegend=False,
                 visible=not initialized_visibility, ))
@@ -198,8 +204,14 @@ def visualize_3d(
         initialized_visibility = True
 
     # Draw a trace for labeled 3D point cloud
-    if getattr(data, 'y', None) is not None:
-        y = data.y.numpy()
+    if data_0.y is not None:
+
+        # If labels are expressed as histograms, keep the most frequent
+        # one
+        if data_0.y.dim() == 2:
+            data_0.y = data_0.y.argmax(1)
+
+        y = data_0.y.numpy()
         n_y_traces = 0
 
         for label in np.unique(y):
@@ -209,9 +221,9 @@ def visualize_3d(
                 go.Scatter3d(
                     name=class_names[label] if class_names else f"Class {label}",
                     opacity=class_opacities[label] if class_opacities else 1.0,
-                    x=data.pos[indices, 0],
-                    y=data.pos[indices, 1],
-                    z=data.pos[indices, 2],
+                    x=data_0.pos[indices, 0],
+                    y=data_0.pos[indices, 1],
+                    z=data_0.pos[indices, 2],
                     mode='markers',
                     marker=dict(
                         size=pointsize,
@@ -225,8 +237,8 @@ def visualize_3d(
         initialized_visibility = True
 
     # Draw a trace for predicted labels 3D point cloud
-    if getattr(data, 'pred', None) is not None:
-        pred = data.pred.numpy()
+    if data_0.pred is not None:
+        pred = data_0.pred.numpy()
         n_pred_traces = 0
 
         for label in np.unique(pred):
@@ -236,9 +248,9 @@ def visualize_3d(
                 go.Scatter3d(
                     name=class_names[label] if class_names else f"Class {label}",
                     opacity=class_opacities[label] if class_opacities else 1.0,
-                    x=data.pos[indices, 0],
-                    y=data.pos[indices, 1],
-                    z=data.pos[indices, 2],
+                    x=data_0.pos[indices, 0],
+                    y=data_0.pos[indices, 1],
+                    z=data_0.pos[indices, 2],
                     mode='markers',
                     marker=dict(
                         size=pointsize,
@@ -251,50 +263,22 @@ def visualize_3d(
         modes['num_traces'].append(n_pred_traces)
         initialized_visibility = True
 
-    # Draw a trace for 3D point cloud of number of images seen
-    if has_2d and images[0].mappings is not None:
-        n_seen = sum([
-            im.mappings.pointers[1:] - im.mappings.pointers[:-1]
-            for im in images])
-        fig.add_trace(
-            go.Scatter3d(
-                name='Times seen',
-                x=data.pos[:, 0],
-                y=data.pos[:, 1],
-                z=data.pos[:, 2],
-                mode='markers',
-                marker=dict(
-                    size=pointsize,
-                    color=n_seen,
-                    colorscale='spectral',
-                    colorbar=dict(
-                        thickness=10, len=0.66, tick0=0,
-                        dtick=max(1, int(n_seen.max() / 10.)), ), ),
-                hovertext=[f"seen: {n}" for n in n_seen],
-                hoverinfo='x+y+z+text',
-                showlegend=False,
-                visible=not initialized_visibility, ))
-        modes['name'].append('Times seen')
-        modes['key'].append('n_seen')
-        modes['num_traces'].append(1)
-        initialized_visibility = True
-
     # Draw a trace for position-colored 3D point cloud
     # radius = torch.norm(data.pos - data.pos.mean(dim=0), dim=1).max()
     # data.pos_rgb = (data.pos - data.pos.mean(dim=0)) / (2 * radius) + 0.5
-    mini = data.pos.min(dim=0).values
-    maxi = data.pos.max(dim=0).values
-    data.pos_rgb = (data.pos - mini) / (maxi - mini + 1e-6)
+    mini = data_0.pos.min(dim=0).values
+    maxi = data_0.pos.max(dim=0).values
+    data_0.pos_rgb = (data_0.pos - mini) / (maxi - mini + 1e-6)
     fig.add_trace(
         go.Scatter3d(
             name='Position RGB',
-            x=data.pos[:, 0],
-            y=data.pos[:, 1],
-            z=data.pos[:, 2],
+            x=data_0.pos[:, 0],
+            y=data_0.pos[:, 1],
+            z=data_0.pos[:, 2],
             mode='markers',
             marker=dict(
                 size=pointsize,
-                color=rgb_to_plotly_rgb(data.pos_rgb), ),
+                color=rgb_to_plotly_rgb(data_0.pos_rgb), ),
             hoverinfo='x+y+z',
             showlegend=False,
             visible=not initialized_visibility, ))
@@ -303,21 +287,92 @@ def visualize_3d(
     modes['num_traces'].append(1)
     initialized_visibility = True
 
-    # Draw a trace for 3D point cloud features
-    if getattr(data, 'x', None) is not None:
-        # Recover the features and convert them to an RGB format for
-        # visualization.
-        data.feat_3d = feats_to_rgb(data.x, normalize=True)
+    # Draw a trace for the each cluster level
+    for i_level, data_i in enumerate(input if is_nag else []):
+
+        # Exit in case the Data has no 'super_index'
+        if not data_i.is_sub:
+            break
+
+        # 'Data.super_index' are expressed between levels i and i+1, but
+        # we need to recover the 'super_index' between level 0 and i+1,
+        # to draw clusters on the level-0 points. To this end, we
+        # compute the desired 'super_index' iteratively, with a
+        # bottom-up approach
+        if i_level == 0:
+            super_index = data_i.super_index
+        else:
+            super_index = super_index[data_i.super_index]
+
+        # Draw the level-0 points, colored by their level-i+1 cluster
+        # index
         fig.add_trace(
             go.Scatter3d(
-                name='Features 3D',
-                x=data.pos[:, 0],
-                y=data.pos[:, 1],
-                z=data.pos[:, 2],
+                name='Level {i_level}',  # TODO: careful with trace names and id
+                x=data_0.pos[:, 0],
+                y=data_0.pos[:, 1],
+                z=data_0.pos[:, 2],
                 mode='markers',
                 marker=dict(
                     size=pointsize,
-                    color=rgb_to_plotly_rgb(data.feat_3d), ),
+                    color=PALETTE[super_index % len(PALETTE)], ),
+                hoverinfo='x+y+z',
+                showlegend=False,
+                visible=not initialized_visibility, ))
+
+        # To recover centroids of the i+1 level superpoints, we either
+        # read them from the next NAG level or compute them using the
+        # level i 'super_index' indices
+        num_levels = input.num_levels
+        if i_level == num_levels - 1 or input[i_level + 1].pos is None:
+            super_pos = scatter_mean(data_0.pos, super_index, dim=0)
+        else:
+            super_pos = input[i_level + 1].pos
+
+        # Round to the cm for cleaner hover info
+        super_pos = (super_pos * 100).round() / 100
+
+        # Draw the level-i+1 cluster centroids
+        idx_sp = np.arange(data_i.super_index.max())
+        fig.add_trace(
+            go.Scatter3d(
+                name=f"Level {i_level} centroids",
+                x=super_pos[:, 0],
+                y=super_pos[:, 1],
+                z=super_pos[:, 2],
+                mode='markers+text',
+                marker=dict(
+                    symbol='diamond',
+                    line_width=2,
+                    size=pointsize + 2,
+                    color=PALETTE[idx_sp % len(PALETTE)], ),
+                text=[f"<b>{i}</b>" for i in idx_sp] if show_superpoint_number else '',
+                textposition="bottom center",
+                textfont=dict(size=16),
+                hoverinfo='x+y+z+name',
+                showlegend=False,
+                visible=not initialized_visibility, ))
+
+        modes['name'].append(f'Level {i_level}')
+        modes['key'].append(f'level_{i_level}')
+        modes['num_traces'].append(2)
+        initialized_visibility = True
+
+    # Draw a trace for 3D point cloud features
+    if getattr(data_0, 'x', None) is not None:
+        # Recover the features and convert them to an RGB format for
+        # visualization.
+        data_0.feat_3d = feats_to_rgb(data_0.x, normalize=True)
+        fig.add_trace(
+            go.Scatter3d(
+                name='Features 3D',
+                x=data_0.pos[:, 0],
+                y=data_0.pos[:, 1],
+                z=data_0.pos[:, 2],
+                mode='markers',
+                marker=dict(
+                    size=pointsize,
+                    color=rgb_to_plotly_rgb(data_0.feat_3d), ),
                 hoverinfo='x+y+z',
                 showlegend=False,
                 visible=not initialized_visibility, ))
@@ -327,19 +382,19 @@ def visualize_3d(
         initialized_visibility = True
 
     # Add a trace for prediction errors
-    has_error = getattr(data, 'y', None) is not None \
-                and getattr(data, 'pred', None) is not None
+    has_error = getattr(data_0, 'y', None) is not None \
+                and getattr(data_0, 'pred', None) is not None
     if has_error:
-        indices = np.where(data.pred.numpy() != data.y.numpy())[0]
+        indices = np.where(data_0.pred.numpy() != data_0.y.numpy())[0]
         error_color = f"rgb{tuple(error_color)}" \
             if error_color is not None else 'rgb(255, 0, 0)'
         fig.add_trace(
             go.Scatter3d(
                 name='Errors',
                 opacity=1.0,
-                x=data.pos[indices, 0],
-                y=data.pos[indices, 1],
-                z=data.pos[indices, 2],
+                x=data_0.pos[indices, 0],
+                y=data_0.pos[indices, 1],
+                z=data_0.pos[indices, 2],
                 mode='markers',
                 marker=dict(
                     size=pointsize,
@@ -350,59 +405,29 @@ def visualize_3d(
         modes['key'].append('error')
         modes['num_traces'].append(1)
 
-    # Draw image positions
-    if has_2d:
-
-        img_traces = []
-        if images.num_settings > 1:
-            image_xyz = torch.cat([im.pos for im in images]).numpy()
-            image_axes = torch.cat([im.axes for im in images]).numpy()
-        else:
-            image_xyz = images[0].pos.numpy()
-            image_axes = images[0].axes.numpy()
-        if len(image_xyz.shape) == 1:
-            image_xyz = image_xyz.reshape((1, -1))
-        for i, (xyz, axes) in enumerate(zip(image_xyz, image_axes)):
-
-            # Draw image coordinate system axes
-            arrow_length = 0.4
-            for v, color in zip(axes, ['red', 'green', 'blue']):  # TODO: proprely rotate S3DIS equirectangular axes
-                #             for v, color in zip(axes, [ 'blue', 'red', 'green',]):
-                v = xyz + v * arrow_length
-                fig.add_trace(
-                    go.Scatter3d(
-                        x=[xyz[0], v[0]],
-                        y=[xyz[1], v[1]],
-                        z=[xyz[2], v[2]],
-                        mode='lines',
-                        line=dict(
-                            color=color,
-                            width=pointsize + 7),
-                        showlegend=False,
-                        hoverinfo='none',
-                        #                         visible=True,  # see all axes
-                        visible=(color == 'blue'),  # see main axis
-                    ))
-
-            # Draw image position as ball
-            img_traces.append(len(fig.data))
-            fig.add_trace(
-                go.Scatter3d(
-                    name=f"Image {i}",
-                    x=[xyz[0]],
-                    y=[xyz[1]],
-                    z=[xyz[2]],
-                    mode='markers+text',
-                    marker=dict(
-                        line_width=2,
-                        size=pointsize + 12,
-                        color=PALETTE[i % len(PALETTE)], ),
-                    text=f"<b>{i}</b>" if show_image_number else '',
-                    textposition="bottom center",
-                    textfont=dict(size=16),
-                    hoverinfo='x+y+z+name',
-                    showlegend=False,
-                    visible=True, ))
+    # # Draw cluster centroid positions
+    # if has_partition:
+    #     idx_sp = np.arange(data_c.num_nodes)
+    #     sp_traces = []
+    #     sp_traces.append(len(fig.data))
+    #     fig.add_trace(
+    #         go.Scatter3d(
+    #             name=f"Superpoint centroids",
+    #             x=data_c.pos[:, 0],
+    #             y=data_c.pos[:, 1],
+    #             z=data_c.pos[:, 2],
+    #             mode='markers+text',
+    #             marker=dict(
+    #                 symbol='diamond',
+    #                 line_width=2,
+    #                 size=pointsize + 2,
+    #                 color=PALETTE[idx_sp % len(PALETTE)], ),
+    #             text=[f"<b>{i}</b>" for i in idx_sp] if show_superpoint_number else '',
+    #             textposition="bottom center",
+    #             textfont=dict(size=16),
+    #             hoverinfo='x+y+z+name',
+    #             showlegend=False,
+    #             visible=True, ))
 
     # Traces visibility for interactive point cloud coloring
     def trace_visibility(mode):
@@ -433,6 +458,7 @@ def visualize_3d(
             yanchor='top',
             y=1.02, ),
     ]
+
     if has_error:
         updatemenus.append(
             dict(
@@ -492,11 +518,7 @@ def visualize_3d(
         )
     )
 
-    output = {'figure': fig, 'data': data}
-
-    if has_2d:
-        output['images'] = images
-        output['img_traces'] = img_traces
+    output = {'figure': fig, 'data': data_0}
 
     return output
 
@@ -521,10 +543,10 @@ def figure_html(fig):
 
 
 def show(
-        data, path=None, title=None, no_output=True, **kwargs):
-    """Multimodal 3D+2D data interactive visualization.
+        input, path=None, title=None, no_output=True, **kwargs):
+    """Interactive data visualization.
 
-    :param data: Data object holding 3d points
+    :param input: Data or NAG object
     :param path: path to save the visualization into a sharable HTML
     :param title: figure title
     :param no_output: set to True if you want to return the 3D and 2D
@@ -532,8 +554,6 @@ def show(
     :param kwargs:
     :return:
     """
-    assert isinstance(data, Data)
-
     # Sanitize title and path
     if title is None:
         title = "Multimodal data"
@@ -545,7 +565,7 @@ def show(
         fig_html = f'<h1 style="text-align: center;">{title}</h1>'
 
     # Draw a figure for 3D data visualization
-    out_3d = visualize_3d(mm_data, **kwargs)
+    out_3d = visualize_3d(input, **kwargs)
     if no_output:
         if path is None:
             out_3d['figure'].show(config={'displayModeBar': False})
