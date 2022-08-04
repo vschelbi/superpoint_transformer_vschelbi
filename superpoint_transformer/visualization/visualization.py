@@ -153,15 +153,13 @@ def visualize_3d(
     # the NAG accordingly, we use 'SaveOriginalPosId'
     idx = torch.arange(data_0.num_points)
 
-    # If a voxel size is specified, voxelize the level-0
+    # If a voxel size is specified, voxelize the level-0. We first
+    # isolate the 'pos' and the input indices of data_0 and apply
+    # voxelization on this. We then recover the original grid-sampled
+    # points indices to be used with Data.select or NAG.select
     if voxel > 0:
-        # We only need the 'pos' and the input indices here
         data_temp = SaveOriginalPosId()(Data(pos=data_0.pos.clone()))
-
-        # Voxelize
         data_temp = GridSampling3D(voxel, mode='last')(data_temp)
-
-        # Recover the original indices of the sampled points
         idx = data_temp[SaveOriginalPosId.KEY]
         del data_temp
 
