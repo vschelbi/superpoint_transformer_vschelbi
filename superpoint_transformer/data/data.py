@@ -14,6 +14,14 @@ class Data(PyGData):
         # self.debug()
 
     @property
+    def rgb(self):
+        return self['rgb'] if 'rgb' in self._store else None
+
+    @property
+    def pred(self):
+        return self['pred'] if 'pred' in self._store else None
+
+    @property
     def neighbors(self):
         return self['neighbors'] if 'neighbors' in self._store else None
 
@@ -143,7 +151,7 @@ class Data(PyGData):
             "ambiguities in edges and super- and sub- indices."
 
         # Output Data will not share memory with input Data
-        data = self.__class__(num_nodes=idx.shape[0])
+        data = self.__class__()
 
         # If Data contains edges, we will want to update edge indices
         # and attributes with respect to the new point order. Edge
@@ -224,16 +232,12 @@ class Data(PyGData):
             else:
                 data[key] = copy.deepcopy(item)
 
+        # Security just in case no node-level attribute was passed, Data
+        # will not be able to properly infer its number of nodes
+        if data.num_nodes != idx.shape[0]:
+            data.num_nodes = idx.shape[0]
+
         return data, out_sub, out_super
-
-
-
-
-
-    #TODO
-    # def GROUP SIZE !!!***************
-
-
 
 
 class Batch(PyGBatch):

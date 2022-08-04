@@ -182,7 +182,7 @@ def _compute_cluster_graph(
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source
     # direction now
-    se = torch.cat((se, se.roll(1, 1)))
+    se = torch.cat((se, se.roll(1, 1)), dim=1)
 
     se_feat = [
         torch.cat((se_dist, se_dist)),

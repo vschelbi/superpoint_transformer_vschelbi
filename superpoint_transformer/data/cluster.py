@@ -1,5 +1,6 @@
 import torch
 from superpoint_transformer.data.csr import CSRData
+from superpoint_transformer.utils import has_duplicates
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
@@ -21,6 +22,14 @@ class Cluster(CSRData):
             f"Points is on {points.device} while self is on {self.device}"
         self.values[0] = points
         self.debug()
+
+    @property
+    def num_clusters(self):
+        return self.num_groups
+
+    @property
+    def num_points(self):
+        return self.num_items
 
     def to_dense(self):
         """Return a 1D tensor of indices converting the CSR-formatted
@@ -73,13 +82,23 @@ class Cluster(CSRData):
         # Convert subpoint indices, in case some subpoints have
         # disappeared. 'idx_sub' is intended to be used with
         # Data.select() on the level below
-        cluster.points, perm = consecutive_cluster(self.points)
+        cluster.points, perm = consecutive_cluster(cluster.points)
         idx_sub = self.points[perm]
 
         # Selecting the subpoints with 'idx_sub' will not be
         # enough to maintain consistency with the current points. We
         # also need to update the sub-level's 'Data.super_index', which
         # can be computed from 'cluster'
-        sub_super = self.to_dense()
+        sub_super = cluster.to_dense()
 
         return cluster, (idx_sub, sub_super)
+
+    def debug(self):
+        super().debug()
+        assert not has_duplicates(self.points)  #TODO: calling this whenever we debug might be costly...
+
+    def __repr__(self):
+        info = [
+            f"{key}={getattr(self, key)}"
+            for key in ['num_clusters', 'num_points', 'device']]
+        return f"{self.__class__.__name__}({', '.join(info)})"

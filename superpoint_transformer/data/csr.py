@@ -263,6 +263,7 @@ class CSRData:
         return self.num_groups
 
     def __repr__(self):
-        info = [f"{key}={getattr(self, key)}"
-                for key in ['num_groups', 'num_items', 'device']]
+        info = [
+            f"{key}={getattr(self, key)}"
+            for key in ['num_groups', 'num_items', 'device']]
         return f"{self.__class__.__name__}({', '.join(info)})"

@@ -11,6 +11,9 @@ class NAG:
     """
 
     def __init__(self, data_list: List[Data]):
+        assert len(data_list) > 0,\
+            "The NAG must have at least 1 level of hierarchy. Please " \
+            "provide a minimum of 1 Data object."
         self._list = data_list
         self.debug()
         self._update_sub_size()
@@ -31,6 +34,8 @@ class NAG:
         # not have 'sub_size'. Note this scatter operation assumes all
         # levels of hierarchy use dense, consecutive indices which are
         # consistent between levels
+        if self.num_levels < 2:
+            return self
         self[1].sub_size = self[1].sub.sizes
         for i in range(2, len(self)):
             self[i].sub_size = scatter_sum(
@@ -168,14 +173,11 @@ class NAG:
         # Create a new NAG with the list of indexed Data
         nag = self.__class__(data_list)
 
-        # Selecting some nodes at a given level affects the 'sub_size'
-        # of all levels above, so need to update them
-        nag._update_sub_size()
-
         return nag
 
     def debug(self):
         """Sanity checks."""
+        assert len(self) > 0
         for i, d in enumerate(self):
             assert isinstance(d, Data)
             if i > 0:
@@ -184,3 +186,9 @@ class NAG:
             if i < len(self) - 1:
                 assert d.is_sub
                 assert d.num_points == self[i + 1].num_sub
+
+    def __repr__(self):
+        info = [
+            f"{key}={getattr(self, key)}"
+            for key in ['num_levels', 'num_points', 'device']]
+        return f"{self.__class__.__name__}({', '.join(info)})"

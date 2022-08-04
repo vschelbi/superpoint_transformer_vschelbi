@@ -93,9 +93,9 @@ def group_data(
         # considered for aggregation
         if torch.is_tensor(item) and item.size(0) == num_nodes:
 
-            # For 'last' mode, use unique_pos_indices to pick values from
-            # a single point within each cluster. The same behavior is
-            # expected for the _LAST_KEYS
+            # For 'last' mode, use unique_pos_indices to pick values
+            # from a single point within each cluster. The same behavior
+            # is expected for the _LAST_KEYS
             if mode == "last" or key in _LAST_KEYS:
                 data[key] = item[unique_pos_indices]
 
@@ -112,9 +112,10 @@ def group_data(
                 # For keys requiring a voting scheme or a histogram
                 if key in _VOTING_KEYS or key in bins.keys():
 
-                    assert item.ge(0).all(), "Mean aggregation only supports positive integers"
-                    assert item.dtype in [torch.uint8, torch.int,
-                                          torch.long], "Mean aggregation only supports positive integers"
+                    assert item.ge(0).all(),\
+                        "Mean aggregation only supports positive integers"
+                    assert item.dtype in [torch.uint8, torch.int, torch.long], \
+                        "Mean aggregation only supports positive integers"
 
                     # Initialization
                     voting = key not in bins.keys()
