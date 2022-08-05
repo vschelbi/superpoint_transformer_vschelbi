@@ -291,10 +291,10 @@ def sample_clusters(data, high=32, low=1, pointers=False):
     """Compute point indices for sampling points inside clusters saved
     in a CSR format.
     """
-    #TODO: rename this function: sample_points_in_nag, sample_point_index, ...
     #TODO: operate on NAG and careful with indices !
-    #TODO: must be able to sample on subset of sub too (for edge sampling)
+    #TODO: must be able to sample on subset/mask of sub too (for edge sampling)
     #TODO: could optionally sample from i into j with i > j > 0...
+    #TODO: modify sampling to prevent duplicates using "choice = torch.randperm(num_nodes)[:self.num]" ?
 
     # Compute the number of points that will be sampled from each
     # cluster
