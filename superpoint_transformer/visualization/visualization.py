@@ -1,7 +1,6 @@
 import torch
 import numpy as np
 import os.path as osp
-import plotly
 import plotly.graph_objects as go
 from superpoint_transformer.data import Data, NAG
 from superpoint_transformer.transforms import GridSampling3D, SaveOriginalPosId
@@ -12,11 +11,6 @@ from colorhash import ColorHash
 # TODO: To go further with ipwidgets :
 #  - https://plotly.com/python/figurewidget-app/
 #  - https://ipywidgets.readthedocs.io/en/stable/
-
-
-# PALETTE = np.array(plotly.colors.qualitative.Plotly)
-# PALETTE = np.array(plotly.colors.qualitative.Dark24)
-PALETTE = np.array(plotly.colors.qualitative.Light24)
 
 
 def rgb_to_plotly_rgb(rgb):
@@ -213,20 +207,15 @@ def visualize_3d(
     fig = go.Figure(layout=layout)
 
     # Prepare 3D visualization modes
-    color_modes = {
-        'name': [], 'key': [], 'colors': [], 'hoverinfo': [], 'hovertext': [],
-        'n_cluster_levels': 0}
+    trace_modes = []
 
     # Draw a trace for position-colored 3D point cloud
-    # radius = torch.norm(data.pos - data.pos.mean(dim=0), dim=1).max()
-    # data.pos_rgb = (data.pos - data.pos.mean(dim=0)) / (2 * radius) + 0.5
     mini = data_0.pos.min(dim=0).values
     maxi = data_0.pos.max(dim=0).values
     data_0.pos_rgb = (data_0.pos - mini) / (maxi - mini + 1e-6)
     colors = rgb_to_plotly_rgb(data_0.pos_rgb)
     fig.add_trace(
         go.Scatter3d(
-            name='Position RGB',
             x=data_0.pos[:, 0],
             y=data_0.pos[:, 1],
             z=data_0.pos[:, 2],
@@ -234,24 +223,17 @@ def visualize_3d(
             marker=dict(
                 size=pointsize,
                 color=colors, ),
-            hoverinfo='x+y+z',
+            hoverinfo='x+y+z+text',
             hovertext=None,
             showlegend=False,
             visible=True, ))
-    color_modes['name'].append('Position RGB')
-    color_modes['key'].append('position_rgb')
-    color_modes['colors'].append(colors)
-    color_modes['hoverinfo'].append('x+y+z')
-    color_modes['hovertext'].append(None)
+    trace_modes.append({})
+    trace_modes[-1]['Position RGB'] = {'marker.color': colors, 'hovertext': None}
 
     # Draw a trace for RGB 3D point cloud
     if data_0.rgb is not None:
         colors = rgb_to_plotly_rgb(data_0.rgb)
-        color_modes['name'].append('RGB')
-        color_modes['key'].append('rgb')
-        color_modes['colors'].append(colors)
-        color_modes['hoverinfo'].append('x+y+z')
-        color_modes['hovertext'].append(None)
+        trace_modes[-1]['RGB'] = {'marker.color': colors, 'hovertext': None}
 
     # Color the points with ground truth semantic labels. If labels are
     # expressed as histograms, keep the most frequent one
@@ -264,28 +246,7 @@ def visualize_3d(
         else:
             text = np.array([str.title(c) for c in class_names])
         text = text[y]
-        color_modes['name'].append('Labels')
-        color_modes['key'].append('y')
-        color_modes['colors'].append(colors)
-        color_modes['hoverinfo'].append('x+y+z+text')
-        color_modes['hovertext'].append(text)
-
-        # high = data_0.pos.max(dim=0).values.view(1, -1).cpu().numpy()
-        # low = data_0.pos.min(dim=0).values.view(1, -1).cpu().numpy()
-        # center = (high + low) / 2
-        # for label in np.unique(y):
-        #     fig.add_trace(
-        #         go.Scatter3d(
-        #             name=class_names[label] if class_names else f"Class {label}",
-        #             opacity=0,
-        #             x=center[:, 0],
-        #             y=center[:, 1],
-        #             z=center[:, 2],
-        #             mode='markers',
-        #             marker=dict(
-        #                 size=pointsize,
-        #                 color=class_colors[label] if class_colors is not None else None, ),
-        #             visible=True, ))
+        trace_modes[-1]['Labels'] = {'marker.color': colors, 'hovertext': text}
 
     # Color the points with predicted semantic labels. If labels are
     # expressed as histograms, keep the most frequent one
@@ -297,11 +258,17 @@ def visualize_3d(
             text = np.array([f'Class {i}' for i in range(pred.max() + 1)])
         else:
             text = np.array([str.title(c) for c in class_names])
-        color_modes['name'].append('Predictions')
-        color_modes['key'].append('pred')
-        color_modes['colors'].append(colors)
-        color_modes['hoverinfo'].append('x+y+z+text')
-        color_modes['hovertext'].append(text)
+        trace_modes[-1]['Predictions'] = {
+            'marker.color': colors, 'hovertext': text}
+
+    # Draw a trace for 3D point cloud features
+    if data_0.x is not None:
+        # Recover the features and convert them to an RGB format for
+        # visualization.
+        data_0.feat_3d = feats_to_rgb(data_0.x, normalize=True)
+        colors = rgb_to_plotly_rgb(data_0.feat_3d)
+        trace_modes[-1]['Features 3D'] = {
+            'marker.color': colors, 'hovertext': None}
 
     # Draw a trace for the each cluster level
     for i_level, data_i in enumerate(input if is_nag else []):
@@ -321,12 +288,9 @@ def visualize_3d(
             super_index = super_index[data_i.super_index]
 
         colors = int_to_plotly_rgb(super_index)
-        # colors = PALETTE[super_index % len(PALETTE)]
-        color_modes['name'].append(f'Level {i_level}')
-        color_modes['key'].append(f'level_{i_level}')
-        color_modes['colors'].append(colors)
-        color_modes['hoverinfo'].append('x+y+z+text')
-        color_modes['hovertext'].append([f'c: {i}' for i in super_index])
+        text = [f'c: {i}' for i in super_index]
+        trace_modes[-1][f'Level {i_level}'] = {
+            'marker.color': colors, 'hovertext': text}
 
         # Skip to the next level if we do not need to draw the cluster
         # centroids
@@ -346,10 +310,11 @@ def visualize_3d(
         super_pos = (super_pos * 100).round() / 100
 
         # Draw the level-i+1 cluster centroids
-        idx_sp = np.arange(data_i.super_index.max())
+        idx_sp = torch.arange(data_i.super_index.max())
+        colors = int_to_plotly_rgb(idx_sp)
+        text = [f"<b>{i}</b>" for i in idx_sp] if super_number else ''
         fig.add_trace(
             go.Scatter3d(
-                name=f"Level {i_level} centroids",
                 x=super_pos[:, 0],
                 y=super_pos[:, 1],
                 z=super_pos[:, 2],
@@ -358,28 +323,17 @@ def visualize_3d(
                     symbol='diamond',
                     line_width=2,
                     size=pointsize + 2,
-                    color=PALETTE[idx_sp % len(PALETTE)], ),
-                text=[f"<b>{i}</b>" for i in idx_sp] if super_number else '',
+                    color=colors, ),
                 textposition="bottom center",
                 textfont=dict(size=16),
-                hoverinfo='x+y+z+name',
+                hovertext=text,
+                hoverinfo='x+y+z+text',
                 showlegend=False,
                 visible=False, ))
 
-        # Update the number of cluster levels
-        color_modes['n_cluster_levels'] += 1
-
-    # Draw a trace for 3D point cloud features
-    if data_0.x is not None:
-        # Recover the features and convert them to an RGB format for
-        # visualization.
-        data_0.feat_3d = feats_to_rgb(data_0.x, normalize=True)
-        colors = rgb_to_plotly_rgb(data_0.feat_3d)
-        color_modes['name'].append('Features 3D')
-        color_modes['key'].append('x')
-        color_modes['colors'].append(colors)
-        color_modes['hoverinfo'].append('x+y+z')
-        color_modes['hovertext'].append(None)
+        trace_modes.append({})
+        trace_modes[-1][f'Level {i_level}'] = {
+            'marker.color': colors, 'hovertext': text}
 
     # # Add a trace for prediction errors
     # has_error = data_0.y is not None and data_0.pred is not None
@@ -419,32 +373,44 @@ def visualize_3d(
     #
     #     return [{"visible": visibilities.tolist()}]
 
+    # Recover the keys for all visualization modes, as an ordered set,
+    # with respect to their order of first appearance
+    modes = list(dict.fromkeys([k for m in trace_modes for k in m.keys()]))
+
     # Traces color for interactive point cloud coloring
-    def trace_color(mode):
-        i_mode = color_modes['key'].index(mode)
-        colors = color_modes['colors'][i_mode]
-        hoverinfo = color_modes['hoverinfo'][i_mode]
-        hovertext = color_modes['hovertext'][i_mode]
+    def trace_update(mode):
+        # Prepare the output args for the figure update attributes. By
+        # default, all traces are non visible, with no color and no
+        # hover text
+        n_traces = len(trace_modes)
+        out = {
+            'visible': [False] * n_traces,
+            'marker.color': [None] * n_traces,
+            'hovertext': [''] * n_traces}
 
-        color_modes['n_cluster_levels']
-        cluster_visible =
-        cluster_color =
-        cluster_hoverinfo = []
-        cluster_hovertext = []
+        # For each trace in 'trace_modes' see if it contains 'mode' and
+        # adapt out accordingly
+        for i_trace, t_modes in enumerate(trace_modes):
 
-        return [{
-            'visible': [True],
-            'marker.color': [colors],
-            'hoverinfo': [hoverinfo],
-            'hovertext': [hovertext]}]
+            # The trace has no action for the mode, skip it and leave
+            # the default args for the trace
+            if mode not in t_modes:
+                continue
+
+            # Note that a trace will only be visible for its modes
+            # declared in trace_modes
+            out['visible'][i_trace] = True
+            for key, val in t_modes[mode].items():
+                out[key][i_trace] = val
+
+        return [out]
 
     # Create the buttons that will serve for toggling trace visibility
     updatemenus = [
         dict(
             buttons=[dict(
-                label=name, method='update', args=trace_color(key))
-                for name, key in zip(color_modes['name'], color_modes['key'])
-                if key != 'error'],
+                label=mode, method='update', args=trace_update(mode))
+                for mode in modes if mode != 'error'],
             pad={'r': 10, 't': 10},
             showactive=True,
             type='dropdown',
