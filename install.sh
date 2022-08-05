@@ -92,6 +92,7 @@ pip install torch==1.12.0 torchvision
 pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.12.0+cu102.html
 pip install plyfile
 pip install h5py
+pip install colorhash
 
 #*********************************
 
