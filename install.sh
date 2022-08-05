@@ -108,7 +108,7 @@ python setup.py install
 # install FRNN
 cd ../../ # back to the {FRNN} directory
 python setup.py install
-cd ../../
+cd ../../../
 
 
 echo
