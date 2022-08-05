@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from superpoint_transformer.data import Data, NAG
 from superpoint_transformer.transforms import GridSampling3D, SaveOriginalPosId
 from torch_scatter import scatter_mean
+from colorhash import ColorHash
 
 
 # TODO: To go further with ipwidgets :
@@ -22,12 +23,24 @@ def rgb_to_plotly_rgb(rgb):
     """Convert torch.Tensor of float RGB values in [0, 1] to
     plotly-friendly RGB format.
     """
-    assert isinstance(rgb, torch.Tensor) and rgb.max() <= 1.0 and rgb.dim() <= 2
-
+    assert isinstance(rgb, torch.Tensor)
+    assert rgb.max() <= 1.0
+    assert rgb.dim() <= 2
     if rgb.dim() == 1:
         rgb = rgb.unsqueeze(0)
-
     return [f"rgb{tuple(x)}" for x in (rgb * 255).int().numpy()]
+
+
+def int_to_plotly_rgb(x):
+    """Convert 1D torch.Tensor of int into plotly-friendly RGB format.
+    This operation is deterministic on the int values.
+    """
+    assert isinstance(x, torch.Tensor)
+    assert x.dim() == 1
+    assert not x.is_floating_point()
+    x = x.cpu().long().numpy()
+    palette = np.array([ColorHash(i).rgb for i in range(x.max() + 1)])
+    return palette[x]
 
 
 def hex_to_tensor(h):
@@ -112,7 +125,8 @@ def identity_PCA(x, dim=3, normalize=False):
 def visualize_3d(
         input, figsize=800, width=None, height=None, class_names=None,
         class_colors=None, class_opacities=None, voxel=-1, max_points=100000,
-        pointsize=5, error_color=None, show_superpoint_number=False, **kwargs):
+        pointsize=5, error_color=None, super_centre=True, super_edge=False,
+        super_number=False, **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
@@ -129,8 +143,11 @@ def visualize_3d(
       visualization
     :param pointsize: size of points
     :param error_color: color used to identify mis-predicted points
-    :param show_superpoint_number: whether superpoint numbers should be
-      displayed
+    :param super_centre: whether superpoint centroids should be displayed
+    :param super_edge: whether superedges should be displayed
+      (only if super_centre=True)
+    :param super_number: whether superpoint numbers should be displayed
+      (only if super_centre=True)
     :param kwargs
 
     :return:
@@ -179,7 +196,7 @@ def visualize_3d(
 
     # Class colors initialization
     if class_colors is not None and not isinstance(class_colors[0], str):
-        class_colors = [f"rgb{tuple(x)}" for x in class_colors]
+        class_colors = np.array([f"rgb{tuple(x)}" for x in class_colors])
     else:
         class_colors = None
 
@@ -194,90 +211,11 @@ def visualize_3d(
         margin=dict(l=margin, r=margin, b=margin, t=margin),
         uirevision=True)
     fig = go.Figure(layout=layout)
-    initialized_visibility = False
 
     # Prepare 3D visualization modes
-    modes = {'name': [], 'key': [], 'num_traces': []}
-
-    # Draw a trace for RGB 3D point cloud
-    if data_0.rgb is not None:
-        fig.add_trace(
-            go.Scatter3d(
-                name='RGB',
-                x=data_0.pos[:, 0],
-                y=data_0.pos[:, 1],
-                z=data_0.pos[:, 2],
-                mode='markers',
-                marker=dict(
-                    size=pointsize,
-                    color=rgb_to_plotly_rgb(data_0.rgb), ),
-                hoverinfo='x+y+z',
-                showlegend=False,
-                visible=not initialized_visibility, ))
-        modes['name'].append('RGB')
-        modes['key'].append('rgb')
-        modes['num_traces'].append(1)
-        initialized_visibility = True
-
-    # Draw a trace for labeled 3D point cloud
-    if data_0.y is not None:
-
-        # If labels are expressed as histograms, keep the most frequent
-        # one
-        if data_0.y.dim() == 2:
-            data_0.y = data_0.y.argmax(1)
-
-        y = data_0.y.numpy()
-        n_y_traces = 0
-
-        for label in np.unique(y):
-            indices = np.where(y == label)[0]
-
-            fig.add_trace(
-                go.Scatter3d(
-                    name=class_names[label] if class_names else f"Class {label}",
-                    opacity=class_opacities[label] if class_opacities else 1.0,
-                    x=data_0.pos[indices, 0],
-                    y=data_0.pos[indices, 1],
-                    z=data_0.pos[indices, 2],
-                    mode='markers',
-                    marker=dict(
-                        size=pointsize,
-                        color=class_colors[label] if class_colors else None, ),
-                    visible=not initialized_visibility, ))
-            n_y_traces += 1  # keep track of the number of traces
-
-        modes['name'].append('Labels')
-        modes['key'].append('y')
-        modes['num_traces'].append(n_y_traces)
-        initialized_visibility = True
-
-    # Draw a trace for predicted labels 3D point cloud
-    if data_0.pred is not None:
-        pred = data_0.pred.numpy()
-        n_pred_traces = 0
-
-        for label in np.unique(pred):
-            indices = np.where(pred == label)[0]
-
-            fig.add_trace(
-                go.Scatter3d(
-                    name=class_names[label] if class_names else f"Class {label}",
-                    opacity=class_opacities[label] if class_opacities else 1.0,
-                    x=data_0.pos[indices, 0],
-                    y=data_0.pos[indices, 1],
-                    z=data_0.pos[indices, 2],
-                    mode='markers',
-                    marker=dict(
-                        size=pointsize,
-                        color=class_colors[label] if class_colors else None, ),
-                    visible=not initialized_visibility, ))
-            n_pred_traces += 1  # keep track of the number of traces
-
-        modes['name'].append('Predictions')
-        modes['key'].append('pred')
-        modes['num_traces'].append(n_pred_traces)
-        initialized_visibility = True
+    color_modes = {
+        'name': [], 'key': [], 'colors': [], 'hoverinfo': [], 'hovertext': [],
+        'n_cluster_levels': 0}
 
     # Draw a trace for position-colored 3D point cloud
     # radius = torch.norm(data.pos - data.pos.mean(dim=0), dim=1).max()
@@ -285,6 +223,7 @@ def visualize_3d(
     mini = data_0.pos.min(dim=0).values
     maxi = data_0.pos.max(dim=0).values
     data_0.pos_rgb = (data_0.pos - mini) / (maxi - mini + 1e-6)
+    colors = rgb_to_plotly_rgb(data_0.pos_rgb)
     fig.add_trace(
         go.Scatter3d(
             name='Position RGB',
@@ -294,14 +233,75 @@ def visualize_3d(
             mode='markers',
             marker=dict(
                 size=pointsize,
-                color=rgb_to_plotly_rgb(data_0.pos_rgb), ),
+                color=colors, ),
             hoverinfo='x+y+z',
+            hovertext=None,
             showlegend=False,
-            visible=not initialized_visibility, ))
-    modes['name'].append('Position RGB')
-    modes['key'].append('position_rgb')
-    modes['num_traces'].append(1)
-    initialized_visibility = True
+            visible=True, ))
+    color_modes['name'].append('Position RGB')
+    color_modes['key'].append('position_rgb')
+    color_modes['colors'].append(colors)
+    color_modes['hoverinfo'].append('x+y+z')
+    color_modes['hovertext'].append(None)
+
+    # Draw a trace for RGB 3D point cloud
+    if data_0.rgb is not None:
+        colors = rgb_to_plotly_rgb(data_0.rgb)
+        color_modes['name'].append('RGB')
+        color_modes['key'].append('rgb')
+        color_modes['colors'].append(colors)
+        color_modes['hoverinfo'].append('x+y+z')
+        color_modes['hovertext'].append(None)
+
+    # Color the points with ground truth semantic labels. If labels are
+    # expressed as histograms, keep the most frequent one
+    if data_0.y is not None:
+        y = data_0.y
+        y = y.argmax(1).numpy() if y.dim() == 2 else y.numpy()
+        colors = class_colors[y] if class_colors is not None else None
+        if class_names is None:
+            text = np.array([f'Class {i}' for i in range(y.max() + 1)])
+        else:
+            text = np.array([str.title(c) for c in class_names])
+        text = text[y]
+        color_modes['name'].append('Labels')
+        color_modes['key'].append('y')
+        color_modes['colors'].append(colors)
+        color_modes['hoverinfo'].append('x+y+z+text')
+        color_modes['hovertext'].append(text)
+
+        # high = data_0.pos.max(dim=0).values.view(1, -1).cpu().numpy()
+        # low = data_0.pos.min(dim=0).values.view(1, -1).cpu().numpy()
+        # center = (high + low) / 2
+        # for label in np.unique(y):
+        #     fig.add_trace(
+        #         go.Scatter3d(
+        #             name=class_names[label] if class_names else f"Class {label}",
+        #             opacity=0,
+        #             x=center[:, 0],
+        #             y=center[:, 1],
+        #             z=center[:, 2],
+        #             mode='markers',
+        #             marker=dict(
+        #                 size=pointsize,
+        #                 color=class_colors[label] if class_colors is not None else None, ),
+        #             visible=True, ))
+
+    # Color the points with predicted semantic labels. If labels are
+    # expressed as histograms, keep the most frequent one
+    if data_0.pred is not None:
+        pred = data_0.pred
+        pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
+        colors = class_colors[pred] if class_colors is not None else None
+        if class_names is None:
+            text = np.array([f'Class {i}' for i in range(pred.max() + 1)])
+        else:
+            text = np.array([str.title(c) for c in class_names])
+        color_modes['name'].append('Predictions')
+        color_modes['key'].append('pred')
+        color_modes['colors'].append(colors)
+        color_modes['hoverinfo'].append('x+y+z+text')
+        color_modes['hovertext'].append(text)
 
     # Draw a trace for the each cluster level
     for i_level, data_i in enumerate(input if is_nag else []):
@@ -320,21 +320,18 @@ def visualize_3d(
         else:
             super_index = super_index[data_i.super_index]
 
-        # Draw the level-0 points, colored by their level-i+1 cluster
-        # index
-        fig.add_trace(
-            go.Scatter3d(
-                name='Level {i_level}',  # TODO: careful with trace names and id
-                x=data_0.pos[:, 0],
-                y=data_0.pos[:, 1],
-                z=data_0.pos[:, 2],
-                mode='markers',
-                marker=dict(
-                    size=pointsize,
-                    color=PALETTE[super_index % len(PALETTE)], ),
-                hoverinfo='x+y+z',
-                showlegend=False,
-                visible=not initialized_visibility, ))
+        colors = int_to_plotly_rgb(super_index)
+        # colors = PALETTE[super_index % len(PALETTE)]
+        color_modes['name'].append(f'Level {i_level}')
+        color_modes['key'].append(f'level_{i_level}')
+        color_modes['colors'].append(colors)
+        color_modes['hoverinfo'].append('x+y+z+text')
+        color_modes['hovertext'].append([f'c: {i}' for i in super_index])
+
+        # Skip to the next level if we do not need to draw the cluster
+        # centroids
+        if not super_centre:
+            continue
 
         # To recover centroids of the i+1 level superpoints, we either
         # read them from the next NAG level or compute them using the
@@ -362,109 +359,92 @@ def visualize_3d(
                     line_width=2,
                     size=pointsize + 2,
                     color=PALETTE[idx_sp % len(PALETTE)], ),
-                text=[f"<b>{i}</b>" for i in idx_sp] if show_superpoint_number else '',
+                text=[f"<b>{i}</b>" for i in idx_sp] if super_number else '',
                 textposition="bottom center",
                 textfont=dict(size=16),
                 hoverinfo='x+y+z+name',
                 showlegend=False,
-                visible=not initialized_visibility, ))
+                visible=False, ))
 
-        modes['name'].append(f'Level {i_level}')
-        modes['key'].append(f'level_{i_level}')
-        modes['num_traces'].append(2)
-        initialized_visibility = True
+        # Update the number of cluster levels
+        color_modes['n_cluster_levels'] += 1
 
     # Draw a trace for 3D point cloud features
-    if getattr(data_0, 'x', None) is not None:
+    if data_0.x is not None:
         # Recover the features and convert them to an RGB format for
         # visualization.
         data_0.feat_3d = feats_to_rgb(data_0.x, normalize=True)
-        fig.add_trace(
-            go.Scatter3d(
-                name='Features 3D',
-                x=data_0.pos[:, 0],
-                y=data_0.pos[:, 1],
-                z=data_0.pos[:, 2],
-                mode='markers',
-                marker=dict(
-                    size=pointsize,
-                    color=rgb_to_plotly_rgb(data_0.feat_3d), ),
-                hoverinfo='x+y+z',
-                showlegend=False,
-                visible=not initialized_visibility, ))
-        modes['name'].append('Features 3D')
-        modes['key'].append('x')
-        modes['num_traces'].append(1)
-        initialized_visibility = True
+        colors = rgb_to_plotly_rgb(data_0.feat_3d)
+        color_modes['name'].append('Features 3D')
+        color_modes['key'].append('x')
+        color_modes['colors'].append(colors)
+        color_modes['hoverinfo'].append('x+y+z')
+        color_modes['hovertext'].append(None)
 
-    # Add a trace for prediction errors
-    has_error = getattr(data_0, 'y', None) is not None \
-                and getattr(data_0, 'pred', None) is not None
-    if has_error:
-        indices = np.where(data_0.pred.numpy() != data_0.y.numpy())[0]
-        error_color = f"rgb{tuple(error_color)}" \
-            if error_color is not None else 'rgb(255, 0, 0)'
-        fig.add_trace(
-            go.Scatter3d(
-                name='Errors',
-                opacity=1.0,
-                x=data_0.pos[indices, 0],
-                y=data_0.pos[indices, 1],
-                z=data_0.pos[indices, 2],
-                mode='markers',
-                marker=dict(
-                    size=pointsize,
-                    color=error_color, ),
-                showlegend=False,
-                visible=False, ))
-        modes['name'].append('Errors')
-        modes['key'].append('error')
-        modes['num_traces'].append(1)
-
-    # # Draw cluster centroid positions
-    # if has_partition:
-    #     idx_sp = np.arange(data_c.num_nodes)
-    #     sp_traces = []
-    #     sp_traces.append(len(fig.data))
+    # # Add a trace for prediction errors
+    # has_error = data_0.y is not None and data_0.pred is not None
+    # if has_error:
+    #     indices = np.where(data_0.pred.numpy() != data_0.y.numpy())[0]
+    #     error_color = f"rgb{tuple(error_color)}" \
+    #         if error_color is not None else 'rgb(255, 0, 0)'
     #     fig.add_trace(
     #         go.Scatter3d(
-    #             name=f"Superpoint centroids",
-    #             x=data_c.pos[:, 0],
-    #             y=data_c.pos[:, 1],
-    #             z=data_c.pos[:, 2],
-    #             mode='markers+text',
+    #             name='Errors',
+    #             opacity=1.0,
+    #             x=data_0.pos[indices, 0],
+    #             y=data_0.pos[indices, 1],
+    #             z=data_0.pos[indices, 2],
+    #             mode='markers',
     #             marker=dict(
-    #                 symbol='diamond',
-    #                 line_width=2,
-    #                 size=pointsize + 2,
-    #                 color=PALETTE[idx_sp % len(PALETTE)], ),
-    #             text=[f"<b>{i}</b>" for i in idx_sp] if show_superpoint_number else '',
-    #             textposition="bottom center",
-    #             textfont=dict(size=16),
-    #             hoverinfo='x+y+z+name',
+    #                 size=pointsize,
+    #                 color=error_color, ),
     #             showlegend=False,
-    #             visible=True, ))
+    #             visible=False, ))
+    #     modes['name'].append('Errors')
+    #     modes['key'].append('error')
+    #     modes['num_traces'].append(1)
 
-    # Traces visibility for interactive point cloud coloring
-    def trace_visibility(mode):
-        visibilities = np.array([d.visible for d in fig.data], dtype='bool')
+    # # Traces visibility for interactive point cloud coloring
+    # def trace_visibility(mode):
+    #     visibilities = np.array([d.visible for d in fig.data], dtype='bool')
+    #
+    #     # Traces visibility for interactive point cloud coloring
+    #     i_mode = modes['key'].index(mode)
+    #     a = sum(modes['num_traces'][:i_mode])
+    #     b = sum(modes['num_traces'][:i_mode + 1])
+    #     n_traces = sum(modes['num_traces'])
+    #
+    #     visibilities[:n_traces] = False
+    #     visibilities[a:b] = True
+    #
+    #     return [{"visible": visibilities.tolist()}]
 
-        # Traces visibility for interactive point cloud coloring
-        i_mode = modes['key'].index(mode)
-        a = sum(modes['num_traces'][:i_mode])
-        b = sum(modes['num_traces'][:i_mode + 1])
-        n_traces = sum(modes['num_traces'])
+    # Traces color for interactive point cloud coloring
+    def trace_color(mode):
+        i_mode = color_modes['key'].index(mode)
+        colors = color_modes['colors'][i_mode]
+        hoverinfo = color_modes['hoverinfo'][i_mode]
+        hovertext = color_modes['hovertext'][i_mode]
 
-        visibilities[:n_traces] = False
-        visibilities[a:b] = True
+        color_modes['n_cluster_levels']
+        cluster_visible =
+        cluster_color =
+        cluster_hoverinfo = []
+        cluster_hovertext = []
 
-        return [{"visible": visibilities.tolist()}]
+        return [{
+            'visible': [True],
+            'marker.color': [colors],
+            'hoverinfo': [hoverinfo],
+            'hovertext': [hovertext]}]
 
     # Create the buttons that will serve for toggling trace visibility
     updatemenus = [
         dict(
-            buttons=[dict(label=name, method='update', args=trace_visibility(key))
-                     for name, key in zip(modes['name'], modes['key']) if key != 'error'],
+            buttons=[dict(
+                label=name, method='update', args=trace_color(key))
+                for name, key in zip(color_modes['name'], color_modes['key'])
+                if key != 'error'],
             pad={'r': 10, 't': 10},
             showactive=True,
             type='dropdown',
@@ -475,25 +455,25 @@ def visualize_3d(
             y=1.02, ),
     ]
 
-    if has_error:
-        updatemenus.append(
-            dict(
-                buttons=[dict(
-                    method='restyle',
-                    label='Error',
-                    visible=True,
-                    args=[{'visible': True, },
-                          [sum(modes['num_traces'][:modes['key'].index('error')])]],
-                    args2=[{'visible': False, },
-                           [sum(modes['num_traces'][:modes['key'].index('error')])]], )],
-                pad={'r': 10, 't': 10},
-                showactive=False,
-                type='buttons',
-                xanchor='left',
-                x=1.02,
-                yanchor='top',
-                y=1.02, ),
-        )
+    # if has_error:
+    #     updatemenus.append(
+    #         dict(
+    #             buttons=[dict(
+    #                 method='restyle',
+    #                 label='Error',
+    #                 visible=True,
+    #                 args=[{'visible': True, },
+    #                       [sum(modes['num_traces'][:modes['key'].index('error')])]],
+    #                 args2=[{'visible': False, },
+    #                        [sum(modes['num_traces'][:modes['key'].index('error')])]], )],
+    #             pad={'r': 10, 't': 10},
+    #             showactive=False,
+    #             type='buttons',
+    #             xanchor='left',
+    #             x=1.02,
+    #             yanchor='top',
+    #             y=1.02, ),
+    #     )
     fig.update_layout(updatemenus=updatemenus)
 
     # Place the legend on the left
