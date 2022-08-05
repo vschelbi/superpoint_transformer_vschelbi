@@ -301,7 +301,8 @@ def visualize_3d(
         # read them from the next NAG level or compute them using the
         # level i 'super_index' indices
         num_levels = input.num_levels
-        if i_level == num_levels - 1 or input[i_level + 1].pos is None:
+        is_last_level = i_level == num_levels - 1
+        if is_last_level or input[i_level + 1].pos is None:
             super_pos = scatter_mean(data_0.pos, super_index, dim=0)
         else:
             super_pos = input[i_level + 1].pos
@@ -330,10 +331,51 @@ def visualize_3d(
                 hoverinfo='x+y+z+text',
                 showlegend=False,
                 visible=False, ))
-
         trace_modes.append({})
         trace_modes[-1][f'Level {i_level}'] = {
             'marker.color': colors, 'hovertext': text}
+
+        # Do not draw superedges if not required or if the i+1 level
+        # does not have any
+        if not super_edge or is_last_level or not input[i_level + 1].has_edges:
+            continue
+
+        # Recover the superedge source and target positions
+        se = input[i_level + 1].edge_index
+
+        # Drawn superedges are assumed to be undirected here, so we
+        # consider (i, j) and (j, i) to be duplicates. By construction,
+        # we assume all superedges are represented in both directions in
+        # a NAG (this assumption does not hold for drawing any type of
+        # directed graph, obviously). Due to this, we can easily remove
+        # duplicate superedges by only keeping egdes such that i < j
+        se = se[:, se[0] < se[1]]
+
+        # Recover corresponding source and target coordinates using the
+        # previously-computed 'super_pos' cluster centroid positions
+        s_pos = super_pos[se[0]].cpu().numpy()
+        t_pos = super_pos[se[1]].cpu().numpy()
+
+        # Convert into a plotly-friendly format for 3D lines
+        edges = np.full((se.shape[1] * 3, 3), None)
+        edges[::3] = s_pos
+        edges[1::3] = t_pos
+
+        # Draw the level-i+1 superedges
+        color = 'black'
+        fig.add_trace(
+            go.Scatter3d(
+                x=edges[:, 0],
+                y=edges[:, 1],
+                z=edges[:, 2],
+                mode='lines',
+                line=dict(
+                    width=pointsize,
+                    color=color,),
+                showlegend=False,
+                visible=False, ))
+        trace_modes.append({})
+        trace_modes[-1][f'Level {i_level}'] = {}
 
     # # Add a trace for prediction errors
     # has_error = data_0.y is not None and data_0.pred is not None
