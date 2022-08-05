@@ -258,6 +258,7 @@ def visualize_3d(
             text = np.array([f'Class {i}' for i in range(pred.max() + 1)])
         else:
             text = np.array([str.title(c) for c in class_names])
+        text = text[pred]
         trace_modes[-1]['Predictions'] = {
             'marker.color': colors, 'hovertext': text}
 
@@ -399,21 +400,6 @@ def visualize_3d(
     #     modes['name'].append('Errors')
     #     modes['key'].append('error')
     #     modes['num_traces'].append(1)
-
-    # # Traces visibility for interactive point cloud coloring
-    # def trace_visibility(mode):
-    #     visibilities = np.array([d.visible for d in fig.data], dtype='bool')
-    #
-    #     # Traces visibility for interactive point cloud coloring
-    #     i_mode = modes['key'].index(mode)
-    #     a = sum(modes['num_traces'][:i_mode])
-    #     b = sum(modes['num_traces'][:i_mode + 1])
-    #     n_traces = sum(modes['num_traces'])
-    #
-    #     visibilities[:n_traces] = False
-    #     visibilities[a:b] = True
-    #
-    #     return [{"visible": visibilities.tolist()}]
 
     # Recover the keys for all visualization modes, as an ordered set,
     # with respect to their order of first appearance
