@@ -378,28 +378,38 @@ def visualize_3d(
         trace_modes.append({})
         trace_modes[-1][f'Level {i_level}'] = {}
 
-    # # Add a trace for prediction errors
-    # has_error = data_0.y is not None and data_0.pred is not None
-    # if has_error:
-    #     indices = np.where(data_0.pred.numpy() != data_0.y.numpy())[0]
-    #     error_color = f"rgb{tuple(error_color)}" \
-    #         if error_color is not None else 'rgb(255, 0, 0)'
-    #     fig.add_trace(
-    #         go.Scatter3d(
-    #             name='Errors',
-    #             opacity=1.0,
-    #             x=data_0.pos[indices, 0],
-    #             y=data_0.pos[indices, 1],
-    #             z=data_0.pos[indices, 2],
-    #             mode='markers',
-    #             marker=dict(
-    #                 size=pointsize,
-    #                 color=error_color, ),
-    #             showlegend=False,
-    #             visible=False, ))
-    #     modes['name'].append('Errors')
-    #     modes['key'].append('error')
-    #     modes['num_traces'].append(1)
+    # Add a trace for prediction errors. NB: it is important that this
+    # trace is created last, as the button behavior for this one is
+    # particular
+    has_error = data_0.y is not None and data_0.pred is not None
+    if has_error:
+
+        # Recover prediction and ground truth and deal with potential
+        # histograms
+        y = data_0.y
+        y = y.argmax(1).numpy() if y.dim() == 2 else y.numpy()
+        pred = data_0.pred
+        pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
+
+        # Identify erroneous point indices
+        indices = np.where(pred != y)[0]
+
+        # Prepare the color for erroneous points
+        error_color = 'red' if error_color is None \
+            else f'rgb{tuple(error_color)}'
+
+        # Draw the erroneous points
+        fig.add_trace(
+            go.Scatter3d(
+                x=data_0.pos[indices, 0],
+                y=data_0.pos[indices, 1],
+                z=data_0.pos[indices, 2],
+                mode='markers',
+                marker=dict(
+                    size=pointsize + 2,
+                    color=error_color, ),
+                showlegend=False,
+                visible=False, ))
 
     # Recover the keys for all visualization modes, as an ordered set,
     # with respect to their order of first appearance
@@ -412,7 +422,7 @@ def visualize_3d(
         # hover text
         n_traces = len(trace_modes)
         out = {
-            'visible': [False] * n_traces,
+            'visible': [False] * (n_traces + has_error),
             'marker.color': [None] * n_traces,
             'hovertext': [''] * n_traces}
 
@@ -431,14 +441,14 @@ def visualize_3d(
             for key, val in t_modes[mode].items():
                 out[key][i_trace] = val
 
-        return [out]
+        return [out, list(range(len(trace_modes)))]
 
     # Create the buttons that will serve for toggling trace visibility
     updatemenus = [
         dict(
             buttons=[dict(
                 label=mode, method='update', args=trace_update(mode))
-                for mode in modes if mode != 'error'],
+                for mode in modes if mode.lower() != 'errors'],
             pad={'r': 10, 't': 10},
             showactive=True,
             type='dropdown',
@@ -446,28 +456,29 @@ def visualize_3d(
             xanchor='left',
             x=0.02,
             yanchor='top',
-            y=1.02, ),
-    ]
+            y=1.02, ),]
 
-    # if has_error:
-    #     updatemenus.append(
-    #         dict(
-    #             buttons=[dict(
-    #                 method='restyle',
-    #                 label='Error',
-    #                 visible=True,
-    #                 args=[{'visible': True, },
-    #                       [sum(modes['num_traces'][:modes['key'].index('error')])]],
-    #                 args2=[{'visible': False, },
-    #                        [sum(modes['num_traces'][:modes['key'].index('error')])]], )],
-    #             pad={'r': 10, 't': 10},
-    #             showactive=False,
-    #             type='buttons',
-    #             xanchor='left',
-    #             x=1.02,
-    #             yanchor='top',
-    #             y=1.02, ),
-    #     )
+    if has_error:
+        updatemenus.append(
+            dict(
+                buttons=[dict(
+                    method='restyle',
+                    label='Errors',
+                    visible=True,
+                    args=[
+                        {'visible': True, 'marker.color': error_color},
+                        [len(trace_modes)]],
+                    args2=[
+                        {'visible': False,},
+                        [len(trace_modes)]],)],
+                pad={'r': 10, 't': 10},
+                showactive=False,
+                type='buttons',
+                xanchor='left',
+                x=1.02,
+                yanchor='top',
+                y=1.02, ),)
+
     fig.update_layout(updatemenus=updatemenus)
 
     # Place the legend on the left
@@ -489,24 +500,19 @@ def visualize_3d(
                 showgrid=False,
                 ticks='',
                 showticklabels=False,
-                backgroundcolor="rgba(0, 0, 0, 0)"
-            ),
+                backgroundcolor="rgba(0, 0, 0, 0)"),
             yaxis=dict(
                 autorange=True,
                 showgrid=False,
                 ticks='',
                 showticklabels=False,
-                backgroundcolor="rgba(0, 0, 0, 0)"
-            ),
+                backgroundcolor="rgba(0, 0, 0, 0)"),
             zaxis=dict(
                 autorange=True,
                 showgrid=False,
                 ticks='',
                 showticklabels=False,
-                backgroundcolor="rgba(0, 0, 0, 0)"
-            )
-        )
-    )
+                backgroundcolor="rgba(0, 0, 0, 0)")))
 
     output = {'figure': fig, 'data': data_0}
 
