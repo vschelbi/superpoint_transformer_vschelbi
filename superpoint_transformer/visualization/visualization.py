@@ -118,8 +118,8 @@ def identity_PCA(x, dim=3, normalize=False):
 
 def visualize_3d(
         input, figsize=800, width=None, height=None, class_names=None,
-        class_colors=None, class_opacities=None, voxel=-1, max_points=100000,
-        pointsize=5, error_color=None, super_centre=True, super_edge=False,
+        class_colors=None, voxel=-1, max_points=100000, pointsize=5,
+        error_color=None, super_centre=True, super_edge=False,
         super_number=False, **kwargs):
     """3D data interactive visualization.
 
@@ -130,7 +130,6 @@ def visualize_3d(
     :param height: figure height
     :param class_names: names for point labels in MMData
     :param class_colors: colors for point labels in MMData
-    :param class_opacities: class-wise opacities
     :param voxel: voxel size to subsample the point cloud to facilitate
       visualization
     :param max_points: maximum number of points displayed to facilitate
