@@ -10,7 +10,8 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 def compute_ajacency_graph(data, k_adjacency, lambda_edge_weight):
-    """Create the adjacency graph edges based on the 'Data.neighbors'.
+    """Create the adjacency graph edges based on the 'Data.neighbors'
+    and 'Data.distances'.
 
     NB: this graph is directed wrt Pytorch Geometric, but cut-pursuit
     happily takes this as an input.
@@ -26,6 +27,43 @@ def compute_ajacency_graph(data, k_adjacency, lambda_edge_weight):
     return data
 
 
+def edge_to_superedge(edges, super_index, edge_attr=None):
+    """Convert point-level edges into superedges between clusters, based
+    on point-to-cluster indexing 'super_index'. Optionally 'edge_attr'
+    can be passed to describe edge attributes that will be returned
+    filtered and ordered to describe the superedges.
+    """
+    # We are only interested in the edges connecting two different
+    # clusters and not in the intra-cluster connections. So we first
+    # identify the edges of interest. This step requires having access
+    # to the 'super_index' to convert point indices into their
+    # corresponding cluster indices
+    idx_source = super_index[edges[0]]
+    idx_target = super_index[edges[1]]
+    inter_cluster = torch.where(idx_source != idx_target)[0]
+
+    # Now only consider the edges of interest (ie inter-cluster edges)
+    edges_inter = edges[:, inter_cluster]
+    edge_attr = edge_attr[inter_cluster] if edge_attr is not None else None
+    idx_source = idx_source[inter_cluster]
+    idx_target = idx_target[inter_cluster]
+
+    # So far we are manipulating inter-cluster edges, but there may be
+    # multiple of those for a given source-target pair. Next, we want to
+    # aggregate those into 'superedge" and compute corresponding
+    # features (designated with 'se_'). Here, we create unique and
+    # consecutive inter-cluster edge identifiers for torch_scatter
+    # operations. We use 'se' to designate 'superedge' (ie an edge
+    # between two clusters)
+    idx_se = idx_source + idx_source.max() * idx_target
+    idx_se, perm = consecutive_cluster(idx_se)
+    idx_se_source = idx_source[perm]
+    idx_se_target = idx_target[perm]
+    se = torch.vstack((idx_se_source, idx_se_target))
+
+    return se, idx_se, edges_inter, edge_attr
+
+
 def _compute_cluster_graph(
         i_level, nag, high_node=32, high_edge=64, low=5):
     # TODO: WARNING the cluster geometric features will only work if we
@@ -37,44 +75,21 @@ def _compute_cluster_graph(
     # TODO: return all eigenvectors from the C++ geometric features, for
     #  superborder features computation
     # TODO: other superedge ideas to better describe how 2 clusters
-    # relate and the geometry of their border (S=source, T=target):
-    # - avg distance S/T points in border to centroid S/T (how far
-    #   is the border from the cluster center)
-    # - angle of mean S->T direction wrt S/T principal components (is
-    #   the border along the long of short side of objects ?)
-    # - PCA of points in S/T cloud (is it linear border or surfacic
-    #   border ?)
-    # - mean dist of S->T along S/T normal (offset along the objects
-    #   normals, eg offsets between steps)
+    #  relate and the geometry of their border (S=source, T=target):
+    #  - avg distance S/T points in border to centroid S/T (how far
+    #    is the border from the cluster center)
+    #  - angle of mean S->T direction wrt S/T principal components (is
+    #    the border along the long of short side of objects ?)
+    #  - PCA of points in S/T cloud (is it linear border or surfacic
+    #    border ?)
+    #  - mean dist of S->T along S/T normal (offset along the objects
+    #    normals, eg offsets between steps)
 
     assert isinstance(nag, NAG)
     assert i_level > 0
 
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
-
-    # Aggregate some point attributes into the clusters. This is not
-    # performed dynamically since not all attributes can be aggregated
-    # (eg 'neighbors', 'distances', 'edge_index', 'edge_attr'...)
-    data_sub = nag[i_level - 1]
-
-    if 'pos' in data_sub.keys:
-        data.pos = scatter_mean(
-            data_sub.pos.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
-        torch.cuda.empty_cache()
-
-    if 'rgb' in data_sub.keys:
-        data.rgb = scatter_mean(
-            data_sub.rgb.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
-        torch.cuda.empty_cache()
-
-    if 'y' in data_sub.keys:
-        assert data_sub.y.dim() == 2, \
-            "Expected Data.y to hold `(num_nodes, num_classes)` " \
-            "histograms, not single labels"
-        data.y = scatter_sum(
-            data_sub.y.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
-        torch.cuda.empty_cache()
 
     # Sample points among the clusters. These will be used to compute
     # cluster geometric features as well as cluster adjacency graph and
@@ -120,45 +135,26 @@ def _compute_cluster_graph(
     pairs = torch.LongTensor(list(itertools.combinations(range(4), 2)))
     edges = torch.from_numpy(np.hstack([
         np.vstack((tri.vertices[:, i], tri.vertices[:, j]))
-        for i, j in pairs]).T).long()
+        for i, j in pairs])).long()
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. So we first
     # identify the edges of interest. This step requires having access
     # to the whole NAG, since we need to convert level-0 point indices
     # into their corresponding level-i superpoint indices
-    idx_point_source = idx_samples[edges[:, 0]]
-    idx_point_target = idx_samples[edges[:, 1]]
-    idx_source = idx_point_source
-    idx_target = idx_point_target
-    for i in range(i_level):
-        idx_source = nag[i].super_index[idx_source]
-        idx_target = nag[i].super_index[idx_target]
-    inter_cluster = torch.where(idx_source != idx_target)[0]
+    super_index = nag[0].super_index
+    for i in range(1, i_level):
+        super_index = nag[i].super_index[super_index]
 
-    # Now only consider the edges of interest (ie inter-cluster edges)
-    idx_point_source = idx_point_source[inter_cluster]
-    idx_point_target = idx_point_target[inter_cluster]
-    idx_source = idx_source[inter_cluster]
-    idx_target = idx_target[inter_cluster]
+    # Select only inter-cluster edges and compute the corresponding
+    # source and target point and cluster indices
+    se, idx_se, edges_inter, _ = edge_to_superedge(
+        idx_samples[edges], super_index)
 
     # Direction are the pointwise source->target vectors, based on which
-    # we will compute superedge descriptors. So far we are manipulating
-    # inter-cluster edges, but their may be multiple of those for a
-    # given source-target pair. Next, we want to aggregate those into
-    # "superegdes" and compute corresponding features (designated with
-    # 'se_')
-    direction = nag[0].pos[idx_point_target] - nag[0].pos[idx_point_source]
+    # we will compute superedge descriptors
+    direction = nag[0].pos[edges_inter[1]] - nag[0].pos[edges_inter[0]]
     dist = torch.linalg.norm(direction, dim=1)
-
-    # Create unique and consecutive inter-cluster edge identifiers for
-    # torch_scatter operations. We use 'se' to designate 'superedge' (ie
-    # an edge between two clusters)
-    idx_se = idx_source + data.num_nodes * idx_target
-    idx_se, perm = consecutive_cluster(idx_se)
-    idx_se_source = idx_source[perm]
-    idx_se_target = idx_target[perm]
-    se = torch.vstack((idx_se_source, idx_se_target))
 
     # We can now use torch_scatter operations to compute superedge
     # features
