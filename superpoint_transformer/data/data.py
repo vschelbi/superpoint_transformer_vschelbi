@@ -9,9 +9,10 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 class Data(PyGData):
 
-    def __init__(self, **kwargs):
+    def __init__(self, debug=False, **kwargs):
         super().__init__(**kwargs)
-        # self.debug()
+        if debug:
+            self.debug()
 
     @property
     def rgb(self):
@@ -173,7 +174,7 @@ class Data(PyGData):
                 0, idx, torch.arange(idx.shape[0], device=device))
             edge_index = reindex[self.edge_index]
 
-            # Remove the obsolete edges (ie those involving a '-1' index)
+            # Remove obsolete edges (ie those involving a '-1' index)
             idx_edge = torch.where((edge_index != -1).all(dim=0))[0]
             data.edge_index = edge_index[:, idx_edge]
 
@@ -197,8 +198,9 @@ class Data(PyGData):
             # Convert superpoint indices, in case some superpoints have
             # disappeared. 'idx_super' is intended to be used with
             # Data.select() on the level above
-            data.super_index, perm = consecutive_cluster(data.super_index)
+            new_super_index, perm = consecutive_cluster(data.super_index)
             idx_super = data.super_index[perm]
+            data.super_index = new_super_index
 
             # Selecting the superpoints with 'idx_super' will not be
             # enough to maintain consistency with the current points. We
@@ -211,7 +213,8 @@ class Data(PyGData):
             out_super = (idx_super, super_sub)
 
         # Index data items depending on their type
-        skip_keys = ['edge_index', 'sub', 'super_index', 'neighbors']
+        skip_keys = [
+            'edge_index', 'sub', 'super_index', 'neighbors', 'distances']
         for key, item in self:
 
             # 'skip_keys' have already been dealt with earlier on, so we
@@ -225,7 +228,7 @@ class Data(PyGData):
 
             # Slice tensor elements containing num_edges elements. Note
             # we deal with edges first, to rule out the case where
-            # num_edges = num_nodes.
+            # num_edges = num_nodes
             if self.has_edges and is_tensor and is_edge_size and 'edge' in key:
                 data[key] = item[idx_edge].clone()
 

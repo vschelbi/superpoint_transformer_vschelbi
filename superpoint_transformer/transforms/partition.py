@@ -79,7 +79,8 @@ def compute_partition(
             balance_parallel_split=balance)
 
         if verbose:
-            print(f'Level {i_level} iteration times: {(times[1:] - times[:-1]).round(2)}')
+            delta_t = times[1:] - times[:-1]
+            print(f'Level {i_level} iteration times: {delta_t:0.2f}')
 
         # Save the super_index for the i-level
         super_index = torch.from_numpy(super_index.astype('int64'))
@@ -92,7 +93,7 @@ def compute_partition(
         values = torch.cat([torch.from_numpy(x.astype('int64')) for x in cluster])
         data_sup = Data(x=torch.from_numpy(x_c.T), sub=Cluster(pointers, values))
 
-        # Prepare the features and adjacency graph for the  i+1-level
+        # Prepare the features and adjacency graph for the i+1-level
         # partition
         x = x_c
         num_nodes = data_sup.num_nodes
@@ -107,6 +108,7 @@ def compute_partition(
         # 'edge_attr'...)
         data_sub = data_list[-1]
 
+        # TODO: scatter operations on CUDA ?
         if 'pos' in data_sub.keys:
             data_sup.pos = scatter_mean(
                 data_sub.pos.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
@@ -124,6 +126,16 @@ def compute_partition(
             data_sup.y = scatter_sum(
                 data_sub.y.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
             torch.cuda.empty_cache()
+
+        if 'pred' in data_sub.keys:
+            assert data_sub.pred.dim() == 2, \
+                "Expected Data.pred to hold `(num_nodes, num_classes)` " \
+                "histograms, not single labels"
+            data_sup.pred = scatter_sum(
+                data_sub.pred.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
+            torch.cuda.empty_cache()
+
+        # TODO: aggregate other attributes ?
 
         # Add the level-i+1 Data object to data_list
         data_list.append(data_sup)

@@ -14,7 +14,7 @@ class CSRData:
 
     def __init__(
             self, pointers: torch.LongTensor, *args, dense=False,
-            is_index_value=None):
+            is_index_value=None, debug=False):
         """Initialize the pointers and values.
 
         Values are passed as args and stored in a list. They are
@@ -38,10 +38,12 @@ class CSRData:
             self.pointers = pointers
         self.values = [*args] if len(args) > 0 else None
         if is_index_value is None or is_index_value == []:
-            self.is_index_value = torch.zeros(self.num_values, dtype=torch.bool)
+            self.is_index_value = torch.zeros(
+                self.num_values, dtype=torch.bool)
         else:
             self.is_index_value = torch.BoolTensor(is_index_value)
-        # self.debug()
+        if debug:
+            self.debug()
 
     def debug(self):
         # assert self.num_groups >= 1, \
@@ -146,7 +148,8 @@ class CSRData:
         return pointers, order
 
     def reindex_groups(
-            self, group_indices: torch.LongTensor, order=None, num_groups=None):
+            self, group_indices: torch.LongTensor, order=None,
+            num_groups=None):
         """Returns a copy of self with modified pointers to account for
         new groups. Affects the num_groups and the order of groups.
         Injects 0-length pointers where need be.
@@ -181,7 +184,8 @@ class CSRData:
         If not provided, it is inferred from the size of group_indices.
         """
         assert self.num_groups == group_indices.shape[0], \
-            "New group indices must correspond to the existing number of groups"
+            "New group indices must correspond to the existing number " \
+            "of groups"
         assert is_sorted(group_indices), "New group indices must be sorted."
 
         if num_groups is not None:
@@ -251,7 +255,8 @@ class CSRData:
 
         else:
             # Select the pointers and prepare the values indexing
-            pointers, val_idx = CSRData.index_select_pointers(self.pointers, idx)
+            pointers, val_idx = CSRData.index_select_pointers(
+                self.pointers, idx)
             out.pointers = pointers
             out.values = [v[val_idx] for v in self.values]
 

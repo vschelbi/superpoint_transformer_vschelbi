@@ -67,9 +67,9 @@ def feats_to_rgb(feats, normalize=False):
         color = torch.cat([feats, torch.ones(feats.shape[0], 1)], 1)
 
     elif feats.shape[1] > 3:
-        # If more than 3 features or more are found, project
-        # features to a 3-dimensional space using N-simplex PCA
-        # Heuristics for clamping
+        # If more than 3 features or more are found, project features to
+        # a 3-dimensional space using N-simplex PCA. Heuristics for
+        # clamping:
         #   - most features live in [0, 1]
         #   - most n-simplex PCA features live in [-0.5, 0.6]
         color = identity_PCA(feats, dim=3, normalize=normalize)
@@ -92,7 +92,7 @@ def identity_PCA(x, dim=3, normalize=False):
     input dimensions with the same importance, independently of the
     input distribution in x.
     """
-    assert x.dim() == 2, f"Expected x.dim()=2 but got x.dim()={x.dim()} instead"
+    assert x.dim() == 2, f"Expected x.dim()=2, got x.dim()={x.dim()} instead"
 
     # Create z the union of the N-simplex
     input_dim = x.shape[1]
@@ -136,7 +136,8 @@ def visualize_3d(
       visualization
     :param pointsize: size of points
     :param error_color: color used to identify mis-predicted points
-    :param super_centre: whether superpoint centroids should be displayed
+    :param super_centre: whether superpoint centroids should be
+      displayed
     :param super_edge: whether superedges should be displayed
       (only if super_centre=True)
     :param super_number: whether superpoint numbers should be displayed
@@ -151,7 +152,8 @@ def visualize_3d(
     # scope. Data_0 accounts for the lowest level of hierarchy, the
     # points themselves.
     input = input.clone()
-    input = NAG([input]) if isinstance(input, Data) and input.is_sub else input
+    input = NAG([input]) if isinstance(input, Data) and input.is_sub \
+        else input
     is_nag = isinstance(input, NAG)
     data_0 = input[0] if is_nag else input
 
@@ -227,7 +229,8 @@ def visualize_3d(
             showlegend=False,
             visible=True, ))
     trace_modes.append({})
-    trace_modes[-1]['Position RGB'] = {'marker.color': colors, 'hovertext': None}
+    trace_modes[-1]['Position RGB'] = {
+        'marker.color': colors, 'hovertext': None}
 
     # Draw a trace for RGB 3D point cloud
     if data_0.rgb is not None:
@@ -285,11 +288,14 @@ def visualize_3d(
         if i_level == 0:
             super_index = data_i.super_index
         else:
-            super_index = super_index[data_i.super_index]
+            super_index = data_i.super_index[super_index]
 
+        # Note that we update the 'trace_modes' 0th element here, this
+        # assumes only it is the trace holding all level-0 points and on
+        # which all other colors modes are defined
         colors = int_to_plotly_rgb(super_index)
         text = [f'c: {i}' for i in super_index]
-        trace_modes[-1][f'Level {i_level}'] = {
+        trace_modes[0][f'Level {i_level + 1}'] = {
             'marker.color': colors, 'hovertext': text}
 
         # Skip to the next level if we do not need to draw the cluster
@@ -311,7 +317,7 @@ def visualize_3d(
         super_pos = (super_pos * 100).round() / 100
 
         # Draw the level-i+1 cluster centroids
-        idx_sp = torch.arange(data_i.super_index.max())
+        idx_sp = torch.arange(data_i.super_index.max() + 1)
         colors = int_to_plotly_rgb(idx_sp)
         text = [f"<b>{i}</b>" for i in idx_sp] if super_number else ''
         fig.add_trace(
@@ -322,9 +328,10 @@ def visualize_3d(
                 mode='markers+text',
                 marker=dict(
                     symbol='diamond',
-                    line_width=2,
-                    size=pointsize + 2,
-                    color=colors, ),
+                    size=int(pointsize * 3),
+                    color=colors,
+                    line_width=pointsize,
+                    line_color='black'),
                 textposition="bottom center",
                 textfont=dict(size=16),
                 hovertext=text,
@@ -332,7 +339,7 @@ def visualize_3d(
                 showlegend=False,
                 visible=False, ))
         trace_modes.append({})
-        trace_modes[-1][f'Level {i_level}'] = {
+        trace_modes[-1][f'Level {i_level + 1}'] = {
             'marker.color': colors, 'hovertext': text}
 
         # Do not draw superedges if not required or if the i+1 level
@@ -362,7 +369,6 @@ def visualize_3d(
         edges[1::3] = t_pos
 
         # Draw the level-i+1 superedges
-        color = 'black'
         fig.add_trace(
             go.Scatter3d(
                 x=edges[:, 0],
@@ -371,11 +377,12 @@ def visualize_3d(
                 mode='lines',
                 line=dict(
                     width=pointsize,
-                    color=color,),
+                    color='black',),
+                hoverinfo='skip',
                 showlegend=False,
                 visible=False, ))
         trace_modes.append({})
-        trace_modes[-1][f'Level {i_level}'] = {}
+        trace_modes[-1][f'Level {i_level + 1}'] = {}
 
     # Add a trace for prediction errors. NB: it is important that this
     # trace is created last, as the button behavior for this one is
@@ -405,7 +412,7 @@ def visualize_3d(
                 z=data_0.pos[indices, 2],
                 mode='markers',
                 marker=dict(
-                    size=pointsize + 2,
+                    size=int(pointsize * 1.5),
                     color=error_color, ),
                 showlegend=False,
                 visible=False, ))
@@ -531,8 +538,9 @@ def figure_html(fig):
         fig_html = f.read()
 
     # Center the figure div for cleaner display
-    fig_html = fig_html.replace('class="plotly-graph-div" style="',
-                                'class="plotly-graph-div" style="margin:0 auto;')
+    fig_html = fig_html.replace(
+        'class="plotly-graph-div" style="',
+        'class="plotly-graph-div" style="margin:0 auto;')
 
     return fig_html
 

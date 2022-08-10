@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import itertools
 from scipy.spatial import Delaunay
-from torch_scatter import scatter_mean, scatter_std, scatter_min, scatter_sum
+from torch_scatter import scatter_mean, scatter_std, scatter_min
 from superpoint_transformer.data import NAG
 import superpoint_transformer.partition.utils.libpoint_utils as point_utils
 from superpoint_transformer.transforms.sampling import sample_clusters
@@ -65,7 +65,7 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
 
 
 def _compute_cluster_graph(
-        i_level, nag, high_node=32, high_edge=64, low=5):
+        i_level, nag, high_node=32, high_edge=64, low=5, max_dist=-1):
     # TODO: WARNING the cluster geometric features will only work if we
     #  enforced a cutoff on the minimum superpoint size ! Make sure you
     #  enforce this
@@ -98,9 +98,10 @@ def _compute_cluster_graph(
         data, high=high_node, low=low, pointers=True)
 
     # Compute cluster geometric features
+    #TODO: # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
     xyz = nag[0].pos[idx_samples].cpu().numpy()
-    nn = np.arange(idx_samples.shape[0]).astype('uint32')  # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
-    nn_ptr = ptr_samples.cpu().numpy().astype('uint32')  # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
+    nn = np.arange(idx_samples.shape[0]).astype('uint32')
+    nn_ptr = ptr_samples.cpu().numpy().astype('uint32')
 
     # Heuristic to avoid issues when a cluster sampling is such that
     # it produces singular covariance matrix (eg the sampling only
@@ -126,16 +127,24 @@ def _compute_cluster_graph(
     idx_samples, ptr_samples = sample_clusters(
         data, high=high_edge, low=low, pointers=True)
 
-    # Delaunay triangulation on the sampled points
-    tri = Delaunay(nag[0].pos[idx_samples].numpy())
+    # Delaunay triangulation on the sampled points. The tetrahedra edges
+    # are voronoi graph edges
+    pos = nag[0].pos[idx_samples]
+    tri = Delaunay(pos.numpy())
 
     # Concatenate all edges of the triangulation. For now, we do not
     # worry about directed/undirected graphs to mitigate memory and
     # compute
     pairs = torch.LongTensor(list(itertools.combinations(range(4), 2)))
     edges = torch.from_numpy(np.hstack([
-        np.vstack((tri.vertices[:, i], tri.vertices[:, j]))
+        np.vstack((tri.simplices[:, i], tri.simplices[:, j]))
         for i, j in pairs])).long()
+
+    # Remove edges whose distance is too large
+    if max_dist > 0:
+        dist = torch.linalg.norm(pos[edges[1]] - pos[edges[0]], dim=1)
+        edges = edges[dist >= max_dist]
+        del dist
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. So we first
@@ -208,9 +217,10 @@ def _compute_cluster_graph(
     return nag
 
 
-def compute_cluster_graph(nag, high_node=32, high_edge=64, low=5):
+def compute_cluster_graph(nag, high_node=32, high_edge=64, low=5, max_dist=-1):
     assert isinstance(nag, NAG)
     for i_level in range(1, nag.num_levels):
         nag = _compute_cluster_graph(
-            i_level, nag, high_node=high_node, high_edge=high_edge, low=low)
+            i_level, nag, high_node=high_node, high_edge=high_edge, low=low,
+            max_dist=max_dist)
     return nag

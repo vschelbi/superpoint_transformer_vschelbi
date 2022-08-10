@@ -10,12 +10,13 @@ class NAG:
     nested partitions of the same point cloud.
     """
 
-    def __init__(self, data_list: List[Data]):
+    def __init__(self, data_list: List[Data], debug=False):
         assert len(data_list) > 0,\
             "The NAG must have at least 1 level of hierarchy. Please " \
             "provide a minimum of 1 Data object."
         self._list = data_list
-        self.debug()
+        if debug:
+            self.debug()
         self._update_sub_size()
 
     def __len__(self):

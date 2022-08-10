@@ -9,8 +9,9 @@ class Cluster(CSRData):
     dedicated to cluster-point indexing.
     """
 
-    def __init__(self, pointers, points, dense=False):
-        super().__init__(pointers, points, dense=dense, is_index_value=[True])
+    def __init__(self, pointers, points, dense=False, debug=False):
+        super().__init__(
+            pointers, points, dense=dense, is_index_value=[True], debug=debug)
 
     @property
     def points(self):
@@ -82,8 +83,9 @@ class Cluster(CSRData):
         # Convert subpoint indices, in case some subpoints have
         # disappeared. 'idx_sub' is intended to be used with
         # Data.select() on the level below
-        cluster.points, perm = consecutive_cluster(cluster.points)
-        idx_sub = self.points[perm]
+        new_cluster_points, perm = consecutive_cluster(cluster.points)
+        idx_sub = cluster.points[perm]
+        cluster.points = new_cluster_points
 
         # Selecting the subpoints with 'idx_sub' will not be
         # enough to maintain consistency with the current points. We
@@ -95,7 +97,8 @@ class Cluster(CSRData):
 
     def debug(self):
         super().debug()
-        assert not has_duplicates(self.points)  #TODO: calling this whenever we debug might be costly...
+        # TODO: calling has_duplicates whenever we debug might be costly...
+        assert not has_duplicates(self.points)
 
     def __repr__(self):
         info = [
