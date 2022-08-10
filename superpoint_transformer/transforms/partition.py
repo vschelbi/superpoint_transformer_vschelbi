@@ -27,13 +27,13 @@ def compute_partition(
     assert 'distances' in data.keys, "Expected node distances in `data.distances`"
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
     assert data.num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
-    assert isinstance(reg_strength, (int, list)), "Expected an int or a List"
+    assert isinstance(reg_strength, (int, float, list)), "Expected a scalar or a List"
 
     # Number of threads depending on the parallelization
     max_thread = 0 if parallel else 1
 
     # The number of levels of hierarchy
-    reg_list = [reg_strength] if isinstance(reg_strength, int) else reg_strength
+    reg_list = reg_strength if isinstance(reg_strength, list) else [reg_strength]
 
     # Prepare the output as list of Data objects that will be stored in
     # a NAG structure
@@ -79,8 +79,8 @@ def compute_partition(
             balance_parallel_split=balance)
 
         if verbose:
-            delta_t = times[1:] - times[:-1]
-            print(f'Level {i_level} iteration times: {delta_t:0.2f}')
+            delta_t = (times[1:] - times[:-1]).round(2)
+            print(f'Level {i_level} iteration times: {delta_t}')
 
         # Save the super_index for the i-level
         super_index = torch.from_numpy(super_index.astype('int64'))
