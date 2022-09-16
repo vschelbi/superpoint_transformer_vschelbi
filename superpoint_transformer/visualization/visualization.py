@@ -344,6 +344,11 @@ def visualize_3d(
 
         # Do not draw superedges if not required or if the i+1 level
         # does not have any
+        print()
+        print(f'i_level: {i_level}')
+        print(f'super_edge: {super_edge}')
+        print(f'is_last_level: {is_last_level}')
+        print(f'input[i_level + 1].has_edges: {input[i_level + 1].has_edges}')
         if not super_edge or is_last_level or not input[i_level + 1].has_edges:
             continue
 
@@ -356,7 +361,10 @@ def visualize_3d(
         # a NAG (this assumption does not hold for drawing any type of
         # directed graph, obviously). Due to this, we can easily remove
         # duplicate superedges by only keeping egdes such that i < j
+        print(f'se: {se.shape}')
+        print((se[0] < se[1]).sum().item(), (se[0] == se[1]).sum().item(), (se[0] > se[1]).sum().item())
         se = se[:, se[0] < se[1]]
+        print(f'se S<T: {se.shape}')
 
         # Recover corresponding source and target coordinates using the
         # previously-computed 'super_pos' cluster centroid positions

@@ -18,7 +18,8 @@ from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 def compute_partition(
         data, reg_strength, k_adjacency=10, lambda_edge_weight=1, cutoff=1,
-        parallel=True, balance=True, iterations=10, verbose=False):
+        parallel=True, balance=True, iterations=10, verbose=False,
+        keep_adjacency_graph=False):
     """Partition the graph with parallel cut-pursuit."""
     # Sanity checks
     assert isinstance(data, Data)
@@ -49,9 +50,14 @@ def compute_partition(
     # again outside of this scope
     data = compute_ajacency_graph(data, k_adjacency, lambda_edge_weight)
     edge_index = data.edge_index
+    print()
+    print('level: 0')
+    print(f'data: {data}')
+    print(f'edge_index: {edge_index.shape}')
     edge_attr = data.edge_attr
     num_nodes = data.num_nodes
-    del data.edge_index, data.edge_attr
+    if not keep_adjacency_graph:
+        del data.edge_index, data.edge_attr
 
     # Iteratively run the partition on the previous level of partition
     for i_level, reg in enumerate(reg_list):
@@ -70,6 +76,8 @@ def compute_partition(
         # We choose to only enforce a cutoff for the level-0 partition
         cutoff = cutoff if i_level == 0 else 1
 
+        print()
+        print(f'launching partition {i_level}')
         # Partition computation
         super_index, x_c, cluster, times = cp_kmpp_d0_dist(
             1, x, first_edge, adj_vertices, edge_weights=edge_weights,
@@ -82,6 +90,8 @@ def compute_partition(
             delta_t = (times[1:] - times[:-1]).round(2)
             print(f'Level {i_level} iteration times: {delta_t}')
 
+        print(f'partition {i_level} done')
+
         # Save the super_index for the i-level
         super_index = torch.from_numpy(super_index.astype('int64'))
         data_list[-1].super_index = super_index
@@ -93,6 +103,11 @@ def compute_partition(
         values = torch.cat([torch.from_numpy(x.astype('int64')) for x in cluster])
         data_sup = Data(x=torch.from_numpy(x_c.T), sub=Cluster(pointers, values))
 
+        print(f'num_points: {x_c.shape[1]} (should be equal to {data_sup.num_points})')
+        print(f'partition {i_level} superedges computation')
+        from superpoint_transformer.utils import has_duplicates
+        print(f'edge_index: shape={edge_index.shape}, min={edge_index.min()}, max={edge_index.max()}, unique.shape={edge_index.unique().shape}')
+        print('edge to superedge...')
         # Prepare the features and adjacency graph for the i+1-level
         # partition
         x = x_c
@@ -101,12 +116,17 @@ def compute_partition(
             edge_index, super_index, edge_attr=edge_attr)
         edge_attr = scatter_sum(edge_attr.cuda(), idx_se.cuda(), dim=0).cpu()
         # TODO: scatter operations on CUDA ?
+        print(f'super edge_index: shape={edge_index.shape}, min={edge_index.min()}, max={edge_index.max()}, unique.shape={edge_index.unique().shape}')
 
         # Aggregate some point attributes into the clusters. This is not
         # performed dynamically since not all attributes can be
         # aggregated (eg 'neighbors', 'distances', 'edge_index',
         # 'edge_attr'...)
         data_sub = data_list[-1]
+
+        if keep_adjacency_graph:
+            data_sup.edge_index = edge_index
+            data_sup.edge_attr = edge_attr
 
         # TODO: scatter operations on CUDA ?
         if 'pos' in data_sub.keys:

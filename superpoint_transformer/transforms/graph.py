@@ -33,6 +33,10 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
     can be passed to describe edge attributes that will be returned
     filtered and ordered to describe the superedges.
     """
+    print('......')
+    print(f'edges: shape={edges.shape}, min={edges.min()}, max={edges.max()}, unique.shape={edges.unique().shape}')
+    print(f'super_index: shape={super_index.shape}, min={super_index.min()}, max={super_index.max()}, unique.shape={super_index.unique().shape}')
+
     # We are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. So we first
     # identify the edges of interest. This step requires having access
@@ -42,11 +46,18 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
     idx_target = super_index[edges[1]]
     inter_cluster = torch.where(idx_source != idx_target)[0]
 
+    print(f'idx_source: shape={idx_source.shape}, min={idx_source.min()}, max={idx_source.max()}, unique.shape={idx_source.unique().shape}')
+    print(f'idx_target: shape={idx_target.shape}, min={idx_target.min()}, max={idx_target.max()}, unique.shape={idx_target.unique().shape}')
+    print(f'inter_cluster: shape={inter_cluster.shape}, min={inter_cluster.min()}, max={inter_cluster.max()}, unique.shape={inter_cluster.unique().shape}')
+
     # Now only consider the edges of interest (ie inter-cluster edges)
     edges_inter = edges[:, inter_cluster]
     edge_attr = edge_attr[inter_cluster] if edge_attr is not None else None
     idx_source = idx_source[inter_cluster]
     idx_target = idx_target[inter_cluster]
+
+    print(f'idx_source: shape={idx_source.shape}, min={idx_source.min()}, max={idx_source.max()}, unique.shape={idx_source.unique().shape}')
+    print(f'idx_target: shape={idx_target.shape}, min={idx_target.min()}, max={idx_target.max()}, unique.shape={idx_target.unique().shape}')
 
     # So far we are manipulating inter-cluster edges, but there may be
     # multiple of those for a given source-target pair. Next, we want to
@@ -56,16 +67,24 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
     # operations. We use 'se' to designate 'superedge' (ie an edge
     # between two clusters)
     idx_se = idx_source + idx_source.max() * idx_target
+    print(f'idx_se: shape={idx_se.shape}, min={idx_se.min()}, max={idx_se.max()}, unique.shape={idx_se.unique().shape}')
     idx_se, perm = consecutive_cluster(idx_se)
+    print(f'idx_se: shape={idx_se.shape}, min={idx_se.min()}, max={idx_se.max()}, unique.shape={idx_se.unique().shape}')
+    print(f'perm: shape={perm.shape}, min={perm.min()}, max={perm.max()}, unique.shape={perm.unique().shape}')
     idx_se_source = idx_source[perm]
     idx_se_target = idx_target[perm]
+    print(f'idx_se_source: shape={idx_se_source.shape}, min={idx_se_source.min()}, max={idx_se_source.max()}, unique.shape={idx_se_source.unique().shape}')
+    print(f'idx_se_target: shape={idx_se_target.shape}, min={idx_se_target.min()}, max={idx_se_target.max()}, unique.shape={idx_se_target.unique().shape}')
     se = torch.vstack((idx_se_source, idx_se_target))
+    print(f'se: shape={se.shape}, min={se.min()}, max={se.max()}, unique.shape={se.unique().shape}')
+
+    print('......')
 
     return se, idx_se, edges_inter, edge_attr
 
 
 def _compute_cluster_graph(
-        i_level, nag, high_node=32, high_edge=64, low=5, max_dist=-1):
+        i_level, nag, n_max_node=32, n_max_edge=64, n_min=5, max_dist=-1):
     # TODO: WARNING the cluster geometric features will only work if we
     #  enforced a cutoff on the minimum superpoint size ! Make sure you
     #  enforce this
@@ -87,18 +106,30 @@ def _compute_cluster_graph(
 
     assert isinstance(nag, NAG)
     assert i_level > 0
+    assert nag[0].has_edges, \
+        "Level-0 must have an adjacency structure in 'edge_index' to allow " \
+        "guided sampling for superedges construction."
 
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
+
+    print()
+    print('****************')
+    print(f'compute cluster graph for i_level={i_level}')
+    print(f'nag: {nag}')
+    print(f'data: {data}')
 
     # Sample points among the clusters. These will be used to compute
     # cluster geometric features as well as cluster adjacency graph and
     # edge features
     idx_samples, ptr_samples = sample_clusters(
-        data, high=high_node, low=low, pointers=True)
+        i_level, nag, low=0, n_max=n_max_node, n_min=n_min, pointers=True)
+
+    from superpoint_transformer.utils import has_duplicates
+    print(f'idx_samples: shape={idx_samples.shape}, min={idx_samples.min()}, max={idx_samples.max()}, unique.shape={idx_samples.unique().shape}, duplicates: {has_duplicates(idx_samples)}')
 
     # Compute cluster geometric features
-    #TODO: # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
+    #TODO: # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!
     xyz = nag[0].pos[idx_samples].cpu().numpy()
     nn = np.arange(idx_samples.shape[0]).astype('uint32')
     nn_ptr = ptr_samples.cpu().numpy().astype('uint32')
@@ -106,8 +137,6 @@ def _compute_cluster_graph(
     # Heuristic to avoid issues when a cluster sampling is such that
     # it produces singular covariance matrix (eg the sampling only
     # contains the same point repeated multiple times)
-    #TODO: modify sampling to prevent duplicates using
-    # "choice = torch.randperm(num_nodes)[:self.num]" ?
     xyz = xyz + torch.rand(xyz.shape).numpy() * 1e-5
 
     # C++ geometric features computation on CPU
@@ -120,15 +149,39 @@ def _compute_cluster_graph(
     data.volume = f[:, 9].to(data.pos.device)
     data.normal = f[:, 4:7].view(-1, 3).to(data.pos.device)
 
+    # To guide the sampling for superedges, we want to sample among
+    # points whose neighbors in the level-0 adjacency graph belong to
+    # a different cluster in the i_level graph. To this end, we first
+    # need to tell whose i_level cluster each level-0 point belongs to.
+    # This step requires having access to the whole NAG, since we need
+    # to convert level-0 point indices into their corresponding level-i
+    # superpoint indices
+    super_index = nag[0].super_index
+    for i in range(1, i_level):
+        super_index = nag[i].super_index[super_index]
+
+    edges_0 = super_index[nag[0].edge_index]
+    inter_cluster = torch.where(edges_0[0] != edges_0[1])[0]
+    idx_edge_point = edges_0[:, inter_cluster].unique()
+
     # Sample points among the clusters. These will be used to compute
     # cluster adjacency graph and edge features. Note we sample more
     # generously here than for cluster features, because we need to
     # capture fine-grained adjacency
     idx_samples, ptr_samples = sample_clusters(
-        data, high=high_edge, low=low, pointers=True)
+        i_level, nag, low=0, n_max=n_max_edge, n_min=n_min,
+        mask=idx_edge_point, pointers=True)
+
+    print()
+    print(f'idx_samples: {idx_samples.shape}')
+    print(f'idx_samples.min(): {idx_samples.min()}')
+    print(f'idx_samples.max(): {idx_samples.max()}')
+    from superpoint_transformer.utils import has_duplicates
+    print(f'idx_samples duplicates: {has_duplicates(idx_samples)}')
 
     # Delaunay triangulation on the sampled points. The tetrahedra edges
     # are voronoi graph edges
+
     pos = nag[0].pos[idx_samples]
     tri = Delaunay(pos.numpy())
 
@@ -147,16 +200,9 @@ def _compute_cluster_graph(
         del dist
 
     # Now we are only interested in the edges connecting two different
-    # clusters and not in the intra-cluster connections. So we first
-    # identify the edges of interest. This step requires having access
-    # to the whole NAG, since we need to convert level-0 point indices
-    # into their corresponding level-i superpoint indices
-    super_index = nag[0].super_index
-    for i in range(1, i_level):
-        super_index = nag[i].super_index[super_index]
-
-    # Select only inter-cluster edges and compute the corresponding
-    # source and target point and cluster indices
+    # clusters and not in the intra-cluster connections. Select only
+    # inter-cluster edges and compute the corresponding source and
+    # target point and cluster indices
     se, idx_se, edges_inter, _ = edge_to_superedge(
         idx_samples[edges], super_index)
 
@@ -184,7 +230,9 @@ def _compute_cluster_graph(
     se_length_ratio = data.length[se[0]] / (data.length[se[1]] + 1e-6)
     se_surface_ratio = data.surface[se[0]] / (data.surface[se[1]] + 1e-6)
     se_volume_ratio = data.volume[se[0]] / (data.volume[se[1]] + 1e-6)
-    se_size_ratio = data.sub_size[se[0]] / (data.sub_size[se[1]] + 1e-6)
+
+    sub_size = nag.get_sub_size(i_level)
+    se_size_ratio = sub_size[se[0]] / (sub_size[se[1]] + 1e-6)
 
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source
@@ -217,10 +265,11 @@ def _compute_cluster_graph(
     return nag
 
 
-def compute_cluster_graph(nag, high_node=32, high_edge=64, low=5, max_dist=-1):
+def compute_cluster_graph(
+        nag, n_max_node=32, n_max_edge=64, n_min=5, max_dist=-1):
     assert isinstance(nag, NAG)
     for i_level in range(1, nag.num_levels):
         nag = _compute_cluster_graph(
-            i_level, nag, high_node=high_node, high_edge=high_edge, low=low,
-            max_dist=max_dist)
+            i_level, nag, n_max_node=n_max_node, n_max_edge=n_max_edge,
+            n_min=n_min, max_dist=max_dist)
     return nag

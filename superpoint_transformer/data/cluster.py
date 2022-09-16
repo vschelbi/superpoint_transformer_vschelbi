@@ -1,4 +1,5 @@
 import torch
+import superpoint_transformer
 from superpoint_transformer.data.csr import CSRData
 from superpoint_transformer.utils import has_duplicates
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
@@ -9,9 +10,9 @@ class Cluster(CSRData):
     dedicated to cluster-point indexing.
     """
 
-    def __init__(self, pointers, points, dense=False, debug=False):
+    def __init__(self, pointers, points, dense=False):
         super().__init__(
-            pointers, points, dense=dense, is_index_value=[True], debug=debug)
+            pointers, points, dense=dense, is_index_value=[True])
 
     @property
     def points(self):
@@ -22,7 +23,8 @@ class Cluster(CSRData):
         assert points.device == self.device, \
             f"Points is on {points.device} while self is on {self.device}"
         self.values[0] = points
-        self.debug()
+        if superpoint_transformer.is_debug_enabled():
+            self.debug()
 
     @property
     def num_clusters(self):
@@ -41,7 +43,7 @@ class Cluster(CSRData):
         device = self.device
         out = torch.empty((self.num_items,), dtype=torch.long, device=device)
         cluster_idx = torch.arange(self.num_groups, device=device)
-        out[self.points] = cluster_idx.repeat_interleave(self.sizes)
+        out[self.points] = cluster_idx.repeat_interleave(self.size)
         return out
 
     def select(self, idx, update_sub=True):

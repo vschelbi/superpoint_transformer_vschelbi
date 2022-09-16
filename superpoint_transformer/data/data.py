@@ -2,16 +2,17 @@ import torch
 import copy
 from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
+import superpoint_transformer
 from superpoint_transformer.data.cluster import Cluster
 from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 class Data(PyGData):
 
-    def __init__(self, debug=False, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if debug:
+        if superpoint_transformer.is_debug_enabled():
             self.debug()
 
     @property
@@ -67,6 +68,22 @@ class Data(PyGData):
     @property
     def num_sub(self):
         return self.sub.points.max().cpu().item() + 1 if self.is_super else 0
+
+    def to(self, device):
+        """Extend torch_geometric.Data.to to handle Cluster attributes.
+        """
+        self = super().to(device)
+        if self.is_super:
+            self.sub = self.sub.to(device)
+        return self
+
+    def cpu(self):
+        """Move the NAG with all Data in it to CPU."""
+        return self.to('cpu')
+
+    def cuda(self):
+        """Move the NAG with all Data in it to CUDA."""
+        return self.to('cuda')
 
     @property
     def device(self):

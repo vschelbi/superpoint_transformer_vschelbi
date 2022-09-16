@@ -1,5 +1,6 @@
 import torch
 import copy
+import superpoint_transformer
 from superpoint_transformer.utils import tensor_idx, is_sorted, is_dense
 
 
@@ -14,7 +15,7 @@ class CSRData:
 
     def __init__(
             self, pointers: torch.LongTensor, *args, dense=False,
-            is_index_value=None, debug=False):
+            is_index_value=None):
         """Initialize the pointers and values.
 
         Values are passed as args and stored in a list. They are
@@ -42,7 +43,7 @@ class CSRData:
                 self.num_values, dtype=torch.bool)
         else:
             self.is_index_value = torch.BoolTensor(is_index_value)
-        if debug:
+        if superpoint_transformer.is_debug_enabled():
             self.debug()
 
     def debug(self):
@@ -76,11 +77,10 @@ class CSRData:
 
     def to(self, device):
         """Move the CSRData to the specified device."""
-        out = self.clone()
-        out.pointers = out.pointers.to(device)
-        for i in range(out.num_values):
-            out.values[i] = out.values[i].to(device)
-        return out
+        self.pointers = self.pointers.to(device)
+        for i in range(self.num_values):
+            self.values[i] = self.values[i].to(device)
+        return self
 
     def cpu(self):
         """Move the CSRData to the CPU."""
@@ -107,7 +107,7 @@ class CSRData:
         return self.pointers[-1].item()
 
     @property
-    def sizes(self):
+    def size(self):
         return self.pointers[1:] - self.pointers[:-1]
 
     @staticmethod
@@ -260,7 +260,8 @@ class CSRData:
             out.pointers = pointers
             out.values = [v[val_idx] for v in self.values]
 
-        # out.debug()
+        if superpoint_transformer.is_debug_enabled():
+            out.debug()
 
         return out
 

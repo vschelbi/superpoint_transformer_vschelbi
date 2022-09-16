@@ -4,6 +4,10 @@ from torch_geometric.nn.pool import voxel_grid
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean, scatter_add
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
+import superpoint_transformer
+from superpoint_transformer.utils import tensor_idx, arange_interleave
+from superpoint_transformer.data import Data, NAG
+from torch_scatter import scatter_sum
 
 
 def shuffle_data(data):
@@ -287,58 +291,113 @@ class GridSampling3D:
             self.mode)
 
 
-def sample_clusters(data, high=32, low=1, pointers=False):
-    """Compute point indices for sampling points inside clusters saved
-    in a CSR format.
+def sample_clusters(
+        high, nag, low=0, n_max=32, n_min=1, mask=None, pointers=False):
+    """Compute indices for sampling elements at level 'low', based on
+    which cluster they belong to at level 'high'. The sampling operation
+    is run is without replacement and each cluster is sampled at least
+    'n_min' and at most 'n_max' times, within the limits allowed by its
+    actual size. Expects as NAG as input or a Data object with 'sub'
+    attribute (ie a Data object whose elements are themselves clusters).
+    Optionally, a 'mask' can be passed to filter out some level 'low'
+    points.
+
+    Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
+    (ie level-0 points are themselves clusters of '-1' level absent
+    from the NAG object).
     """
-    #TODO: operate on NAG and careful with indices !
-    #TODO: must be able to sample on subset/mask of sub too (for edge sampling)
-    #TODO: could optionally sample from i into j with i > j > 0...
-    #TODO: modify sampling to prevent duplicates using "choice = torch.randperm(num_nodes)[:self.num]" ?
+    assert isinstance(nag, (Data, NAG))
+    if isinstance(nag, Data):
+        assert nag.is_super
+        nag = NAG([nag])
+    assert 0 <= n_min <= n_max
+
+    print('xxxxxxxxxxxxxxxx')
+    print('Sample clusters')
+
+    # Get the number of elements of level 'low' contained in each
+    # elements of level 'high'
+    sub_size = nag.get_sub_size(high, low=low)
+
+    from superpoint_transformer.utils import has_duplicates
+    print(f'sub_size: shape={sub_size.shape}, min={sub_size.min()}, max={sub_size.max()}')
 
     # Compute the number of points that will be sampled from each
-    # cluster
-    if high > 0:
-        # k * tanh(x / k) is bounded by k, is ~x for low x and starts
+    # cluster, based on a heuristic
+    if n_max > 0:
+        # k * tanh(x / k) is bounded by k, is ~x for x~0 and starts
         # saturating at x~k
-        n_samples = (high * torch.tanh(
-            data.sub.sizes / high)).floor().long()
+        n_samples = (n_max * torch.tanh(sub_size / n_max)).floor().long()
     else:
         # Fallback to sqrt sampling
-        n_samples = data.sub.sizes.sqrt().round().long()
+        n_samples = sub_size.sqrt().round().long()
+    print(f'n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
 
-    # Make sure each cluster is sampled at least 'low' times
-    n_samples = n_samples.clamp(min=low)
+    # Make sure each cluster is sampled at least 'low' times and not
+    # sampled more than its size (we sample without replacements). If a
+    # cluster has less than 'n_min' elements, it will be entirely
+    # sampled (no randomness for sampling this cluster), which is why we
+    # apply clamp min and clamp max successively
+    print(f'n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
+    n_samples = n_samples.clamp(min=n_min).clamp(max=sub_size)
+    print(f'n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
 
-    # Sample values in [0, 1], these will be used to compute
-    # corresponding integer indices for vectorized sampling of the
-    # points directly from the CSR-format cluster-to-point data
-    samples = torch.rand(n_samples.sum())
+    # Sanity check
+    if superpoint_transformer.is_debug_enabled():
+        assert n_samples.le(sub_size), \
+            "Cannot sample more than the cluster sizes."
 
-    # Convert the [0, 1] samples to integer indices in [0, n_samples]
-    # depending on the corresponding cluster sampling size. The 0.9999
-    # factor is a security to handle the case where torch.rand is to
-    # close to 1.0, which would yield incorrect sampling coordinates
-    n_bins = n_samples.repeat_interleave(n_samples)
-    samples = (samples * 0.9999 * n_bins).floor().long()
+    # Compute the level 'high' indices of the cluster each element of
+    # level 'low' belongs to, while maintaining corresponding indices of
+    # level 'low' elements
+    if low < 0:
+        point_index = nag.sub.points.max() + 1
+        super_index = nag.sub.to_dense()
+    else:
+        point_index = torch.arange(nag.num_points[low], device=nag.device)
+        super_index = nag[low].super_index
+    for i_level in range(low + 1, high):
+        super_index = nag[i_level].super_index[super_index]
 
-    # As they are now, sampling indices are expressed in [0, sub_size].
-    # If we want to sample directly from the cluster-to-point CSR data,
-    # we need to express those coordinates in the aggregated CSR values,
-    # that is to say we need to apply the cumulative cluster sizes as
-    # offsets to the indices. This is typically what is stored in
-    # CSRData.pointers
-    offsets = data.sub.pointers[:-1].repeat_interleave(n_samples)
-    samples = samples + offsets
+    # If a mask is provided, only keep the corresponding points. This
+    # also requires updating the 'sub_size' and 'n_samples'
+    mask = tensor_idx(mask)
+    if mask.shape[0] > 0:
+        point_index = point_index[mask]
+        super_index = super_index[mask]
+        sub_size = scatter_sum(
+            torch.ones_like(super_index), super_index, dim=0,
+            dim_size=nag.num_points[high])
+        n_samples = n_samples.clamp(max=sub_size)
 
-    # Now we can get the sampled point indices
-    idx_samples = data.sub.points[samples]
+    # Sanity check
+    if superpoint_transformer.is_debug_enabled():
+        assert n_samples.le(sub_size), \
+            "Cannot sample more than the cluster sizes."
+
+    # Shuffle the order of points
+    perm = torch.randperm(super_index.shape[0])
+    super_index = super_index[perm]
+    point_index = point_index[perm]
+
+    # Sort by super_index. Combined with the previous sampling, this
+    # ensures the randomness in the points selected from each cluster
+    super_index, order = super_index.sort()
+    point_index = point_index[order]
+
+    # Build the indices of the points we will sample from point_index.
+    # Note this could easily be expressed with a for loop but we need to
+    # use a vectorized formulation to ensure reasonable processing time
+    zero = torch.zeros(1, device=nag.device).long()
+    offset = torch.cat((zero, sub_size[:-1]))
+    idx_samples = arange_interleave(n_samples, start=offset)
+    idx_samples = point_index[idx_samples]
 
     # Return here if sampling pointers are not required
     if not pointers:
         return idx_samples
 
     # Compute the pointers
-    ptr_samples = torch.cat([torch.LongTensor([0]), n_samples.cumsum(dim=0)])
+    ptr_samples = torch.cat([zero, n_samples.cumsum(dim=0)])
 
     return idx_samples, ptr_samples.contiguous()

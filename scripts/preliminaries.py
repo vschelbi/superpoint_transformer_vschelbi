@@ -259,7 +259,7 @@ print(f'Partition num_nodes={data.num_nodes}, num_edges={data.num_edges}: {time(
 
 from superpoint_transformer.transforms import compute_cluster_graph
 
-nag = compute_cluster_graph(nag, high_node=32, high_edge=64, low=5)
+nag = compute_cluster_graph(nag, n_max_node=32, n_max_edge=64, n_min=5)
 
 
 #-----------------------------------------------------------------------
@@ -270,7 +270,7 @@ from superpoint_transformer.transforms import sample_clusters
 # cluster geometric features as well as cluster adjacency graph and
 # edge features
 idx_samples, ptr_samples = sample_clusters(
-    data_c, high=32, low=5, pointers=True)
+    data_c, n_max=32, low=5, pointers=True)
 
 # Compute cluster geometric features
 xyz = data.pos[idx_samples].cpu().numpy()

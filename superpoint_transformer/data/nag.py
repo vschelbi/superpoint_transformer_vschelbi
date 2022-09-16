@@ -1,5 +1,6 @@
 import torch
 from typing import List
+import superpoint_transformer
 from superpoint_transformer.data import Data
 from superpoint_transformer.utils import tensor_idx, has_duplicates
 from torch_scatter import scatter_sum
@@ -10,14 +11,13 @@ class NAG:
     nested partitions of the same point cloud.
     """
 
-    def __init__(self, data_list: List[Data], debug=False):
+    def __init__(self, data_list: List[Data]):
         assert len(data_list) > 0,\
             "The NAG must have at least 1 level of hierarchy. Please " \
             "provide a minimum of 1 Data object."
         self._list = data_list
-        if debug:
+        if superpoint_transformer.is_debug_enabled():
             self.debug()
-        self._update_sub_size()
 
     def __len__(self):
         return len(self._list)
@@ -26,22 +26,24 @@ class NAG:
         for i in range(self.__len__()):
             yield self[i]
 
-    def _update_sub_size(self):
-        """Compute the number of level-0 points contained in each
-        superpoint, at each level of hierarchy. This modifies the
-        'sub_size' attribute of each Data in the NAG.
+    def get_sub_size(self, high, low=0):
+        """Compute the number of points of level 'low' contained in each
+        superpoint of level 'high'.
+
+        Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
+        (ie level-0 points are themselves clusters of '-1' level absent
+        from the NAG object).
         """
-        # Sizes are computed in a bottom-up fashion. The level-0 does
-        # not have 'sub_size'. Note this scatter operation assumes all
-        # levels of hierarchy use dense, consecutive indices which are
-        # consistent between levels
-        if self.num_levels < 2:
-            return self
-        self[1].sub_size = self[1].sub.sizes
-        for i in range(2, len(self)):
-            self[i].sub_size = scatter_sum(
-                self[i - 1].sub_size, self[i - 1].super_index, dim=0)
-        return self
+        assert -1 <= low < high < self.num_levels
+        assert 0 <= low or self[0].is_super
+
+        # Sizes are computed in a bottom-up fashion. Note this scatter
+        # operation assumes all levels of hierarchy use dense,
+        # consecutive indices which are consistent between levels
+        sub_size = self[low + 1].sub.size
+        for i in range(low + 1, high):
+            sub_size = scatter_sum(sub_size, self[i].super_index, dim=0)
+        return sub_size
 
     @property
     def num_levels(self):
@@ -62,16 +64,17 @@ class NAG:
         return self.__class__([d.clone() for d in self])
 
     def to(self, device):
-        """Return a new NAG instance with all Data moved to device."""
-        return self.__class__([d.to(device) for d in self])
+        """Move the NAG with all Data in it to device."""
+        self._list = [d.to(device) for d in self]
+        return self
 
     def cpu(self):
-        """Return a new NAG instance with all Data moved to CPU."""
-        return self.__class__([d.cpu() for d in self])
+        """Move the NAG with all Data in it to CPU."""
+        return self.to('cpu')
 
-    def cuda(self, *args, **kwargs):
-        """Return a new NAG instance with all Data moved to CUDA."""
-        return self.__class__([d.cuda(*args, **kwargs) for d in self])
+    def cuda(self):
+        """Move the NAG with all Data in it to CUDA."""
+        return self.to('cuda')
 
     @property
     def device(self):

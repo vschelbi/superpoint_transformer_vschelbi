@@ -65,14 +65,22 @@ def is_permutation(a: torch.LongTensor):
     return a.sort().values.equal(torch.arange(a.numel()))
 
 
-def arange_interleave(sizes):
+def arange_interleave(width, start=None):
     """Vectorized equivalent of:
-        ```torch.cat([torch.arange(x) for x in sizes])```
+        >>> torch.cat([torch.arange(s, s + w) for w, s in zip(width, start)])
     """
-    assert sizes.dim() == 1, 'Only supports 1D tensors'
-    assert isinstance(sizes, torch.LongTensor), 'Only supports LongTensors'
-    assert sizes.ge(0).all(), 'Only supports positive integers'
-
-    a = torch.cat((torch.LongTensor([0]), sizes[:-1]))
-    b = torch.cumsum(a, 0).long()
-    return torch.arange(sizes.sum()) - torch.repeat_interleave(b, sizes)
+    assert width.dim() == 1, 'Only supports 1D tensors'
+    assert isinstance(width, torch.Tensor), 'Only supports Tensors'
+    assert not width.is_floating_point(), 'Only supports Tensors of integers'
+    assert width.ge(0).all(), 'Only supports positive integers'
+    start = start if start is not None else torch.zeros_like(width)
+    assert width.shape == start.shape
+    assert start.dim() == 1, 'Only supports 1D tensors'
+    assert isinstance(start, torch.Tensor), 'Only supports Tensors'
+    assert not start.is_floating_point(), 'Only supports Tensors of integers'
+    width = width.long()
+    start = start.long()
+    device = width.device
+    a = torch.cat((torch.zeros(1, device=device).long(), width[:-1]))
+    offsets = (start - a.cumsum(0)).repeat_interleave(width)
+    return torch.arange(width.sum(), device=device) + offsets
