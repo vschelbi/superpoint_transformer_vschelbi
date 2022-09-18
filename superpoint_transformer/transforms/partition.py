@@ -76,6 +76,28 @@ def compute_partition(
         # We choose to only enforce a cutoff for the level-0 partition
         cutoff = cutoff if i_level == 0 else 1
 
+
+
+        # import pickle
+        # import glob
+        # import os.path as osp
+        #
+        # stuff = {
+        #     'x': x, 'first_edge': first_edge, 'adj_vertices': adj_vertices, 'edge_weights': edge_weights,
+        #     'min_comp_weight': cutoff, 'cp_dif_tol': 1e-2, 'cp_it_max': iterations, 'split_damp_ratio': 0.7,
+        #     'verbose': verbose, 'max_num_threads': max_thread, 'compute_Time': True, 'compute_List': True}
+        #
+        # # Open a file and use dump()
+        # root = '/media/drobert-admin/DATA2/datasets/kitti360/shared/temp'
+        # basename = 'data_20cm'
+        # # basename = 'data_15m_'
+        # n_files = len(glob.glob(osp.join(root, f'{basename}_*.pkl')))
+        # with open(root + f'/{basename}_{n_files}.pkl', 'wb') as file:
+        #     # A new file will be created
+        #     pickle.dump(stuff, file)
+
+
+
         print()
         print(f'launching partition {i_level}')
         # Partition computation

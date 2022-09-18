@@ -97,6 +97,7 @@ class NAG:
         i_level: int
             The hierarchy level to return
         """
+        assert 0 <= i_level < len(self)
         return self._list[i_level]
 
     def select(self, i_level, idx):

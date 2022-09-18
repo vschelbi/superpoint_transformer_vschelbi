@@ -47,7 +47,7 @@ def compute_pointfeatures(
     # Add xyz normalized. The scaling factor drives the maximum cluster
     # size the partition may produce
     if 'pos' in data.keys:
-        features.append(data.pos / radius)
+        features.append((data.pos - data.pos.mean(dim=0)) / radius)
 
     # Add rgb to the features. If colors are stored in int, we assume
     # they are encoded in  [0, 255] and normalize them. Otherwise, we
