@@ -359,13 +359,20 @@ def sample_clusters(
     for i_level in range(low + 1, high):
         super_index = nag[i_level].super_index[super_index]
 
+    print()
+    print(f'    point_index: shape={point_index.shape}, min={point_index.min()}, max={point_index.max()}')
+    print(f'    super_index: shape={super_index.shape}, min={super_index.min()}, max={super_index.max()}')
+    print(f'    n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
+    print(f'    no cluster was sampled more than sub_size: {n_samples.le(sub_size).all()}')
+    print()
+
     # If a mask is provided, only keep the corresponding points. This
     # also requires updating the 'sub_size' and 'n_samples'
-    #TODO: this is quite tricky, test it thouroughly to make sure it works...
     mask = tensor_idx(mask)
     if mask.shape[0] > 0:
         point_index = point_index[mask]
         super_index = super_index[mask]
+        # TODO: replace this scatter_sum with torch.bincount ?
         sub_size = scatter_sum(
             torch.ones_like(super_index), super_index, dim=0,
             dim_size=nag.num_points[high])
@@ -377,7 +384,7 @@ def sample_clusters(
             "Cannot sample more than the cluster sizes."
 
     # Shuffle the order of points
-    perm = torch.randperm(super_index.shape[0])
+    perm = torch.randperm(point_index.shape[0])
     super_index = super_index[perm]
     point_index = point_index[perm]
 
@@ -386,15 +393,18 @@ def sample_clusters(
     super_index, order = super_index.sort()
     point_index = point_index[order]
 
+    print(f'    mask: shape={mask.shape}')
     print(f'    point_index: shape={point_index.shape}, min={point_index.min()}, max={point_index.max()}')
     print(f'    super_index: shape={super_index.shape}, min={super_index.min()}, max={super_index.max()}')
-
+    print(f'    n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
+    print(f'    no cluster was sampled more than sub_size: {n_samples.le(sub_size).all()}')
+    print()
 
     # Build the indices of the points we will sample from point_index.
     # Note this could easily be expressed with a for loop but we need to
     # use a vectorized formulation to ensure reasonable processing time
     zero = torch.zeros(1, device=nag.device).long()
-    offset = torch.cat((zero, sub_size[:-1])).cumsum(dim=0)  #TODO: this is tricky: will it not break if a cluster was masked out ?
+    offset = torch.cat((zero, sub_size[:-1])).cumsum(dim=0)  #TODO: this is TRICKY: will it not break if a cluster was masked out ?
     print(f'    sub_size: shape={sub_size.shape}, min={sub_size.min()}, max={sub_size.max()}')
     print(f'    offset: shape={offset.shape}, min={offset.min()}, max={offset.max()}')
     idx_samples = arange_interleave(n_samples, start=offset)
@@ -408,5 +418,7 @@ def sample_clusters(
 
     # Compute the pointers
     ptr_samples = torch.cat([zero, n_samples.cumsum(dim=0)])
+    print()
+    print(f'    n_samples: shape={n_samples.shape}, ptr_samples={ptr_samples.shape}')
 
     return idx_samples, ptr_samples.contiguous()

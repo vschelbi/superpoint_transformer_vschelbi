@@ -91,6 +91,16 @@ def _compute_cluster_graph(
     #  enforced a cutoff on the minimum superpoint size ! Make sure you
     #  enforce this
 
+    # TODO: QUESTION: we currently build superedges and sample superedge
+    #  points based on the assumption that they connect level-i clusters
+    #  iff there is at least on elevel-0 adjacency edge connecting points
+    #  belonging to each cluster. But this is not true, some clusters are
+    #  just isolated and will never be connected to the rest. For the same
+    #  reason, those will never be aggregated in the hierarchical partition,
+    #  producing weird annoying artifacts, potentially hurting training too...
+    #  How should we deal with those at partition time and at superedge
+    #  construction time ?
+
     # TODO: define recursive sampling for super(n)point features
     # TODO: define recursive edge for super(n)edge features
     # TODO: return all eigenvectors from the C++ geometric features, for
@@ -140,11 +150,21 @@ def _compute_cluster_graph(
     print(f'ptr_samples: {ptr_samples.shape}')
     print(f'ptr_samples.min(): {ptr_samples.min()}')
     print(f'ptr_samples.max(): {ptr_samples.max()}')
+    print(f'ptr_samples delta size min: {(ptr_samples[1:] - ptr_samples[:-1]).min()}')
+    print(f'ptr_samples delta size max: {(ptr_samples[1:] - ptr_samples[:-1]).max()}')
     print(f'ptr_samples is_sorted: {is_sorted(ptr_samples)}')
-    print(f'all clusters have a ptr: {ptr_samples.shape[0] == nag[i_level].num_nodes}')
-    print(f'all clusters received n_min+ samples: {(ptr_samples[1:] - ptr_samples[0]).ge(n_min).all()}')
-    print()
-    print(f'points do belong to the proper clusters: {nag[0].super_index[idx_samples].unique().shape[0] == nag[i_level].num_nodes}')
+    print(f'all clusters have a ptr: {ptr_samples.shape[0] - 1 == nag[i_level].num_nodes}')
+    print(f'all clusters received n_min+ samples: {(ptr_samples[1:] - ptr_samples[:-1]).ge(n_min).all()}')
+    #TODO: this is temp--------
+    super_index = nag[0].super_index
+    for i in range(1, i_level):
+        super_index = nag[i].super_index[super_index]
+    #TODO: this is temp--------
+    print(f'some clusters received receive no sample: {torch.where(ptr_samples[1:] == ptr_samples[:-1])[0].shape[0]}/{nag[i_level].num_nodes}')
+    # TODO: ********temp
+    a = torch.repeat_interleave(torch.arange(nag[i_level].num_nodes), ptr_samples[1:] - ptr_samples[:-1])
+    print(f'all points belong to the correct clusters: {torch.equal(super_index[idx_samples], a)}')
+    # TODO: ********temp
 
     #TODO: !!!!! something FISHY here: SAMPLES ONLY BELONG TO ONE / A FEW CLUSTERS !!!!!
 
@@ -183,9 +203,12 @@ def _compute_cluster_graph(
     for i in range(1, i_level):
         super_index = nag[i].super_index[super_index]
 
+    # Once we know the i_level cluster each level-0 point belongs to,
+    # we can search for level-0 edges between i_level clusters. These
+    # in turn tell us which level-0 points to sample from
     edges_0 = super_index[nag[0].edge_index]
     inter_cluster = torch.where(edges_0[0] != edges_0[1])[0]
-    idx_edge_point = edges_0[:, inter_cluster].unique()
+    idx_edge_point = nag[0].edge_index[:, inter_cluster].unique()
 
     # Sample points among the clusters. These will be used to compute
     # cluster adjacency graph and edge features. Note we sample more
@@ -201,6 +224,20 @@ def _compute_cluster_graph(
     print(f'idx_samples.max(): {idx_samples.max()}')
     from superpoint_transformer.utils import has_duplicates
     print(f'idx_samples duplicates: {has_duplicates(idx_samples)}')
+    print()
+    print(f'ptr_samples: {ptr_samples.shape}')
+    print(f'ptr_samples.min(): {ptr_samples.min()}')
+    print(f'ptr_samples.max(): {ptr_samples.max()}')
+    print(f'ptr_samples delta size min: {(ptr_samples[1:] - ptr_samples[:-1]).min()}')
+    print(f'ptr_samples delta size max: {(ptr_samples[1:] - ptr_samples[:-1]).max()}')
+    print(f'ptr_samples is_sorted: {is_sorted(ptr_samples)}')
+    print(f'all clusters have a ptr: {ptr_samples.shape[0] - 1 == nag[i_level].num_nodes}')
+    print(f'all clusters received n_min+ samples: {(ptr_samples[1:] - ptr_samples[:-1]).ge(n_min).all()}')
+    print(f'some clusters received receive no sample: {torch.where(ptr_samples[1:] == ptr_samples[:-1])[0].shape[0]}/{nag[i_level].num_nodes}')
+    #TODO: ********temp
+    a = torch.repeat_interleave(torch.arange(nag[i_level].num_nodes), ptr_samples[1:] - ptr_samples[:-1])
+    print(f'all points belong to the correct clusters: {torch.equal(super_index[idx_samples], a)}')
+    # TODO: ********temp
 
     # Delaunay triangulation on the sampled points. The tetrahedra edges
     # are voronoi graph edges
