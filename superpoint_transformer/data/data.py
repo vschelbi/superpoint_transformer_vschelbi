@@ -3,9 +3,11 @@ import copy
 from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from torch_geometric.utils import coalesce, remove_self_loops
 import superpoint_transformer
 from superpoint_transformer.data.cluster import Cluster
 from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates
+from superpoint_transformer.utils.neighbors import knn
 
 
 class Data(PyGData):
@@ -14,6 +16,10 @@ class Data(PyGData):
         super().__init__(**kwargs)
         if superpoint_transformer.is_debug_enabled():
             self.debug()
+
+    @property
+    def pos(self):
+        return self['pos'] if 'pos' in self._store else None
 
     @property
     def rgb(self):
@@ -263,6 +269,120 @@ class Data(PyGData):
             data.num_nodes = idx.shape[0]
 
         return data, out_sub, out_super
+
+    def is_isolated(self):
+        """If self.has_edges, returns a boolean tensor of size
+        self.num_nodes indicating which are absent from self.edge_index.
+        Will raise an error if self.has_edges is False.
+        """
+        assert self.has_edges
+        mask = torch.ones(self.num_nodes, dtype=torch.bool, device=self.device)
+        mask[self.edge_index.unique()] = False
+        return mask
+
+    # def absorb(self, data, idx):
+    #     """Integrate the points of another data object into self, based
+    #     on the provided indices. This operation requires data to have
+    #     the same attributes as self (any attribute of data absent from
+    #     self will be silently discarded). Note that this operation
+    #     assumes data.sub
+    #     """
+    #     # Sanity checks
+    #     idx = tensor_idx(idx)
+    #     assert isinstance(data, Data)
+    #     assert data.num_points == idx.numel()
+    #     assert idx.max() < self.num_points
+    #     missing = [k for k in self.keys if k not in data.keys]
+    #     if len(missing) > 0:
+    #         raise ValueError(
+    #             f"Keys in 'self' and 'data' do not match. Missing keys: "
+    #             f"{missing}")
+    #
+    #     #TODO: DO NOT fuse attributes, only super and sub... ?
+
+    def connect_isolated(self, k=1):
+        """Search for nodes with no edges in the graph and connect them
+        to their k nearest neighbors. Update self.edge_index and
+        self.edge_attr accordingly.
+
+        Will raise an error if self has no edges or no pos.
+
+        Returns self updated with the newly-created edges.
+        """
+        assert self.has_edges
+        assert self.pos is not None
+
+        # Search for isolated nodes and exit if no node is isolated
+        is_isolated = self.is_isolated()
+        is_out = torch.where(is_isolated)[0]
+        if not is_isolated.any():
+            return self
+
+        # Search the nearest nodes for isolated nodes, among all nodes
+        # NB: we remove the nodes themselves from their own neighborhood
+        high = self.pos.max(dim=0).values
+        low = self.pos.min(dim=0).values
+        r_max = torch.linalg.norm(high - low)
+        distances, neighbors = knn(
+            self.pos, self.pos[is_out], k + 1, r_max=r_max)
+        distances = distances[:, 1:]
+        neighbors = neighbors[:, 1:]
+
+        # If the edges have attributes, we also create attributes for
+        # the new edges. There is no trivial way of doing so, the
+        # heuristic here simply attempts to linearly regress the edge
+        # weights based on the corresponding node distances
+        if self.edge_attr is not None:
+
+            # Get existing edges attributes and associated distance
+            w = self.edge_attr
+            s = self.edge_index[0]
+            t = self.edge_index[1]
+            d = torch.linalg.norm(self.pos[s] - self.pos[t], dim=1)
+            d_1 = torch.vstack((d, torch.ones_like(d))).T
+
+            # Least square on d_1.x = w  (ie d.a + b = w)
+            a, b = torch.linalg.lstsq(d_1, w).solution
+
+            # Heuristic: linear approximation of w by d
+            edge_attr_new = distances.flatten() * a + b
+
+            # Append to existing self.edge_attr
+            self.edge_attr = torch.cat((self.edge_attr, edge_attr_new))
+
+        # Add new edges between the nodes
+        source = is_out.repeat_interleave(k)
+        target = neighbors.flatten()
+        edge_index_new = torch.vstack((source, target))
+        self.edge_index = torch.cat((self.edge_index, edge_index_new), dim=1)
+
+        return self
+
+    def clean_graph(self):
+        """Remove self loops, redundant edges and undirected edges."""
+        assert self.has_edges
+
+        # Recover self edges and edge attributes
+        edge_index = self.edge_index
+        edge_attr = self.edge_attr if self.edge_attr is not None else None
+
+        # Search for undirected edges, ie edges with (i,j) and (j,i)
+        # both present in edge_index. Flip (j,i) into (i,j) to make them
+        # redundant
+        s_larger_t = edge_index[0] > edge_index[1]
+        edge_index[:, s_larger_t] = edge_index[:, s_larger_t].flip(0)
+
+        # Sort edges by row and remove duplicates
+        edge_index, edge_attr = coalesce(edge_index, edge_attr, reduce='mean')
+
+        # Remove self loops
+        edge_index, edge_attr = remove_self_loops(edge_index, edge_attr)
+
+        # Save new graph in self attributes
+        self.edge_index = edge_index
+        self.edge_attr = edge_attr
+
+        return self
 
 
 class Batch(PyGBatch):

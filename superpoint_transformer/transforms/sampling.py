@@ -70,7 +70,7 @@ def group_data(
     # Keys for which voxel aggregation will be based on majority voting
     _LAST_KEYS = ['batch', SaveOriginalPosId.KEY]
 
-    assert mode in ["mean", "last"]
+    assert mode in ['mean', 'last']
     if mode == "mean" and cluster is None:
         raise ValueError(
             "In mean mode the cluster argument needs to be specified")
@@ -90,7 +90,7 @@ def group_data(
             continue
 
         # Edges cannot be aggregated
-        if bool(re.search("edge", key)):
+        if bool(re.search('edge', key)):
             raise ValueError("Edges not supported. Wrong data type.")
 
         # Only torch.Tensor attributes of size Data.num_nodes are
@@ -100,12 +100,12 @@ def group_data(
             # For 'last' mode, use unique_pos_indices to pick values
             # from a single point within each cluster. The same behavior
             # is expected for the _LAST_KEYS
-            if mode == "last" or key in _LAST_KEYS:
+            if mode == 'last' or key in _LAST_KEYS:
                 data[key] = item[unique_pos_indices]
 
             # For 'mean' mode, the attributes will be aggregated
             # depending on their nature
-            elif mode == "mean":
+            elif mode == 'mean':
 
                 # If the attribute is a boolean, temporarily convert is
                 # to integer to facilitate aggregation
@@ -169,7 +169,7 @@ class SaveOriginalPosId:
     data object
     """
 
-    KEY = "origin_id"
+    KEY = 'origin_id'
 
     def __init__(self, key=None):
         self.KEY = key if key is not None else self.KEY
@@ -245,14 +245,14 @@ class GridSampling3D:
 
         # If the aggregation mode is 'last', shuffle the point order.
         # Note that voxelization of point attributes will be stochastic
-        if self.mode == "last":
+        if self.mode == 'last':
             data = shuffle_data(data)
 
         # Convert point coordinates to the voxel grid coordinates
         coords = torch.round((data.pos) / self.grid_size)
 
         # Match each point with a voxel identifier
-        if "batch" not in data:
+        if 'batch' not in data:
             cluster = grid_cluster(coords, torch.ones(3, device=coords.device))
         else:
             cluster = voxel_grid(coords, data.batch, 1)
@@ -353,7 +353,7 @@ def sample_clusters(
     num_points_low = sub_size.sum()
     point_index = torch.arange(num_points_low, device=nag.device)
     if low < 0:
-        super_index = nag[0].sub.to_dense()
+        super_index = nag[0].sub.to_super_index()
     else:
         super_index = nag[low].super_index
     for i_level in range(low + 1, high):

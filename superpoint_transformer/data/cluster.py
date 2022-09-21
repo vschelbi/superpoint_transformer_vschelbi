@@ -34,9 +34,9 @@ class Cluster(CSRData):
     def num_points(self):
         return self.num_items
 
-    def to_dense(self):
+    def to_super_index(self):
         """Return a 1D tensor of indices converting the CSR-formatted
-        clustering structure in 'self' into a dense format.
+        clustering structure in 'self' into the 'super_index' format.
         """
         # TODO: this assumes 'self.point' is a permutation, shall we
         #  check this (although it requires sorting) ?
@@ -93,7 +93,7 @@ class Cluster(CSRData):
         # enough to maintain consistency with the current points. We
         # also need to update the sub-level's 'Data.super_index', which
         # can be computed from 'cluster'
-        sub_super = cluster.to_dense()
+        sub_super = cluster.to_super_index()
 
         return cluster, (idx_sub, sub_super)
 

@@ -16,7 +16,8 @@ def compute_ajacency_graph(data, k_adjacency, lambda_edge_weight):
     NB: this graph is directed wrt Pytorch Geometric, but cut-pursuit
     happily takes this as an input.
     """
-    source = torch.arange(data.num_nodes).repeat_interleave(k_adjacency)
+    source = torch.arange(
+        data.num_nodes, device=data.device).repeat_interleave(k_adjacency)
     target = data.neighbors[:, :k_adjacency].flatten()
     data.edge_index = torch.stack((source, target))
 
@@ -210,13 +211,29 @@ def _compute_cluster_graph(
     inter_cluster = torch.where(edges_0[0] != edges_0[1])[0]
     idx_edge_point = nag[0].edge_index[:, inter_cluster].unique()
 
+    # Some nodes may be isolated and not be connected to the other nodes
+    # in the level-0 adjacency graph. For that reason, we need to look
+    # for such isolated nodes and sample point inside them, since the
+    # above approach will otherwise ignore them
+    if nag[i_level].has_edges:
+        is_isolated = nag[i_level].is_isolated()
+    else:
+        is_isolated = torch.ones(
+            nag[i_level].num_nodes, dtype=torch.bool, device=nag.device)
+        is_isolated[edges_0.unique()] = False
+    idx_isolated_point = is_isolated[super_index]
+
+    # Combine the point indices into a point mask
+    mask = idx_isolated_point
+    mask[idx_edge_point] = True
+
     # Sample points among the clusters. These will be used to compute
     # cluster adjacency graph and edge features. Note we sample more
     # generously here than for cluster features, because we need to
     # capture fine-grained adjacency
     idx_samples, ptr_samples = sample_clusters(
         i_level, nag, low=0, n_max=n_max_edge, n_min=n_min,
-        mask=idx_edge_point, pointers=True)
+        mask=mask, pointers=True)
 
     print()
     print(f'idx_samples: {idx_samples.shape}')
@@ -254,9 +271,11 @@ def _compute_cluster_graph(
         for i, j in pairs])).long()
 
     # Remove edges whose distance is too large
+    # TODO: careful that max_dist does not re-isolate the de-isolated
+    #  nodes
     if max_dist > 0:
         dist = torch.linalg.norm(pos[edges[1]] - pos[edges[0]], dim=1)
-        edges = edges[dist >= max_dist]
+        edges = edges[:, dist <= max_dist]
         del dist
 
     # Now we are only interested in the edges connecting two different
@@ -299,6 +318,7 @@ def _compute_cluster_graph(
     # direction now
     se = torch.cat((se, se.roll(1, 1)), dim=1)
 
+    #TODO : visualize/control the SP and SE features
     se_feat = [
         torch.cat((se_dist, se_dist)),
         torch.cat((se_min_dist, se_min_dist)),
@@ -328,8 +348,14 @@ def _compute_cluster_graph(
 def compute_cluster_graph(
         nag, n_max_node=32, n_max_edge=64, n_min=5, max_dist=-1):
     assert isinstance(nag, NAG)
-    for i_level in range(1, nag.num_levels):
+    assert isinstance(max_dist, (int, float, list)), "Expected a scalar or a List"
+
+    if not isinstance(max_dist, list):
+        max_dist = [max_dist] * (nag.num_levels - 1)
+
+    for i_level, md in zip(range(1, nag.num_levels), max_dist):
         nag = _compute_cluster_graph(
             i_level, nag, n_max_node=n_max_node, n_max_edge=n_max_edge,
-            n_min=n_min, max_dist=max_dist)
+            n_min=n_min, max_dist=md)
+
     return nag

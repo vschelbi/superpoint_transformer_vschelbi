@@ -3,9 +3,8 @@ import os.path as osp
 import torch
 import numpy as np
 from superpoint_transformer.data import Data, Cluster, NAG
-from superpoint_transformer.transforms.graph import compute_ajacency_graph, \
-    edge_to_superedge
-from torch_scatter import scatter_sum, scatter_mean
+from superpoint_transformer.transforms.graph import compute_ajacency_graph
+from torch_scatter import scatter_sum
 
 partition_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.append(partition_folder)
@@ -17,10 +16,25 @@ from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 
 def compute_partition(
-        data, reg_strength, k_adjacency=10, lambda_edge_weight=1, cutoff=1,
-        parallel=True, balance=True, iterations=10, verbose=False,
-        keep_adjacency_graph=False):
-    """Partition the graph with parallel cut-pursuit."""
+        data, regularization, k_adjacency=10, lambda_edge_weight=1,
+        spatial_weight=1, cutoff=1, parallel=True, iterations=10,
+        verbose=False):
+    """Partition the graph with parallel cut-pursuit.
+
+    Parameters
+    ----------
+    data:
+    regularization:
+    k_adjacency:
+    lambda_edge_weight:
+    spatial_weight: float
+        Weight used to scale the point position features, to mitigate
+        the maximum superpoint size.
+    cutoff:
+    parallel:
+    iterations:
+    verbose:
+    """
     # Sanity checks
     assert isinstance(data, Data)
     assert 'x' in data.keys, "Expected node features in `data.x`"
@@ -28,20 +42,9 @@ def compute_partition(
     assert 'distances' in data.keys, "Expected node distances in `data.distances`"
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
     assert data.num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
-    assert isinstance(reg_strength, (int, float, list)), "Expected a scalar or a List"
-
-    # Number of threads depending on the parallelization
-    max_thread = 0 if parallel else 1
-
-    # The number of levels of hierarchy
-    reg_list = reg_strength if isinstance(reg_strength, list) else [reg_strength]
-
-    # Prepare the output as list of Data objects that will be stored in
-    # a NAG structure
-    data_list = [data]
-
-    # Recover level-0pointwise features from Data object
-    x = np.asfortranarray(data.x.numpy().T)
+    assert isinstance(regularization, (int, float, list)), "Expected a scalar or a List"
+    assert isinstance(cutoff, (int, list)), "Expected an int or a List"
+    assert isinstance(spatial_weight, (int, float, list)), "Expected a scalar or a List"
 
     # Compute a level-0 adjacency graph based on 'Data.neighbors' and
     # 'Data.distances'. NB: here we choose to delete the adjacency graph
@@ -49,138 +52,125 @@ def compute_partition(
     # 'neighbors' and 'distances' attributes and we might not need it
     # again outside of this scope
     data = compute_ajacency_graph(data, k_adjacency, lambda_edge_weight)
-    edge_index = data.edge_index
-    print()
-    print('level: 0')
-    print(f'data: {data}')
-    print(f'edge_index: {edge_index.shape}')
-    edge_attr = data.edge_attr
-    num_nodes = data.num_nodes
-    if not keep_adjacency_graph:
-        del data.edge_index, data.edge_attr
+
+    # Remove self loops, redundant edges and undirected edges
+    #TODO: calling this on the level-0 adjacency graph is a bit sluggish
+    # but still saves partition time overall. May be worth finding a
+    # quick way of removing self loops and redundant edges...
+    data = data.clean_graph()
+
+    # Initialize the hierarchical partition parameters. In particular,
+    # prepare the output as list of Data objects that will be stored in
+    # a NAG structure
+    max_thread = 0 if parallel else 1
+    data.node_size = torch.ones(data.num_nodes)  # level-0 points all have the same importance
+    data_list = [data]
+    if not isinstance(regularization, list):
+        regularization = [regularization]
+    if isinstance(cutoff, int):
+        cutoff = [cutoff] * len(regularization)
+    if not isinstance(spatial_weight, list):
+        spatial_weight = [spatial_weight] * len(regularization)
+    n_dim = data.pos.shape[1]
+    n_feat = data.x.shape[1]
 
     # Iteratively run the partition on the previous level of partition
-    for i_level, reg in enumerate(reg_list):
+    for level, (reg, cut, sw) in enumerate(zip(
+            regularization, cutoff, spatial_weight)):
 
-        # Convert to forward-star graph representation
+        if verbose:
+            print(f'Launching partition level={level} reg={reg}, cutoff={cut}')
+
+        # Recover the Data object on which we will run the partition
+        d1 = data_list[level]
+
+        # Convert to edges forward-star (or CSR) graph representation
         # TODO: IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM
-        first_edge, adj_vertices, reindex = edge_list_to_forward_star(
-            num_nodes, edge_index.T.contiguous().numpy())
-        first_edge = first_edge.astype('uint32')
-        adj_vertices = adj_vertices.astype('uint32')
+        source_csr, target, reindex = edge_list_to_forward_star(
+            d1.num_nodes, d1.edge_index.T.contiguous().cpu().numpy())
+        source_csr = source_csr.astype('uint32')
+        target = target.astype('uint32')
+        edge_weights = d1.edge_attr.cpu().numpy()[reindex] * reg
 
-        # Update edge_weights based on the regularization strength and
-        # forward-star reindexing
-        edge_weights = reg * edge_attr.numpy()[reindex]
+        # Recover attributes features from Data object
+        x = np.asfortranarray(
+            torch.cat((d1.pos.cpu(), d1.x.cpu()), dim=1).numpy().T)
+        node_size = d1.node_size.cpu().numpy()
+        coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
+        coor_weights[:n_dim] *= sw
 
-        # We choose to only enforce a cutoff for the level-0 partition
-        cutoff = cutoff if i_level == 0 else 1
-
-
-
-        # import pickle
-        # import glob
-        # import os.path as osp
-        #
-        # stuff = {
-        #     'x': x, 'first_edge': first_edge, 'adj_vertices': adj_vertices, 'edge_weights': edge_weights,
-        #     'min_comp_weight': cutoff, 'cp_dif_tol': 1e-2, 'cp_it_max': iterations, 'split_damp_ratio': 0.7,
-        #     'verbose': verbose, 'max_num_threads': max_thread, 'compute_Time': True, 'compute_List': True}
-        #
-        # # Open a file and use dump()
-        # root = '/media/drobert-admin/DATA2/datasets/kitti360/shared/temp'
-        # basename = 'data_20cm'
-        # # basename = 'data_15m_'
-        # n_files = len(glob.glob(osp.join(root, f'{basename}_*.pkl')))
-        # with open(root + f'/{basename}_{n_files}.pkl', 'wb') as file:
-        #     # A new file will be created
-        #     pickle.dump(stuff, file)
-
-
-
-        print()
-        print(f'launching partition {i_level}')
         # Partition computation
-        super_index, x_c, cluster, times = cp_kmpp_d0_dist(
-            1, x, first_edge, adj_vertices, edge_weights=edge_weights,
-            min_comp_weight=cutoff, cp_dif_tol=1e-2, cp_it_max=iterations,
-            split_damp_ratio=0.7, verbose=verbose, max_num_threads=max_thread,
-            compute_Time=True, compute_List=True,
-            balance_parallel_split=balance)
+        super_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
+            1, x, source_csr, target, edge_weights=edge_weights,
+            vert_weights=node_size, coor_weights=coor_weights,
+            min_comp_weight=cut, cp_dif_tol=1e-2,
+            cp_it_max=iterations, split_damp_ratio=0.7, verbose=verbose,
+            max_num_threads=max_thread, compute_Time=True, compute_List=True,
+            compute_Graph=True)
 
         if verbose:
             delta_t = (times[1:] - times[:-1]).round(2)
-            print(f'Level {i_level} iteration times: {delta_t}')
-
-        print(f'partition {i_level} done')
+            print(f'Level {level} iteration times: {delta_t}')
+            print(f'partition {level} done')
 
         # Save the super_index for the i-level
         super_index = torch.from_numpy(super_index.astype('int64'))
-        data_list[-1].super_index = super_index
+        d1.super_index = super_index
 
         # Save cluster information in another Data object. Convert
         # cluster-to-point indices in a CSR format
-        sizes = torch.LongTensor([c.shape[0] for c in cluster])
-        pointers = torch.cat([torch.LongTensor([0]), sizes.cumsum(dim=0)])
-        values = torch.cat([torch.from_numpy(x.astype('int64')) for x in cluster])
-        data_sup = Data(x=torch.from_numpy(x_c.T), sub=Cluster(pointers, values))
+        size = torch.LongTensor([c.shape[0] for c in cluster])
+        pointer = torch.cat([torch.LongTensor([0]), size.cumsum(dim=0)])
+        value = torch.cat([torch.from_numpy(x.astype('int64')) for x in cluster])
+        pos = torch.from_numpy(x_c[:n_dim].T)
+        x = torch.from_numpy(x_c[n_dim:].T)
+        s = torch.arange(edges[0].shape[0] - 1).repeat_interleave(
+            torch.from_numpy((edges[0][1:] - edges[0][:-1]).astype("int64")))
+        t = torch.from_numpy(edges[1].astype("int64"))
+        edge_index = torch.vstack((s, t))
+        edge_attr = torch.from_numpy(edges[2] / reg)
+        node_size = torch.from_numpy(node_size)
+        node_size_new = scatter_sum(node_size.cuda(), super_index.cuda(), dim=0).cpu()
+        d2 = Data(
+            pos=pos, x=x, edge_index=edge_index, edge_attr=edge_attr,
+            sub=Cluster(pointer, value), node_size=node_size_new)
 
-        print(f'num_points: {x_c.shape[1]} (should be equal to {data_sup.num_points})')
-        print(f'partition {i_level} superedges computation')
-        from superpoint_transformer.utils import has_duplicates
-        print(f'edge_index: shape={edge_index.shape}, min={edge_index.min()}, max={edge_index.max()}, unique.shape={edge_index.unique().shape}')
-        print('edge to superedge...')
-        # Prepare the features and adjacency graph for the i+1-level
-        # partition
-        x = x_c
-        num_nodes = data_sup.num_nodes
-        edge_index, idx_se, _, edge_attr = edge_to_superedge(
-            edge_index, super_index, edge_attr=edge_attr)
-        edge_attr = scatter_sum(edge_attr.cuda(), idx_se.cuda(), dim=0).cpu()
-        # TODO: scatter operations on CUDA ?
-        print(f'super edge_index: shape={edge_index.shape}, min={edge_index.min()}, max={edge_index.max()}, unique.shape={edge_index.unique().shape}')
+        # Remove self loops, redundant edges and undirected edges
+        d2 = d2.clean_graph()
+
+        # If some nodes are isolated in the graph, connect them to their
+        # nearest neighbors, so their absence of connectivity does not
+        # "pollute" higher levels of partition
+        d2 = d2.connect_isolated(k=k_adjacency)
 
         # Aggregate some point attributes into the clusters. This is not
         # performed dynamically since not all attributes can be
         # aggregated (eg 'neighbors', 'distances', 'edge_index',
         # 'edge_attr'...)
-        data_sub = data_list[-1]
-
-        if keep_adjacency_graph:
-            data_sup.edge_index = edge_index
-            data_sup.edge_attr = edge_attr
-
-        # TODO: scatter operations on CUDA ?
-        if 'pos' in data_sub.keys:
-            data_sup.pos = scatter_mean(
-                data_sub.pos.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
-            torch.cuda.empty_cache()
-
-        if 'rgb' in data_sub.keys:
-            data_sup.rgb = scatter_mean(
-                data_sub.rgb.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
-            torch.cuda.empty_cache()
-
-        if 'y' in data_sub.keys:
-            assert data_sub.y.dim() == 2, \
+        if 'y' in d1.keys:
+            assert d1.y.dim() == 2, \
                 "Expected Data.y to hold `(num_nodes, num_classes)` " \
                 "histograms, not single labels"
-            data_sup.y = scatter_sum(
-                data_sub.y.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
+            d2.y = scatter_sum(d1.y.cuda(), d1.super_index.cuda(), dim=0).cpu()
             torch.cuda.empty_cache()
 
-        if 'pred' in data_sub.keys:
-            assert data_sub.pred.dim() == 2, \
+        if 'pred' in d1.keys:
+            assert d1.pred.dim() == 2, \
                 "Expected Data.pred to hold `(num_nodes, num_classes)` " \
                 "histograms, not single labels"
-            data_sup.pred = scatter_sum(
-                data_sub.pred.cuda(), data_sub.super_index.cuda(), dim=0).cpu()
+            d2.pred = scatter_sum(
+                d1.pred.cuda(), d1.super_index.cuda(), dim=0).cpu()
             torch.cuda.empty_cache()
 
         # TODO: aggregate other attributes ?
 
-        # Add the level-i+1 Data object to data_list
-        data_list.append(data_sup)
+        # Add the l+1-level Data object to data_list and update the
+        # l-level after super_index has been changed
+        data_list[level] = d1
+        data_list.append(d2)
+
+        if verbose:
+            print('\n' + '-' * 64 + '\n')
 
     # Create the NAG object
     nag = NAG(data_list)
