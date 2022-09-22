@@ -37,7 +37,6 @@ def compute_partition(
     """
     # Sanity checks
     assert isinstance(data, Data)
-    assert 'x' in data.keys, "Expected node features in `data.x`"
     assert data.has_neighbors, "Expected node neighbors in `data.neighbors`"
     assert 'distances' in data.keys, "Expected node distances in `data.distances`"
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
@@ -72,7 +71,7 @@ def compute_partition(
     if not isinstance(spatial_weight, list):
         spatial_weight = [spatial_weight] * len(regularization)
     n_dim = data.pos.shape[1]
-    n_feat = data.x.shape[1]
+    n_feat = data.x.shape[1] if data.x is not None else 0
 
     # Iteratively run the partition on the previous level of partition
     for level, (reg, cut, sw) in enumerate(zip(
@@ -93,8 +92,11 @@ def compute_partition(
         edge_weights = d1.edge_attr.cpu().numpy()[reindex] * reg
 
         # Recover attributes features from Data object
-        x = np.asfortranarray(
-            torch.cat((d1.pos.cpu(), d1.x.cpu()), dim=1).numpy().T)
+        if d1.x is not None:
+            x = torch.cat((d1.pos.cpu(), d1.x.cpu()), dim=1)
+        else:
+            x = d1.pos.cpu()
+        x = np.asfortranarray(x.numpy().T)
         node_size = d1.node_size.cpu().numpy()
         coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
         coor_weights[:n_dim] *= sw
