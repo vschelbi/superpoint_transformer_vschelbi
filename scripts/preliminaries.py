@@ -270,7 +270,7 @@ from superpoint_transformer.transforms import sample_clusters
 # cluster geometric features as well as cluster adjacency graph and
 # edge features
 idx_samples, ptr_samples = sample_clusters(
-    data_c, n_max=32, low=5, pointers=True)
+    data_c, n_max=32, low=5, return_pointers=True)
 
 # Compute cluster geometric features
 xyz = data.pos[idx_samples].cpu().numpy()
