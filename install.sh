@@ -93,6 +93,7 @@ pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geo
 pip install plyfile
 pip install h5py
 pip install colorhash
+pip install seaborn
 
 #*********************************
 

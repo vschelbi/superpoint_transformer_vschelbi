@@ -494,9 +494,9 @@ PyObject * compute_geometric_features(
         // near 0 (points lie in 1D or 2D)
         float linearity  = (sqrtf(val[0]) - sqrtf(val[1])) / (sqrtf(val[0]) + 1e-3);
         float planarity  = (sqrtf(val[1]) - sqrtf(val[2])) / (sqrtf(val[0]) + 1e-3);
-        float scattering =  sqrtf(val[2]) / (sqrtf(val[0]) + 1e-3);
-        float length     = sqrtf(val[3]);
-        float surface    = sqrtf(val[1] * val[2] + 1e-10);
+        float scattering = sqrtf(val[2]) / (sqrtf(val[0]) + 1e-3);
+        float length     = sqrtf(val[0]);
+        float surface    = sqrtf(val[0] * val[1] + 1e-10);
         float volume     = sqrtf(val[0] * val[1] * val[2] + 1e-10);
 
         // Compute the verticality
@@ -515,9 +515,9 @@ PyObject * compute_geometric_features(
         features[i_point][1] = planarity;
         features[i_point][2] = scattering;
         features[i_point][3] = verticality;
-        features[i_point][4] = v0[0];
-        features[i_point][5] = v0[1];
-        features[i_point][6] = v0[2];
+        features[i_point][4] = v2[0];
+        features[i_point][5] = v2[1];
+        features[i_point][6] = v2[2];
         features[i_point][7] = length;
         features[i_point][8] = surface;
         features[i_point][9] = volume;

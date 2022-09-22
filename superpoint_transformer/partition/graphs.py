@@ -1,3 +1,5 @@
+#TODO: DELETE THIS FILE WHEN NO LONGER NEEDED
+
 #------------------------------------------------------------------------------
 #---------  Graph methods for SuperPoint Graph   ------------------------------
 #---------     Loic Landrieu, Dec. 2017     -----------------------------------

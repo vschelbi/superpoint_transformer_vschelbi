@@ -312,15 +312,9 @@ def sample_clusters(
         nag = NAG([nag])
     assert 0 <= n_min <= n_max
 
-    print('\nxxxxxxxxxxx  Sample clusters  xxxxxxxxxxxxx')
-
     # Get the number of elements of level 'low' contained in each
     # elements of level 'high'
     sub_size = nag.get_sub_size(high, low=low)
-
-    from superpoint_transformer.utils import has_duplicates
-    print(f'    sub_size: shape={sub_size.shape}, min={sub_size.min()}, max={sub_size.max()}')
-    print(f'    sub_size sum equals num_points: {sub_size.sum() == nag[low].num_nodes}')
 
     # Compute the number of points that will be sampled from each
     # cluster, based on a heuristic
@@ -331,7 +325,6 @@ def sample_clusters(
     else:
         # Fallback to sqrt sampling
         n_samples = sub_size.sqrt().round().long()
-    print(f'    n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
 
     # Make sure each cluster is sampled at least 'low' times and not
     # sampled more than its size (we sample without replacements). If a
@@ -339,8 +332,6 @@ def sample_clusters(
     # sampled (no randomness for sampling this cluster), which is why we
     # apply clamp min and clamp max successively
     n_samples = n_samples.clamp(min=n_min).clamp(max=sub_size)
-    print(f'    n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
-    print(f'    no cluster was sampled more than sub_size: {n_samples.le(sub_size).all()}')
 
     # Sanity check
     if superpoint_transformer.is_debug_enabled():
@@ -359,13 +350,6 @@ def sample_clusters(
     for i_level in range(low + 1, high):
         super_index = nag[i_level].super_index[super_index]
 
-    print()
-    print(f'    point_index: shape={point_index.shape}, min={point_index.min()}, max={point_index.max()}')
-    print(f'    super_index: shape={super_index.shape}, min={super_index.min()}, max={super_index.max()}')
-    print(f'    n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
-    print(f'    no cluster was sampled more than sub_size: {n_samples.le(sub_size).all()}')
-    print()
-
     # If a mask is provided, only keep the corresponding points. This
     # also requires updating the 'sub_size' and 'n_samples'
     mask = tensor_idx(mask)
@@ -379,7 +363,7 @@ def sample_clusters(
 
     # Sanity check
     if superpoint_transformer.is_debug_enabled():
-        assert n_samples.le(sub_size), \
+        assert n_samples.le(sub_size).all(), \
             "Cannot sample more than the cluster sizes."
 
     # Shuffle the order of points
@@ -392,24 +376,12 @@ def sample_clusters(
     super_index, order = super_index.sort()
     point_index = point_index[order]
 
-    print(f'    mask: shape={mask.shape}')
-    print(f'    point_index: shape={point_index.shape}, min={point_index.min()}, max={point_index.max()}')
-    print(f'    super_index: shape={super_index.shape}, min={super_index.min()}, max={super_index.max()}')
-    print(f'    n_samples: shape={n_samples.shape}, min={n_samples.min()}, max={n_samples.max()}')
-    print(f'    no cluster was sampled more than sub_size: {n_samples.le(sub_size).all()}')
-    print()
-
     # Build the indices of the points we will sample from point_index.
     # Note this could easily be expressed with a for loop but we need to
     # use a vectorized formulation to ensure reasonable processing time
     zero = torch.zeros(1, device=nag.device).long()
     offset = torch.cat((zero, sub_size[:-1])).cumsum(dim=0)
-    print(f'    sub_size: shape={sub_size.shape}, min={sub_size.min()}, max={sub_size.max()}')
-    print(f'    offset: shape={offset.shape}, min={offset.min()}, max={offset.max()}')
-    idx_samples = arange_interleave(n_samples, start=offset)
-    print(f'    idx_samples: shape={idx_samples.shape}, min={idx_samples.min()}, max={idx_samples.max()}')
-    idx_samples = point_index[idx_samples]
-    print(f'    idx_samples: shape={idx_samples.shape}, min={idx_samples.min()}, max={idx_samples.max()}')
+    idx_samples = point_index[arange_interleave(n_samples, start=offset)]
 
     # Return here if sampling pointers are not required
     if not return_pointers:
@@ -417,7 +389,5 @@ def sample_clusters(
 
     # Compute the pointers
     ptr_samples = torch.cat([zero, n_samples.cumsum(dim=0)])
-    print()
-    print(f'    n_samples: shape={n_samples.shape}, ptr_samples={ptr_samples.shape}')
 
     return idx_samples, ptr_samples.contiguous()

@@ -64,6 +64,14 @@ class Data(PyGData):
         return self.edge_index is not None
 
     @property
+    def num_edges(self):
+        """Overwrite the torch_geometric initial definition, which
+        somehow returns incorrect results, like:
+            data.num_edges != data.edge_index.shape[1]
+        """
+        return self.edge_index.shape[1] if self.has_edges else 0
+
+    @property
     def num_points(self):
         return self.num_nodes
 
@@ -373,10 +381,15 @@ class Data(PyGData):
         edge_index[:, s_larger_t] = edge_index[:, s_larger_t].flip(0)
 
         # Sort edges by row and remove duplicates
-        edge_index, edge_attr = coalesce(edge_index, edge_attr, reduce='mean')
+        if edge_attr is None:
+            edge_index = coalesce(edge_index)
+        else:
+            edge_index, edge_attr = coalesce(
+                edge_index, edge_attr=edge_attr, reduce='mean')
 
         # Remove self loops
-        edge_index, edge_attr = remove_self_loops(edge_index, edge_attr)
+        edge_index, edge_attr = remove_self_loops(
+            edge_index, edge_attr=edge_attr)
 
         # Save new graph in self attributes
         self.edge_index = edge_index

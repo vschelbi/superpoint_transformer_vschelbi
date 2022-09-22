@@ -1,3 +1,5 @@
+#TODO: DELETE THIS FILE WHEN NO LONGER NEEDED
+
 """
     Large-scale Point Cloud Semantic Segmentation with Superpoint Graphs
     http://arxiv.org/abs/1711.09869
