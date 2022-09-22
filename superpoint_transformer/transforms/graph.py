@@ -102,20 +102,8 @@ def _compute_cluster_graph(
     #  How should we deal with those at partition time and at superedge
     #  construction time ?
 
-    # TODO: define recursive sampling for super(n)point features
-    # TODO: define recursive edge for super(n)edge features
-    # TODO: return all eigenvectors from the C++ geometric features, for
-    #  superborder features computation
-    # TODO: other superedge ideas to better describe how 2 clusters
-    #  relate and the geometry of their border (S=source, T=target):
-    #  - avg distance S/T points in border to centroid S/T (how far
-    #    is the border from the cluster center)
-    #  - angle of mean S->T direction wrt S/T principal components (is
-    #    the border along the long of short side of objects ?)
-    #  - PCA of points in S/T cloud (is it linear border or surfacic
-    #    border ?)
-    #  - mean dist of S->T along S/T normal (offset along the objects
-    #    normals, eg offsets between steps)
+
+
 
     assert isinstance(nag, NAG)
     assert i_level > 0
@@ -139,7 +127,8 @@ def _compute_cluster_graph(
     # cluster geometric features as well as cluster adjacency graph and
     # edge features
     idx_samples, ptr_samples = sample_clusters(
-        i_level, nag, low=0, n_max=n_max_node, n_min=n_min, pointers=True)
+        i_level, nag, low=0, n_max=n_max_node, n_min=n_min,
+        return_pointers=True)
 
     print()
     print(f'idx_samples: {idx_samples.shape}')
@@ -232,8 +221,8 @@ def _compute_cluster_graph(
     # generously here than for cluster features, because we need to
     # capture fine-grained adjacency
     idx_samples, ptr_samples = sample_clusters(
-        i_level, nag, low=0, n_max=n_max_edge, n_min=n_min,
-        mask=mask, pointers=True)
+        i_level, nag, low=0, n_max=n_max_edge, n_min=n_min, mask=mask,
+        return_pointers=True)
 
     print()
     print(f'idx_samples: {idx_samples.shape}')
@@ -257,8 +246,8 @@ def _compute_cluster_graph(
     # TODO: ********temp
 
     # Delaunay triangulation on the sampled points. The tetrahedra edges
-    # are voronoi graph edges
-
+    # are voronoi graph edges. This is the bottleneck of this function,
+    # may be worth investigating alternatives if speedups are needed
     pos = nag[0].pos[idx_samples]
     tri = Delaunay(pos.numpy())
 
@@ -312,6 +301,17 @@ def _compute_cluster_graph(
 
     sub_size = nag.get_sub_size(i_level)
     se_size_ratio = sub_size[se[0]] / (sub_size[se[1]] + 1e-6)
+
+    # TODO: other superedge ideas to better describe how 2 clusters
+    #  relate and the geometry of their border (S=source, T=target):
+    #  - avg distance S/T points in border to centroid S/T (how far
+    #    is the border from the cluster center)
+    #  - angle of mean S->T direction wrt S/T principal components (is
+    #    the border along the long of short side of objects ?)
+    #  - PCA of points in S/T cloud (is it linear border or surfacic
+    #    border ?)
+    #  - mean dist of S->T along S/T normal (offset along the objects
+    #    normals, eg offsets between steps)
 
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source

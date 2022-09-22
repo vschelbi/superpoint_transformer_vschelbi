@@ -292,7 +292,7 @@ class GridSampling3D:
 
 
 def sample_clusters(
-        high, nag, low=0, n_max=32, n_min=1, mask=None, pointers=False):
+        high, nag, low=0, n_max=32, n_min=1, mask=None, return_pointers=False):
     """Compute indices for sampling elements at level 'low', based on
     which cluster they belong to at level 'high'. The sampling operation
     is run is without replacement and each cluster is sampled at least
@@ -372,7 +372,6 @@ def sample_clusters(
     if mask.shape[0] > 0:
         point_index = point_index[mask]
         super_index = super_index[mask]
-        # TODO: replace this scatter_sum with torch.bincount ?
         sub_size = scatter_sum(
             torch.ones_like(super_index), super_index, dim=0,
             dim_size=nag.num_points[high])
@@ -404,7 +403,7 @@ def sample_clusters(
     # Note this could easily be expressed with a for loop but we need to
     # use a vectorized formulation to ensure reasonable processing time
     zero = torch.zeros(1, device=nag.device).long()
-    offset = torch.cat((zero, sub_size[:-1])).cumsum(dim=0)  #TODO: this is TRICKY: will it not break if a cluster was masked out ?
+    offset = torch.cat((zero, sub_size[:-1])).cumsum(dim=0)
     print(f'    sub_size: shape={sub_size.shape}, min={sub_size.min()}, max={sub_size.max()}')
     print(f'    offset: shape={offset.shape}, min={offset.min()}, max={offset.max()}')
     idx_samples = arange_interleave(n_samples, start=offset)
@@ -413,7 +412,7 @@ def sample_clusters(
     print(f'    idx_samples: shape={idx_samples.shape}, min={idx_samples.min()}, max={idx_samples.max()}')
 
     # Return here if sampling pointers are not required
-    if not pointers:
+    if not return_pointers:
         return idx_samples
 
     # Compute the pointers
