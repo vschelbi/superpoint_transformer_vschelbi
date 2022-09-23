@@ -426,15 +426,26 @@ PyObject * compute_geometric_features(
     for (std::size_t i_point = 0; i_point < n_points; i_point++)
     {
         // Compute the cloud (n_neighbors + 1, 3) matrix holding the
-        // points' neighbors XYZ coordinates. The first row of the
-        // matrix holds the point itself
+        // points' neighbors XYZ coordinates
         std::size_t k_nn = nn_ptr[i_point + 1] - nn_ptr[i_point];
-        ei::MatrixXf cloud(k_nn + 1, 3);
+        ei::MatrixXf cloud(k_nn, 3);
 
-        // The first row of the matrix holds the point itself
-        cloud(0,0) = xyz[3 * i_point];
-        cloud(0,1) = xyz[3 * i_point + 1];
-        cloud(0,2) = xyz[3 * i_point + 2];
+        // If the cloud has only one point, populate the final feature
+        // vector with zeros and continue
+        if (k_nn <= 1)
+        {
+            features[i_point][0] = 0;
+            features[i_point][1] = 0;
+            features[i_point][2] = 0;
+            features[i_point][3] = 0;
+            features[i_point][4] = 0;
+            features[i_point][5] = 0;
+            features[i_point][6] = 0;
+            features[i_point][7] = 0;
+            features[i_point][8] = 0;
+            features[i_point][9] = 0;
+            continue;
+        }
 
         // Recover the neighbors' XYZ coordinates using nn and xyz
         std::size_t idx_nei;
@@ -444,15 +455,15 @@ PyObject * compute_geometric_features(
             idx_nei = nn[nn_ptr[i_point] + i_nei];
 
             // Recover the corresponding xyz coordinates
-            cloud(i_nei + 1, 0) = xyz[3 * idx_nei];
-            cloud(i_nei + 1, 1) = xyz[3 * idx_nei + 1];
-            cloud(i_nei + 1, 2) = xyz[3 * idx_nei + 2];
+            cloud(i_nei, 0) = xyz[3 * idx_nei];
+            cloud(i_nei, 1) = xyz[3 * idx_nei + 1];
+            cloud(i_nei, 2) = xyz[3 * idx_nei + 2];
         }
 
         // Compute the (3, 3) covariance matrix
         ei::MatrixXf centered_cloud = cloud.rowwise() - cloud.colwise().mean();
         ei::Matrix3f cov =
-            (centered_cloud.adjoint() * centered_cloud) / float(k_nn + 1);
+            (centered_cloud.adjoint() * centered_cloud) / float(k_nn);
 
         // Compute the eigenvalues and eigenvectors of the covariance
         ei::EigenSolver<Matrix3f> es(cov);
@@ -491,13 +502,17 @@ PyObject * compute_geometric_features(
 
         // Compute the dimensionality features. The 1e-3 term is meant
         // to stabilize the division when the cloud's 3rd eigenvalue is
-        // near 0 (points lie in 1D or 2D)
-        float linearity  = (sqrtf(val[0]) - sqrtf(val[1])) / (sqrtf(val[0]) + 1e-3);
-        float planarity  = (sqrtf(val[1]) - sqrtf(val[2])) / (sqrtf(val[0]) + 1e-3);
-        float scattering = sqrtf(val[2]) / (sqrtf(val[0]) + 1e-3);
-        float length     = sqrtf(val[0]);
-        float surface    = sqrtf(val[0] * val[1] + 1e-10);
-        float volume     = sqrtf(val[0] * val[1] * val[2] + 1e-10);
+        // near 0 (points lie in 1D or 2D). Note we take the sqrt of the
+        // eigenvalues since the PCA eigenvaluess are homogeneous to m²
+        float val0       = sqrtf(val[0]);
+        float val1       = sqrtf(val[1]);
+        float val2       = sqrtf(val[2]);
+        float linearity  = (val0 - val1) / (val0 + 1e-3);
+        float planarity  = (val1 - val2) / (val0 + 1e-3);
+        float scattering = val2 / (val0 + 1e-3);
+        float length     = val0;
+        float surface    = sqrtf(val[0] * val[1] + 1e-6);
+        float volume     = powf(val[0] * val[1] * val[2] + 1e-9, 1 / 3.);
 
         // Compute the verticality
         std::vector<float> unary_vector = {

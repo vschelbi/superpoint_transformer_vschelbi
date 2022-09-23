@@ -161,6 +161,8 @@ def compute_partition(
 
         # TODO: aggregate other attributes ?
 
+        # TODO: if scatter operations are bottleneck, use scatter_csr
+
         # Add the l+1-level Data object to data_list and update the
         # l-level after super_index has been changed
         data_list[level] = d1

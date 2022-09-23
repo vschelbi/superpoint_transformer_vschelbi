@@ -56,15 +56,18 @@ def compute_pointfeatures(
         features.append(f)
 
     # Add local geometric features
+    # TODO: !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
     needs_geof = any((linearity, planarity, scattering, verticality, normal))
     if needs_geof and data.pos is not None:
-        # Prepare data for numpy boost interface
+
+        # Prepare data for numpy boost interface. Note: we add each
+        # point to its own neighborhood before computation
         xyz = data.pos.cpu().numpy()
-        nn = data.neighbors.flatten().cpu().numpy().astype(
-            'uint32')  # TODO: !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
+        nn = torch.cat(
+            (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbors),
+            dim=1).flatten().cpu().numpy().astype('uint32')
         k = data.neighbors.shape[1]
-        nn_ptr = np.arange(xyz.shape[0] + 1).astype(
-            'uint32') * k  # TODO: !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
+        nn_ptr = np.arange(xyz.shape[0] + 1).astype('uint32') * k
 
         # C++ geometric features computation on CPU
         f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, False)

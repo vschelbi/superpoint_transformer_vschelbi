@@ -84,3 +84,23 @@ def arange_interleave(width, start=None):
     a = torch.cat((torch.zeros(1, device=device).long(), width[:-1]))
     offsets = (start - a.cumsum(0)).repeat_interleave(width)
     return torch.arange(width.sum(), device=device) + offsets
+
+def print_tensor_info(a, name):
+    """Print some info about a tensor. Used for debugging.
+    """
+    is_1d = a.dim() == 1
+    is_int = not a.is_floating_point()
+
+    msg = f'{name}:'
+    msg += f'  shape={a.shape}'
+    msg += f'  dtype={a.dtype}'
+    msg += f'  min={a.min()}'
+    msg += f'  max={a.max()}'
+
+    if is_1d and is_int:
+        msg += f'  duplicates={has_duplicates(a)}'
+        msg += f'  sorted={is_sorted(a)}'
+        msg += f'  dense={is_dense(a)}'
+        msg += f'  permutation={is_permutation(a)}'
+
+    print(msg)

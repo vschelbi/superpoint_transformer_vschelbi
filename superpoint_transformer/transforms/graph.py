@@ -3,11 +3,12 @@ import numpy as np
 import itertools
 from scipy.spatial import Delaunay
 from torch_scatter import scatter_mean, scatter_std, scatter_min
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 import superpoint_transformer
 from superpoint_transformer.data import Data, NAG
 import superpoint_transformer.partition.utils.libpoint_utils as point_utils
 from superpoint_transformer.transforms.sampling import sample_clusters
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from superpoint_transformer.utils import print_tensor_info
 
 
 def compute_ajacency_graph(data, k_adjacency, lambda_edge_weight):
@@ -113,18 +114,15 @@ def _compute_cluster_graph(
     assert nag[0].has_edges, \
         "Level-0 must have an adjacency structure in 'edge_index' to allow " \
         "guided sampling for superedges construction."
+    assert nag[0].has_neighbors, \
+        "Level-0 must have 'neighbors' attribute to allow superpoint features" \
+        "construction."
 
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
 
-    # print()
-    # print()
-    # print('************************************************')
-    # print(f'        cluster graph for i_level={i_level}')
-    # print('************************************************')
-    # print()
-    # print(f'nag: {nag}')
-    # print(f'data: {data}')
+    # Compute how many level-0 points each i_level cluster contains
+    sub_size = nag.get_sub_size(i_level, low=0)
 
     # Sample points among the clusters. These will be used to compute
     # cluster geometric features as well as cluster adjacency graph and
@@ -132,38 +130,6 @@ def _compute_cluster_graph(
     idx_samples, ptr_samples = sample_clusters(
         i_level, nag, low=0, n_max=n_max_node, n_min=n_min,
         return_pointers=True)
-
-    # print()
-    # print(f'idx_samples: {idx_samples.shape}')
-    # print(f'idx_samples.min(): {idx_samples.min()}')
-    # print(f'idx_samples.max(): {idx_samples.max()}')
-    from superpoint_transformer.utils import has_duplicates, is_sorted
-    # print(f'idx_samples duplicates: {has_duplicates(idx_samples)}')
-    # print()
-    # print(f'ptr_samples: {ptr_samples.shape}')
-    # print(f'ptr_samples.min(): {ptr_samples.min()}')
-    # print(f'ptr_samples.max(): {ptr_samples.max()}')
-    # print(f'ptr_samples delta size min: {(ptr_samples[1:] - ptr_samples[:-1]).min()}')
-    # print(f'ptr_samples delta size max: {(ptr_samples[1:] - ptr_samples[:-1]).max()}')
-    # print(f'ptr_samples is_sorted: {is_sorted(ptr_samples)}')
-    # print(f'all clusters have a ptr: {ptr_samples.shape[0] - 1 == nag[i_level].num_nodes}')
-    # print(f'all clusters received n_min+ samples: {(ptr_samples[1:] - ptr_samples[:-1]).ge(n_min).all()}')
-    # #TODO: this is temp--------
-    # super_index = nag[0].super_index
-    # for i in range(1, i_level):
-    #     super_index = nag[i].super_index[super_index]
-    # #TODO: this is temp--------
-    # print(f'some clusters received receive no sample: {torch.where(ptr_samples[1:] == ptr_samples[:-1])[0].shape[0]}/{nag[i_level].num_nodes}')
-    # # TODO: ********temp
-    # a = torch.repeat_interleave(torch.arange(nag[i_level].num_nodes), ptr_samples[1:] - ptr_samples[:-1])
-    # print(f'all points belong to the correct clusters: {torch.equal(super_index[idx_samples], a)}')
-    # # TODO: ********temp
-    #
-    # #TODO: !!!!! something FISHY here: SAMPLES ONLY BELONG TO ONE / A FEW CLUSTERS !!!!!
-
-    # To debug sampling
-    if superpoint_transformer.is_debug_enabled():
-        data.node_idx_samples = idx_samples
 
     # Compute cluster geometric features
     #TODO: !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!
@@ -189,6 +155,7 @@ def _compute_cluster_graph(
     data.surface = f[:, 8].to(data.pos.device)
     data.volume = f[:, 9].to(data.pos.device)
     data.normal = f[:, 4:7].view(-1, 3).to(data.pos.device)
+    data.log_size = (torch.log(sub_size + 1) / 2)
 
     # As a way to "stabilize" the normals' orientation, we choose to
     # express them as oriented in the z+ half-space
@@ -208,6 +175,32 @@ def _compute_cluster_graph(
     # To debug sampling
     if superpoint_transformer.is_debug_enabled():
         data.super_super_index = super_index
+        data.node_idx_samples = idx_samples
+        data.node_xyz_samples = torch.from_numpy(xyz)
+        data.node_nn_samples = torch.from_numpy(nn.astype('int64'))
+        data.node_nn_ptr_samples = torch.from_numpy(nn_ptr.astype('int64'))
+
+        end = ptr_samples[1:]
+        start = ptr_samples[:-1]
+        num_nodes = nag[i_level].num_nodes
+        super_index_samples = torch.repeat_interleave(
+            torch.arange(num_nodes), end - start)
+        print('\n\n************************************************')
+        print(f'        cluster graph for i_level={i_level}')
+        print('************************************************\n')
+        print(f'nag: {nag}')
+        print(f'data: {data}')
+        print('\n* Sampling for superpoint features')
+        print_tensor_info(idx_samples, 'idx_samples')
+        print_tensor_info(ptr_samples, 'ptr_samples')
+        print(f'all clusters have a ptr:                   '
+              f'{ptr_samples.shape[0] - 1 == num_nodes}')
+        print(f'all clusters received n_min+ samples:      '
+              f'{(end - start).ge(n_min).all()}')
+        print(f'clusters which received no sample:         '
+              f'{torch.where(end == start)[0].shape[0]}/{num_nodes}')
+        print(f'all points belong to the correct clusters: '
+              f'{torch.equal(super_index[idx_samples], super_index_samples)}')
 
     # Exit in case the i_level graph contains only one node
     if data.num_nodes < 2:
@@ -252,26 +245,23 @@ def _compute_cluster_graph(
     if superpoint_transformer.is_debug_enabled():
         data.edge_idx_samples = idx_samples
 
-    # print()
-    # print(f'idx_samples: {idx_samples.shape}')
-    # print(f'idx_samples.min(): {idx_samples.min()}')
-    # print(f'idx_samples.max(): {idx_samples.max()}')
-    # from superpoint_transformer.utils import has_duplicates
-    # print(f'idx_samples duplicates: {has_duplicates(idx_samples)}')
-    # print()
-    # print(f'ptr_samples: {ptr_samples.shape}')
-    # print(f'ptr_samples.min(): {ptr_samples.min()}')
-    # print(f'ptr_samples.max(): {ptr_samples.max()}')
-    # print(f'ptr_samples delta size min: {(ptr_samples[1:] - ptr_samples[:-1]).min()}')
-    # print(f'ptr_samples delta size max: {(ptr_samples[1:] - ptr_samples[:-1]).max()}')
-    # print(f'ptr_samples is_sorted: {is_sorted(ptr_samples)}')
-    # print(f'all clusters have a ptr: {ptr_samples.shape[0] - 1 == nag[i_level].num_nodes}')
-    # print(f'all clusters received n_min+ samples: {(ptr_samples[1:] - ptr_samples[:-1]).ge(n_min).all()}')
-    # print(f'some clusters received receive no sample: {torch.where(ptr_samples[1:] == ptr_samples[:-1])[0].shape[0]}/{nag[i_level].num_nodes}')
-    # #TODO: ********temp
-    # a = torch.repeat_interleave(torch.arange(nag[i_level].num_nodes), ptr_samples[1:] - ptr_samples[:-1])
-    # print(f'all points belong to the correct clusters: {torch.equal(super_index[idx_samples], a)}')
-    # # TODO: ********temp
+        end = ptr_samples[1:]
+        start = ptr_samples[:-1]
+        num_nodes = nag[i_level].num_nodes
+        super_index_samples = torch.repeat_interleave(
+            torch.arange(num_nodes), end - start)
+
+        print('\n* Sampling for superedge features')
+        print_tensor_info(idx_samples, 'idx_samples')
+        print_tensor_info(ptr_samples, 'ptr_samples')
+        print(f'all clusters have a ptr:                   '
+              f'{ptr_samples.shape[0] - 1 == num_nodes}')
+        print(f'all clusters received n_min+ samples:      '
+              f'{(end - start).ge(n_min).all()}')
+        print(f'clusters which received no sample:         '
+              f'{torch.where(end == start)[0].shape[0]}/{num_nodes}')
+        print(f'all points belong to the correct clusters: '
+              f'{torch.equal(super_index[idx_samples], super_index_samples)}')
 
     # Delaunay triangulation on the sampled points. The tetrahedra edges
     # are voronoi graph edges. This is the bottleneck of this function,
@@ -296,9 +286,9 @@ def _compute_cluster_graph(
     # TODO: careful that max_dist does not re-isolate the de-isolated
     #  nodes
     if max_dist > 0:
-        dist = torch.linalg.norm(pos[edges[1]] - pos[edges[0]], dim=1)
-        edges = edges[:, dist <= max_dist]
-        del dist
+        dist_sqrt = torch.linalg.norm(pos[edges[1]] - pos[edges[0]], dim=1)
+        edges = edges[:, dist_sqrt <= max_dist]
+        del dist_sqrt
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. Select only
@@ -310,14 +300,19 @@ def _compute_cluster_graph(
     # Direction are the pointwise source->target vectors, based on which
     # we will compute superedge descriptors
     direction = nag[0].pos[edges_inter[1]] - nag[0].pos[edges_inter[0]]
-    dist = torch.linalg.norm(direction, dim=1)
+
+    # To stabilize the distance-based features distribution, we use the
+    # sqrt of the metric distance. This assumes coordinates are in meter
+    # and that we are mostly interested in the range [1, 100]. Might
+    # want to change this if your dataset is different
+    dist_sqrt = torch.linalg.norm(direction, dim=1).sqrt().clamp(max=10)
 
     # We can now use torch_scatter operations to compute superedge
     # features
     se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).cpu()
-    se_dist = scatter_mean(dist.cuda(), se_id.cuda(), dim=0).cpu()
-    se_min_dist = scatter_min(dist.cuda(), se_id.cuda(), dim=0)[0].cpu()
-    se_std_dist = scatter_std(dist.cuda(), se_id.cuda(), dim=0).cpu()
+    se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).cpu()
+    se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].cpu()
+    se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).cpu()
 
     se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
     se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1)
@@ -328,12 +323,11 @@ def _compute_cluster_graph(
     se_angle_source = (se_direction * se_normal_source).sum(dim=1)
     se_angle_target = (se_direction * se_normal_target).sum(dim=1)
 
-    se_length_ratio = data.length[se[0]] / (data.length[se[1]] + 1e-6)
-    se_surface_ratio = data.surface[se[0]] / (data.surface[se[1]] + 1e-6)
-    se_volume_ratio = data.volume[se[0]] / (data.volume[se[1]] + 1e-6)
+    se_length_ratio = data.length[se[0]] / (data.length[se[1]] + 1e-1)
+    se_surface_ratio = data.surface[se[0]] / (data.surface[se[1]] + 1e-1)
+    se_volume_ratio = data.volume[se[0]] / (data.volume[se[1]] + 1e-1)
 
-    sub_size = nag.get_sub_size(i_level)
-    se_size_ratio = sub_size[se[0]] / (sub_size[se[1]] + 1e-6)
+    se_size_ratio = data.log_size[se[0]] / (data.log_size[se[1]] + 1e-1)
 
     # TODO: other superedge ideas to better describe how 2 clusters
     #  relate and the geometry of their border (S=source, T=target):
@@ -345,6 +339,8 @@ def _compute_cluster_graph(
     #    border ?)
     #  - mean dist of S->T along S/T normal (offset along the objects
     #    normals, eg offsets between steps)
+
+    # TODO: if scatter operations are bottleneck, use scatter_csr
 
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source
@@ -360,10 +356,10 @@ def _compute_cluster_graph(
         torch.cat((se_normal_angle, se_normal_angle)),
         torch.cat((se_angle_source, se_angle_target)),
         torch.cat((se_angle_target, se_angle_source)),
-        torch.cat((se_length_ratio, 1 / (se_length_ratio + 1e-6))),
-        torch.cat((se_surface_ratio, 1 / (se_surface_ratio + 1e-6))),
-        torch.cat((se_volume_ratio, 1 / (se_volume_ratio + 1e-6))),
-        torch.cat((se_size_ratio, 1 / (se_size_ratio + 1e-6)))]
+        torch.cat((se_length_ratio, 1 / (se_length_ratio + 1e-1))),
+        torch.cat((se_surface_ratio, 1 / (se_surface_ratio + 1e-1))),
+        torch.cat((se_volume_ratio, 1 / (se_volume_ratio + 1e-1))),
+        torch.cat((se_size_ratio, 1 / (se_size_ratio + 1e-1)))]
 
     # Aggregate all edge features in a single tensor
     se_feat = torch.vstack(se_feat).T

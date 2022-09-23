@@ -274,15 +274,6 @@ def visualize_3d(
             'marker.color': colors, 'hovertext': None}
 
     # Draw a trace for 3D point cloud sampling (for sampling debugging)
-    if 'sampling' in data_0.keys:
-        # Recover the features and convert them to an RGB format for
-        # visualization.
-        colors = int_to_plotly_rgb(data_0.sampling)
-        colors[data_0.super_sampling == -1] = 230
-        trace_modes[-1]['Sampling'] = {
-            'marker.color': colors, 'hovertext': None}
-
-    # Draw a trace for 3D point cloud sampling (for sampling debugging)
     if 'super_sampling' in data_0.keys:
         # Recover the features and convert them to an RGB format for
         # visualization.
