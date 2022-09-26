@@ -36,10 +36,6 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
     can be passed to describe edge attributes that will be returned
     filtered and ordered to describe the superedges.
     """
-    # print('\n............  edge_to_superedge  ............')
-    # print(f'    edges: shape={edges.shape}, min={edges.min()}, max={edges.max()}, unique.shape={edges.unique().shape}')
-    # print(f'    super_index: shape={super_index.shape}, min={super_index.min()}, max={super_index.max()}, unique.shape={super_index.unique().shape}')
-
     # We are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. So we first
     # identify the edges of interest. This step requires having access
@@ -49,21 +45,11 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
     idx_target = super_index[edges[1]]
     inter_cluster = torch.where(idx_source != idx_target)[0]
 
-    # print(f'    idx_source: shape={idx_source.shape}, min={idx_source.min()}, max={idx_source.max()}, unique.shape={idx_source.unique().shape}')
-    # print(f'    idx_target: shape={idx_target.shape}, min={idx_target.min()}, max={idx_target.max()}, unique.shape={idx_target.unique().shape}')
-    # if inter_cluster.shape[0] > 0:
-    #     print(f'    inter_cluster: shape={inter_cluster.shape}, min={inter_cluster.min()}, max={inter_cluster.max()}, unique.shape={inter_cluster.unique().shape}')
-    # else:
-    #     print('    inter_cluster shape is 0')
-
     # Now only consider the edges of interest (ie inter-cluster edges)
     edges_inter = edges[:, inter_cluster]
     edge_attr = edge_attr[inter_cluster] if edge_attr is not None else None
     idx_source = idx_source[inter_cluster]
     idx_target = idx_target[inter_cluster]
-
-    # print(f'    idx_source: shape={idx_source.shape}, min={idx_source.min()}, max={idx_source.max()}, unique.shape={idx_source.unique().shape}')
-    # print(f'    idx_target: shape={idx_target.shape}, min={idx_target.min()}, max={idx_target.max()}, unique.shape={idx_target.unique().shape}')
 
     # So far we are manipulating inter-cluster edges, but there may be
     # multiple of those for a given source-target pair. Next, we want to
@@ -73,19 +59,10 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
     # operations. We use 'se' to designate 'superedge' (ie an edge
     # between two clusters)
     se_id = idx_source * (max(idx_source.max(), idx_target.max()) + 1) + idx_target
-    # print(f'    se_id: shape={se_id.shape}, min={se_id.min()}, max={se_id.max()}, unique.shape={se_id.unique().shape}')
     se_id, perm = consecutive_cluster(se_id)
-    # print(f'    se_id: shape={se_id.shape}, min={se_id.min()}, max={se_id.max()}, unique.shape={se_id.unique().shape}')
-    # print(f'    perm: shape={perm.shape}, min={perm.min()}, max={perm.max()}, unique.shape={perm.unique().shape}')
     se_id_source = idx_source[perm]
     se_id_target = idx_target[perm]
-    # print(f'    se_id_source: shape={se_id_source.shape}, min={se_id_source.min()}, max={se_id_source.max()}, unique.shape={se_id_source.unique().shape}')
-    # print(f'    se_id_target: shape={se_id_target.shape}, min={se_id_target.min()}, max={se_id_target.max()}, unique.shape={se_id_target.unique().shape}')
     se = torch.vstack((se_id_source, se_id_target))
-    # print(f'    se: shape={se.shape}, min={se.min()}, max={se.max()}, unique.shape={se.unique().shape}')
-    # print(f'    edges_inter: shape={edges_inter.shape}, min={edges_inter.min()}, max={edges_inter.max()}, unique.shape={edges_inter.unique().shape}')
-    # print(f'    edge_attr: shape={edge_attr.shape}, min={edge_attr.min()}, max={edge_attr.max()}, unique.shape={edge_attr.unique().shape}')
-    # print()
 
     return se, se_id, edges_inter, edge_attr
 
@@ -105,9 +82,6 @@ def _compute_cluster_graph(
     #  producing weird annoying artifacts, potentially hurting training too...
     #  How should we deal with those at partition time and at superedge
     #  construction time ?
-
-
-
 
     assert isinstance(nag, NAG)
     assert i_level > 0
@@ -151,11 +125,11 @@ def _compute_cluster_graph(
     data.planarity = f[:, 1].to(data.pos.device)
     data.scattering = f[:, 2].to(data.pos.device)
     data.verticality = f[:, 3].to(data.pos.device)
-    data.length = f[:, 7].to(data.pos.device)
-    data.surface = f[:, 8].to(data.pos.device)
-    data.volume = f[:, 9].to(data.pos.device)
+    data.log_length = torch.log(f[:, 7] + 1).to(data.pos.device)
+    data.log_surface = torch.log(f[:, 8] + 1).to(data.pos.device)
+    data.log_volume = torch.log(f[:, 9] + 1).to(data.pos.device)
     data.normal = f[:, 4:7].view(-1, 3).to(data.pos.device)
-    data.log_size = (torch.log(sub_size + 1) / 2)
+    data.log_size = (torch.log(sub_size + 1) - np.log(2)) / 10
 
     # As a way to "stabilize" the normals' orientation, we choose to
     # express them as oriented in the z+ half-space
@@ -230,7 +204,6 @@ def _compute_cluster_graph(
 
     # Combine the point indices into a point mask
     mask = idx_isolated_point
-    # print(f'has isolated nodes requiring specific sampling: {mask.any()}, {int(mask.sum())} points')
     mask[idx_edge_point] = True
 
     # Sample points among the clusters. These will be used to compute
@@ -301,33 +274,35 @@ def _compute_cluster_graph(
     # we will compute superedge descriptors
     direction = nag[0].pos[edges_inter[1]] - nag[0].pos[edges_inter[0]]
 
-    # To stabilize the distance-based features distribution, we use the
+    # To stabilize the distance-based features' distribution, we use the
     # sqrt of the metric distance. This assumes coordinates are in meter
     # and that we are mostly interested in the range [1, 100]. Might
     # want to change this if your dataset is different
-    dist_sqrt = torch.linalg.norm(direction, dim=1).sqrt().clamp(max=10)
+    dist_sqrt = torch.linalg.norm(direction, dim=1).sqrt() / 10
 
     # We can now use torch_scatter operations to compute superedge
     # features
-    se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).cpu()
-    se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).cpu()
-    se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].cpu()
-    se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).cpu()
+    se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).to(data.pos.device)
+    se_direction = se_direction / torch.linalg.norm(se_direction, dim=0)
+    se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(data.pos.device)
+    se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].to(data.pos.device)
+    se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(data.pos.device)
 
     se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
-    se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1)
+    se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1).sqrt() / 10
 
     se_normal_source = data.normal[se[0]]
     se_normal_target = data.normal[se[1]]
-    se_normal_angle = (se_normal_source * se_normal_target).sum(dim=1)
-    se_angle_source = (se_direction * se_normal_source).sum(dim=1)
-    se_angle_target = (se_direction * se_normal_target).sum(dim=1)
+    se_normal_angle = (se_normal_source * se_normal_target).sum(dim=1).abs()
+    se_angle_source = (se_direction * se_normal_source).sum(dim=1).abs()
+    se_angle_target = (se_direction * se_normal_target).sum(dim=1).abs()
 
-    se_length_ratio = data.length[se[0]] / (data.length[se[1]] + 1e-1)
-    se_surface_ratio = data.surface[se[0]] / (data.surface[se[1]] + 1e-1)
-    se_volume_ratio = data.volume[se[0]] / (data.volume[se[1]] + 1e-1)
+    se_log_length_ratio = data.log_length[se[0]] - data.log_length[se[1]]
+    se_log_surface_ratio = data.log_surface[se[0]] - data.log_surface[se[1]]
+    se_log_volume_ratio = data.log_volume[se[0]] - data.log_volume[se[1]]
+    se_log_size_ratio = data.log_size[se[0]] - data.log_size[se[1]]
 
-    se_size_ratio = data.log_size[se[0]] / (data.log_size[se[1]] + 1e-1)
+    se_is_artificial = is_isolated[se[0]] | is_isolated[se[1]]
 
     # TODO: other superedge ideas to better describe how 2 clusters
     #  relate and the geometry of their border (S=source, T=target):
@@ -356,10 +331,11 @@ def _compute_cluster_graph(
         torch.cat((se_normal_angle, se_normal_angle)),
         torch.cat((se_angle_source, se_angle_target)),
         torch.cat((se_angle_target, se_angle_source)),
-        torch.cat((se_length_ratio, 1 / (se_length_ratio + 1e-1))),
-        torch.cat((se_surface_ratio, 1 / (se_surface_ratio + 1e-1))),
-        torch.cat((se_volume_ratio, 1 / (se_volume_ratio + 1e-1))),
-        torch.cat((se_size_ratio, 1 / (se_size_ratio + 1e-1)))]
+        torch.cat((se_log_length_ratio, se_log_length_ratio)),
+        torch.cat((se_log_surface_ratio, se_log_surface_ratio)),
+        torch.cat((se_log_volume_ratio, se_log_volume_ratio)),
+        torch.cat((se_log_size_ratio, -se_log_size_ratio)),
+        torch.cat((se_is_artificial, se_is_artificial))]
 
     # Aggregate all edge features in a single tensor
     se_feat = torch.vstack(se_feat).T
