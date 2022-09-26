@@ -181,16 +181,23 @@ def _compute_cluster_graph(
     # in the level-0 adjacency graph. For that reason, we need to look
     # for such isolated nodes and sample point inside them, since the
     # above approach will otherwise ignore them
+    # TODO: This approach has 2 downsizes: it samples points anywhere in
+    #  the isolated cluster and does not drive the other clusters
+    #  sampling around the isolated clusters. This means that edges may
+    #  not be the true visibility-based, simplest edges of the isolated
+    #  clusters. Could be solved by dense sampling inside the clusters
+    #  with points near the isolated clusters, but requires a bit of
+    #  effort...
     if nag[i_level].has_edges:
         is_isolated = nag[i_level].is_isolated()
     else:
         is_isolated = torch.ones(
             nag[i_level].num_nodes, dtype=torch.bool, device=nag.device)
         is_isolated[edges_0.unique()] = False
-    idx_isolated_point = is_isolated[super_index]
+    is_isolated_point = is_isolated[super_index]
 
     # Combine the point indices into a point mask
-    mask = idx_isolated_point
+    mask = is_isolated_point
     mask[idx_edge_point] = True
 
     # Sample points among the clusters. These will be used to compute
@@ -234,6 +241,7 @@ def _compute_cluster_graph(
     edges = torch.from_numpy(np.hstack([
         np.vstack((tri.simplices[:, i], tri.simplices[:, j]))
         for i, j in pairs])).long()
+    edges = idx_samples[edges]
 
     # Remove duplicate edges. For now, (i,j) and (j,i) are considered
     # to be duplicates. We remove do not care about directed graphs at
@@ -246,16 +254,52 @@ def _compute_cluster_graph(
     # TODO: careful that max_dist does not re-isolate the de-isolated
     #  nodes
     if max_dist > 0:
-        dist_sqrt = torch.linalg.norm(pos[edges[1]] - pos[edges[0]], dim=1)
-        edges = edges[:, dist_sqrt <= max_dist]
-        del dist_sqrt
+        # Identify the edges that are too long
+        dist = torch.linalg.norm(
+            nag[0].pos[edges[1]] - nag[0].pos[edges[0]], dim=1)
+        too_far_edge = dist > max_dist
+
+        # Recover the corresponding cluster indices for each edge
+        edge_cluster = super_index[edges]
+
+        # Identify the clusters which would be isolated if all edges
+        # beyond max_dist were removed
+        cluster_isolated = torch.ones(
+            nag[i_level].num_nodes, dtype=torch.bool, device=nag.device)
+        cluster_isolated[edge_cluster[:, ~too_far_edge].unique()] = False
+
+        # For those clusters, we will tolerate 1 edge larger than
+        # max_dist and that connects to another cluster
+        source_isolated = cluster_isolated[edge_cluster[0]]
+        target_isolated = cluster_isolated[edge_cluster[1]]
+        tricky_edge = too_far_edge & (source_isolated | target_isolated) & \
+                      (edge_cluster[0] != edge_cluster[1])
+
+        # Sort tricky edges by distance in descending order and sort the
+        # edge indices and cluster indices consequently. By populating a
+        # 'shortest edge index' tensor for the clusters using the sorted
+        # edge indices, we can ensure the last edge is the shortest.
+        order = dist[tricky_edge].sort(descending=True).indices
+        idx = edge_cluster[:, tricky_edge][:, order]
+        val = torch.where(tricky_edge)[0][order]
+        cluster_shortest_edge = -torch.ones(
+            nag[i_level].num_nodes, dtype=torch.long, device=nag.device)
+        cluster_shortest_edge[idx[0]] = val
+        cluster_shortest_edge[idx[1]] = val
+        idx_edge_to_keep = cluster_shortest_edge[cluster_isolated]
+
+        # Update the too-far mask so as to preserve at least one edge
+        # for each cluster
+        too_far_edge[idx_edge_to_keep] = False
+        edges = edges[:, ~too_far_edge]
+
+        del dist
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. Select only
     # inter-cluster edges and compute the corresponding source and
     # target point and cluster indices
-    se, se_id, edges_inter, _ = edge_to_superedge(
-        idx_samples[edges], super_index)
+    se, se_id, edges_inter, _ = edge_to_superedge(edges, super_index)
 
     # Direction are the pointwise source->target vectors, based on which
     # we will compute superedge descriptors
@@ -293,6 +337,10 @@ def _compute_cluster_graph(
 
     # TODO: other superedge ideas to better describe how 2 clusters
     #  relate and the geometry of their border (S=source, T=target):
+    #  - matrix that transforms unary_vector_source into
+    #   unary_vector_target ? Should express, differences in pose, size
+    #   and shape as it requires rotation, translation and scaling. Poses
+    #   questions regarding the canonical base, PCA orientation ±π
     #  - current SE direction is not the axis/plane of the edge but
     #   rather its normal... build it with PCA and for points sampled in
     #    each side ? careful with single-point edges...
