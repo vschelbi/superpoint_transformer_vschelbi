@@ -274,10 +274,8 @@ idx_samples, ptr_samples = sample_clusters(
 
 # Compute cluster geometric features
 xyz = data.pos[idx_samples].cpu().numpy()
-nn = np.arange(idx_samples.shape[0]).astype(
-    'uint32')  # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
-nn_ptr = ptr_samples.cpu().numpy().astype(
-    'uint32')  # !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
+nn = np.arange(idx_samples.shape[0]).astype('uint32')
+nn_ptr = ptr_samples.cpu().numpy().astype('uint32')
 
 # -***************************************
 xyz = xyz + torch.rand(xyz.shape).numpy() * 1e-5

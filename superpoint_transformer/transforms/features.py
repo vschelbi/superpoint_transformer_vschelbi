@@ -39,6 +39,10 @@ def compute_pointfeatures(
     volume: bool
         Use local volume. Assumes ``Data.neighbors``.
     """
+    assert data.has_neighbors, "Data is expected to have a 'neighbors' attribute"
+    assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
+    assert data.neigbors.max() < np.iinfo(np.uint32).max, "Too high neighbor indices for `uint32` indices"
+
     features = []
 
     # Add xyz normalized. The scaling factor drives the maximum cluster
@@ -56,7 +60,6 @@ def compute_pointfeatures(
         features.append(f)
 
     # Add local geometric features
-    # TODO: !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!!
     needs_geof = any((linearity, planarity, scattering, verticality, normal))
     if needs_geof and data.pos is not None:
 

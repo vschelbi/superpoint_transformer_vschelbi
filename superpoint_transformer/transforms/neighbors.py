@@ -53,7 +53,7 @@ def _search_outliers(
     if idx_potential.shape[0] == 0:
         return idx_outliers, idx_inliers
 
-    # Recursviely search actual outliers among the potential
+    # Recursively search actual outliers among the potential
     xyz_query_sub = xyz_query[0, idx_inliers[idx_potential]]
     xyz_search_sub = xyz_search[0, idx_inliers]
     idx_outliers_sub, idx_inliers_sub = _search_outliers(
@@ -146,8 +146,9 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
         k - n_found_nn[idx_partial])
 
     # Compute the oversampling row indices.
-    idx_x_sampling = torch.arange(neighbors_partial.shape[0], device=device
-                                  ).repeat_interleave(k - n_found_nn[idx_partial])
+    idx_x_sampling = torch.arange(
+        neighbors_partial.shape[0], device=device).repeat_interleave(
+        k - n_found_nn[idx_partial])
 
     # Compute the oversampling column indices. The 0.9999 factor is a
     # security to handle the case where torch.rand is to close to 1.0,
@@ -163,7 +164,7 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
     distances_partial[idx_missing] = distances_partial[
         idx_x_sampling, idx_y_sampling]
 
-    # Restore the oversampled neighborhods with the rest
+    # Restore the oversampled neighborhoods with the rest
     neighbors[idx_partial] = neighbors_partial
     distances[idx_partial] = distances_partial
 
@@ -174,33 +175,6 @@ def search_neighbors(data, k, r_max=1):
     # Data initialization
     xyz_query = data.pos.view(1, -1, 3)
     xyz_search = data.pos.view(1, -1, 3)
-
-    #     #--------------------------------
-    #     # KNN on GPU. Search for outliers first
-    #     _, neighbors, _, _ = frnn.frnn_grid_points(
-    #         xyz_query, xyz_search, K=k_min + 1, r=r_max)
-
-    #     # Remove each point from its own neighborhood
-    #     neighbors = neighbors[0][:, 1:]
-
-    #     # Get the number of found neighbors for each point. Indeed,
-    #     # depending on the cloud properties and the chosen K and radius,
-    #     # some points may receive `-1` neighbors
-    #     n_found_nn = (neighbors != -1).sum(dim=1)
-
-    #     # Identify points which have less than k_min neighbors within R.
-    #     # Those are treated as outliers and will be discarded
-    #     idx_isolated = torch.where(n_found_nn < k_min)[0]
-
-    #     # Save the outliers in a separate Data object
-    #     outliers = Data(
-    #         pos=data.pos[idx_isolated], rgb=data.rgb[idx_isolated],
-    #         y=data.y[idx_isolated], idx_isolated=idx_isolated)
-
-    #     # KNN on GPU. Search for outliers first
-    #     _, neighbors, _, _ = frnn.frnn_grid_points(
-    #         xyz_query, xyz_search, K=k_min + 1, r=r_max)
-    #     #--------------------------------
 
     # KNN on GPU. Actual neighbor search now
     distances, neighbors, _, _ = frnn.frnn_grid_points(
@@ -228,5 +202,5 @@ def search_neighbors(data, k, r_max=1):
 
     return data
 
-# IMPORTANT !!!
+# TODO: !!! IMPORTANT !!!
 #   - points with no neighbors within radius -> set to 0-feature !

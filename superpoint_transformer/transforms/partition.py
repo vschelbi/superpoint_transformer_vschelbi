@@ -16,7 +16,7 @@ from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 
 def compute_partition(
-        data, regularization, spatial_weight=1, cutoff=1, parallel=True,
+        data, regularization, spatial_weight=1, cutoff=10, parallel=True,
         iterations=10, k_adjacency=5, verbose=False):
     """Partition the graph with parallel cut-pursuit.
 
@@ -36,7 +36,6 @@ def compute_partition(
     # Sanity checks
     assert isinstance(data, Data)
     assert data.has_edges, "Expected edges in Data"
-    # TODO: IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
     assert data.num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
     assert isinstance(regularization, (int, float, list)), "Expected a scalar or a List"
@@ -187,15 +186,14 @@ def compute_grid_partition(data, size=2):
     """
     # Sanity checks
     assert isinstance(data, Data)
-    # TODO: IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
     assert data.num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
     assert isinstance(size, (int, float, list)), "Expected a scalar or a List"
 
     # Remove self loops, redundant edges and undirected edges
-    # TODO: calling this on the level-0 adjacency graph is a bit sluggish
-    # but still saves partition time overall. May be worth finding a
-    # quick way of removing self loops and redundant edges...
+    # TODO: calling this on the level-0 adjacency graph is a bit
+    #  sluggish but still saves partition time overall. May be worth
+    #  finding a quick way of removing self loops and redundant edges...
     data = data.clean_graph()
 
     # Initialize the partition data

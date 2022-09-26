@@ -69,20 +69,6 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
 
 def _compute_cluster_graph(
         i_level, nag, n_max_node=32, n_max_edge=64, n_min=5, max_dist=-1):
-    # TODO: WARNING the cluster geometric features will only work if we
-    #  enforced a cutoff on the minimum superpoint size ! Make sure you
-    #  enforce this
-
-    # TODO: QUESTION: we currently build superedges and sample superedge
-    #  points based on the assumption that they connect level-i clusters
-    #  iff there is at least on elevel-0 adjacency edge connecting points
-    #  belonging to each cluster. But this is not true, some clusters are
-    #  just isolated and will never be connected to the rest. For the same
-    #  reason, those will never be aggregated in the hierarchical partition,
-    #  producing weird annoying artifacts, potentially hurting training too...
-    #  How should we deal with those at partition time and at superedge
-    #  construction time ?
-
     assert isinstance(nag, NAG)
     assert i_level > 0
     assert nag[0].has_edges, \
@@ -91,6 +77,8 @@ def _compute_cluster_graph(
     assert nag[0].has_neighbors, \
         "Level-0 must have 'neighbors' attribute to allow superpoint features" \
         "construction."
+    assert nag[0].num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
+    assert nag[0].num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
 
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
@@ -106,7 +94,6 @@ def _compute_cluster_graph(
         return_pointers=True)
 
     # Compute cluster geometric features
-    #TODO: !!!! IMPORTANT CAREFUL WITH UINT32 = 4 BILLION points MAXIMUM !!!
     xyz = nag[0].pos[idx_samples].cpu().numpy()
     nn = np.arange(idx_samples.shape[0]).astype('uint32')
     nn_ptr = ptr_samples.cpu().numpy().astype('uint32')
@@ -306,6 +293,9 @@ def _compute_cluster_graph(
 
     # TODO: other superedge ideas to better describe how 2 clusters
     #  relate and the geometry of their border (S=source, T=target):
+    #  - current SE direction is not the axis/plane of the edge but
+    #   rather its normal... build it with PCA and for points sampled in
+    #    each side ? careful with single-point edges...
     #  - avg distance S/T points in border to centroid S/T (how far
     #    is the border from the cluster center)
     #  - angle of mean S->T direction wrt S/T principal components (is
@@ -321,9 +311,7 @@ def _compute_cluster_graph(
     # create the edges and corresponding features for the Target->Source
     # direction now
     se = torch.cat((se, se.flip(0)), dim=1)
-
-    #TODO : visualize/control the SP and SE features
-    se_feat = [
+    se_feat = torch.vstack([
         torch.cat((se_dist, se_dist)),
         torch.cat((se_min_dist, se_min_dist)),
         torch.cat((se_std_dist, se_std_dist)),
@@ -331,14 +319,11 @@ def _compute_cluster_graph(
         torch.cat((se_normal_angle, se_normal_angle)),
         torch.cat((se_angle_source, se_angle_target)),
         torch.cat((se_angle_target, se_angle_source)),
-        torch.cat((se_log_length_ratio, se_log_length_ratio)),
-        torch.cat((se_log_surface_ratio, se_log_surface_ratio)),
-        torch.cat((se_log_volume_ratio, se_log_volume_ratio)),
+        torch.cat((se_log_length_ratio, -se_log_length_ratio)),
+        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),
+        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),
         torch.cat((se_log_size_ratio, -se_log_size_ratio)),
-        torch.cat((se_is_artificial, se_is_artificial))]
-
-    # Aggregate all edge features in a single tensor
-    se_feat = torch.vstack(se_feat).T
+        torch.cat((se_is_artificial, se_is_artificial))]).T
 
     # Save superedges and superedge features in the Data object
     data.edge_index = se
