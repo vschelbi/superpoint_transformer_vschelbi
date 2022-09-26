@@ -41,7 +41,7 @@ def compute_pointfeatures(
     """
     assert data.has_neighbors, "Data is expected to have a 'neighbors' attribute"
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
-    assert data.neigbors.max() < np.iinfo(np.uint32).max, "Too high neighbor indices for `uint32` indices"
+    assert data.neighbors.max() < np.iinfo(np.uint32).max, "Too high 'neighbors' indices for `uint32` indices"
 
     features = []
 
