@@ -391,6 +391,7 @@ def visualize_3d(
             # feature
             edge_attr = input[i_level + 1].edge_attr[edge_mask].abs()
             colors = rgb_to_plotly_rgb(feats_to_rgb(edge_attr, normalize=True))
+            colors = [colors[i // 3] for i in range(len(colors) * 3)]
             edge_width = pointsize * 3
         else:
             colors = 'black'
