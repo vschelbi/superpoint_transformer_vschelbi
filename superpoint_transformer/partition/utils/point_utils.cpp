@@ -500,6 +500,29 @@ PyObject * compute_geometric_features(
             es.eigenvectors().col(indices[2])(1).real(),
             es.eigenvectors().col(indices[2])(2).real()};
 
+        // To standardize the orientation of eigenvectors, we choose to
+        // enforce all eigenvectors to be expressed in the Z+ half-space
+        if (v0[2] < 0)
+        {
+            v0[0] = -v0[0];
+            v0[1] = -v0[1];
+            v0[2] = -v0[2];
+        }
+
+        if (v1[2] < 0)
+        {
+            v1[0] = -v1[0];
+            v1[1] = -v1[1];
+            v1[2] = -v1[2];
+        }
+
+        if (v2[2] < 0)
+        {
+            v2[0] = -v2[0];
+            v2[1] = -v2[1];
+            v2[2] = -v2[2];
+        }
+
         // Compute the dimensionality features. The 1e-3 term is meant
         // to stabilize the division when the cloud's 3rd eigenvalue is
         // near 0 (points lie in 1D or 2D). Note we take the sqrt of the
@@ -511,8 +534,8 @@ PyObject * compute_geometric_features(
         float planarity  = (val1 - val2) / (val0 + 1e-3);
         float scattering = val2 / (val0 + 1e-3);
         float length     = val0;
-        float surface    = sqrtf(val[0] * val[1] + 1e-6);
-        float volume     = powf(val[0] * val[1] * val[2] + 1e-9, 1 / 3.);
+        float surface    = sqrtf(val0 * val1 + 1e-6);
+        float volume     = powf(val0 * val1 * val2 + 1e-9, 1 / 3.);
 
         // Compute the verticality
         std::vector<float> unary_vector = {
