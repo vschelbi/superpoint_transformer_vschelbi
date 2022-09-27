@@ -109,6 +109,7 @@ def identity_PCA(x, dim=3, normalize=False):
         high = x.max(dim=0).values
         low = x.min(dim=0).values
         x = (x - low) / (high - low)
+        x[x.isnan() | x.isinf()] = 0
 
     # Apply the PCA on x
     x_reduced = (x - z_offset).mm(eigenvectors[:, -dim:])
@@ -120,7 +121,7 @@ def visualize_3d(
         input, figsize=800, width=None, height=None, class_names=None,
         class_colors=None, voxel=-1, max_points=100000, pointsize=5,
         error_color=None, super_centre=True, super_edge=False,
-        super_number=False, **kwargs):
+        super_number=False, super_edge_attr=False, **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
@@ -142,6 +143,8 @@ def visualize_3d(
       (only if super_centre=True)
     :param super_number: whether superpoint numbers should be displayed
       (only if super_centre=True)
+    :param super_edge_attr: whether the edges should be colored by their
+      features (only if super_edge=True)
     :param kwargs
 
     :return:
@@ -183,7 +186,7 @@ def visualize_3d(
     # If a sampling is needed, apply it to the input Data or NAG,
     # depending on the structure
     if idx.shape[0] < data_0.num_points:
-        input = input.select(0, idx) if is_nag else input.select(idx)
+        input = input.select(0, idx) if is_nag else input.select(idx)[0]
         data_0 = input[0] if is_nag else input
 
     # Round to the cm for cleaner hover info
@@ -365,7 +368,8 @@ def visualize_3d(
         # a NAG (this assumption does not hold for drawing any type of
         # directed graph, obviously). Due to this, we can easily remove
         # duplicate superedges by only keeping egdes such that i < j
-        se = se[:, se[0] < se[1]]
+        edge_mask = se[0] < se[1]
+        se = se[:, edge_mask]
 
         # Recover corresponding source and target coordinates using the
         # previously-computed 'super_pos' cluster centroid positions
@@ -377,6 +381,21 @@ def visualize_3d(
         edges[::3] = s_pos
         edges[1::3] = t_pos
 
+        if super_edge_attr and input[i_level + 1].edge_attr is not None:
+            # Recover edge features and convert them to RGB colors. NB:
+            # edge features are assumed to be in [0, 1] or [-1, 1].
+            # Since we only draw edges in one direction, we choose to
+            # only represent the absolute value of the features. This
+            # implies that features are either direction-independent or
+            # that the edge direction only changes the sign of the
+            # feature
+            edge_attr = input[i_level + 1].edge_attr[edge_mask].abs()
+            colors = rgb_to_plotly_rgb(feats_to_rgb(edge_attr, normalize=True))
+            edge_width = pointsize * 3
+        else:
+            colors = 'black'
+            edge_width = pointsize
+
         # Draw the level-i+1 superedges
         fig.add_trace(
             go.Scatter3d(
@@ -385,8 +404,8 @@ def visualize_3d(
                 z=edges[:, 2],
                 mode='lines',
                 line=dict(
-                    width=pointsize,
-                    color='black',),
+                    width=edge_width,
+                    color=colors,),
                 hoverinfo='skip',
                 showlegend=False,
                 visible=False, ))
