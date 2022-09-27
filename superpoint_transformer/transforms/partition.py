@@ -16,7 +16,7 @@ from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 
 def compute_partition(
-        data, regularization, spatial_weight=1, cutoff=10, parallel=True,
+        data, regularization, spatial_mitigation=1, cutoff=10, parallel=True,
         iterations=10, k_adjacency=5, verbose=False):
     """Partition the graph with parallel cut-pursuit.
 
@@ -24,9 +24,10 @@ def compute_partition(
     ----------
     data:
     regularization:
-    spatial_weight: float
-        Weight used to scale the point position features, to mitigate
-        the maximum superpoint size.
+    spatial_mitigation: float
+        Weight used to mitigate the impact of the point position  in the
+        partition. The larger, the less spatial coordinates matter. This
+        can be loosely interpreted as a maximum superpoint radius
     cutoff:
     parallel:
     iterations:
@@ -40,7 +41,7 @@ def compute_partition(
     assert data.num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
     assert isinstance(regularization, (int, float, list)), "Expected a scalar or a List"
     assert isinstance(cutoff, (int, list)), "Expected an int or a List"
-    assert isinstance(spatial_weight, (int, float, list)), "Expected a scalar or a List"
+    assert isinstance(spatial_mitigation, (int, float, list)), "Expected a scalar or a List"
 
     # Remove self loops, redundant edges and undirected edges
     #TODO: calling this on the level-0 adjacency graph is a bit sluggish
@@ -58,14 +59,14 @@ def compute_partition(
         regularization = [regularization]
     if isinstance(cutoff, int):
         cutoff = [cutoff] * len(regularization)
-    if not isinstance(spatial_weight, list):
-        spatial_weight = [spatial_weight] * len(regularization)
+    if not isinstance(spatial_mitigation, list):
+        spatial_mitigation = [spatial_mitigation] * len(regularization)
     n_dim = data.pos.shape[1]
     n_feat = data.x.shape[1] if data.x is not None else 0
 
     # Iteratively run the partition on the previous level of partition
     for level, (reg, cut, sw) in enumerate(zip(
-            regularization, cutoff, spatial_weight)):
+            regularization, cutoff, spatial_mitigation)):
 
         if verbose:
             print(f'Launching partition level={level} reg={reg}, cutoff={cut}')
@@ -86,14 +87,15 @@ def compute_partition(
             if d1.edge_attr is not None else reg
 
         # Recover attributes features from Data object
+        pos_offset = d1.pos.mean(dim=0)
         if d1.x is not None:
-            x = torch.cat((d1.pos.cpu(), d1.x.cpu()), dim=1)
+            x = torch.cat((d1.pos - pos_offset, d1.x), dim=1)
         else:
-            x = d1.pos.cpu()
-        x = np.asfortranarray(x.numpy().T)
+            x = d1.pos - pos_offset
+        x = np.asfortranarray(x.cpu().numpy().T)
         node_size = d1.node_size.cpu().numpy()
         coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
-        coor_weights[:n_dim] *= sw
+        coor_weights[n_dim:] *= sw
 
         # Partition computation
         super_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
@@ -118,7 +120,7 @@ def compute_partition(
         size = torch.LongTensor([c.shape[0] for c in cluster])
         pointer = torch.cat([torch.LongTensor([0]), size.cumsum(dim=0)])
         value = torch.cat([torch.from_numpy(x.astype('int64')) for x in cluster])
-        pos = torch.from_numpy(x_c[:n_dim].T)
+        pos = torch.from_numpy(x_c[:n_dim].T) + pos_offset.cpu()
         x = torch.from_numpy(x_c[n_dim:].T)
         s = torch.arange(edges[0].shape[0] - 1).repeat_interleave(
             torch.from_numpy((edges[0][1:] - edges[0][:-1]).astype("int64")))

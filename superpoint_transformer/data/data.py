@@ -244,16 +244,17 @@ class Data(PyGData):
             out_super = (idx_super, super_sub)
 
         # Index data items depending on their type
-        skip_keys = [
-            'edge_index', 'sub', 'super_index', 'neighbors', 'distances']
+        warn_keys = ['neighbors', 'distances']
+        skip_keys = ['edge_index', 'sub', 'super_index'] + warn_keys
         for key, item in self:
 
             # 'skip_keys' have already been dealt with earlier on, so we
             # can skip them here
-            if key in skip_keys:
+            if key in warn_keys and superpoint_transformer.is_debug_enabled():
                 print(
                     f"WARNING: Data.select does not support '{key}', this "
                     f"attribute will be absent from the output")
+            if key in skip_keys:
                 continue
 
             is_tensor = torch.is_tensor(item)
