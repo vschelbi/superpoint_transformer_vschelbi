@@ -69,8 +69,13 @@ def compute_pointfeatures(
         nn = torch.cat(
             (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbors),
             dim=1).flatten().cpu().numpy().astype('uint32')
-        k = data.neighbors.shape[1]
+        k = data.neighbors.shape[1] + 1
         nn_ptr = np.arange(xyz.shape[0] + 1).astype('uint32') * k
+
+        # Make sure array are contiguous before moving to C++
+        xyz = np.ascontiguousarray(xyz)
+        nn = np.ascontiguousarray(nn)
+        nn_ptr = np.ascontiguousarray(nn_ptr)
 
         # C++ geometric features computation on CPU
         f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, False)
