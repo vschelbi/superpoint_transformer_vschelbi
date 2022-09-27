@@ -251,6 +251,9 @@ class Data(PyGData):
             # 'skip_keys' have already been dealt with earlier on, so we
             # can skip them here
             if key in skip_keys:
+                print(
+                    f"WARNING: Data.select does not support '{key}', this "
+                    f"attribute will be absent from the output")
                 continue
 
             is_tensor = torch.is_tensor(item)
