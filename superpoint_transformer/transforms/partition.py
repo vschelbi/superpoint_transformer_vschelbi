@@ -139,7 +139,8 @@ def compute_partition(
         # If some nodes are isolated in the graph, connect them to their
         # nearest neighbors, so their absence of connectivity does not
         # "pollute" higher levels of partition
-        d2 = d2.connect_isolated(k=k_adjacency)
+        if d2.num_nodes > 1:
+            d2 = d2.connect_isolated(k=k_adjacency)
 
         # Aggregate some point attributes into the clusters. This is not
         # performed dynamically since not all attributes can be

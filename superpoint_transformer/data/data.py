@@ -6,7 +6,8 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_geometric.utils import coalesce, remove_self_loops
 import superpoint_transformer
 from superpoint_transformer.data.cluster import Cluster
-from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates
+from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates, \
+    isolated_nodes
 from superpoint_transformer.utils.neighbors import knn
 
 
@@ -56,12 +57,12 @@ class Data(PyGData):
     @property
     def has_neighbors(self):
         """Whether the points have neighbors."""
-        return self.neighbors is not None
+        return self.neighbors is not None and self.neighbors.shape[1] > 0
 
     @property
     def has_edges(self):
         """Whether the points have edges."""
-        return self.edge_index is not None
+        return self.edge_index is not None and self.edge_index.shape[1] > 0
 
     @property
     def num_edges(self):
@@ -176,8 +177,8 @@ class Data(PyGData):
         idx = tensor_idx(idx).to(device)
 
         # Make sure idx contains no duplicate entries
-        #TODO: calling this whenever we select points might be costly, is
-        # there a workaround ?
+        #TODO: calling this whenever we select points might be costly,
+        # is there a workaround ?
         assert not has_duplicates(idx), \
             "Duplicate indices are not supported. This would cause " \
             "ambiguities in edges and super- and sub- indices."
@@ -288,29 +289,7 @@ class Data(PyGData):
         Will raise an error if self.has_edges is False.
         """
         assert self.has_edges
-        mask = torch.ones(self.num_nodes, dtype=torch.bool, device=self.device)
-        mask[self.edge_index.unique()] = False
-        return mask
-
-    # def absorb(self, data, idx):
-    #     """Integrate the points of another data object into self, based
-    #     on the provided indices. This operation requires data to have
-    #     the same attributes as self (any attribute of data absent from
-    #     self will be silently discarded). Note that this operation
-    #     assumes data.sub
-    #     """
-    #     # Sanity checks
-    #     idx = tensor_idx(idx)
-    #     assert isinstance(data, Data)
-    #     assert data.num_points == idx.numel()
-    #     assert idx.max() < self.num_points
-    #     missing = [k for k in self.keys if k not in data.keys]
-    #     if len(missing) > 0:
-    #         raise ValueError(
-    #             f"Keys in 'self' and 'data' do not match. Missing keys: "
-    #             f"{missing}")
-    #
-    #     #TODO: DO NOT fuse attributes, only super and sub... ?
+        return isolated_nodes(self.edge_index, num_nodes=self.num_nodes)
 
     def connect_isolated(self, k=1):
         """Search for nodes with no edges in the graph and connect them

@@ -79,9 +79,10 @@ def feats_to_rgb(feats, normalize=False):
     if normalize and not is_normalized:
         # Unit-normalize the features in a hypercube of shared scale
         # for nicer visualizations
-        if color.max() != color.min():
-            color = color - color.min(dim=0).values.view(1, -1)
-        color = color / (color.max(dim=0).values.view(1, -1) + 1e-6)
+        high = color.max(dim=0).values
+        low = color.min(dim=0).values
+        color = (color - low) / (high - low)
+        color[color.isnan() | color.isinf()] = 0
 
     return color
 
