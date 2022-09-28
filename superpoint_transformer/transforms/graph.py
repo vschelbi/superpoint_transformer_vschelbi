@@ -299,13 +299,13 @@ def _compute_cluster_graph(
 
         # Since this filtering might have affected edges_point, we
         # recompute the super edges indices and ids
-        se, se_id, edges_inter, _ = edge_to_superedge(edges_point, super_index)
+        se, se_id, edges_point, _ = edge_to_superedge(edges_point, super_index)
 
         del dist
 
     # Direction are the pointwise source->target vectors, based on which
     # we will compute superedge descriptors
-    direction = nag[0].pos[edges_inter[1]] - nag[0].pos[edges_inter[0]]
+    direction = nag[0].pos[edges_point[1]] - nag[0].pos[edges_point[0]]
 
     # To stabilize the distance-based features' distribution, we use the
     # sqrt of the metric distance. This assumes coordinates are in meter
