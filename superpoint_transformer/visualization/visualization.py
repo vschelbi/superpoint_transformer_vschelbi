@@ -121,8 +121,9 @@ def identity_PCA(x, dim=3, normalize=False):
 def visualize_3d(
         input, figsize=800, width=None, height=None, class_names=None,
         class_colors=None, voxel=-1, max_points=100000, pointsize=5,
-        error_color=None, super_centre=True, super_edge=False,
-        super_number=False, super_edge_attr=False, **kwargs):
+        superpointsize=None, error_color=None, super_centre=True,
+        super_edge=False, super_number=False, super_edge_attr=False, gap=None,
+        select=None, alpha=0.1, **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
@@ -137,6 +138,7 @@ def visualize_3d(
     :param max_points: maximum number of points displayed to facilitate
       visualization
     :param pointsize: size of points
+    :param superpointsize: size of superpoints
     :param error_color: color used to identify mis-predicted points
     :param super_centre: whether superpoint centroids should be
       displayed
@@ -146,11 +148,21 @@ def visualize_3d(
       (only if super_centre=True)
     :param super_edge_attr: whether the edges should be colored by their
       features (only if super_edge=True)
+    :param gap: if None, the hierarchical graphs will be overlaid on the
+      points. If not None, a 3D tensor indicating the offset by which
+      the hierarchical graphs should be plotted
+    :param select: if not None, will call Data.select(slicing) or
+      NAG.select(*slicing) on the input data (depending on its nature)
+      and the coloring schemes will illustrate it
+    :param alpha: float ruling the whitening of selected points, nodes
+      and edges (only if select is not None)
     :param kwargs
 
     :return:
     """
     assert isinstance(input, (Data, NAG))
+    assert gap is None \
+           or isinstance(gap, torch.Tensor) and gap.shape == torch.Size([3])
 
     # We work on copies of the input data, to allow modified in this
     # scope. Data_0 accounts for the lowest level of hierarchy, the
@@ -160,6 +172,47 @@ def visualize_3d(
         else input
     is_nag = isinstance(input, NAG)
     data_0 = input[0] if is_nag else input
+
+    # Make sure alpha is in [0, 1]
+    alpha = max(0, min(alpha, 1))
+
+    # If select is provided, we will call NAG.select on the input data
+    # and illustrate the selected/discarded pattern in the figure
+    has_select = select is not None
+    if has_select and is_nag:
+
+        # Add an ID to the points before applying NAG.select
+        nag_temp = input.clone()
+        for i in range(len(nag_temp)):
+            nag_temp._list[i] = SaveOriginalPosId()(nag_temp[i])
+
+        # Apply the selection
+        nag_temp = nag_temp.select(*select)
+
+        # Indicate, for each node of the hierarchical graph, whether it
+        # has been selected
+        for i in range(len(input)):
+            selected = torch.zeros(input[i].num_nodes, dtype=torch.bool)
+            selected[nag_temp[i][SaveOriginalPosId.KEY]] = True
+            input[i].selected = selected
+
+        del nag_temp, selected
+
+    elif has_select and not is_nag:
+
+        # Add an ID to the points before applying NAG.select
+        data_temp = SaveOriginalPosId()(Data(pos=input.pos.clone()))
+
+        # Apply the selection
+        data_temp = data_temp.select(select)[0]
+
+        # Indicate, for each node of the hierarchical graph, whether it
+        # has been selected
+        selected = torch.zeros(input.num_nodes, dtype=torch.bool)
+        selected[data_temp[SaveOriginalPosId.KEY]] = True
+        input.selected = selected
+
+        del data_temp, selected
 
     # Subsample to limit the drawing time
     # If the level-0 cloud needs to be voxelized or sampled, a NAG
@@ -217,8 +270,10 @@ def visualize_3d(
     # Draw a trace for position-colored 3D point cloud
     mini = data_0.pos.min(dim=0).values
     maxi = data_0.pos.max(dim=0).values
-    data_0.pos_rgb = (data_0.pos - mini) / (maxi - mini + 1e-6)
-    colors = rgb_to_plotly_rgb(data_0.pos_rgb)
+    colors = (data_0.pos - mini) / (maxi - mini + 1e-6)
+    if has_select:
+        colors[~data_0.selected] = 1 - alpha * (1 - colors[~data_0.selected])
+    colors = rgb_to_plotly_rgb(colors)
     fig.add_trace(
         go.Scatter3d(
             x=data_0.pos[:, 0],
@@ -238,7 +293,10 @@ def visualize_3d(
 
     # Draw a trace for RGB 3D point cloud
     if data_0.rgb is not None:
-        colors = rgb_to_plotly_rgb(data_0.rgb)
+        colors = data_0.rgb
+        if has_select:
+            colors[~data_0.selected] = 1 - alpha * (1 - colors[~data_0.selected])
+        colors = rgb_to_plotly_rgb(colors)
         trace_modes[-1]['RGB'] = {'marker.color': colors, 'hovertext': None}
 
     # Color the points with ground truth semantic labels. If labels are
@@ -272,8 +330,10 @@ def visualize_3d(
     if data_0.x is not None:
         # Recover the features and convert them to an RGB format for
         # visualization.
-        data_0.feat_3d = feats_to_rgb(data_0.x, normalize=True)
-        colors = rgb_to_plotly_rgb(data_0.feat_3d)
+        colors = feats_to_rgb(data_0.x, normalize=True)
+        if has_select:
+            colors[~data_0.selected] = 1 - alpha * (1 - colors[~data_0.selected])
+        colors = rgb_to_plotly_rgb(colors)
         trace_modes[-1]['Features 3D'] = {
             'marker.color': colors, 'hovertext': None}
 
@@ -281,8 +341,11 @@ def visualize_3d(
     if 'super_sampling' in data_0.keys:
         # Recover the features and convert them to an RGB format for
         # visualization.
-        colors = int_to_plotly_rgb(data_0.super_sampling)
+        colors = data_0.super_sampling
+        colors = int_to_plotly_rgb(colors)
         colors[data_0.super_sampling == -1] = 230
+        if has_select:
+            colors[~data_0.selected] = 255 - alpha * (255 - colors[~data_0.selected])
         trace_modes[-1]['Super sampling'] = {
             'marker.color': colors, 'hovertext': None}
 
@@ -307,6 +370,8 @@ def visualize_3d(
         # assumes only it is the trace holding all level-0 points and on
         # which all other colors modes are defined
         colors = int_to_plotly_rgb(super_index)
+        if has_select:
+            colors[~data_0.selected] = 255 - alpha * (255 - colors[~data_0.selected])
         text = [f'c: {i}' for i in super_index]
         trace_modes[0][f'Level {i_level + 1}'] = {
             'marker.color': colors, 'hovertext': text}
@@ -326,13 +391,21 @@ def visualize_3d(
         else:
             super_pos = input[i_level + 1].pos
 
+        # Add the gap offset, if need be
+        if gap is not None:
+            super_pos += gap * (i_level + 1)
+
         # Round to the cm for cleaner hover info
         super_pos = (super_pos * 100).round() / 100
 
         # Draw the level-i+1 cluster centroids
         idx_sp = torch.arange(data_i.super_index.max() + 1)
         colors = int_to_plotly_rgb(idx_sp)
+        if has_select:
+            colors[~input[i_level + 1].selected] = \
+                255 - alpha * (255 - colors[~input[i_level + 1].selected])
         text = [f"<b>{i}</b>" for i in idx_sp] if super_number else ''
+        ball_size = superpointsize if superpointsize else pointsize * 3
         fig.add_trace(
             go.Scatter3d(
                 x=super_pos[:, 0],
@@ -341,19 +414,19 @@ def visualize_3d(
                 mode='markers+text',
                 marker=dict(
                     symbol='diamond',
-                    size=int(pointsize * 3),
+                    size=ball_size,
                     color=colors,
-                    line_width=pointsize,
+                    line_width=min(ball_size / 2, 2),
                     line_color='black'),
                 textposition="bottom center",
                 textfont=dict(size=16),
                 hovertext=text,
                 hoverinfo='x+y+z+text',
                 showlegend=False,
-                visible=False, ))
-        trace_modes.append({})
-        trace_modes[-1][f'Level {i_level + 1}'] = {
-            'marker.color': colors, 'hovertext': text}
+                visible=gap is not None, ))
+        keys = f'Level {i_level + 1}' if gap is None else trace_modes[0].keys()
+        trace_modes.append(
+            {k: {'marker.color': colors, 'hovertext': text} for k in keys})
 
         # Do not draw superedges if not required or if the i+1 level
         # does not have any
@@ -391,9 +464,20 @@ def visualize_3d(
             # that the edge direction only changes the sign of the
             # feature
             edge_attr = input[i_level + 1].edge_attr[edge_mask].abs()
-            colors = rgb_to_plotly_rgb(feats_to_rgb(edge_attr, normalize=True))
+            colors = feats_to_rgb(edge_attr, normalize=True)
+            if has_select:
+                selected_edge = input[i_level + 1].selected[se].all(dim=0)
+                colors[~selected_edge] = 1 - alpha * (1 - colors[~selected_edge])
+            colors = rgb_to_plotly_rgb(colors)
             colors = [colors[i // 3] for i in range(len(colors) * 3)]
             edge_width = pointsize * 3
+        elif has_select:
+            selected_edge = input[i_level + 1].selected[se].all(dim=0)
+            colors = torch.zeros(se.shape[1], 3)
+            colors[~selected_edge] = 1 - alpha * (1 - colors[~selected_edge])
+            colors = rgb_to_plotly_rgb(colors)
+            colors = [colors[i // 3] for i in range(len(colors) * 3)]
+            edge_width = pointsize
         else:
             colors = 'black'
             edge_width = pointsize
@@ -410,9 +494,9 @@ def visualize_3d(
                     color=colors,),
                 hoverinfo='skip',
                 showlegend=False,
-                visible=False, ))
-        trace_modes.append({})
-        trace_modes[-1][f'Level {i_level + 1}'] = {}
+                visible=gap is not None, ))
+        keys = f'Level {i_level + 1}' if gap is None else trace_modes[0].keys()
+        trace_modes.append({k: {} for k in keys})
 
     # Add a trace for prediction errors. NB: it is important that this
     # trace is created last, as the button behavior for this one is
