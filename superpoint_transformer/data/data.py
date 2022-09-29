@@ -259,8 +259,8 @@ class Data(PyGData):
                 continue
 
             is_tensor = torch.is_tensor(item)
-            is_node_size = item.size(0) == self.num_nodes
-            is_edge_size = item.size(0) == self.num_edges
+            is_node_size = item.shape[0] == self.num_nodes
+            is_edge_size = item.shape[0] == self.num_edges
 
             # Slice tensor elements containing num_edges elements. Note
             # we deal with edges first, to rule out the case where
