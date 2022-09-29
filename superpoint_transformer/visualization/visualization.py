@@ -135,10 +135,10 @@ def identity_PCA(x, dim=3, normalize=False):
 
 def visualize_3d(
         input, figsize=800, width=None, height=None, class_names=None,
-        class_colors=None, voxel=-1, max_points=50000, pointsize=3,
-        super_pointsize=None, error_color=None, super_center=False,
-        super_edge=False, super_edge_attr=False, gap=None, select=None,
-        alpha=0.1, alpha_super=None, **kwargs):
+        class_colors=None, voxel=-1, max_points=50000, point_size=3,
+        centroid_size=None, error_color=None, centroids=False, v_edge=False,
+        h_edge=False, h_edge_attr=False, gap=None, select=None, alpha=0.1,
+        alpha_super=None, **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
@@ -152,15 +152,17 @@ def visualize_3d(
       visualization
     :param max_points: maximum number of points displayed to facilitate
       visualization
-    :param pointsize: size of points
-    :param super_pointsize: size of superpoints
+    :param point_size: size of points
+    :param centroid_size: size of superpoints
     :param error_color: color used to identify mis-predicted points
-    :param super_center: whether superpoint centroids should be
+    :param centroids: whether superpoint centroids should be
       displayed
-    :param super_edge: whether superedges should be displayed
-      (only if super_center=True)
-    :param super_edge_attr: whether the edges should be colored by their
-      features (only if super_edge=True)
+    :param v_edge: whether vertical edges should be displayed
+      (only if centroids=True and gap is not None)
+    :param h_edge: whether horizontal edges should be displayed
+      (only if centroids=True)
+    :param h_edge_attr: whether the edges should be colored by their
+      features (only if h_edge=True)
     :param gap: if None, the hierarchical graphs will be overlaid on the
       points. If not None, a 3D tensor indicating the offset by which
       the hierarchical graphs should be plotted
@@ -309,7 +311,7 @@ def visualize_3d(
             z=data_0.pos[data_0.selected, 2],
             mode='markers',
             marker=dict(
-                size=pointsize,
+                size=point_size,
                 color=colors[data_0.selected]),
             hoverinfo='x+y+z+text',
             hovertext=None,
@@ -326,7 +328,7 @@ def visualize_3d(
             z=data_0.pos[~data_0.selected, 2],
             mode='markers',
             marker=dict(
-                size=pointsize,
+                size=point_size,
                 color=colors[~data_0.selected],
                 opacity=alpha),
             hoverinfo='x+y+z+text',
@@ -432,7 +434,7 @@ def visualize_3d(
 
         # Skip to the next level if we do not need to draw the cluster
         # centroids
-        if not super_center:
+        if not centroids:
             continue
 
         # To recover centroids of the i+1 level superpoints, we either
@@ -452,11 +454,15 @@ def visualize_3d(
         # Round to the cm for cleaner hover info
         super_pos = (super_pos * 100).round() / 100
 
+        # Save the drawing position of centroids to faciliate vertical
+        # edges drawing later on
+        input[i_level + 1].draw_pos = super_pos
+
         # Draw the level-i+1 cluster centroids
         idx_sp = torch.arange(data_i.super_index.max() + 1)
         colors = int_to_plotly_rgb(idx_sp)
         text = np.array([f"<b>#: {i}</b>" for i in idx_sp])
-        ball_size = super_pointsize if super_pointsize else pointsize * 3
+        ball_size = centroid_size if centroid_size else point_size * 3
 
         fig.add_trace(
             go.Scatter3d(
@@ -467,7 +473,7 @@ def visualize_3d(
                 marker=dict(
                     symbol='diamond',
                     size=ball_size,
-                    color=colors[input[i_level + 1].selected, :],
+                    color=colors[input[i_level + 1].selected.numpy()],
                     line_width=min(ball_size / 2, 2),
                     line_color='black'),
                 textposition="bottom center",
@@ -486,7 +492,7 @@ def visualize_3d(
                 marker=dict(
                     symbol='diamond',
                     size=ball_size,
-                    color=colors[~input[i_level + 1].selected],
+                    color=colors[~input[i_level + 1].selected.numpy()],
                     line_width=min(ball_size / 2, 2),
                     line_color='black',
                     opacity=alpha_super),
@@ -501,18 +507,59 @@ def visualize_3d(
             else trace_modes[i_point_trace].keys()
         trace_modes.append(
             {k: {
-                'marker.color': colors[input[i_level + 1].selected],
-                'hovertext': text[input[i_level + 1].selected]}
+                'marker.color': colors[input[i_level + 1].selected.numpy()],
+                'hovertext': text[input[i_level + 1].selected.numpy()]}
             for k in keys})
         trace_modes.append(
             {k: {
-                'marker.color': colors[~input[i_level + 1].selected],
-                'hovertext': text[~input[i_level + 1].selected]}
+                'marker.color': colors[~input[i_level + 1].selected.numpy()],
+                'hovertext': text[~input[i_level + 1].selected.numpy()]}
             for k in keys})
+
+        if i_level > 0 and v_edge and gap is not None:
+            # Recover the source and target positions for vertical edges
+            # between i_level -> i_level+1
+            low_pos = data_i.draw_pos[data_i.selected]
+            high_pos = super_pos[data_i.super_index[data_i.selected]]
+
+            # Convert into a plotly-friendly format for 3D lines
+            edges = np.full((low_pos.shape[0] * 3, 3), None)
+            edges[::3] = low_pos
+            edges[1::3] = high_pos
+
+            # Color the vertical edges based on the parent cluster index
+            colors = int_to_plotly_rgb(data_i.super_index[data_i.selected])
+            colors = np.repeat(colors, 3)
+
+            # Since plotly 3D lines do not support opacity, we draw
+            # these edges as super thin to limit clutter
+            edge_width = 0.5
+
+            # Draw the level i -> i+1 vertical edges. NB we only draw
+            # edges that are selected and do not draw the unselected
+            # edges. This is because plotly does not handle opacity
+            # on lines (yet), which means the unselected edges will tend
+            # to clutter the figure. For this reason we choose to simply
+            # not show them
+            fig.add_trace(
+                go.Scatter3d(
+                    x=edges[:, 0],
+                    y=edges[:, 1],
+                    z=edges[:, 2],
+                    mode='lines',
+                    line=dict(
+                        width=edge_width,
+                        color=colors, ),
+                    hoverinfo='skip',
+                    showlegend=False,
+                    visible=gap is not None, ))
+
+            keys = trace_modes[i_point_trace].keys()
+            trace_modes.append({k: {} for k in keys})
 
         # Do not draw superedges if not required or if the i+1 level
         # does not have any
-        if not super_edge or is_last_level or not input[i_level + 1].has_edges:
+        if not h_edge or is_last_level or not input[i_level + 1].has_edges:
             continue
 
         # Recover the superedge source and target positions
@@ -537,7 +584,7 @@ def visualize_3d(
         edges[::3] = s_pos
         edges[1::3] = t_pos
 
-        if super_edge_attr and input[i_level + 1].edge_attr is not None:
+        if h_edge_attr and input[i_level + 1].edge_attr is not None:
 
             # Recover edge features and convert them to RGB colors. NB:
             # edge features are assumed to be in [0, 1] or [-1, 1].
@@ -550,18 +597,18 @@ def visualize_3d(
             colors = feats_to_rgb(edge_attr, normalize=True)
             colors = rgb_to_plotly_rgb(colors)
             colors = np.repeat(colors, 3)
-            edge_width = pointsize * 3
+            edge_width = point_size * 3
 
         else:
             colors = np.zeros((edges.shape[0], 3))
-            edge_width = pointsize
+            edge_width = point_size
 
         selected_edge = input[i_level + 1].selected[se].all(axis=0)
         selected_edge = selected_edge.repeat_interleave(3).numpy()
 
         # Draw the level-i+1 superedges. NB we only draw edges that are
-        # selected and do not raw the unselected edges. This is because
-        # plotly does not handle opacity (yet) on lines, which means the
+        # selected and do not draw the unselected edges. This is because
+        # plotly does not handle opacity on lines (yet), which means the
         # unselected edges will tend to clutter the figure. For this
         # reason we choose to simply not show them
         fig.add_trace(
@@ -609,7 +656,7 @@ def visualize_3d(
                 z=data_0.pos[indices, 2],
                 mode='markers',
                 marker=dict(
-                    size=int(pointsize * 1.5),
+                    size=int(point_size * 1.5),
                     color=error_color, ),
                 showlegend=False,
                 visible=False, ))
