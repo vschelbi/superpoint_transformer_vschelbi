@@ -136,7 +136,7 @@ def identity_PCA(x, dim=3, normalize=False):
 def visualize_3d(
         input, figsize=800, width=None, height=None, class_names=None,
         class_colors=None, voxel=-1, max_points=50000, pointsize=3,
-        super_pointsize=None, error_color=None, super_center=False,
+        super_pointsize=None, error_color=None, super_center=True,
         super_edge=False, super_edge_attr=False, gap=None, select=None,
         alpha=0.1, alpha_super=None, **kwargs):
     """3D data interactive visualization.
@@ -209,7 +209,7 @@ def visualize_3d(
         for i in range(len(input)):
             selected = torch.zeros(input[i].num_nodes, dtype=torch.bool)
             selected[nag_temp[i][SaveOriginalPosId.KEY]] = True
-            input[i].selected = selected
+            input[i].selected = selected.numpy()
 
         del nag_temp, selected
 
@@ -225,17 +225,18 @@ def visualize_3d(
         # has been selected
         selected = torch.zeros(input.num_nodes, dtype=torch.bool)
         selected[data_temp[SaveOriginalPosId.KEY]] = True
-        input.selected = selected
+        input.selected = selected.numpy()
 
         del data_temp, selected
 
     elif is_nag:
         for i in range(len(input)):
             input[i].selected = torch.ones(
-                input[i].num_nodes, dtype=torch.bool)
+                input[i].num_nodes, dtype=torch.bool).numpy()
 
     else:
-        input.selected = torch.ones(input.num_nodes, dtype=torch.bool)
+        input.selected = torch.ones(input.num_nodes, dtype=torch.bool).numpy()
+
 
     # Subsample to limit the drawing time
     # If the level-0 cloud needs to be voxelized or sampled, a NAG
@@ -557,7 +558,7 @@ def visualize_3d(
             edge_width = pointsize
 
         selected_edge = input[i_level + 1].selected[se].all(axis=0)
-        selected_edge = selected_edge.repeat_interleave(3).numpy()
+        selected_edge = np.repeat(selected_edge, 3)
 
         # Draw the level-i+1 superedges. NB we only draw edges that are
         # selected and do not raw the unselected edges. This is because
@@ -756,7 +757,7 @@ def show(
     """
     # Sanitize title and path
     if title is None:
-        title = "3D Point Cloud"
+        title = "Multimodal data"
     if path is not None:
         if osp.isdir(path):
             path = osp.join(path, f"{title}.html")

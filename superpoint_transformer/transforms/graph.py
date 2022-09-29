@@ -64,7 +64,8 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
     # consecutive inter-cluster edge identifiers for torch_scatter
     # operations. We use 'se' to designate 'superedge' (ie an edge
     # between two clusters)
-    se_id = idx_source * (max(idx_source.max(), idx_target.max()) + 1) + idx_target
+    se_id = \
+        idx_source * (max(idx_source.max(), idx_target.max()) + 1) + idx_target
     se_id, perm = consecutive_cluster(se_id)
     se_id_source = idx_source[perm]
     se_id_target = idx_target[perm]
@@ -80,8 +81,10 @@ def _compute_cluster_graph(
     assert nag[0].has_edges, \
         "Level-0 must have an adjacency structure in 'edge_index' to allow " \
         "guided sampling for superedges construction."
-    assert nag[0].num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
-    assert nag[0].num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
+    assert nag[0].num_nodes < np.iinfo(np.uint32).max, \
+        "Too many nodes for `uint32` indices"
+    assert nag[0].num_edges < np.iinfo(np.uint32).max, \
+        "Too many edges for `uint32` indices"
 
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
@@ -149,9 +152,9 @@ def _compute_cluster_graph(
         start = ptr_samples[:-1]
         super_index_samples = torch.repeat_interleave(
             torch.arange(num_nodes), end - start)
-        print('\n\n************************************************')
+        print('\n\n' + '*' * 50)
         print(f'        cluster graph for i_level={i_level}')
-        print('************************************************\n')
+        print('*' * 50 + '\n')
         print(f'nag: {nag}')
         print(f'data: {data}')
         print('\n* Sampling for superpoint features')
