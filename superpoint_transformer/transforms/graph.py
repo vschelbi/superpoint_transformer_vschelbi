@@ -24,13 +24,23 @@ def compute_adjacency_graph(data, k_adjacency, lambda_edge_weight):
     assert getattr(data, 'distances', None) is not None, \
         "Level-0 must have 'distances' attribute to allow superpoint " \
         "features construction."
+
+    # Compute source and target indices based on neighbors
     source = torch.arange(
         data.num_nodes, device=data.device).repeat_interleave(k_adjacency)
     target = data.neighbors[:, :k_adjacency].flatten()
-    data.edge_index = torch.stack((source, target))
 
-    # Create the edge features for the adjacency graph
+    # Recover the neighbors distances
     distances = data.distances[:, :k_adjacency].flatten()
+
+    # Account for -1 neighbors and delete corresponding edges
+    mask = target >= 0
+    source = source[mask]
+    target = target[mask]
+    distances = distances[mask]
+
+    # Save edges and edge features in data
+    data.edge_index = torch.stack((source, target))
     data.edge_attr = 1 / (lambda_edge_weight + distances / distances.mean())
 
     return data
@@ -111,7 +121,7 @@ def _compute_cluster_graph(
     xyz = xyz + torch.rand(xyz.shape).numpy() * 1e-5
 
     # C++ geometric features computation on CPU
-    f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, False)
+    f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, 5, False)
     f = torch.from_numpy(f.astype('float32'))
 
     # Recover length, surface and volume

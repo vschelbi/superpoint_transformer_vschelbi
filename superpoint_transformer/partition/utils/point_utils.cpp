@@ -382,7 +382,7 @@ PyObject *  prune(const bpn::ndarray & xyz ,float voxel_size, const bpn::ndarray
 
 PyObject * compute_geometric_features(
     const bpn::ndarray & xyz_boost, const bpn::ndarray & nn_boost,
-    const bpn::ndarray & nn_ptr_boost, bool verbose)
+    const bpn::ndarray & nn_ptr_boost, int k_min, bool verbose)
 {
     /*
     Compute the geometric features associated with each point's
@@ -407,6 +407,9 @@ PyObject * compute_geometric_features(
     nn_ptr_boost : bpn::ndarray
         Array of size (n_points + 1) indicating the start and end
         indices of each point's neighbors in nn_boost
+    k_min: int
+        Minimum number of neighbors to consider for features
+        computation. If less, the point set will be given 0 features
     verbose: bool
         Whether computation progress should be printed out
     */
@@ -432,7 +435,7 @@ PyObject * compute_geometric_features(
 
         // If the cloud has only one point, populate the final feature
         // vector with zeros and continue
-        if (k_nn <= 1)
+        if (k_nn < k_min)
         {
             features[i_point][0] = 0;
             features[i_point][1] = 0;

@@ -1,4 +1,5 @@
 import torch
+import superpoint_transformer
 from superpoint_transformer.data import Data
 from superpoint_transformer.partition.FRNN import frnn
 
@@ -171,7 +172,7 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
     return neighbors, distances
 
 
-def search_neighbors(data, k, r_max=1):
+def search_neighbors(data, k, r_max=1, oversample=False, verbose=False):
     # Data initialization
     xyz_query = data.pos.view(1, -1, 3)
     xyz_search = data.pos.view(1, -1, 3)
@@ -185,22 +186,26 @@ def search_neighbors(data, k, r_max=1):
     distances = distances[0][:, 1:]
 
     # Oversample the neighborhoods where less than k points were found
-    neighbors, distances = oversample_partial_neighborhoods(
-        neighbors, distances, k)
+    if oversample:
+        neighbors, distances = oversample_partial_neighborhoods(
+            neighbors, distances, k)
 
     # Store the neighbors and distances as a Data object attribute
     data.neighbors = neighbors.cpu()
     data.distances = distances.cpu()
 
-    # Save the index for these isolated points in the Data object. This
-    # will help properly handle neighborhoods, features and adjacency
-    # graph for those specific points.
-    # NB: it is important this attribute follows the "*index" naming
-    # convention, see:
-    # https://pytorch-geometric.readthedocs.io/en/latest/notes/batching.html
-    # data.isolated_index = idx_isolated.cpu()
+    if not verbose and not superpoint_transformer.is_debug_enabled():
+        return data
+
+    # Warn the user of partial and empty neighborhoods
+    n_missing = (data.neighbors < 0).sum(dim=1)
+    n_partial = (n_missing > 0).sum()
+    n_empty = (n_missing == k).sum()
+    if n_partial == 0:
+        return data
+    print(
+        f"\nWarning: {n_partial}/{data.num_nodes} points have partial "
+        f"neighborhoods and {n_empty}/{data.num_nodes} have empty "
+        f"neighborhoods (missing neighbors are indicated by -1 indices).")
 
     return data
-
-# TODO: !!! IMPORTANT !!!
-#   - points with no neighbors within radius -> set to 0-feature !

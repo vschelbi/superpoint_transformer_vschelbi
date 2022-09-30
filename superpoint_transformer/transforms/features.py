@@ -6,14 +6,15 @@ import superpoint_transformer.partition.utils.libpoint_utils as point_utils
 def compute_point_features(
         data, pos=False, radius=5, rgb=True, linearity=True, planarity=True,
         scattering=True, verticality=True, normal=True, length=False,
-        surface=False, volume=False):
+        surface=False, volume=False, k_min=5):
     """ Compute the pointwise features that will be used for the
     partition.
 
     All local geometric features assume the input ``Data`` has a
     ``neighbors`` attribute, holding a ``(num_nodes, k)`` tensor of
     indices. All k neighbors will be used for local geometric features
-    computation.
+    computation, unless some are missing (indicated by -1 indices). If
+    the latter, only positive indices will be used.
 
     Parameters
     ----------
@@ -25,7 +26,7 @@ def compute_point_features(
     linearity: bool
         Use local linearity. Assumes ``Data.neighbors``.
     planarity: bool
-        Use local lanarity. Assumes ``Data.neighbors``.
+        Use local planarity. Assumes ``Data.neighbors``.
     scattering: bool
         Use local scattering. Assumes ``Data.neighbors``.
     verticality: bool
@@ -38,6 +39,10 @@ def compute_point_features(
         Use local surface. Assumes ``Data.neighbors``.
     volume: bool
         Use local volume. Assumes ``Data.neighbors``.
+    k_min: int
+        Minimum number of neighbors to consider for geometric features
+        computation. Points with less than k_min neighbors will receive
+        0-features. Assumes ``Data.neighbors``.
     """
     assert data.has_neighbors, "Data is expected to have a 'neighbors' attribute"
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
@@ -67,10 +72,20 @@ def compute_point_features(
         # point to its own neighborhood before computation
         xyz = data.pos.cpu().numpy()
         nn = torch.cat(
-            (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbors),
-            dim=1).flatten().cpu().numpy().astype('uint32')
-        k = data.neighbors.shape[1] + 1
-        nn_ptr = np.arange(xyz.shape[0] + 1).astype('uint32') * k
+            (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbors), dim=1)
+        k = nn.shape[1]
+
+        # Check for missing neighbors (indicated by -1 indices)
+        n_missing = (nn < 0).sum(dim=1)
+        if (n_missing > 0).any():
+            sizes = k - n_missing
+            nn = nn[nn >= 0]
+            nn_ptr = torch.cat((torch.zeros(1), sizes.cumsum(dim=0).cpu()))
+        else:
+            nn = nn.flatten().cpu()
+            nn_ptr = torch.arange(xyz.shape[0] + 1) * k
+        nn = nn.numpy().astype('uint32')
+        nn_ptr = nn_ptr.numpy().astype('uint32')
 
         # Make sure array are contiguous before moving to C++
         xyz = np.ascontiguousarray(xyz)
@@ -78,7 +93,7 @@ def compute_point_features(
         nn_ptr = np.ascontiguousarray(nn_ptr)
 
         # C++ geometric features computation on CPU
-        f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, False)
+        f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, k_min, False)
         f = torch.from_numpy(f.astype('float32'))
 
         # Heuristic to increase the importance of verticality
