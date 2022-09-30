@@ -11,7 +11,7 @@ from superpoint_transformer.transforms.sampling import sample_clusters
 from superpoint_transformer.utils import print_tensor_info, isolated_nodes
 
 
-def compute_ajacency_graph(data, k_adjacency, lambda_edge_weight):
+def compute_adjacency_graph(data, k_adjacency, lambda_edge_weight):
     """Create the adjacency graph edges based on the 'Data.neighbors'
     and 'Data.distances'.
 

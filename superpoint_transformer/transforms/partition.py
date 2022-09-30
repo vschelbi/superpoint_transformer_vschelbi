@@ -16,7 +16,7 @@ from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 
 def compute_partition(
-        data, regularization, spatial_mitigation=1, cutoff=10, parallel=True,
+        data, regularization, spatial_weight=1, cutoff=10, parallel=True,
         iterations=10, k_adjacency=5, verbose=False):
     """Partition the graph with parallel cut-pursuit.
 
@@ -24,8 +24,8 @@ def compute_partition(
     ----------
     data:
     regularization:
-    spatial_mitigation: float
-        Weight used to mitigate the impact of the point position  in the
+    spatial_weight: float
+        Weight used to mitigate the impact of the point position in the
         partition. The larger, the less spatial coordinates matter. This
         can be loosely interpreted as a maximum superpoint radius
     cutoff:
@@ -36,12 +36,18 @@ def compute_partition(
     """
     # Sanity checks
     assert isinstance(data, Data)
-    assert data.has_edges, "Expected edges in Data"
-    assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
-    assert data.num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
-    assert isinstance(regularization, (int, float, list)), "Expected a scalar or a List"
-    assert isinstance(cutoff, (int, list)), "Expected an int or a List"
-    assert isinstance(spatial_mitigation, (int, float, list)), "Expected a scalar or a List"
+    assert data.has_edges, \
+        "Expected edges in Data"
+    assert data.num_nodes < np.iinfo(np.uint32).max, \
+        "Too many nodes for `uint32` indices"
+    assert data.num_edges < np.iinfo(np.uint32).max, \
+        "Too many edges for `uint32` indices"
+    assert isinstance(regularization, (int, float, list)), \
+        "Expected a scalar or a List"
+    assert isinstance(cutoff, (int, list)), \
+        "Expected an int or a List"
+    assert isinstance(spatial_weight, (int, float, list)), \
+        "Expected a scalar or a List"
 
     # Remove self loops, redundant edges and undirected edges
     #TODO: calling this on the level-0 adjacency graph is a bit sluggish
@@ -59,14 +65,14 @@ def compute_partition(
         regularization = [regularization]
     if isinstance(cutoff, int):
         cutoff = [cutoff] * len(regularization)
-    if not isinstance(spatial_mitigation, list):
-        spatial_mitigation = [spatial_mitigation] * len(regularization)
+    if not isinstance(spatial_weight, list):
+        spatial_weight = [spatial_weight] * len(regularization)
     n_dim = data.pos.shape[1]
     n_feat = data.x.shape[1] if data.x is not None else 0
 
     # Iteratively run the partition on the previous level of partition
     for level, (reg, cut, sw) in enumerate(zip(
-            regularization, cutoff, spatial_mitigation)):
+            regularization, cutoff, spatial_weight)):
 
         if verbose:
             print(f'Launching partition level={level} reg={reg}, cutoff={cut}')
@@ -95,16 +101,15 @@ def compute_partition(
         x = np.asfortranarray(x.cpu().numpy().T)
         node_size = d1.node_size.cpu().numpy()
         coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
-        coor_weights[n_dim:] *= sw
+        coor_weights[:n_dim] *= sw
 
         # Partition computation
         super_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
             1, x, source_csr, target, edge_weights=edge_weights,
             vert_weights=node_size, coor_weights=coor_weights,
-            min_comp_weight=cut, cp_dif_tol=1e-2,
-            cp_it_max=iterations, split_damp_ratio=0.7, verbose=verbose,
-            max_num_threads=max_thread, compute_Time=True, compute_List=True,
-            compute_Graph=True)
+            min_comp_weight=cut, cp_dif_tol=1e-2, cp_it_max=iterations,
+            split_damp_ratio=0.7, verbose=verbose, max_num_threads=max_thread,
+            compute_Time=True, compute_List=True, compute_Graph=True)
 
         if verbose:
             delta_t = (times[1:] - times[:-1]).round(2)
@@ -119,7 +124,8 @@ def compute_partition(
         # cluster-to-point indices in a CSR format
         size = torch.LongTensor([c.shape[0] for c in cluster])
         pointer = torch.cat([torch.LongTensor([0]), size.cumsum(dim=0)])
-        value = torch.cat([torch.from_numpy(x.astype('int64')) for x in cluster])
+        value = torch.cat([
+            torch.from_numpy(x.astype('int64')) for x in cluster])
         pos = torch.from_numpy(x_c[:n_dim].T) + pos_offset.cpu()
         x = torch.from_numpy(x_c[n_dim:].T)
         s = torch.arange(edges[0].shape[0] - 1).repeat_interleave(
@@ -128,7 +134,8 @@ def compute_partition(
         edge_index = torch.vstack((s, t))
         edge_attr = torch.from_numpy(edges[2] / reg)
         node_size = torch.from_numpy(node_size)
-        node_size_new = scatter_sum(node_size.cuda(), super_index.cuda(), dim=0).cpu()
+        node_size_new = scatter_sum(
+            node_size.cuda(), super_index.cuda(), dim=0).cpu()
         d2 = Data(
             pos=pos, x=x, edge_index=edge_index, edge_attr=edge_attr,
             sub=Cluster(pointer, value), node_size=node_size_new)
@@ -192,12 +199,6 @@ def compute_grid_partition(data, size=2):
     assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
     assert data.num_edges < np.iinfo(np.uint32).max, "Too many edges for `uint32` indices"
     assert isinstance(size, (int, float, list)), "Expected a scalar or a List"
-
-    # Remove self loops, redundant edges and undirected edges
-    # TODO: calling this on the level-0 adjacency graph is a bit
-    #  sluggish but still saves partition time overall. May be worth
-    #  finding a quick way of removing self loops and redundant edges...
-    data = data.clean_graph()
 
     # Initialize the partition data
     if not isinstance(size, list):

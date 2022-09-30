@@ -3,7 +3,7 @@ import numpy as np
 import superpoint_transformer.partition.utils.libpoint_utils as point_utils
 
 
-def compute_pointfeatures(
+def compute_point_features(
         data, pos=False, radius=5, rgb=True, linearity=True, planarity=True,
         scattering=True, verticality=True, normal=True, length=False,
         surface=False, volume=False):
