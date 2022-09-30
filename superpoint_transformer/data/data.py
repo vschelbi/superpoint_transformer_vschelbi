@@ -333,7 +333,17 @@ class Data(PyGData):
             d_1 = torch.vstack((d, torch.ones_like(d))).T
 
             # Least square on d_1.x = w  (ie d.a + b = w)
-            a, b = torch.linalg.lstsq(d_1, w).solution
+            # NB: CUDA may crash trying to solve this simple system, in
+            # which case we will fallback to CPU. Not ideal though
+            try:
+                a, b = torch.linalg.lstsq(d_1, w).solution
+            except:
+                print(
+                    '\nWarning: failed to compute torch.linalg.lstsq, trying '
+                    'again on CPU')
+                a, b = torch.linalg.lstsq(d_1.cpu(), w.cpu()).solution
+                a = a.to(self.device)
+                b = b.to(self.device)
 
             # Heuristic: linear approximation of w by d
             edge_attr_new = distances.flatten() * a + b

@@ -6,8 +6,8 @@ def is_pyg_edge_format(edge_index):
     format: a [2, N] torch.LongTensor.
     """
     return \
-        isinstance(edge_index, torch.LongTensor) and edge_index.dim() == 2 \
-        and edge_index.shape[0] == 2
+        isinstance(edge_index, torch.Tensor) and edge_index.dim() == 2 \
+        and edge_index.dtype == torch.long and edge_index.shape[0] == 2
 
 
 def isolated_nodes(edge_index, num_nodes=None):
