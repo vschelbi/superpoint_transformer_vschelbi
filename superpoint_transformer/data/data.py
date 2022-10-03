@@ -338,9 +338,10 @@ class Data(PyGData):
             try:
                 a, b = torch.linalg.lstsq(d_1, w).solution
             except:
-                print(
-                    '\nWarning: failed to compute torch.linalg.lstsq, trying '
-                    'again on CPU')
+                if superpoint_transformer.is_debug_enabled():
+                    print(
+                        '\nWarning: torch.linalg.lstsq failed, trying again '
+                        'on CPU')
                 a, b = torch.linalg.lstsq(d_1.cpu(), w.cpu()).solution
                 a = a.to(self.device)
                 b = b.to(self.device)
