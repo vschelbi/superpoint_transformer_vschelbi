@@ -39,18 +39,19 @@ infos = Data(
     rgb=True,
     hsv=False,
     lab=False,
+    density=False,
     linearity=True,
     planarity=True,
     scattering=True,
     verticality=True,
-    normal=False,
+    normal=True,
     length=False,
     surface=False,
     volume=False,
-    regularization=0.05,
+    regularization=0.5,
     spatial_weight=0,
     cutoff=10,
-    iterations=10,
+    iterations=15,
     times={})
 
 # Data loading

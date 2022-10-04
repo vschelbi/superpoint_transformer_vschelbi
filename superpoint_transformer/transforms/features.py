@@ -6,8 +6,9 @@ from superpoint_transformer.utils.features import rgb2hsv, rgb2lab
 
 def compute_point_features(
         data, pos=False, radius=5, rgb=True, hsv=False, lab=False,
-        linearity=True, planarity=True, scattering=True, verticality=True,
-        normal=True, length=False, surface=False, volume=False, k_min=5):
+        density=False, linearity=True, planarity=True, scattering=True,
+        verticality=True, normal=True, length=False, surface=False,
+        volume=False, k_min=5):
     """ Compute the pointwise features that will be used for the
     partition.
 
@@ -30,6 +31,9 @@ def compute_point_features(
     lab: bool
         Use LAB color. Assumes Data.rgb holds either [0, 1] floats or
         [0, 255] integers
+    density: bool
+        Use local density. Assumes ``Data.neighbors`` and
+        ``Data.distances``.
     linearity: bool
         Use local linearity. Assumes ``Data.neighbors``.
     planarity: bool
@@ -96,6 +100,18 @@ def compute_point_features(
         if f.dtype in [torch.uint8, torch.int, torch.long]:
             f = f.float() / 255
         features.append(rgb2lab(f) / 100)
+
+    # Add local surfacic density to the features. The local density is
+    # approximated as K / D² where K is the number of nearest neighbors
+    # and D is the distance of the Kth neighbor. We normalize by D²
+    # since points roughly lie on a 2D manifold. Note that this takes
+    # into account partial neighborhoods where -1 indicates absent
+    # neighbors
+    if density:
+        dmax = data.distances.max(dim=1).values
+        k = data.neighbors.ge(0).sum(dim=1)
+        # features.append((k / dmax**2).view(-1, 1))
+        features.append((torch.log(1 + k / dmax**2)).view(-1, 1))
 
     # Add local geometric features
     needs_geof = any((linearity, planarity, scattering, verticality, normal))
