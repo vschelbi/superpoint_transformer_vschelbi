@@ -104,6 +104,43 @@ class ConfusionMatrix:
     def count_gt(self, ground_truth):
         return self.confusion_matrix[ground_truth, :].sum()
 
+    @classmethod
+    def from_histogram(cls, y, class_names=None, verbose=False):
+        assert y.ndim == 2
+
+        # Initialization
+        num_nodes, num_classes = y.shape
+
+        # Instantiate the ConfusionMatrix object
+        cm = cls(num_classes)
+
+        # Compute the dominant class in each superpoint
+        pred_super = y.argmax(dim=1)
+
+        # Compute the corresponding pointwise prediction and ground truth
+        gt = torch.arange(num_classes).repeat(num_nodes).repeat_interleave(
+            y.flatten())
+        pred = pred_super.repeat_interleave(y.sum(dim=1))
+
+        # Store in the ConfusionMatrix
+        cm.count_predicted_batch(gt.numpy(), pred.numpy())
+
+        if not verbose:
+            return cm
+
+        # Compute and print the metrics
+        print(f'OA: {100 * cm.get_overall_accuracy():0.2f}')
+        print(f'mIoU: {100 * cm.get_average_intersection_union():0.2f}')
+        class_iou = cm.get_intersection_union_per_class()
+        class_names = class_names if class_names else range(num_nodes)
+        for c, iou, seen in zip(class_names, class_iou[0], class_iou[1]):
+            if not seen:
+                print(f'  {c:<13}: not seen')
+                continue
+            print(f'  {c:<13}: {100 * iou:0.2f}')
+
+        return cm
+
 
 def save_confusion_matrix(cm, path2save, ordered_names):
     import seaborn as sns
