@@ -19,11 +19,17 @@ def rgb_to_plotly_rgb(rgb, alpha=None):
     expressed in RGBA format.
     """
     assert isinstance(rgb, torch.Tensor)
-    assert rgb.max() <= 1.0
     assert rgb.dim() <= 2
     if rgb.dim() == 1:
         rgb = rgb.unsqueeze(0)
-    rgb = (rgb * 255).int().numpy()
+    if rgb.dtype in [torch.uint8, torch.int, torch.long]:
+        rgb = rgb.long().numpy()
+    elif rgb.is_floating_point and rgb.max() <= 1:
+        rgb = (rgb * 255).long().numpy()
+    else:
+        raise ValueError(
+            f'Not sure how to deal with RGB of dtype={rgb.dtype} and '
+            f'max={rgb.max()}')
 
     if alpha is None:
         return np.array([f"rgb{tuple(x)}" for x in rgb])
@@ -528,8 +534,14 @@ def visualize_3d(
             edges[1::3] = high_pos
 
             # Color the vertical edges based on the parent cluster index
-            colors = int_to_plotly_rgb(data_i.super_index[data_i.selected])
+            # Plotly is a bit hacky with colors for 3D lines. We cannot
+            # directly pass individual edge colors, we must instead give
+            # edge color as an int corresponding to a colorscale list
+            # holding plotly-friendly colors
+            colors = data_i.super_index[data_i.selected]
             colors = np.repeat(colors, 3)
+            colorscale = rgb_to_plotly_rgb(torch.from_numpy(int_to_plotly_rgb(
+                torch.arange(colors.max()))))
 
             # Since plotly 3D lines do not support opacity, we draw
             # these edges as super thin to limit clutter
@@ -549,12 +561,17 @@ def visualize_3d(
                     mode='lines',
                     line=dict(
                         width=edge_width,
-                        color=colors, ),
+                        color=colors,
+                        colorscale=colorscale),
                     hoverinfo='skip',
                     showlegend=False,
                     visible=gap is not None, ))
 
-            keys = trace_modes[i_point_trace].keys()
+            # NB: at this point, trace_modes contains 'Level i+1' as its
+            # last key, but we do not want vertical edges to be seen
+            # when 'Level i+1' is selected, because it means 'Level i'
+            # nodes are hidden
+            keys = list(trace_modes[i_point_trace].keys())[:-1]
             trace_modes.append({k: {} for k in keys})
 
         # Do not draw superedges if not required or if the i+1 level
