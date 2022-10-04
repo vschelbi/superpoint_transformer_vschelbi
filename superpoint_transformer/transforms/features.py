@@ -1,12 +1,13 @@
 import torch
 import numpy as np
 import superpoint_transformer.partition.utils.libpoint_utils as point_utils
+from superpoint_transformer.utils.features import rgb2hsv, rgb2lab
 
 
 def compute_point_features(
-        data, pos=False, radius=5, rgb=True, linearity=True, planarity=True,
-        scattering=True, verticality=True, normal=True, length=False,
-        surface=False, volume=False, k_min=5):
+        data, pos=False, radius=5, rgb=True, hsv=False, lab=False,
+        linearity=True, planarity=True, scattering=True, verticality=True,
+        normal=True, length=False, surface=False, volume=False, k_min=5):
     """ Compute the pointwise features that will be used for the
     partition.
 
@@ -22,6 +23,12 @@ def compute_point_features(
         Use point position.
     rgb: bool
         Use rgb color. Assumes Data.rgb holds either [0, 1] floats or
+        [0, 255] integers
+    hsv: bool
+        Use HSV color. Assumes Data.rgb holds either [0, 1] floats or
+        [0, 255] integers
+    lab: bool
+        Use LAB color. Assumes Data.rgb holds either [0, 1] floats or
         [0, 255] integers
     linearity: bool
         Use local linearity. Assumes ``Data.neighbors``.
@@ -44,9 +51,12 @@ def compute_point_features(
         computation. Points with less than k_min neighbors will receive
         0-features. Assumes ``Data.neighbors``.
     """
-    assert data.has_neighbors, "Data is expected to have a 'neighbors' attribute"
-    assert data.num_nodes < np.iinfo(np.uint32).max, "Too many nodes for `uint32` indices"
-    assert data.neighbors.max() < np.iinfo(np.uint32).max, "Too high 'neighbors' indices for `uint32` indices"
+    assert data.has_neighbors, \
+        "Data is expected to have a 'neighbors' attribute"
+    assert data.num_nodes < np.iinfo(np.uint32).max, \
+        "Too many nodes for `uint32` indices"
+    assert data.neighbors.max() < np.iinfo(np.uint32).max, \
+        "Too high 'neighbors' indices for `uint32` indices"
 
     features = []
 
@@ -55,14 +65,37 @@ def compute_point_features(
     if pos and data.pos is not None:
         features.append((data.pos - data.pos.mean(dim=0)) / radius)
 
-    # Add rgb to the features. If colors are stored in int, we assume
+    # Add RGB to the features. If colors are stored in int, we assume
     # they are encoded in  [0, 255] and normalize them. Otherwise, we
     # assume they have already been [0, 1] normalized
     if rgb and data.rgb is not None:
         f = data.rgb
-        if f.type in [torch.uint8, torch.int, torch.long]:
+        if f.dtype in [torch.uint8, torch.int, torch.long]:
             f = f.float() / 255
         features.append(f)
+
+    # Add HSV to the features. If colors are stored in int, we assume
+    # they are encoded in  [0, 255] and normalize them. Otherwise, we
+    # assume they have already been [0, 1] normalized. Note: for all
+    # features to live in a similar range, we normalize H in [0, 1]
+    if hsv and data.rgb is not None:
+        f = data.rgb
+        if f.dtype in [torch.uint8, torch.int, torch.long]:
+            f = f.float() / 255
+        hsv = rgb2hsv(f)
+        hsv[:, 0] /= 360.
+        features.append(hsv)
+
+    # Add LAB to the features. If colors are stored in int, we assume
+    # they are encoded in  [0, 255] and normalize them. Otherwise, we
+    # assume they have already been [0, 1] normalized. Note: for all
+    # features to live in a similar range, we normalize L in [0, 1] and
+    # ab in [-1, 1]
+    if lab and data.rgb is not None:
+        f = data.rgb
+        if f.dtype in [torch.uint8, torch.int, torch.long]:
+            f = f.float() / 255
+        features.append(rgb2lab(f) / 100)
 
     # Add local geometric features
     needs_geof = any((linearity, planarity, scattering, verticality, normal))
