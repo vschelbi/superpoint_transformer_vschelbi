@@ -120,10 +120,25 @@ def group_data(
                         "Mean aggregation only supports positive integers"
                     assert item.dtype in [torch.uint8, torch.int, torch.long], \
                         "Mean aggregation only supports positive integers"
+                    assert item.ndim <= 2, \
+                        "Voting and histograms are only supported for 1D and " \
+                        "2D tensors"
 
                     # Initialization
                     voting = key not in bins.keys()
                     n_bins = item.max() if voting else bins[key]
+
+                    # Important: if values are already 2D, we consider
+                    # them to be histograms and will simply scatter_add
+                    # them
+                    if item.ndim == 2:
+                        # Aggregate the histograms
+                        hist = scatter_add(item, cluster, dim=0)
+                        data[key] = hist
+
+                        # Either save the histogram or the majority vote
+                        data[key] = hist.argmax(dim=-1) if voting else hist
+                        continue
 
                     # Convert values to one-hot encoding. Values are
                     # temporarily offset to 0 to save some memory and
