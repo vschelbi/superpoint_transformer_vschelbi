@@ -820,7 +820,7 @@ def show(
     """
     # Sanitize title and path
     if title is None:
-        title = "Multimodal data"
+        title = "Large-scale point cloud"
     if path is not None:
         if osp.isdir(path):
             path = osp.join(path, f"{title}.html")
