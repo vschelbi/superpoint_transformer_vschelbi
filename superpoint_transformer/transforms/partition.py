@@ -2,9 +2,10 @@ import sys
 import os.path as osp
 import torch
 import numpy as np
-from superpoint_transformer.data import Data, Cluster, NAG
 from torch_scatter import scatter_sum, scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from superpoint_transformer.data import Data, Cluster, NAG
+from superpoint_transformer.utils.cpu import available_cpu_count
 
 partition_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.append(partition_folder)
@@ -58,7 +59,7 @@ def compute_partition(
     # Initialize the hierarchical partition parameters. In particular,
     # prepare the output as list of Data objects that will be stored in
     # a NAG structure
-    max_thread = 0 if parallel else 1
+    num_threads = available_cpu_count() if parallel else 1
     data.node_size = torch.ones(data.num_nodes)  # level-0 points all have the same importance
     data_list = [data]
     if not isinstance(regularization, list):
@@ -108,7 +109,7 @@ def compute_partition(
             1, x, source_csr, target, edge_weights=edge_weights,
             vert_weights=node_size, coor_weights=coor_weights,
             min_comp_weight=cut, cp_dif_tol=1e-2, cp_it_max=iterations,
-            split_damp_ratio=0.7, verbose=verbose, max_num_threads=max_thread,
+            split_damp_ratio=0.7, verbose=verbose, max_num_threads=num_threads,
             balance_parallel_split=True, compute_Time=True, compute_List=True,
             compute_Graph=True)
 
