@@ -109,7 +109,8 @@ def compute_partition(
             vert_weights=node_size, coor_weights=coor_weights,
             min_comp_weight=cut, cp_dif_tol=1e-2, cp_it_max=iterations,
             split_damp_ratio=0.7, verbose=verbose, max_num_threads=max_thread,
-            compute_Time=True, compute_List=True, compute_Graph=True)
+            balance_parallel_split=True, compute_Time=True, compute_List=True,
+            compute_Graph=True)
 
         if verbose:
             delta_t = (times[1:] - times[:-1]).round(2)

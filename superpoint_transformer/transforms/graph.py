@@ -41,7 +41,10 @@ def compute_adjacency_graph(data, k_adjacency, lambda_edge_weight):
 
     # Save edges and edge features in data
     data.edge_index = torch.stack((source, target))
-    data.edge_attr = 1 / (lambda_edge_weight + distances / distances.mean())
+    if lambda_edge_weight > 0:
+        data.edge_attr = 1 / (lambda_edge_weight + distances / distances.mean())
+    else:
+        data.edge_attr = torch.ones_like(distances)
 
     return data
 

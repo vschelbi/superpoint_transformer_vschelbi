@@ -22,7 +22,7 @@ from superpoint_transformer.transforms import *
 from superpoint_transformer.data import Data
 from superpoint_transformer.metrics import ConfusionMatrix
 from superpoint_transformer.datasets.kitti360 import read_kitti360_window
-from superpoint_transformer.datasets.kitti360_config import KITTI360_NUM_CLASSES, CLASS_NAMES
+from superpoint_transformer.datasets.kitti360_config import WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
 from superpoint_transformer.utils.cpu import available_cpu_count
 
 print(f'CPUs available: {available_cpu_count()}')
@@ -32,10 +32,10 @@ infos = Data(
     i_window=0,
     voxel=0.1,
     radius=10,
-    k_min=5,
-    k_feat=70,
+    k_min=1,
+    k_feat=50,
     k_adjacency=10,
-    lambda_edge_weight=1,
+    lambda_edge_weight=-1,
     rgb=True,
     hsv=False,
     lab=False,
@@ -44,11 +44,11 @@ infos = Data(
     planarity=True,
     scattering=True,
     verticality=True,
-    normal=True,
+    normal=False,
     length=False,
     surface=False,
     volume=False,
-    regularization=0.5,
+    regularization=0.04,
     spatial_weight=0,
     cutoff=10,
     iterations=15,
@@ -58,11 +58,15 @@ infos = Data(
 key = 'loading'
 print(f'{key:<12} : ', end='')
 start = time()
-all_filepaths = sorted(glob.glob(os.path.join(
-    DATA_ROOT, 'kitti360/shared/data_3d_semantics/*/static/*.ply')))
-filepath = all_filepaths[infos.i_window]
+# all_filepaths = sorted(glob.glob(os.path.join(
+#     DATA_ROOT, 'kitti360/shared/data_3d_semantics/*/static/*.ply')))
+root = os.path.join(DATA_ROOT, 'kitti360/shared/data_3d_semantics')
+train_filepaths = [
+    os.path.join(root, f"{x.split('/')[0]}/static/{x.split('/')[1]}.ply")
+    for x in WINDOWS['train']]
+filepath = train_filepaths[infos.i_window]
 data = read_kitti360_window(filepath, semantic=True, instance=False, remap=True)
-# TODO Offset labels by 1 to account for unlabelled points -> !!!!!!!!!!!!!!!! IMPORTANT !!!!!!!!!!!!!!!!
+#TODO Offset labels by 1 to account for unlabelled points -> !!!!!!!!!!!!!!!! IMPORTANT !!!!!!!!!!!!!!!!
 data.y[data.y == -1] = KITTI360_NUM_CLASSES
 infos.filepath = filepath
 infos.num_nodes_raw = data.num_nodes

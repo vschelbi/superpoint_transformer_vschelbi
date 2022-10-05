@@ -110,8 +110,7 @@ def compute_point_features(
     if density:
         dmax = data.distances.max(dim=1).values
         k = data.neighbors.ge(0).sum(dim=1)
-        # features.append((k / dmax**2).view(-1, 1))
-        features.append((torch.log(1 + k / dmax**2)).view(-1, 1))
+        features.append((k / dmax**2).view(-1, 1))
 
     # Add local geometric features
     needs_geof = any((linearity, planarity, scattering, verticality, normal))
