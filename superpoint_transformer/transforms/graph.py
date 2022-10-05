@@ -132,6 +132,7 @@ def _compute_cluster_graph(
     data.planarity = f[:, 1].to(data.pos.device)
     data.scattering = f[:, 2].to(data.pos.device)
     data.verticality = f[:, 3].to(data.pos.device)
+    data.curvature = f[:, 10].to(data.pos.device)
     data.log_length = torch.log(f[:, 7] + 1).to(data.pos.device)
     data.log_surface = torch.log(f[:, 8] + 1).to(data.pos.device)
     data.log_volume = torch.log(f[:, 9] + 1).to(data.pos.device)

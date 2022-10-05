@@ -48,6 +48,7 @@ infos = Data(
     length=False,
     surface=False,
     volume=False,
+    curvature=True,
     regularization=0.04,
     spatial_weight=0,
     cutoff=10,
@@ -107,7 +108,7 @@ data = compute_point_features(
     data, rgb=infos.rgb, linearity=infos.linearity, planarity=infos.planarity,
     scattering=infos.scattering, verticality=infos.verticality,
     normal=infos.normal, length=infos.length, surface=infos.surface,
-    volume=infos.volume, k_min=infos.k_min)
+    volume=infos.volume, curvature=infos.curvature, k_min=infos.k_min)
 infos.times[key] = round(time() - start, 3)
 print(f'{infos.times[key]} s')
 

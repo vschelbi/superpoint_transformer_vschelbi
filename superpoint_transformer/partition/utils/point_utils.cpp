@@ -416,7 +416,7 @@ PyObject * compute_geometric_features(
 
     // Initialize the features
     std::size_t n_points = bp::len(nn_ptr_boost) - 1;
-    std::vector<std::vector<float>> features(n_points, std::vector<float>(10, 0));
+    std::vector<std::vector<float>> features(n_points, std::vector<float>(11, 0));
 
     // Read numpy array data
     const float * xyz = reinterpret_cast<float*>(xyz_boost.get_data());
@@ -437,16 +437,17 @@ PyObject * compute_geometric_features(
         // vector with zeros and continue
         if (k_nn < k_min)
         {
-            features[i_point][0] = 0;
-            features[i_point][1] = 0;
-            features[i_point][2] = 0;
-            features[i_point][3] = 0;
-            features[i_point][4] = 0;
-            features[i_point][5] = 0;
-            features[i_point][6] = 0;
-            features[i_point][7] = 0;
-            features[i_point][8] = 0;
-            features[i_point][9] = 0;
+            features[i_point][0]  = 0;
+            features[i_point][1]  = 0;
+            features[i_point][2]  = 0;
+            features[i_point][3]  = 0;
+            features[i_point][4]  = 0;
+            features[i_point][5]  = 0;
+            features[i_point][6]  = 0;
+            features[i_point][7]  = 0;
+            features[i_point][8]  = 0;
+            features[i_point][9]  = 0;
+            features[i_point][10] = 0;
             continue;
         }
 
@@ -539,6 +540,7 @@ PyObject * compute_geometric_features(
         float length     = val0;
         float surface    = sqrtf(val0 * val1 + 1e-6);
         float volume     = powf(val0 * val1 * val2 + 1e-9, 1 / 3.);
+        float curvature  = val2 / (val0 + val1 + val2 + 1e-3);
 
         // Compute the verticality
         std::vector<float> unary_vector = {
@@ -552,16 +554,17 @@ PyObject * compute_geometric_features(
         float verticality = unary_vector[2] / norm;
 
         // Populate the final feature vector
-        features[i_point][0] = linearity;
-        features[i_point][1] = planarity;
-        features[i_point][2] = scattering;
-        features[i_point][3] = verticality;
-        features[i_point][4] = v2[0];
-        features[i_point][5] = v2[1];
-        features[i_point][6] = v2[2];
-        features[i_point][7] = length;
-        features[i_point][8] = surface;
-        features[i_point][9] = volume;
+        features[i_point][0]  = linearity;
+        features[i_point][1]  = planarity;
+        features[i_point][2]  = scattering;
+        features[i_point][3]  = verticality;
+        features[i_point][4]  = v2[0];
+        features[i_point][5]  = v2[1];
+        features[i_point][6]  = v2[2];
+        features[i_point][7]  = length;
+        features[i_point][8]  = surface;
+        features[i_point][9]  = volume;
+        features[i_point][10] = curvature;
 
         // Print progress
         // NB: when in parallel s_point behavior is undefined, but gives

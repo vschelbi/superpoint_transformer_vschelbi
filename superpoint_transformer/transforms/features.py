@@ -8,7 +8,7 @@ def compute_point_features(
         data, pos=False, radius=5, rgb=True, hsv=False, lab=False,
         density=False, linearity=True, planarity=True, scattering=True,
         verticality=True, normal=True, length=False, surface=False,
-        volume=False, k_min=5):
+        volume=False, curvature=False, k_min=5):
     """ Compute the pointwise features that will be used for the
     partition.
 
@@ -50,6 +50,8 @@ def compute_point_features(
         Use local surface. Assumes ``Data.neighbors``.
     volume: bool
         Use local volume. Assumes ``Data.neighbors``.
+    curvature: bool
+        Use local curvature. Assumes ``Data.neighbors``.
     k_min: int
         Minimum number of neighbors to consider for geometric features
         computation. Points with less than k_min neighbors will receive
@@ -151,7 +153,7 @@ def compute_point_features(
         mask = (
             [linearity, planarity, scattering, verticality]
             + [normal] * 3
-            + [length, surface, volume])
+            + [length, surface, volume, curvature])
         features.append(f[:, mask].to(data.pos.device))
 
     # Save all features in the Data.x attribute
