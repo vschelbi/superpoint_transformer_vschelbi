@@ -50,8 +50,10 @@ infos = Data(
     volume=False,
     curvature=True,
     regularization=0.04,
-    spatial_weight=0,
+    # regularization=[0.04, 0.2, 0.8, 1.4]
+    spatial_weight=1e-2, ******* #for first level partition, prevent too large sp road instead of sidewalk, for higher levels, don't care
     cutoff=10,
+    # cutoff=[10, 100, 1000, 10000],
     iterations=15,
     times={})
 
