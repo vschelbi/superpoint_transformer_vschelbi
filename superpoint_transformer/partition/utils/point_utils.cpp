@@ -435,7 +435,7 @@ PyObject * compute_geometric_features(
 
         // If the cloud has only one point, populate the final feature
         // vector with zeros and continue
-        if (k_nn < k_min)
+        if (k_nn < k_min or k_nn <= 0)
         {
             features[i_point][0]  = 0;
             features[i_point][1]  = 0;
@@ -542,16 +542,21 @@ PyObject * compute_geometric_features(
         float volume     = powf(val0 * val1 * val2 + 1e-9, 1 / 3.);
         float curvature  = val2 / (val0 + val1 + val2 + 1e-3);
 
-        // Compute the verticality
-        std::vector<float> unary_vector = {
-            val[0] * fabsf(v0[0]) + val[1] * fabsf(v1[0]) + val[2] * fabsf(v2[0]),
-            val[0] * fabsf(v0[1]) + val[1] * fabsf(v1[1]) + val[2] * fabsf(v2[1]),
-            val[0] * fabsf(v0[2]) + val[1] * fabsf(v1[2]) + val[2] * fabsf(v2[2])};
-        float norm = sqrt(
-            unary_vector[0] * unary_vector[0]
-            + unary_vector[1] * unary_vector[1]
-            + unary_vector[2] * unary_vector[2]);
-        float verticality = unary_vector[2] / norm;
+        // Compute the verticality. NB we account for the edge case
+        // where all features are 0
+        float verticality = 0;
+        if (val0 > 0)
+        {
+            std::vector<float> unary_vector = {
+                val[0] * fabsf(v0[0]) + val[1] * fabsf(v1[0]) + val[2] * fabsf(v2[0]),
+                val[0] * fabsf(v0[1]) + val[1] * fabsf(v1[1]) + val[2] * fabsf(v2[1]),
+                val[0] * fabsf(v0[2]) + val[1] * fabsf(v1[2]) + val[2] * fabsf(v2[2])};
+            float norm = sqrt(
+                unary_vector[0] * unary_vector[0]
+                + unary_vector[1] * unary_vector[1]
+                + unary_vector[2] * unary_vector[2]);
+            verticality = unary_vector[2] / norm;
+        }
 
         // Populate the final feature vector
         features[i_point][0]  = linearity;
