@@ -2,6 +2,9 @@ import torch
 from superpoint_transformer.partition.FRNN import frnn
 
 
+__all__ = ['knn']
+
+
 def knn(x_search, x_query, k, r_max=1):
     assert isinstance(x_search, torch.Tensor)
     assert isinstance(x_query, torch.Tensor)

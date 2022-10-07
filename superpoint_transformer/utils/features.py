@@ -1,6 +1,9 @@
 import torch
 
 
+__all__ = ['rgb2hsv', 'rgb2lab']
+
+
 def rgb2hsv(rgb, epsilon=1e-10):
     """Convert a 2D tensor of RGB colors int [0, 255] or float [0, 1] to
     HSV format.

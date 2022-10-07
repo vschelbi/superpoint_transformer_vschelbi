@@ -2,6 +2,11 @@ import torch
 import numpy as np
 
 
+__all__ = [
+    'tensor_idx', 'is_sorted', 'has_duplicates', 'is_dense', 'is_permutation',
+    'arange_interleave', 'print_tensor_info']
+
+
 def tensor_idx(idx):
     """Convert an int, slice, list or numpy index to a torch.LongTensor."""
     if idx is None:
