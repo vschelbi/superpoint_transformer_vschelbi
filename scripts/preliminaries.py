@@ -23,9 +23,7 @@ from superpoint_transformer.data import Data
 from superpoint_transformer.metrics import ConfusionMatrix
 from superpoint_transformer.datasets.kitti360 import read_kitti360_window
 from superpoint_transformer.datasets.kitti360_config import WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
-from superpoint_transformer.utils.cpu import available_cpu_count
 
-print(f'CPUs available: {available_cpu_count()}')
 
 # Hyperparameters and experiment info
 infos = Data(
@@ -49,9 +47,10 @@ infos = Data(
     surface=False,
     volume=False,
     curvature=True,
-    regularization=0.04,
-    # regularization=[0.04, 0.2, 0.8, 1.4]
-    spatial_weight=1e-2, ******* #for first level partition, prevent too large sp road instead of sidewalk, for higher levels, don't care
+    regularization=0.05,
+    # regularization=[0.05, 0.2, 0.8, 1.4],
+    spatial_weight=1e-2,
+    # spatial_weight=[1e-2, 0, 0, 0],
     cutoff=10,
     # cutoff=[10, 100, 1000, 10000],
     iterations=15,
