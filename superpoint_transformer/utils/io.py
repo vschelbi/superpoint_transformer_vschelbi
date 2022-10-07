@@ -5,7 +5,7 @@ from datetime import datetime
 from superpoint_transformer.utils.tensor import tensor_idx
 
 
-__all__ = ['dated_dir', 'read_hdf5']
+__all__ = ['dated_dir', 'select_hdf5_data']
 
 
 def dated_dir(root, create=False):
@@ -49,16 +49,18 @@ def select_hdf5_data(f, idx=None, idx_keys=None, keys=None):
         # Read everything if there is no 'idx_keys' of 'keys'
         if idx_keys is None and keys is None:
             data[k] = torch.from_numpy(f[k][:])
-            continue
 
         # Index the key elements if key is in 'idx_keys'
-        if k in idx_keys:
+        elif k in idx_keys:
             data[k] = torch.from_numpy(f[k][:])[idx]
-            continue
 
         # Read everything if key is in 'keys'
-        if k in keys:
+        elif k in keys:
             data[k] = torch.from_numpy(f[k][:])
-            continue
+
+        # By default, convert int32 to int64, might cause issues for
+        # tensor indexing otherwise
+        if k in data.keys() and data[k].dtype == torch.int32:
+            data[k] = data[k].long()
 
     return data
