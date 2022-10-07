@@ -145,6 +145,8 @@ def process(i_cloud, args):
     info.cm = []
     info.segment_oracle = {'num': [], 'oa': [], 'miou': []}
     for i, d in enumerate(nag):
+        if args.verbose:
+            print(f'\nLevel-{i} purity')
         cm = ConfusionMatrix.from_histogram(
             d.y[:, :KITTI360_NUM_CLASSES], class_names=CLASS_NAMES,
             verbose=args.verbose)
@@ -213,6 +215,7 @@ for REG in REG_LIST:
     for i_cloud in generator:
         if args.verbose:
             print(f'\n\n{"_" * 16} Cloud {i_cloud} (num_clouds={args.num_clouds}) {"_" * 16}')
+            print(f'path: {filepaths[i_cloud]}')
         args, info = pickle.load(open(out_path, "rb"))
         try:
             info.append(process(i_cloud, args))
