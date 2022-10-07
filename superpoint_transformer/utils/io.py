@@ -25,7 +25,7 @@ def dated_dir(root, create=False):
     return path
 
 
-def read_hdf5(path, idx=None, idx_keys=None, keys=None):
+def select_hdf5_data(f, idx=None, idx_keys=None, keys=None):
     """Read an HDF5 file and return its content as a dictionary.
 
     :param path: path to the HDF5 file
@@ -37,27 +37,28 @@ def read_hdf5(path, idx=None, idx_keys=None, keys=None):
         the file, ignoring the rest.
     :return:
     """
+    assert isinstance(f, (h5py.File, h5py.Group))
+
     idx = tensor_idx(idx)
     idx_keys = [] if idx_keys is None or idx.shape[0] == 0 else idx_keys
     keys = [] if keys is None else keys
     data = {}
 
-    with h5py.File(path, 'r') as f:
-        for k in f.keys():
+    for k in f.keys():
 
-            # Read everything if there is no 'idx_keys' of 'keys'
-            if idx_keys is None and keys is None:
-                data[k] = torch.from_numpy(f[k][:])
-                continue
+        # Read everything if there is no 'idx_keys' of 'keys'
+        if idx_keys is None and keys is None:
+            data[k] = torch.from_numpy(f[k][:])
+            continue
 
-            # Index the key elements if key is in 'idx_keys'
-            if k in idx_keys:
-                data[k] = torch.from_numpy(f[k][:])[idx]
-                continue
+        # Index the key elements if key is in 'idx_keys'
+        if k in idx_keys:
+            data[k] = torch.from_numpy(f[k][:])[idx]
+            continue
 
-            # Read everything if key is in 'keys'
-            if k in keys:
-                data[k] = torch.from_numpy(f[k][:])
-                continue
+        # Read everything if key is in 'keys'
+        if k in keys:
+            data[k] = torch.from_numpy(f[k][:])
+            continue
 
     return data
