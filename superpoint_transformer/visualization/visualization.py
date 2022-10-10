@@ -188,13 +188,11 @@ def visualize_3d(
            or isinstance(gap, torch.Tensor) and gap.shape == torch.Size([3])
 
     # We work on copies of the input data, to allow modified in this
-    # scope. Data_0 accounts for the lowest level of hierarchy, the
-    # points themselves.
+    # scope
     input = input.clone()
     input = NAG([input]) if isinstance(input, Data) and input.is_sub \
         else input
     is_nag = isinstance(input, NAG)
-    data_0 = input[0] if is_nag else input
 
     # Make sure alpha is in [0, 1]
     alpha = max(0, min(alpha, 1))
@@ -244,6 +242,10 @@ def visualize_3d(
 
     else:
         input.selected = torch.ones(input.num_nodes, dtype=torch.bool)
+
+    # Data_0 accounts for the lowest level of hierarchy, the points
+    # themselves
+    data_0 = input[0] if is_nag else input
 
     # Subsample to limit the drawing time
     # If the level-0 cloud needs to be voxelized or sampled, a NAG
@@ -359,7 +361,8 @@ def visualize_3d(
     if data_0.y is not None:
         y = data_0.y
         y = y.argmax(1).numpy() if y.dim() == 2 else y.numpy()
-        colors = class_colors[y] if class_colors is not None else None
+        colors = class_colors[y] if class_colors is not None \
+            else int_to_plotly_rgb(torch.LongTensor(y))
         if class_names is None:
             text = np.array([f'Class {i}' for i in range(y.max() + 1)])
         else:
