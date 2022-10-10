@@ -111,9 +111,9 @@ def process(i_cloud, args):
     nag = compute_partition(
         data, args.regularization, spatial_weight=args.spatial_weight,
         k_adjacency=args.k_adjacency, cutoff=args.cutoff, verbose=args.verbose,
-        iterations=args.iterations)
+        iterations=args.iterations, parallel=args.parallel)
     torch.cuda.synchronize()
-    info.num_super = nag[1].num_nodes
+    info.num_sp = nag[1].num_nodes
     info.times[key] = round(time() - start, 3)
 
     # Compute total time
@@ -158,7 +158,7 @@ def process(i_cloud, args):
     return info
 
 
-REG_LIST = [0.05, 0.04, 0.06, 0.03]
+REG_LIST = [0.04, 0.03, 0.05, 0.06]
 root = os.path.join(DATA_ROOT, 'kitti360/shared/data_3d_semantics')
 out_dir = dated_dir(
     os.path.join(DATA_ROOT, 'kitti360/spt/preprocessing_study'), create=True)
@@ -202,7 +202,8 @@ for REG in REG_LIST:
         num_clouds=len(filepaths),
         voxel_max_size=250,
         voxel_steps=200,
-        verbose=True,
+        parallel=True,
+        verbose=False,
         failed=[])
     info = []
 
