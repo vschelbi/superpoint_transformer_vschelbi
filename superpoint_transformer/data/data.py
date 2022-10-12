@@ -13,6 +13,11 @@ from superpoint_transformer.utils.neighbors import knn
 
 class Data(PyGData):
 
+    _INDEXABLE = [
+        'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size']
+
+    _READABLE = _INDEXABLE + ['edge_index', 'edge_attr', 'sub']
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if superpoint_transformer.is_debug_enabled():

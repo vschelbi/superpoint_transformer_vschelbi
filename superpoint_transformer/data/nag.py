@@ -5,6 +5,7 @@ import superpoint_transformer
 from superpoint_transformer.data import Data, Cluster
 from superpoint_transformer.utils import tensor_idx, has_duplicates, numpyfy, \
     select_hdf5_data
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter_sum
 
 
@@ -180,6 +181,146 @@ class NAG:
         nag = self.__class__(data_list)
 
         return nag
+
+    def save(self, path, x32=True):
+        """Save NAG to HDF5 file.
+
+        :param path:
+        :param x32:
+        :return:
+        """
+        with h5py.File(path, 'w') as f:
+            for i_level, data in enumerate(self):
+                group = f.create_group(f'partition_{i_level}')
+                for k, val in data.items():
+                    if isinstance(val, torch.Tensor):
+                        val = numpyfy(val, x32=x32)
+                        group.create_dataset(k, data=val, dtype=val.dtype)
+                    elif isinstance(val, Cluster):
+                        p = numpyfy(val.pointers, x32=x32)
+                        group.create_dataset('sub_pointers', data=p, dtype=p.dtype)
+                        p = numpyfy(val.points, x32=x32)
+                        group.create_dataset('sub_points', data=p, dtype=p.dtype)
+                    else:
+                        raise NotImplementedError(f'Unsupported type={type(val)}')
+
+    @staticmethod
+    def load(
+            path, low=0, high=-1, idx=None, idx_keys=None, keys=None,
+            update_super=True, update_sub=False):
+        """Load NAG from an HDF5 file. See `NAG.save` for writing such
+        file. Options allow reading only part of the data.
+
+        :param path: path the file
+        :param low: lowest partition level to read
+        :param high: highest partition level to read
+        :param idx: index, slice, mask to select from level_min
+        :param idx_keys: keys on which the indexing should be applied
+        :param keys: keys to load. If None, all keys will be loaded
+        update_sub: bool
+            If True, the point (ie subpoint) indices will also be
+            updated to maintain dense indices. The output will then
+            contain '(idx_sub, sub_super)' which can help apply these
+            changes to maintain consistency with lower hierarchy levels
+            of a NAG. See Data.select
+        :param update_super: If True, the cluster (ie superpoint)
+            indices will also be updated to maintain dense indices. The
+            output will then contain '(idx_super, super_sub)' which can
+            help apply these changes to maintain consistency with higher
+            hierarchy levels of a NAG. See Data.select
+        :return:
+        """
+        idx_keys = Data._INDEXABLE if idx_keys is None else idx_keys
+        keys = Data._READABLE if keys is None else keys
+        data_list = []
+        with h5py.File(path, 'r') as f:
+
+            # Initialize partition levels min and max to read from the
+            # file. This functionality is especially intended for
+            # loading levels 1 and above when we want to avoid loading
+            # the memory-costly level-0 points
+            low = max(low, 0)
+            high = len(f) - 1 if high < 0 else min(high, len(f) - 1)
+
+            # Make sure all required partitions are present in the file
+            assert all([
+                f'partition_{k}' in f.keys()
+                for k in range(low, high + 1)])
+
+            for i in range(low, high + 1):
+
+                # Apply index selection on the low only, if required.
+                # For all subsequent levels, only keys selection is
+                # available
+                if i == low:
+                    kwargs = select_hdf5_data(
+                        f[f'partition_{i}'], keys=keys, idx=idx,
+                        idx_keys=idx_keys)
+                else:
+                    kwargs = select_hdf5_data(
+                        f[f'partition_{i}'], keys=keys)
+
+                # Special treatment is required to gather the
+                # 'sub_pointers' and 'sub_points' and convert them into
+                # a Cluster object
+                pointers = kwargs.pop('sub_pointers', None)
+                points = kwargs.pop('sub_points', None)
+                if points is not None and pointers is not None:
+                    sub = Cluster(pointers, points)
+                    if i == low and idx is not None:
+                        sub = sub.select(idx, update_sub=update_sub)
+                    kwargs['sub'] = sub
+
+                data_list.append(Data(**kwargs))
+
+        if idx is not None:
+            return NAG(data_list)
+
+        # In case the lowest level was indexed, we need to update the
+        # above level too. Unfortunately, this is probably because we do
+        # not want to load the whole low-level partition, so we
+        # artificially create a Data object to simulate it, just to be
+        # able to leverage the convenient NAG.select method.
+        # NB: this may be a little slow for the CPU-based DataLoader
+        # operations at train time, so we will prefer setting
+        # update_super=False in this situation and do the necessary
+        # later on on GPU
+        if update_super:
+            return NAG.cat_select(data_list[0], data_list[1:], idx=idx)
+
+        return data_list, idx
+
+    @staticmethod
+    def cat_select(data, data_list, idx=None):
+        """Does part of what Data.select does but in an ugly way. This
+        is mostly intended for the DataLoader to be able to load NAG and
+        sample level-0 points on CPU in reasonable time and finish the
+        update_sub, update_super work on GPU later on if need be...
+
+        :param data: Data object for level-0 points
+        :param data_list: list of Data objects for level-1+ points
+        :param idx: optional, indexing that has been applied on level-0
+            data and guides higher levels updating (see NAG.select and
+            Data.select with update_super=True)
+        :return:
+        """
+        if idx is None and data_list is None or len(data_list) == 0:
+            return NAG([data])
+
+        if idx is None:
+            return NAG([data] + data_list)
+
+        if data_list is None or len(data_list) == 0:
+            data.super_index = consecutive_cluster(data.super_index)[0]
+            return NAG([data])
+
+        data_fake = Data(super_index=data_list[0].sub.to_super_index())
+        nag = NAG([data_fake] + data_list)
+        nag = nag.select(0, idx)
+        data.super_index = nag[0].super_index
+        nag._list[0] = data
+
+        return NAG(data_list)
 
     def debug(self):
         """Sanity checks."""
