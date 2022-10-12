@@ -383,6 +383,10 @@ def sample_clusters(
         assert n_samples.le(sub_size).all(), \
             "Cannot sample more than the cluster sizes."
 
+    # TODO: IMPORTANT the randperm-sort approach here is a huge
+    #  bottleneck for the sampling operation on CPU. Can we do any
+    #  better ?
+
     # Shuffle the order of points
     perm = randperm(point_index.shape[0], device=nag.device)
     super_index = super_index[perm]
