@@ -1,10 +1,11 @@
 import torch
 import numpy as np
+from superpoint_transformer.utils.numba import numba_randperm
 
 
 __all__ = [
     'tensor_idx', 'is_sorted', 'has_duplicates', 'is_dense', 'is_permutation',
-    'arange_interleave', 'print_tensor_info', 'numpyfy']
+    'arange_interleave', 'print_tensor_info', 'numpyfy', 'randperm']
 
 
 def tensor_idx(idx):
@@ -124,3 +125,11 @@ def numpyfy(a, x32=False):
             "Can't convert int64 tensor to int32, largest value is to high"
         a = a.int()
     return a.numpy()
+
+
+def randperm(n, device='cpu'):
+    """Same as torch.randperm, but relies on numba for CPU tensors."""
+    if device == 'cuda' or \
+            isinstance(device, torch.device) and device.type == 'cuda':
+        return torch.randperm(n, device=device)
+    return numba_randperm(n)

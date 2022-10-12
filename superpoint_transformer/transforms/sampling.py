@@ -5,7 +5,8 @@ from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean, scatter_add
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 import superpoint_transformer
-from superpoint_transformer.utils import tensor_idx, arange_interleave
+from superpoint_transformer.utils import tensor_idx, arange_interleave, \
+    randperm
 from superpoint_transformer.data import Data, NAG
 from torch_scatter import scatter_sum
 
@@ -20,8 +21,9 @@ def shuffle_data(data):
     ----------
     data : Data
     """
+    device = data.device
     num_points = data.pos.shape[0]
-    shuffle_idx = torch.randperm(num_points)
+    shuffle_idx = randperm(num_points, device=device)
     for key in set(data.keys):
         item = data[key]
         if torch.is_tensor(item) and num_points == item.shape[0]:
@@ -382,7 +384,7 @@ def sample_clusters(
             "Cannot sample more than the cluster sizes."
 
     # Shuffle the order of points
-    perm = torch.randperm(point_index.shape[0])
+    perm = randperm(point_index.shape[0], device=nag.device)
     super_index = super_index[perm]
     point_index = point_index[perm]
 
