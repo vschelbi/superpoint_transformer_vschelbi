@@ -39,7 +39,10 @@ def torch_to_numba(func):
 @torch_to_numba
 @njit(cache=True, nogil=True)
 def numba_randperm(n):
-    """Same as torch.randperm but leveraing numba on CPU."""
+    """Same as torch.randperm but leveraing numba on CPU.
+
+    NB: slightly faster than `np.random.permutation(np.arange(n))`
+    """
     a = np.arange(n)
     np.random.shuffle(a)
     return a
