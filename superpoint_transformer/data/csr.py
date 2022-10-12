@@ -226,10 +226,9 @@ class CSRData:
         # avoid for loops and list concatenations to benefit from torch
         # capabilities.
         sizes = pointers_new[1:] - pointers_new[:-1]
-        val_idx = torch.arange(pointers_new[-1]).to(device)
-        val_idx -= torch.arange(
-            pointers_new[-1] + 1)[pointers_new[:-1]].repeat_interleave(
-            sizes).to(device)
+        val_idx = torch.arange(pointers_new[-1], device=device)
+        val_idx -= torch.arange(pointers_new[-1] + 1, device=device)[
+            pointers_new[:-1]].repeat_interleave(sizes)
         val_idx += pointers[indices].repeat_interleave(sizes).to(device)
 
         return pointers_new, val_idx
@@ -249,7 +248,6 @@ class CSRData:
         # If idx is empty, return an empty CSRData with empty values
         # of consistent type
         if idx.shape[0] == 0:
-            out = self.clone()
             out.pointers = torch.LongTensor([0])
             out.values = [v[[]] for v in self.values]
 
