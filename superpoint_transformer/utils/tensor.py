@@ -4,7 +4,7 @@ import numpy as np
 
 __all__ = [
     'tensor_idx', 'is_sorted', 'has_duplicates', 'is_dense', 'is_permutation',
-    'arange_interleave', 'print_tensor_info']
+    'arange_interleave', 'print_tensor_info', 'numpyfy']
 
 
 def tensor_idx(idx):
@@ -109,3 +109,18 @@ def print_tensor_info(a, name):
         msg += f'  permutation={is_permutation(a)}'
 
     print(msg)
+
+
+def numpyfy(a, x32=False):
+    """Convert torch.Tensor to numpy while respecting some constraints
+    on output dtype.
+    """
+    assert isinstance(a, torch.Tensor)
+
+    if x32 and a.dtype == torch.double:
+        a = a.float()
+    elif x32 and a.dtype == torch.long:
+        assert a.abs().max() < torch.iinfo(torch.int).max, \
+            "Can't convert int64 tensor to int32, largest value is to high"
+        a = a.int()
+    return a.numpy()
