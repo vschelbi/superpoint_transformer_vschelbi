@@ -1,8 +1,10 @@
+import h5py
 import torch
 from typing import List
 import superpoint_transformer
-from superpoint_transformer.data import Data
-from superpoint_transformer.utils import tensor_idx, has_duplicates
+from superpoint_transformer.data import Data, Cluster
+from superpoint_transformer.utils import tensor_idx, has_duplicates, numpyfy, \
+    select_hdf5_data
 from torch_scatter import scatter_sum
 
 
@@ -129,11 +131,10 @@ class NAG:
         idx = tensor_idx(idx).to(self.device)
 
         # Make sure idx contains no duplicate entries
-        #TODO: calling this whenever we select points might be costly, is
-        # there a workaround ?
-        assert not has_duplicates(idx), \
-            "Duplicate indices are not supported. This would cause " \
-            "ambiguities in edges and super- and sub- indices."
+        if superpoint_transformer.is_debug_enabled():
+            assert not has_duplicates(idx), \
+                "Duplicate indices are not supported. This would cause " \
+                "ambiguities in edges and super- and sub- indices."
 
         # Prepare the output Data list
         data_list = [None] * self.num_levels

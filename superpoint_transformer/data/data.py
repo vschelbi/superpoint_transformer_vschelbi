@@ -177,11 +177,10 @@ class Data(PyGData):
         idx = tensor_idx(idx).to(device)
 
         # Make sure idx contains no duplicate entries
-        #TODO: calling this whenever we select points might be costly,
-        # is there a workaround ?
-        assert not has_duplicates(idx), \
-            "Duplicate indices are not supported. This would cause " \
-            "ambiguities in edges and super- and sub- indices."
+        if superpoint_transformer.is_debug_enabled():
+            assert not has_duplicates(idx), \
+                "Duplicate indices are not supported. This would cause " \
+                "ambiguities in edges and super- and sub- indices."
 
         # Output Data will not share memory with input Data.
         # NB: it is generally not recommended to instantiate en empty
