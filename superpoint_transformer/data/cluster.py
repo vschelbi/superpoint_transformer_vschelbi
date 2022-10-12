@@ -85,6 +85,8 @@ class Cluster(CSRData):
         # Convert subpoint indices, in case some subpoints have
         # disappeared. 'idx_sub' is intended to be used with
         # Data.select() on the level below
+        # TODO: IMPORTANT consecutive_cluster is a bottleneck for NAG
+        #  and Data indexing, can we do better ?
         new_cluster_points, perm = consecutive_cluster(cluster.points)
         idx_sub = cluster.points[perm]
         cluster.points = new_cluster_points
@@ -99,7 +101,6 @@ class Cluster(CSRData):
 
     def debug(self):
         super().debug()
-        # TODO: calling has_duplicates whenever we debug might be costly...
         assert not has_duplicates(self.points)
 
     def __repr__(self):
