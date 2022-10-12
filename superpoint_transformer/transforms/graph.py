@@ -110,7 +110,7 @@ def _compute_cluster_graph(
     # cluster geometric features as well as cluster adjacency graph and
     # edge features
     idx_samples, ptr_samples = sample_clusters(
-        i_level, nag, low=0, n_max=n_max_node, n_min=n_min,
+        nag, i_level, low=0, n_max=n_max_node, n_min=n_min,
         return_pointers=True)
 
     # Compute cluster geometric features
@@ -221,7 +221,7 @@ def _compute_cluster_graph(
     # generously here than for cluster features, because we need to
     # capture fine-grained adjacency
     idx_samples, ptr_samples = sample_clusters(
-        i_level, nag, low=0, n_max=n_max_edge, n_min=n_min, mask=mask,
+        nag, i_level, low=0, n_max=n_max_edge, n_min=n_min, mask=mask,
         return_pointers=True)
 
     # To debug sampling

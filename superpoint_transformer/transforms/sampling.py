@@ -307,7 +307,7 @@ class GridSampling3D:
 
 
 def sample_clusters(
-        high, nag, low=0, n_max=32, n_min=1, mask=None, return_pointers=False):
+        nag, high, low=0, n_max=32, n_min=1, mask=None, return_pointers=False):
     """Compute indices for sampling elements at level 'low', based on
     which cluster they belong to at level 'high'. The sampling operation
     is run is without replacement and each cluster is sampled at least
