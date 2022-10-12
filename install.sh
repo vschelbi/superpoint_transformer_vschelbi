@@ -94,6 +94,7 @@ pip install plyfile
 pip install h5py
 pip install colorhash
 pip install seaborn
+pip3 install numba --user
 
 #*********************************
 
