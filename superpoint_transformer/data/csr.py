@@ -271,3 +271,33 @@ class CSRData:
             f"{key}={getattr(self, key)}"
             for key in ['num_groups', 'num_items', 'device']]
         return f"{self.__class__.__name__}({', '.join(info)})"
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: classes differ')
+            return False
+        if not torch.equal(self.pointers, other.pointers):
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: pointers differ')
+            return False
+        if not torch.equal(self.is_index_value, other.is_index_value):
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: is_index_value differ')
+            return False
+        if self.num_values != other.num_values:
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: num_values differ')
+            return False
+        for v1, v2 in zip(self.values, other.values):
+            # NB: this may be a bit strong a constraint for Cluster
+            # where values are well-attributed to the proper clusters
+            # but their order differ inside the cluster. In reality, we
+            # want a set, the order does not matter. We could normalize
+            # things by using a lexsort on cluster and point indices but
+            # this be a bit costly...
+            if not torch.equal(v1, v2):
+                if superpoint_transformer.is_debug_enabled():
+                    print(f'{self.__class__.__name__}.__eq__: values differ')
+                return False
+        return True

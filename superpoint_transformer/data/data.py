@@ -1,5 +1,6 @@
-import torch
 import copy
+import torch
+import numpy as np
 from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
@@ -16,7 +17,8 @@ class Data(PyGData):
     _INDEXABLE = [
         'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size']
 
-    _READABLE = _INDEXABLE + ['edge_index', 'edge_attr', 'sub']
+    _READABLE = _INDEXABLE + [
+        'edge_index', 'edge_attr', 'sub_points', 'sub_pointers']
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -394,6 +396,34 @@ class Data(PyGData):
         self.edge_attr = edge_attr
 
         return self
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: classes differ')
+            return False
+        if sorted(self.keys) != sorted(other.keys):
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: keys differ')
+            return False
+        for k, v in self.items():
+            if isinstance(v, torch.Tensor):
+                if not torch.equal(v, other[k]):
+                    if superpoint_transformer.is_debug_enabled():
+                        print(f'{self.__class__.__name__}.__eq__: {k} differ')
+                    return False
+                continue
+            if isinstance(v, np.ndarray):
+                if not np.array_equal(v, other[k]):
+                    if superpoint_transformer.is_debug_enabled():
+                        print(f'{self.__class__.__name__}.__eq__: {k} differ')
+                    return False
+                continue
+            if v != other[k]:
+                if superpoint_transformer.is_debug_enabled():
+                    print(f'{self.__class__.__name__}.__eq__: {k} differ')
+                return False
+        return True
 
 
 class Batch(PyGBatch):

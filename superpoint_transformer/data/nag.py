@@ -207,27 +207,26 @@ class NAG:
     @staticmethod
     def load(
             path, low=0, high=-1, idx=None, idx_keys=None, keys=None,
-            update_super=True, update_sub=False):
+            update_super=True, update_sub=True):
         """Load NAG from an HDF5 file. See `NAG.save` for writing such
         file. Options allow reading only part of the data.
 
-        :param path: path the file
-        :param low: lowest partition level to read
-        :param high: highest partition level to read
-        :param idx: index, slice, mask to select from level_min
-        :param idx_keys: keys on which the indexing should be applied
-        :param keys: keys to load. If None, all keys will be loaded
-        update_sub: bool
-            If True, the point (ie subpoint) indices will also be
-            updated to maintain dense indices. The output will then
-            contain '(idx_sub, sub_super)' which can help apply these
-            changes to maintain consistency with lower hierarchy levels
-            of a NAG. See Data.select
-        :param update_super: If True, the cluster (ie superpoint)
-            indices will also be updated to maintain dense indices. The
-            output will then contain '(idx_super, super_sub)' which can
-            help apply these changes to maintain consistency with higher
-            hierarchy levels of a NAG. See Data.select
+        :param path: str
+            Path the file
+        :param low: int
+            Lowest partition level to read
+        :param high: int
+            Highest partition level to read
+        :param idx: list, array, tensor, slice
+            Index or boolean mask used to select from low
+        :param idx_keys: list(str)
+            Keys on which the indexing should be applied
+        :param keys: list(str)
+            Keys to load. If None, all keys will be loaded
+        :param update_sub: bool
+            See NAG.select and Data.select
+        :param update_super:
+            See NAG.select and Data.select
         :return:
         """
         idx_keys = Data._INDEXABLE if idx_keys is None else idx_keys
@@ -273,8 +272,13 @@ class NAG:
 
                 data_list.append(Data(**kwargs))
 
-        if idx is not None:
-            return NAG(data_list)
+        # In the case where update_super is not required but the low
+        # level was indexed, we cannot combine the leve-0 and level-1+
+        # Data into a NAG, because the indexing might have broken index
+        # consistency between the levels. So we return the elements in a
+        # NAG.cat_select-friendly way, for later update
+        if not update_super and idx is not None:
+            return data_list[0], data_list[1:], idx
 
         # In case the lowest level was indexed, we need to update the
         # above level too. Unfortunately, this is probably because we do
@@ -314,13 +318,15 @@ class NAG:
             data.super_index = consecutive_cluster(data.super_index)[0]
             return NAG([data])
 
-        data_fake = Data(super_index=data_list[0].sub.to_super_index())
+        fake_super_index = data_list[0].sub.to_super_index()
+        fake_x = torch.empty_like(fake_super_index)
+        data_fake = Data(x=fake_x, super_index=fake_super_index)
         nag = NAG([data_fake] + data_list)
         nag = nag.select(0, idx)
         data.super_index = nag[0].super_index
         nag._list[0] = data
 
-        return NAG(data_list)
+        return nag
 
     def debug(self):
         """Sanity checks."""
@@ -339,3 +345,19 @@ class NAG:
             f"{key}={getattr(self, key)}"
             for key in ['num_levels', 'num_points', 'device']]
         return f"{self.__class__.__name__}({', '.join(info)})"
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: classes differ')
+            return False
+        if self.num_levels != other.num_levels:
+            if superpoint_transformer.is_debug_enabled():
+                print(f'{self.__class__.__name__}.__eq__: num_levels differ')
+            return False
+        for d1, d2 in zip(self, other):
+            if d1 != d2:
+                if superpoint_transformer.is_debug_enabled():
+                    print(f'{self.__class__.__name__}.__eq__: data differ')
+                return False
+        return True
