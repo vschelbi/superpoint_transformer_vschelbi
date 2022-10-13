@@ -123,9 +123,13 @@ class Data(PyGData):
             assert self.y is None or self.y.dim() == 2, \
                 "Clusters must hold label histograms"
         if self.is_sub:
-            assert is_dense(self.super_index), \
-                "Point-to-cluster indices must be dense (ie all indices in " \
-                "[0, super_index.max()] must be used"
+            if not is_dense(self.super_index):
+                print(
+                    "WARNING: super_index indices are generally expected to be "
+                    "dense (ie all indices in [0, super_index.max()] are used),"
+                    " which is not the case here. This may be because you are "
+                    "creating a Data object after applying a selection of "
+                    "points without updating the cluster indices.")
 
     def __inc__(self, key, value, *args, **kwargs):
         """Extend the PyG.Data.__inc__ behavior on '*index*' and
