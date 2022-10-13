@@ -1,7 +1,8 @@
 import torch
 import copy
 import superpoint_transformer
-from superpoint_transformer.utils import tensor_idx, is_sorted, is_dense
+from superpoint_transformer.utils import tensor_idx, is_sorted, \
+    indices_to_pointers
 
 
 class CSRData:
@@ -33,14 +34,13 @@ class CSRData:
         will be updated wrt the cumulative size of the batched values.
         """
         if dense:
-            self.pointers, order = CSRData.indices_to_pointers(pointers)
+            self.pointers, order = indices_to_pointers(pointers)
             args = [a[order] for a in args]
         else:
             self.pointers = pointers
         self.values = [*args] if len(args) > 0 else None
         if is_index_value is None or is_index_value == []:
-            self.is_index_value = torch.zeros(
-                self.num_values, dtype=torch.bool)
+            self.is_index_value = torch.zeros(self.num_values, dtype=torch.bool)
         else:
             self.is_index_value = torch.BoolTensor(is_index_value)
         if superpoint_transformer.is_debug_enabled():
@@ -125,27 +125,6 @@ class CSRData:
         out.pointers = copy.copy(self.pointers)
         out.values = copy.copy(self.values)
         return out
-
-    @staticmethod
-    def indices_to_pointers(indices: torch.LongTensor):
-        """Convert pre-sorted dense indices to CSR format."""
-        device = indices.device
-        assert len(indices.shape) == 1, "Only 1D indices are accepted."
-        assert indices.shape[0] >= 1, "At least one group index is required."
-        assert is_dense(indices), "Indices must be dense"
-
-        # Sort indices if need be
-        order = torch.arange(indices.shape[0], device=device)
-        if not is_sorted(indices):
-            indices, order = indices.sort()
-
-        # Convert sorted indices to pointers
-        pointers = torch.cat([
-            torch.LongTensor([0]).to(device),
-            torch.where(indices[1:] > indices[:-1])[0] + 1,
-            torch.LongTensor([indices.shape[0]]).to(device)])
-
-        return pointers, order
 
     def reindex_groups(
             self, group_indices: torch.LongTensor, order=None,
