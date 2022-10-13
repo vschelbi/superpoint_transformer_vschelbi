@@ -5,11 +5,13 @@ from superpoint_transformer.utils.numba import numba_randperm
 
 __all__ = [
     'tensor_idx', 'is_sorted', 'has_duplicates', 'is_dense', 'is_permutation',
-    'arange_interleave', 'print_tensor_info', 'numpyfy', 'randperm']
+    'arange_interleave', 'print_tensor_info', 'numpyfy', 'randperm',
+    'fast_zeros', 'fast_repeat']
 
 
 def tensor_idx(idx):
-    """Convert an int, slice, list or numpy index to a torch.LongTensor."""
+    """Convert an int, slice, list or numpy index to a torch.LongTensor.
+    """
     if idx is None:
         idx = torch.LongTensor([])
     elif isinstance(idx, int):
@@ -91,6 +93,7 @@ def arange_interleave(width, start=None):
     offsets = (start - a.cumsum(0)).repeat_interleave(width)
     return torch.arange(width.sum(), device=device) + offsets
 
+
 def print_tensor_info(a, name):
     """Print some info about a tensor. Used for debugging.
     """
@@ -133,3 +136,31 @@ def randperm(n, device='cpu'):
             isinstance(device, torch.device) and device.type == 'cuda':
         return torch.randperm(n, device=device)
     return numba_randperm(n)
+
+
+# Not working as good as experiments promised...
+def fast_zeros(*args, dtype=None, device='cpu'):
+    """Same as torch.zeros but relies numpy on CPU. This may be x40
+    faster when manipulating large tensors on CPU.
+    """
+    if device == 'cuda' or \
+        isinstance(device, torch.device) and device.type == 'cuda':
+        return torch.zeros(*args, dtype=dtype, device=device)
+    out = torch.from_numpy(np.zeros(tuple(args), dtype='float32'))
+    if dtype is not None:
+        out = out.to(dtype)
+    return out
+
+
+def fast_repeat(x, repeats):
+    """Same as torch.repeat_interleave but relies numpy on CPU. This
+    saves a little bit of time when manipulating large tensors on CPU.
+    """
+    assert isinstance(x, torch.Tensor)
+    assert isinstance(repeats, int) or x.device == repeats.device
+    if x.is_cuda:
+        return torch.repeat_interleave(x, repeats)
+    if isinstance(repeats, int):
+        return torch.from_numpy(np.repeat(x.numpy(), repeats))
+    else:
+        return torch.from_numpy(np.repeat(x.numpy(), repeats.numpy()))
