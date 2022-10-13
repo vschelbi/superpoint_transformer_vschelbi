@@ -1,4 +1,5 @@
 import copy
+import h5py
 import torch
 import numpy as np
 from torch_geometric.data import Data as PyGData
@@ -8,17 +9,15 @@ from torch_geometric.utils import coalesce, remove_self_loops
 import superpoint_transformer
 from superpoint_transformer.data.cluster import Cluster
 from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates, \
-    isolated_nodes
-from superpoint_transformer.utils.neighbors import knn
+    isolated_nodes, knn, dense_to_csr, numpyfy, save_dense_to_csr_hdf5
 
 
 class Data(PyGData):
 
     _INDEXABLE = [
-        'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size']
+        'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size', 'sub']
 
-    _READABLE = _INDEXABLE + [
-        'edge_index', 'edge_attr', 'sub_points', 'sub_pointers']
+    _READABLE = _INDEXABLE + ['edge_index', 'edge_attr']
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -428,6 +427,101 @@ class Data(PyGData):
                     print(f'{self.__class__.__name__}.__eq__: {k} differ')
                 return False
         return True
+
+    def save(self, f, x32=True, y_to_csr=True):
+        """Save Data to HDF5 file.
+
+        :param f: h5 file path of h5py.File or h5py.Group
+        :param x32: bool
+            Convert 64-bit data to 32-bit before saving.
+        :param y_to_csr: bool
+            Convert 'y' to CSR format before saving. Only applies if
+            'y' is a 2D histogram
+        :return:
+        """
+        if not isinstance(f, (h5py.File, h5py.Group)):
+            with h5py.File(f, 'w') as file:
+                self.save(file, x32=x32, y_to_csr=y_to_csr)
+            return
+
+        assert isinstance(f, (h5py.File, h5py.Group))
+
+        for k, val in self.items():
+            if k == 'y' and val.dim() > 1 and y_to_csr:
+                sg = f.create_group('/_csr_/y')
+                save_dense_to_csr_hdf5(val, sg, x32=x32)
+            elif isinstance(val, Cluster):
+                sg = f.create_group('/_cluster_/sub')
+                val.save(sg, x32=x32)
+            elif isinstance(val, torch.Tensor):
+                val = numpyfy(val, x32=x32)
+                f.create_dataset(k, data=val, dtype=val.dtype)
+            else:
+                raise NotImplementedError(f'Unsupported type={type(val)}')
+
+    @staticmethod
+    def load(f, idx=None, idx_keys=None, keys=None, update_sub=True):
+        """Read an HDF5 file and return its content as a dictionary.
+
+        :param f: h5 file path of h5py.File or h5py.Group
+        :param idx: int, list, numpy.ndarray, torch.Tensor
+            Used to select the elements in `keys_idx`. Supports fancy
+            indexing
+        :param idx_keys: List(str)
+            Keys on which the indexing should be applied
+        :param keys: List(str)
+            Keys should be loaded from the file, ignoring the rest
+        :param update_sub: bool
+            If True, the point (ie subpoint) indices will also be
+            updated to maintain dense indices. The output will then
+            contain '(idx_sub, sub_super)' which can help apply these
+            changes to maintain consistency with lower hierarchy levels
+            of a NAG.
+        :return:
+        """
+        if not isinstance(f, (h5py.File, h5py.Group)):
+            with h5py.File(f, 'r') as file:
+                out = Data.load(file, idx=idx, idx_keys=idx_keys, keys=keys)
+            return out
+
+        idx = tensor_idx(idx)
+        idx_keys = None if idx_keys is None or idx.shape[0] == 0 \
+            else Data._INDEXABLE
+        keys = None if keys is None else keys
+        data = {}
+
+        for k in f.keys():
+
+            from time import time
+            start = time()
+
+            # Recursive call in case the special '_csr_ or '_cluster_'
+            # keys are encountered
+            if k == '_csr_':
+                for subk in f[k].keys:
+                    load_csr_hdf5_to_dense(f[k][subk], idx=idx)
+
+            # Read everything if there is no 'idx_keys' or 'keys'
+            if idx_keys is None and keys is None:******control keys and idx_keys before reading data******
+                data[k] = torch.from_numpy(f[k][:])
+
+            # Index the key elements if key is in 'idx_keys'
+            elif idx_keys is not None and k in idx_keys:
+                data[k] = torch.from_numpy(f[k][:])[idx]
+
+            # Read everything if key is in 'keys'
+            elif keys is not None and k in keys:
+                data[k] = torch.from_numpy(f[k][:])
+
+            # By default, convert int32 to int64, might cause issues for
+            # tensor indexing otherwise
+            if k in data.keys() and data[k].dtype == torch.int32:
+                data[k] = data[k].long()
+
+            print(f'  reading {k:<20}: {time() - start:0.5f}s')
+
+        return data
+
 
 
 class Batch(PyGBatch):

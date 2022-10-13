@@ -1,10 +1,11 @@
 import h5py
 import torch
+import numpy as np
 from typing import List
 import superpoint_transformer
 from superpoint_transformer.data import Data, Cluster
 from superpoint_transformer.utils import tensor_idx, has_duplicates, numpyfy, \
-    select_hdf5_data
+    select_hdf5_data, dense_to_csr, csr_to_dense
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter_sum
 
@@ -182,27 +183,21 @@ class NAG:
 
         return nag
 
-    def save(self, path, x32=True):
+    def save(self, path, x32=True, y_to_csr=True):
         """Save NAG to HDF5 file.
 
         :param path:
-        :param x32:
+        :param x32: bool
+            Convert 64-bit data to 32-bit before saving.
+        :param y_to_csr: bool
+            Convert 'y' to CSR format before saving. Only applies if
+            'y' is a 2D histogram
         :return:
         """
         with h5py.File(path, 'w') as f:
             for i_level, data in enumerate(self):
-                group = f.create_group(f'partition_{i_level}')
-                for k, val in data.items():
-                    if isinstance(val, torch.Tensor):
-                        val = numpyfy(val, x32=x32)
-                        group.create_dataset(k, data=val, dtype=val.dtype)
-                    elif isinstance(val, Cluster):
-                        p = numpyfy(val.pointers, x32=x32)
-                        group.create_dataset('sub_pointers', data=p, dtype=p.dtype)
-                        p = numpyfy(val.points, x32=x32)
-                        group.create_dataset('sub_points', data=p, dtype=p.dtype)
-                    else:
-                        raise NotImplementedError(f'Unsupported type={type(val)}')
+                g = f.create_group(f'partition_{i_level}')
+                data.save(g, x32=x32, y_to_csr=y_to_csr)
 
     @staticmethod
     def load(
@@ -232,6 +227,9 @@ class NAG:
         idx_keys = Data._INDEXABLE if idx_keys is None else idx_keys
         keys = Data._READABLE if keys is None else keys
         data_list = []
+
+        from time import time
+        start = time()
         with h5py.File(path, 'r') as f:
 
             # Initialize partition levels min and max to read from the
@@ -246,7 +244,12 @@ class NAG:
                 f'partition_{k}' in f.keys()
                 for k in range(low, high + 1)])
 
+            print(f'opening file: {time() - start:0.3f}s\n')
+
             for i in range(low, high + 1):
+
+                start_i = time()
+                start = time()
 
                 # Apply index selection on the low only, if required.
                 # For all subsequent levels, only keys selection is
@@ -262,15 +265,32 @@ class NAG:
                 # Special treatment is required to gather the
                 # 'sub_pointers' and 'sub_points' and convert them into
                 # a Cluster object
-                pointers = kwargs.pop('sub_pointers', None)
-                points = kwargs.pop('sub_points', None)
-                if points is not None and pointers is not None:
-                    sub = Cluster(pointers, points)
+                sub_pointers = kwargs.pop('sub_pointers', None)
+                sub_points = kwargs.pop('sub_points', None)
+                if sub_points is not None and sub_pointers is not None:
+                    sub = Cluster(sub_pointers, sub_points)
                     if i == low and idx is not None:
-                        sub = sub.select(idx, update_sub=update_sub)
+                        sub = sub.select(idx, update_sub=update_sub)[0]
                     kwargs['sub'] = sub
 
+                # Special treatment is required to gather the
+                # 'y_pointers', 'y_columns', 'y_values' 'y_shape'
+                # elements and build the y tensor back
+                y_pointers = kwargs.pop('y_pointers', None)
+                y_columns = kwargs.pop('y_columns', None)
+                y_values = kwargs.pop('y_values', None)
+                y_shape = kwargs.pop('y_shape', None)
+                if not any(x is None for x in [y_pointers, y_columns, y_values, y_shape]):
+                    start = time()
+                    y = csr_to_dense(y_pointers, y_columns, y_values, y_shape)
+                    if i == low and idx is not None:
+                        y = y[idx]
+                    kwargs['y'] = y
+                    print(f'  y from CSR                  : {time() - start:0.3f}s')
+
                 data_list.append(Data(**kwargs))
+
+                print(f'reading level {i}: {time() - start_i:0.3f}s\n')
 
         # In the case where update_super is not required but the low
         # level was indexed, we cannot combine the leve-0 and level-1+
