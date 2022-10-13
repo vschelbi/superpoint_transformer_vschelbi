@@ -156,13 +156,14 @@ def group_data(
                     # Prepend 0 columns to the histogram for bins
                     # removed due to offsetting
                     bins_before = torch.zeros(
-                        (N, offset), device=device).long()
+                        N, offset, device=device, dtype=torch.long)
                     hist = torch.cat((bins_before, hist), dim=1)
 
                     # Append columns to the histogram for unobserved
                     # classes/bins
                     bins_after = torch.zeros(
-                        (N, n_bins - hist.shape[1]), device=device).long()
+                        N, n_bins - hist.shape[1], device=device,
+                        dtype=torch.long)
                     hist = torch.cat((hist, bins_after), dim=1)
 
                     # Either save the histogram or the majority vote
