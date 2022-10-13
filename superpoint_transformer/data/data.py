@@ -9,7 +9,8 @@ from torch_geometric.utils import coalesce, remove_self_loops
 import superpoint_transformer
 from superpoint_transformer.data.cluster import Cluster
 from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates, \
-    isolated_nodes, knn, dense_to_csr, numpyfy, save_dense_to_csr_hdf5
+    isolated_nodes, knn, save_tensor, load_tensor, save_dense_to_csr, \
+    load_csr_to_dense
 
 
 class Data(PyGData):
@@ -449,13 +450,12 @@ class Data(PyGData):
         for k, val in self.items():
             if k == 'y' and val.dim() > 1 and y_to_csr:
                 sg = f.create_group('/_csr_/y')
-                save_dense_to_csr_hdf5(val, sg, x32=x32)
+                save_dense_to_csr(val, sg, x32=x32)
             elif isinstance(val, Cluster):
                 sg = f.create_group('/_cluster_/sub')
                 val.save(sg, x32=x32)
             elif isinstance(val, torch.Tensor):
-                val = numpyfy(val, x32=x32)
-                f.create_dataset(k, data=val, dtype=val.dtype)
+                save_tensor(val, f, k, x32=x32)
             else:
                 raise NotImplementedError(f'Unsupported type={type(val)}')
 
@@ -485,43 +485,68 @@ class Data(PyGData):
             return out
 
         idx = tensor_idx(idx)
-        idx_keys = None if idx_keys is None or idx.shape[0] == 0 \
-            else Data._INDEXABLE
-        keys = None if keys is None else keys
-        data = {}
+        if idx.shape[0] == 0:
+            idx_keys = []
+        elif idx_keys is None:
+            idx_keys = Data._INDEXABLE
+        keys = f.keys() if keys is None else keys
+
+        data_dict = {}
+        csr_keys = []
+        cluster_keys = []
 
         for k in f.keys():
 
             from time import time
             start = time()
 
-            # Recursive call in case the special '_csr_ or '_cluster_'
-            # keys are encountered
+            # Special key '_csr_ holds data saved in CSR format
             if k == '_csr_':
-                for subk in f[k].keys:
-                    load_csr_hdf5_to_dense(f[k][subk], idx=idx)
+                csr_keys = list(f[k].keys())
+                continue
 
-            # Read everything if there is no 'idx_keys' or 'keys'
-            if idx_keys is None and keys is None:******control keys and idx_keys before reading data******
-                data[k] = torch.from_numpy(f[k][:])
+            # Special key '_cluster_' holds Cluster data
+            if k == '_cluster_':
+                cluster_keys = list(f[k].keys())
+                continue
 
-            # Index the key elements if key is in 'idx_keys'
-            elif idx_keys is not None and k in idx_keys:
-                data[k] = torch.from_numpy(f[k][:])[idx]
-
-            # Read everything if key is in 'keys'
-            elif keys is not None and k in keys:
-                data[k] = torch.from_numpy(f[k][:])
-
-            # By default, convert int32 to int64, might cause issues for
-            # tensor indexing otherwise
-            if k in data.keys() and data[k].dtype == torch.int32:
-                data[k] = data[k].long()
+            # Other keys, if required
+            if k in idx_keys:
+                data_dict[k] = load_tensor(f[k], idx=idx)
+            elif k in keys:
+                data_dict[k] = load_tensor(f[k])
 
             print(f'  reading {k:<20}: {time() - start:0.5f}s')
 
-        return data
+        # Special key '_csr_ holds data saved in CSR format
+        for k in csr_keys:
 
+            from time import time
+            start = time()
+
+            if k in idx_keys:
+                data_dict[k] = load_csr_to_dense(f['_csr_'][k], idx=idx)
+            elif k in keys:
+                data_dict[k] = load_csr_to_dense(f['_csr_'][k])
+
+            print(f'  reading {k:<20}: {time() - start:0.5f}s')
+
+        # Special key '_cluster_' holds Cluster data
+        for k in cluster_keys:
+
+            from time import time
+            start = time()
+
+            if k in idx_keys:
+                data_dict[k] = Cluster.load(
+                    f['_cluster_'][k], idx=idx, update_sub=update_sub)[0]
+            elif k in keys:
+                data_dict[k] = Cluster.load(
+                    f['_cluster_'][k], update_sub=update_sub)[0]
+
+            print(f'  reading {k:<20}: {time() - start:0.5f}s')
+
+        return Data(**data_dict)
 
 
 class Batch(PyGBatch):

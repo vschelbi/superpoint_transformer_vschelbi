@@ -9,8 +9,8 @@ from superpoint_transformer.utils.sparse import dense_to_csr, csr_to_dense
 
 
 __all__ = [
-    'dated_dir', 'select_hdf5_data', 'host_data_root', 'select_hdf5_data',
-    'save_dense_to_csr_hdf5']
+    'dated_dir', 'host_data_root', 'save_tensor', 'load_tensor',
+    'save_dense_to_csr', 'load_csr_to_dense']
 
 
 def dated_dir(root, create=False):
@@ -48,7 +48,65 @@ def host_data_root():
     return DATA_ROOT
 
 
-def save_dense_to_csr_hdf5(x, f, x32=True):
+def save_tensor(x, f, key, x32=True):
+    """Save torch.Tensor to HDF5 file.
+
+    :param x: 2D torch.Tensor
+    :param f: h5 file path of h5py.File or h5py.Group
+    :param key: str
+        h5py.Dataset key under which to save the tensor
+    :param x32: bool
+        Convert 64-bit data to 32-bit before saving.
+    :return:
+    """
+    if not isinstance(f, (h5py.File, h5py.Group)):
+        with h5py.File(f, 'w') as file:
+            save_tensor(x, file, key, x32=x32)
+        return
+
+    assert isinstance(x, torch.Tensor)
+
+    d = numpyfy(x, x32=x32)
+    f.create_dataset(key, data=d, dtype=d.dtype)
+
+
+def load_tensor(f, key=None, idx=None):
+    """Load torch.Tensor from an HDF5 file. See `save_tensor` for
+    writing such file. Options allow reading only part of the rows.
+
+    :param f: h5 file path of h5py.File or h5py.Group or h5py.Dataset
+    :param key: str
+        h5py.Dataset key under which to the tensor was saved. Must be
+        provided if f is not already a h5py.Dataset object
+    :param idx: int, list, numpy.ndarray, torch.Tensor
+        Used to select and read only some rows of the dense tensor.
+        Supports fancy indexing
+    :return:
+    """
+    if not isinstance(f, (h5py.File, h5py.Group, h5py.Dataset)):
+        with h5py.File(f, 'r') as file:
+            out = load_tensor(file, key, idx=idx)
+        return out
+
+    if not isinstance(f, h5py.Dataset):
+        f = f[key]
+
+    idx = tensor_idx(idx)
+
+    if idx is None or idx.shape[0] == 0:
+        x = torch.from_numpy(f[:])
+    else:
+        x = torch.from_numpy(f[:])[idx]
+
+    # By default, convert int32 to int64, might cause issues for
+    # tensor indexing otherwise
+    if x is not None and x.dtype == torch.int32:
+        x = x.long()
+
+    return x
+
+
+def save_dense_to_csr(x, f, x32=True):
     """Compress a 2D tensor with CSR format and save it in an
     already-open HDF5.
 
@@ -60,23 +118,19 @@ def save_dense_to_csr_hdf5(x, f, x32=True):
     """
     if not isinstance(f, (h5py.File, h5py.Group)):
         with h5py.File(f, 'w') as file:
-            save_dense_to_csr_hdf5(x, file, x32=x32)
+            save_dense_to_csr(x, file, x32=x32)
         return
 
     assert isinstance(x, torch.Tensor) and x.dim() == 2
 
     pointers, columns, values = dense_to_csr(x)
-    d = numpyfy(pointers, x32=x32)
-    f.create_dataset('pointers', data=d, dtype=d.dtype)
-    d = numpyfy(columns, x32=x32)
-    f.create_dataset('columns', data=d, dtype=d.dtype)
-    d = numpyfy(values, x32=x32)
-    f.create_dataset('values', data=d, dtype=d.dtype)
-    d = np.array(x.shape)
-    f.create_dataset('shape', data=d, dtype=d.dtype)
+    save_tensor(pointers, f, 'pointers', x32=x32)
+    save_tensor(columns, f, 'columns', x32=x32)
+    save_tensor(values, f, 'values', x32=x32)
+    f.create_dataset('shape', data=np.array(x.shape))
 
 
-def load_csr_hdf5_to_dense(f, idx=None):
+def load_csr_to_dense(f, idx=None):
     """Read an HDF5 file of group produced using `dense_to_csr_hdf5` and
     return the dense tensor. An optional idx can be passed to only read
     corresponding rows from the dense tensor.
@@ -91,7 +145,7 @@ def load_csr_hdf5_to_dense(f, idx=None):
 
     if not isinstance(f, (h5py.File, h5py.Group)):
         with h5py.File(f, 'r') as file:
-            out = load_csr_hdf5_to_dense(file, idx=idx)
+            out = load_csr_to_dense(file, idx=idx)
         return out
 
     assert all(k in f.keys() for k in KEYS)
@@ -99,15 +153,15 @@ def load_csr_hdf5_to_dense(f, idx=None):
     idx = tensor_idx(idx)
 
     if idx is None or idx.shape[0] == 0:
-        pointers = torch.from_numpy(f['pointers'][:])
-        columns = torch.from_numpy(f['columns'][:])
-        values = torch.from_numpy(f['values'][:])
-        shape = torch.from_numpy(f['shape'][:])
+        pointers = load_tensor(f['pointers'])
+        columns = load_tensor(f['columns'])
+        values = load_tensor(f['values'])
+        shape = load_tensor(f['shape'])
         return csr_to_dense(pointers, columns, values, shape=shape)
 
     # Read only pointers start and end indices based on idx
-    ptr_start = torch.from_numpy(f['pointers'][:])[idx]
-    ptr_end = torch.from_numpy(f['pointers'][:])[idx + 1]
+    ptr_start = load_tensor(f['pointers'], idx=idx)
+    ptr_end = load_tensor(f['pointers'], idx=idx + 1)
 
     # Create the new pointers
     pointers = torch.cat([
@@ -127,9 +181,9 @@ def load_csr_hdf5_to_dense(f, idx=None):
     # Read the columns and values, now we have computed the val_idx.
     # Make sure to update the output shape too, since the rows have been
     # indexed
-    columns = torch.from_numpy(f['columns'][:])[val_idx]
-    values = torch.from_numpy(f['values'][:])[val_idx]
-    shape = torch.from_numpy(f['shape'][:])
+    columns = load_tensor(f['columns'], idx=val_idx)
+    values = load_tensor(f['values'], idx=val_idx)
+    shape = load_tensor(f['shape'])
     shape[0] = idx.shape[0]
 
     return csr_to_dense(pointers, columns, values, shape=shape)

@@ -224,8 +224,6 @@ class NAG:
             See NAG.select and Data.select
         :return:
         """
-        idx_keys = Data._INDEXABLE if idx_keys is None else idx_keys
-        keys = Data._READABLE if keys is None else keys
         data_list = []
 
         from time import time
@@ -249,46 +247,54 @@ class NAG:
             for i in range(low, high + 1):
 
                 start_i = time()
-                start = time()
+
+                Data.load(f[f'partition_{i}'], idx=idx, idx_keys=idx_keys, keys=keys, update_sub=update_sub)
 
                 # Apply index selection on the low only, if required.
                 # For all subsequent levels, only keys selection is
                 # available
                 if i == low:
-                    kwargs = select_hdf5_data(
-                        f[f'partition_{i}'], keys=keys, idx=idx,
-                        idx_keys=idx_keys)
+                    # kwargs = select_hdf5_data(
+                    #     f[f'partition_{i}'], keys=keys, idx=idx,
+                    #     idx_keys=idx_keys)
+                    data = Data.load(
+                        f[f'partition_{i}'], idx=idx, idx_keys=idx_keys,
+                        keys=keys, update_sub=update_sub)
                 else:
-                    kwargs = select_hdf5_data(
-                        f[f'partition_{i}'], keys=keys)
+                    # kwargs = select_hdf5_data(
+                    #     f[f'partition_{i}'], keys=keys)
+                    data = Data.load(
+                        f[f'partition_{i}'], keys=keys, update_sub=update_sub)
 
-                # Special treatment is required to gather the
-                # 'sub_pointers' and 'sub_points' and convert them into
-                # a Cluster object
-                sub_pointers = kwargs.pop('sub_pointers', None)
-                sub_points = kwargs.pop('sub_points', None)
-                if sub_points is not None and sub_pointers is not None:
-                    sub = Cluster(sub_pointers, sub_points)
-                    if i == low and idx is not None:
-                        sub = sub.select(idx, update_sub=update_sub)[0]
-                    kwargs['sub'] = sub
+                # # Special treatment is required to gather the
+                # # 'sub_pointers' and 'sub_points' and convert them into
+                # # a Cluster object
+                # sub_pointers = kwargs.pop('sub_pointers', None)
+                # sub_points = kwargs.pop('sub_points', None)
+                # if sub_points is not None and sub_pointers is not None:
+                #     sub = Cluster(sub_pointers, sub_points)
+                #     if i == low and idx is not None:
+                #         sub = sub.select(idx, update_sub=update_sub)[0]
+                #     kwargs['sub'] = sub
+                # 
+                # # Special treatment is required to gather the
+                # # 'y_pointers', 'y_columns', 'y_values' 'y_shape'
+                # # elements and build the y tensor back
+                # y_pointers = kwargs.pop('y_pointers', None)
+                # y_columns = kwargs.pop('y_columns', None)
+                # y_values = kwargs.pop('y_values', None)
+                # y_shape = kwargs.pop('y_shape', None)
+                # if not any(x is None for x in [y_pointers, y_columns, y_values, y_shape]):
+                #     start = time()
+                #     y = csr_to_dense(y_pointers, y_columns, y_values, y_shape)
+                #     if i == low and idx is not None:
+                #         y = y[idx]
+                #     kwargs['y'] = y
+                #     print(f'  y from CSR                  : {time() - start:0.3f}s')
+                # 
+                # data_list.append(Data(**kwargs))
 
-                # Special treatment is required to gather the
-                # 'y_pointers', 'y_columns', 'y_values' 'y_shape'
-                # elements and build the y tensor back
-                y_pointers = kwargs.pop('y_pointers', None)
-                y_columns = kwargs.pop('y_columns', None)
-                y_values = kwargs.pop('y_values', None)
-                y_shape = kwargs.pop('y_shape', None)
-                if not any(x is None for x in [y_pointers, y_columns, y_values, y_shape]):
-                    start = time()
-                    y = csr_to_dense(y_pointers, y_columns, y_values, y_shape)
-                    if i == low and idx is not None:
-                        y = y[idx]
-                    kwargs['y'] = y
-                    print(f'  y from CSR                  : {time() - start:0.3f}s')
-
-                data_list.append(Data(**kwargs))
+                data_list.append(data)
 
                 print(f'reading level {i}: {time() - start_i:0.3f}s\n')
 
@@ -308,11 +314,11 @@ class NAG:
         # NB: this may be a little slow for the CPU-based DataLoader
         # operations at train time, so we will prefer setting
         # update_super=False in this situation and do the necessary
-        # later on on GPU
+        # later on GPU
         if update_super:
             return NAG.cat_select(data_list[0], data_list[1:], idx=idx)
 
-        return data_list, idx
+        return NAG(data_list)
 
     @staticmethod
     def cat_select(data, data_list, idx=None):

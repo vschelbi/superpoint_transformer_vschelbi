@@ -2,7 +2,8 @@ import h5py
 import torch
 import superpoint_transformer
 from superpoint_transformer.data.csr import CSRData
-from superpoint_transformer.utils import has_duplicates, tensor_idx, numpyfy
+from superpoint_transformer.utils import has_duplicates, tensor_idx, \
+    save_tensor, load_tensor
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
@@ -123,10 +124,8 @@ class Cluster(CSRData):
                 self.save(file, x32=x32)
             return
 
-        d = numpyfy(self.pointers, x32=x32)
-        f.create_dataset('pointers', data=d, dtype=d.dtype)
-        d = numpyfy(self.points, x32=x32)
-        f.create_dataset('points', data=d, dtype=d.dtype)
+        save_tensor(self.pointers, f, 'pointers', x32=x32)
+        save_tensor(self.points, f, 'points', x32=x32)
 
     @staticmethod
     def load(f, idx=None, update_sub=True):
@@ -160,13 +159,13 @@ class Cluster(CSRData):
         idx = tensor_idx(idx)
 
         if idx is None or idx.shape[0] == 0:
-            pointers = torch.from_numpy(f['pointers'][:])
-            points = torch.from_numpy(f['points'][:])
+            pointers = load_tensor(f['pointers'])
+            points = load_tensor(f['points'])
             return Cluster(pointers, points), (None, None)
 
         # Read only pointers start and end indices based on idx
-        ptr_start = torch.from_numpy(f['pointers'][:])[idx]
-        ptr_end = torch.from_numpy(f['pointers'][:])[idx + 1]
+        ptr_start = load_tensor(f['pointers'], idx=idx)
+        ptr_end = load_tensor(f['pointers'], idx=idx + 1)
 
         # Create the new pointers
         pointers = torch.cat([
@@ -174,7 +173,7 @@ class Cluster(CSRData):
             torch.cumsum(ptr_end - ptr_start, 0)])
 
         # Create the indexing tensor to select and order values.
-        # Simply, we could have used a list of slices but we want to
+        # Simply, we could have used a list of slices, but we want to
         # avoid for loops and list concatenations to benefit from torch
         # capabilities.
         sizes = pointers[1:] - pointers[:-1]
@@ -184,7 +183,7 @@ class Cluster(CSRData):
         val_idx += ptr_start.repeat_interleave(sizes)
 
         # Read the points, now we have computed the val_idx
-        points = torch.from_numpy(f['points'][:])[val_idx]
+        points = load_tensor(f['points'], idx=val_idx)
 
         # Build the Cluster object
         cluster = Cluster(pointers, points)
@@ -203,7 +202,7 @@ class Cluster(CSRData):
 
         # Selecting the subpoints with 'idx_sub' will not be
         # enough to maintain consistency with the current points. We
-        # also need to update the sub-level's 'Data.super_index', which
+        # also need to update the sublevel's 'Data.super_index', which
         # can be computed from 'cluster'
         sub_super = cluster.to_super_index()
 
