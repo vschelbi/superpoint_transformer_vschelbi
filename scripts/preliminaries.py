@@ -1,28 +1,18 @@
-import sys, os
-import socket
-
-HOST = socket.gethostname()
-if HOST == 'DEL2001W017':
-    DATA_ROOT = '/media/drobert-admin/DATA2/datasets'
-elif HOST == 'HP-2010S002':
-    DATA_ROOT = '/var/data/drobert/datasets'
-elif HOST == '9c81b1a54ad8':
-    DATA_ROOT = '/raid/dataset/pointcloud/data'
-else:
-    raise NotImplementedError(f"Unknown host '{HOST}', cannot set DATA_ROOT")
+import os
+import sys
 
 file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # for .py script
 # file_path = os.path.dirname(os.path.abspath(''))  # for .ipynb notebook
 sys.path.append(file_path)
 
 from time import time
-import glob
 import torch
 from superpoint_transformer.transforms import *
 from superpoint_transformer.data import Data
 from superpoint_transformer.metrics import ConfusionMatrix
 from superpoint_transformer.datasets.kitti360 import read_kitti360_window
 from superpoint_transformer.datasets.kitti360_config import WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
+from superpoint_transformer.utils.io import host_data_root
 
 
 # Hyperparameters and experiment info
@@ -61,8 +51,8 @@ key = 'loading'
 print(f'{key:<12} : ', end='')
 start = time()
 # all_filepaths = sorted(glob.glob(os.path.join(
-#     DATA_ROOT, 'kitti360/shared/data_3d_semantics/*/static/*.ply')))
-root = os.path.join(DATA_ROOT, 'kitti360/shared/data_3d_semantics')
+#     host_data_root(), 'kitti360/shared/data_3d_semantics/*/static/*.ply')))
+root = os.path.join(host_data_root(), 'kitti360/shared/data_3d_semantics')
 train_filepaths = [
     os.path.join(root, f"{x.split('/')[0]}/static/{x.split('/')[1]}.ply")
     for x in WINDOWS['train']]

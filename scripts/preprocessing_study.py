@@ -1,41 +1,21 @@
-import numpy as np
-import torch
-import sys, os
-import socket
-
-HOST = socket.gethostname()
-if HOST == 'DEL2001W017':
-    DATA_ROOT = '/media/drobert-admin/DATA2/datasets'
-elif HOST == 'HP-2010S002':
-    DATA_ROOT = '/var/data/drobert/datasets'
-elif HOST == '9c81b1a54ad8':
-    DATA_ROOT = '/raid/dataset/pointcloud/data'
-else:
-    raise NotImplementedError(f"Unknown host '{HOST}', cannot set DATA_ROOT")
+import os
+import sys
 
 file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # for .py script
 # file_path = os.path.dirname(os.path.abspath(''))  # for .ipynb notebook
 sys.path.append(file_path)
 
-from time import time
-import glob
+import torch
 import pickle
+import numpy as np
+from time import time
 from tqdm import tqdm
 from superpoint_transformer.transforms import *
 from superpoint_transformer.data import Data
 from superpoint_transformer.metrics import ConfusionMatrix
 from superpoint_transformer.datasets.kitti360 import read_kitti360_window
 from superpoint_transformer.datasets.kitti360_config import WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
-
-from time import time
-import glob
-import pickle
-from tqdm import tqdm
-from superpoint_transformer.transforms import *
-from superpoint_transformer.data import Data
-from superpoint_transformer.metrics import ConfusionMatrix
-from superpoint_transformer.datasets.kitti360 import read_kitti360_window
-from superpoint_transformer.datasets.kitti360_config import WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
+from superpoint_transformer.utils.io import host_data_root
 from superpoint_transformer.utils.io import dated_dir
 
 
@@ -159,9 +139,9 @@ def process(i_cloud, args):
 
 
 REG_LIST = [0.04, 0.03, 0.05, 0.06]
-root = os.path.join(DATA_ROOT, 'kitti360/shared/data_3d_semantics')
+root = os.path.join(host_data_root(), 'kitti360/shared/data_3d_semantics')
 out_dir = dated_dir(
-    os.path.join(DATA_ROOT, 'kitti360/spt/preprocessing_study'), create=True)
+    os.path.join(host_data_root(), 'kitti360/spt/preprocessing_study'), create=True)
 filepaths = [
     os.path.join(root, f"{x.split('/')[0]}/static/{x.split('/')[1]}.ply")
     for x in WINDOWS['train']]
