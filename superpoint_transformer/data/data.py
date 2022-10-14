@@ -2,6 +2,8 @@ import copy
 import h5py
 import torch
 import numpy as np
+import os.path as osp
+from time import time
 from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
@@ -449,25 +451,29 @@ class Data(PyGData):
 
         for k, val in self.items():
             if k == 'y' and val.dim() > 1 and y_to_csr:
-                sg = f.create_group('/_csr_/y')
+                sg = f.create_group(osp.join(f.name, '_csr_', k))
                 save_dense_to_csr(val, sg, x32=x32)
             elif isinstance(val, Cluster):
-                sg = f.create_group('/_cluster_/sub')
+                sg = f.create_group(osp.join(f.name, '_cluster_', 'sub'))
                 val.save(sg, x32=x32)
+            elif k == 'rgb' and val.is_floating_point():
+                save_tensor((val * 255).byte(), f, k, x32=x32)
             elif isinstance(val, torch.Tensor):
                 save_tensor(val, f, k, x32=x32)
             else:
                 raise NotImplementedError(f'Unsupported type={type(val)}')
 
     @staticmethod
-    def load(f, idx=None, idx_keys=None, keys=None, update_sub=True):
+    def load(
+            f, idx=None, keys_idx=None, keys=None, update_sub=True,
+            verbose=False):
         """Read an HDF5 file and return its content as a dictionary.
 
         :param f: h5 file path of h5py.File or h5py.Group
         :param idx: int, list, numpy.ndarray, torch.Tensor
             Used to select the elements in `keys_idx`. Supports fancy
             indexing
-        :param idx_keys: List(str)
+        :param keys_idx: List(str)
             Keys on which the indexing should be applied
         :param keys: List(str)
             Keys should be loaded from the file, ignoring the rest
@@ -477,76 +483,77 @@ class Data(PyGData):
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels
             of a NAG.
+        :param verbose: bool
         :return:
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'r') as file:
-                out = Data.load(file, idx=idx, idx_keys=idx_keys, keys=keys)
+                out = Data.load(file, idx=idx, keys_idx=keys_idx, keys=keys)
             return out
 
         idx = tensor_idx(idx)
         if idx.shape[0] == 0:
-            idx_keys = []
-        elif idx_keys is None:
-            idx_keys = Data._INDEXABLE
-        keys = f.keys() if keys is None else keys
+            keys_idx = []
+        elif keys_idx is None:
+            keys_idx = Data._INDEXABLE
+        if keys is None:
+            all_keys = list(f.keys())
+            for k in ['_csr_', '_cluster_']:
+                if k in all_keys:
+                    all_keys.remove(k)
+                    all_keys += list(f[k].keys())
+            keys = all_keys
 
-        data_dict = {}
+        d_dict = {}
         csr_keys = []
         cluster_keys = []
 
+        # Deal with special keys first, then read other keys if required
         for k in f.keys():
-
-            from time import time
             start = time()
-
-            # Special key '_csr_ holds data saved in CSR format
             if k == '_csr_':
                 csr_keys = list(f[k].keys())
                 continue
-
-            # Special key '_cluster_' holds Cluster data
             if k == '_cluster_':
                 cluster_keys = list(f[k].keys())
                 continue
-
-            # Other keys, if required
-            if k in idx_keys:
-                data_dict[k] = load_tensor(f[k], idx=idx)
+            if k in keys_idx:
+                d_dict[k] = load_tensor(f[k], idx=idx)
             elif k in keys:
-                data_dict[k] = load_tensor(f[k])
-
-            print(f'  reading {k:<20}: {time() - start:0.5f}s')
+                d_dict[k] = load_tensor(f[k])
+            if verbose and k in d_dict.keys():
+                print(f'Data.load {k:<22}: {time() - start:0.5f}s')
 
         # Special key '_csr_ holds data saved in CSR format
         for k in csr_keys:
-
-            from time import time
             start = time()
-
-            if k in idx_keys:
-                data_dict[k] = load_csr_to_dense(f['_csr_'][k], idx=idx)
+            if k in keys_idx:
+                d_dict[k] = load_csr_to_dense(
+                    f['_csr_'][k], idx=idx, verbose=verbose)
             elif k in keys:
-                data_dict[k] = load_csr_to_dense(f['_csr_'][k])
-
-            print(f'  reading {k:<20}: {time() - start:0.5f}s')
+                d_dict[k] = load_csr_to_dense(f['_csr_'][k], verbose=verbose)
+            if verbose and k in d_dict.keys():
+                print(f'Data.load {k:<22}: {time() - start:0.5f}s')
 
         # Special key '_cluster_' holds Cluster data
         for k in cluster_keys:
-
-            from time import time
             start = time()
-
-            if k in idx_keys:
-                data_dict[k] = Cluster.load(
-                    f['_cluster_'][k], idx=idx, update_sub=update_sub)[0]
+            if k in keys_idx:
+                d_dict[k] = Cluster.load(
+                    f['_cluster_'][k], idx=idx, update_sub=update_sub,
+                    verbose=verbose)[0]
             elif k in keys:
-                data_dict[k] = Cluster.load(
-                    f['_cluster_'][k], update_sub=update_sub)[0]
+                d_dict[k] = Cluster.load(
+                    f['_cluster_'][k], update_sub=update_sub,
+                    verbose=verbose)[0]
+            if verbose and k in d_dict.keys():
+                print(f'Data.load {k:<22}: {time() - start:0.5f}s')
 
-            print(f'  reading {k:<20}: {time() - start:0.5f}s')
+        # In case RGB is among the keys, convert uint8 back to float
+        if 'rgb' in d_dict.keys() and d_dict['rgb'].dtype == torch.uint8:
+            d_dict['rgb'] = d_dict['rgb'].float() / 255
 
-        return Data(**data_dict)
+        return Data(**d_dict)
 
 
 class Batch(PyGBatch):

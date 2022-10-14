@@ -6,7 +6,7 @@ from torch_scatter import scatter_mean, scatter_add
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 import superpoint_transformer
 from superpoint_transformer.utils import tensor_idx, arange_interleave, \
-    randperm
+    fast_randperm
 from superpoint_transformer.data import Data, NAG
 from torch_scatter import scatter_sum
 
@@ -23,7 +23,7 @@ def shuffle_data(data):
     """
     device = data.device
     num_points = data.pos.shape[0]
-    shuffle_idx = randperm(num_points, device=device)
+    shuffle_idx = fast_randperm(num_points, device=device)
     for key in set(data.keys):
         item = data[key]
         if torch.is_tensor(item) and num_points == item.shape[0]:
@@ -385,11 +385,12 @@ def sample_clusters(
             "Cannot sample more than the cluster sizes."
 
     # TODO: IMPORTANT the randperm-sort approach here is a huge
-    #  bottleneck for the sampling operation on CPU. Can we do any
+    #  BOTTLENECK for the sampling operation on CPU. Can we do any
     #  better ?
 
     # Shuffle the order of points
-    perm = randperm(point_index.shape[0], device=nag.device)
+    print(f'is_sorted point_index: ')
+    perm = fast_randperm(point_index.shape[0], device=nag.device)
     super_index = super_index[perm]
     point_index = point_index[perm]
 

@@ -3,6 +3,7 @@ import h5py
 import torch
 import socket
 import numpy as np
+from time import time
 from datetime import datetime
 from superpoint_transformer.utils.tensor import tensor_idx, numpyfy
 from superpoint_transformer.utils.sparse import dense_to_csr, csr_to_dense
@@ -130,7 +131,7 @@ def save_dense_to_csr(x, f, x32=True):
     f.create_dataset('shape', data=np.array(x.shape))
 
 
-def load_csr_to_dense(f, idx=None):
+def load_csr_to_dense(f, idx=None, verbose=False):
     """Read an HDF5 file of group produced using `dense_to_csr_hdf5` and
     return the dense tensor. An optional idx can be passed to only read
     corresponding rows from the dense tensor.
@@ -139,6 +140,7 @@ def load_csr_to_dense(f, idx=None):
     :param idx: int, list, numpy.ndarray, torch.Tensor
         Used to select and read only some rows of the dense tensor.
         Supports fancy indexing
+    :param verbose: bool
     :return:
     """
     KEYS = ['pointers', 'columns', 'values', 'shape']
@@ -153,83 +155,61 @@ def load_csr_to_dense(f, idx=None):
     idx = tensor_idx(idx)
 
     if idx is None or idx.shape[0] == 0:
+        start = time()
         pointers = load_tensor(f['pointers'])
         columns = load_tensor(f['columns'])
         values = load_tensor(f['values'])
         shape = load_tensor(f['shape'])
-        return csr_to_dense(pointers, columns, values, shape=shape)
+        if verbose:
+            print(f'load_csr_to_dense read all      : {time() - start:0.5f}s')
+        start = time()
+        out = csr_to_dense(pointers, columns, values, shape=shape)
+        if verbose:
+            print(f'load_csr_to_dense csr_to_dense  : {time() - start:0.5f}s')
+        return out
 
     # Read only pointers start and end indices based on idx
+    start = time()
     ptr_start = load_tensor(f['pointers'], idx=idx)
     ptr_end = load_tensor(f['pointers'], idx=idx + 1)
+    if verbose:
+        print(f'load_csr_to_dense read ptr      : {time() - start:0.5f}s')
 
     # Create the new pointers
+    start = time()
     pointers = torch.cat([
         torch.zeros(1, dtype=ptr_start.dtype),
         torch.cumsum(ptr_end - ptr_start, 0)])
+    if verbose:
+        print(f'load_csr_to_dense pointers      : {time() - start:0.5f}s')
 
     # Create the indexing tensor to select and order values.
     # Simply, we could have used a list of slices but we want to
     # avoid for loops and list concatenations to benefit from torch
-    # capabilities.
+    # capabilities
+    start = time()
     sizes = pointers[1:] - pointers[:-1]
     val_idx = torch.arange(pointers[-1])
     val_idx -= torch.arange(pointers[-1] + 1)[
         pointers[:-1]].repeat_interleave(sizes)
     val_idx += ptr_start.repeat_interleave(sizes)
+    if verbose:
+        print(f'load_csr_to_dense val_idx       : {time() - start:0.5f}s')
 
     # Read the columns and values, now we have computed the val_idx.
     # Make sure to update the output shape too, since the rows have been
     # indexed
+    start = time()
     columns = load_tensor(f['columns'], idx=val_idx)
     values = load_tensor(f['values'], idx=val_idx)
     shape = load_tensor(f['shape'])
     shape[0] = idx.shape[0]
+    if verbose:
+        print(f'load_csr_to_dense read values   : {time() - start:0.5f}s')
 
-    return csr_to_dense(pointers, columns, values, shape=shape)
+    start = time()
+    out = csr_to_dense(pointers, columns, values, shape=shape)
+    if verbose:
+        print(f'load_csr_to_dense csr_to_dense  : {time() - start:0.5f}s')
 
-
-def select_hdf5_data(f, idx=None, idx_keys=None, keys=None):
-    """Read an HDF5 file and return its content as a dictionary.
-
-    :param path: HDF5 file opened using
-    :param idx: optional. int, list, numpy.ndarray, torch.Tensor used to
-        index the elements in `keys_idx`. Supports fancy indexing
-    :param idx_keys: optional. List of keys on which the indexing should
-        be applied
-    :param keys: optional. Indicates which keys should be loaded from
-        the file, ignoring the rest.
-    :return:
-    """
-    assert isinstance(f, (h5py.File, h5py.Group))
-
-    idx = tensor_idx(idx)
-    idx_keys = None if idx_keys is None or idx.shape[0] == 0 else idx_keys
-    keys = None if keys is None else keys
-    data = {}
-
-    for k in f.keys():
-
-        from time import time
-        start = time()
-
-        # Read everything if there is no 'idx_keys' or 'keys'
-        if idx_keys is None and keys is None:
-            data[k] = torch.from_numpy(f[k][:])
-
-        # Index the key elements if key is in 'idx_keys'
-        elif idx_keys is not None and k in idx_keys:
-            data[k] = torch.from_numpy(f[k][:])[idx]
-
-        # Read everything if key is in 'keys'
-        elif keys is not None and k in keys:
-            data[k] = torch.from_numpy(f[k][:])
-
-        # By default, convert int32 to int64, might cause issues for
-        # tensor indexing otherwise
-        if k in data.keys() and data[k].dtype == torch.int32:
-            data[k] = data[k].long()
-
-        print(f'  reading {k:<20}: {time() - start:0.5f}s')
-
-    return data
+    return out

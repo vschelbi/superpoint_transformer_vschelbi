@@ -45,9 +45,6 @@ def csr_to_dense(pointers, columns, values, shape=None):
     assert shape is None or len(shape) == 2
     assert pointers.device == columns.device == values.device
 
-    from time import time
-    start = time()
-
     device = pointers.device
 
     shape_guess = (pointers.shape[0] - 1, columns.max().item() + 1)
@@ -57,21 +54,11 @@ def csr_to_dense(pointers, columns, values, shape=None):
         shape = (max(shape[0], shape_guess[0]), max(shape[1], shape_guess[1]))
 
     n, m = shape
-    print(f'    init                      : {time() - start:0.3f}s')
-    start = time()
     a = torch.zeros(n, m, dtype=values.dtype, device=device)
-    # a = fast_zeros(n, m, dtype=values.dtype, device=device)
-    print(f'    zeros                     : {time() - start:0.3f}s')
-    start = time()
     i = torch.arange(n, device=device)
-    print(f'    arange                    : {time() - start:0.3f}s')
-    start = time()
     i = fast_repeat(i, pointers[1:] - pointers[:-1])
-    print(f'    repeat                    : {time() - start:0.3f}s')
-    start = time()
     j = columns
 
     a[i, j] = values
-    print(f'    index                     : {time() - start:0.3f}s')
 
     return a

@@ -4,7 +4,7 @@ import os.path as osp
 import plotly.graph_objects as go
 from superpoint_transformer.data import Data, NAG
 from superpoint_transformer.transforms import GridSampling3D, SaveOriginalPosId
-from superpoint_transformer.utils.tensor import randperm
+from superpoint_transformer.utils.tensor import fast_randperm
 from torch_scatter import scatter_mean
 from colorhash import ColorHash
 
@@ -269,7 +269,7 @@ def visualize_3d(
     # If the cloud is too large with respect to required 'max_points',
     # sample without replacement
     if idx.shape[0] > max_points:
-        idx = idx[randperm(idx.shape[0])[:max_points]]
+        idx = idx[fast_randperm(idx.shape[0])[:max_points]]
 
     # If a sampling is needed, apply it to the input Data or NAG,
     # depending on the structure

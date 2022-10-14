@@ -1,6 +1,6 @@
 import h5py
 import torch
-import superpoint_transformer
+from time import time
 from superpoint_transformer.data.csr import CSRData
 from superpoint_transformer.utils import has_duplicates, tensor_idx, \
     save_tensor, load_tensor
@@ -25,8 +25,8 @@ class Cluster(CSRData):
         assert points.device == self.device, \
             f"Points is on {points.device} while self is on {self.device}"
         self.values[0] = points
-        if superpoint_transformer.is_debug_enabled():
-            self.debug()
+        # if superpoint_transformer.is_debug_enabled():
+        #     self.debug()
 
     @property
     def num_clusters(self):
@@ -128,7 +128,7 @@ class Cluster(CSRData):
         save_tensor(self.points, f, 'points', x32=x32)
 
     @staticmethod
-    def load(f, idx=None, update_sub=True):
+    def load(f, idx=None, update_sub=True, verbose=False):
         """Load Cluster from an HDF5 file. See `Cluster.save` for
         writing such file. Options allow reading only part of the
         points.
@@ -145,6 +145,7 @@ class Cluster(CSRData):
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels
             of a NAG.
+        :param verbose: bool
         :return: cluster, (idx_sub, sub_super)
         """
         KEYS = ['pointers', 'points']
@@ -156,37 +157,62 @@ class Cluster(CSRData):
 
         assert all(k in f.keys() for k in KEYS)
 
+        start = time()
         idx = tensor_idx(idx)
+        if verbose:
+            print(f'Cluster.load tensor_idx         : {time() - start:0.5f}s')
 
         if idx is None or idx.shape[0] == 0:
+            start = time()
             pointers = load_tensor(f['pointers'])
             points = load_tensor(f['points'])
-            return Cluster(pointers, points), (None, None)
+            if verbose:
+                print(f'Cluster.load read all           : {time() - start:0.5f}s')
+            start = time()
+            out = Cluster(pointers, points), (None, None)
+            if verbose:
+                print(f'Cluster.load init               : {time() - start:0.5f}s')
+            return out
 
         # Read only pointers start and end indices based on idx
+        start = time()
         ptr_start = load_tensor(f['pointers'], idx=idx)
         ptr_end = load_tensor(f['pointers'], idx=idx + 1)
+        if verbose:
+            print(f'Cluster.load read ptr       : {time() - start:0.5f}s')
 
         # Create the new pointers
+        start = time()
         pointers = torch.cat([
             torch.zeros(1, dtype=ptr_start.dtype),
             torch.cumsum(ptr_end - ptr_start, 0)])
+        if verbose:
+            print(f'Cluster.load new pointers   : {time() - start:0.5f}s')
 
         # Create the indexing tensor to select and order values.
         # Simply, we could have used a list of slices, but we want to
         # avoid for loops and list concatenations to benefit from torch
         # capabilities.
+        start = time()
         sizes = pointers[1:] - pointers[:-1]
         val_idx = torch.arange(pointers[-1])
         val_idx -= torch.arange(pointers[-1] + 1)[
             pointers[:-1]].repeat_interleave(sizes)
         val_idx += ptr_start.repeat_interleave(sizes)
+        if verbose:
+            print(f'Cluster.load val_idx        : {time() - start:0.5f}s')
 
         # Read the points, now we have computed the val_idx
+        start = time()
         points = load_tensor(f['points'], idx=val_idx)
+        if verbose:
+            print(f'Cluster.load read points    : {time() - start:0.5f}s')
 
         # Build the Cluster object
+        start = time()
         cluster = Cluster(pointers, points)
+        if verbose:
+            print(f'Cluster.load init           : {time() - start:0.5f}s')
 
         if not update_sub:
             return cluster, (None, None)
@@ -196,14 +222,20 @@ class Cluster(CSRData):
         # Data.select() on the level below
         # TODO: IMPORTANT consecutive_cluster is a bottleneck for NAG
         #  and Data indexing, can we do better ?
+        start = time()
         new_cluster_points, perm = consecutive_cluster(cluster.points)
         idx_sub = cluster.points[perm]
         cluster.points = new_cluster_points
+        if verbose:
+            print(f'Cluster.load update_sub     : {time() - start:0.5f}s')
 
         # Selecting the subpoints with 'idx_sub' will not be
         # enough to maintain consistency with the current points. We
         # also need to update the sublevel's 'Data.super_index', which
         # can be computed from 'cluster'
+        start = time()
         sub_super = cluster.to_super_index()
+        if verbose:
+            print(f'Cluster.load super_index    : {time() - start:0.5f}s')
 
         return cluster, (idx_sub, sub_super)

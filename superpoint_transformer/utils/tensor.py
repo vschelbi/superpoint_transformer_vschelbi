@@ -1,12 +1,12 @@
 import torch
 import numpy as np
-from superpoint_transformer.utils.numba import numba_randperm
+from numba import njit
 
 
 __all__ = [
     'tensor_idx', 'is_sorted', 'has_duplicates', 'is_dense', 'is_permutation',
-    'arange_interleave', 'print_tensor_info', 'numpyfy', 'randperm',
-    'fast_zeros', 'fast_repeat']
+    'arange_interleave', 'print_tensor_info', 'numpyfy', 'torchify',
+    'torch_to_numpy', 'fast_randperm', 'fast_zeros', 'fast_repeat']
 
 
 def tensor_idx(idx):
@@ -119,7 +119,8 @@ def numpyfy(a, x32=False):
     """Convert torch.Tensor to numpy while respecting some constraints
     on output dtype.
     """
-    assert isinstance(a, torch.Tensor)
+    if not isinstance(a, torch.Tensor):
+        return a
 
     if x32 and a.dtype == torch.double:
         a = a.float()
@@ -127,11 +128,73 @@ def numpyfy(a, x32=False):
         assert a.abs().max() < torch.iinfo(torch.int).max, \
             "Can't convert int64 tensor to int32, largest value is to high"
         a = a.int()
-    return a.numpy()
+    return a.cpu().numpy()
 
 
-def randperm(n, device='cpu'):
-    """Same as torch.randperm, but relies on numba for CPU tensors."""
+def torchify(x):
+    """Convert np.ndarray to torch.Tensor.
+    """
+    return torch.from_numpy(x) if isinstance(x, np.ndarray) else x
+
+
+def torch_to_numpy(func):
+    """Decorator intended for numpy-based functions to be fed and return
+    torch.Tensor arguments.
+
+    :param func:
+    :return:
+    """
+    #TODO: handle input and output device
+
+    def wrapper_torch_to_numba(*args, **kwargs):
+        args_numba = [numpyfy(x) for x in args]
+        kwargs_numba = {k: numpyfy(v) for k, v in kwargs.items()}
+        out = func(*args_numba, **kwargs_numba)
+        if isinstance(out, list):
+            out = [torchify(x) for x in out]
+        elif isinstance(out, tuple):
+            out = tuple([torchify(x) for x in list(out)])
+        elif isinstance(out, dict):
+            out = {k: torchify(v) for k, v in out.items()}
+        else:
+            out = torchify(out)
+        return out
+
+    return wrapper_torch_to_numba
+
+
+@torch_to_numpy
+@njit(cache=True, nogil=True)
+def numba_randperm(n):
+    """Same as torch.randperm but leveraging numba on CPU.
+
+    NB: slightly faster than `np.random.permutation(np.arange(n))`
+    """
+    a = np.arange(n)
+    np.random.shuffle(a)
+    return a
+
+
+def fast_randperm(n, device='cpu'):
+    """Same as torch.randperm, but relies on numba for CPU tensors. This
+    may bring a x2 speedup on CPU for n >= 1e5.
+
+    ```
+    from time import time
+    import torch
+    from superpoint_transformer.utils.tensor import fast_randperm
+
+    n = 100000
+
+    start = time()
+    a = torch.randperm(n)
+    print(f'torch.randperm : {time() - start:0.5f}s')
+
+    start = time()
+    b = fast_randperm(n)
+    print(f'fast_randperm: {time() - start:0.5f}s')
+    ```
+    """
     if device == 'cuda' or \
             isinstance(device, torch.device) and device.type == 'cuda':
         return torch.randperm(n, device=device)
@@ -142,11 +205,35 @@ def randperm(n, device='cpu'):
 def fast_zeros(*args, dtype=None, device='cpu'):
     """Same as torch.zeros but relies numpy on CPU. This may be x40
     faster when manipulating large tensors on CPU.
+
+    ```
+    from time import time
+    import torch
+    import numpy as np
+    from superpoint_transformer.utils.tensor import fast_zeros
+
+    n = 1000000
+    m = 20
+
+    start = time()
+    a = torch.zeros(n, m)
+    print(f'torch.zeros : {time() - start:0.4f}s')
+
+    start = time()
+    b = torch.from_numpy(np.zeros((n, m), dtype='float32'))
+    print(f'np.zeros: {time() - start:0.4f}s')
+
+    start = time()
+    c = fast_zeros(n, m)
+    print(f'fast_zeros: {time() - start:0.4f}s')
+
+    print(torch.equal(a, b), torch.equal(a, c))
+    ```
     """
     if device == 'cuda' or \
         isinstance(device, torch.device) and device.type == 'cuda':
         return torch.zeros(*args, dtype=dtype, device=device)
-    out = torch.from_numpy(np.zeros(tuple(args), dtype='float32'))
+    out = torchify(np.zeros(tuple(args), dtype='float32'))
     if dtype is not None:
         out = out.to(dtype)
     return out
@@ -155,12 +242,38 @@ def fast_zeros(*args, dtype=None, device='cpu'):
 def fast_repeat(x, repeats):
     """Same as torch.repeat_interleave but relies numpy on CPU. This
     saves a little bit of time when manipulating large tensors on CPU.
+
+    ```
+    from time import time
+    import torch
+    import numpy as np
+    from superpoint_transformer.utils.tensor import fast_repeat
+
+    n = 1000000
+    rmax = 50
+    values = torch.arange(n)
+    repeats = torch.randint(low=0, high=rmax, size=(n,))
+
+    start = time()
+    a = values.repeat_interleave(repeats)
+    print(f'torch.repeat_interleave : {time() - start:0.4f}s')
+
+    start = time()
+    b = torch.from_numpy(np.repeat(values.numpy(), repeats.numpy()))
+    print(f'np.repeat: {time() - start:0.4f}s')
+
+    start = time()
+    c = fast_repeat(values, repeats)
+    print(f'fast_repeat: {time() - start:0.4f}s')
+
+    print(torch.equal(a, b), torch.equal(a, c))
+    ```
     """
     assert isinstance(x, torch.Tensor)
     assert isinstance(repeats, int) or x.device == repeats.device
     if x.is_cuda:
         return torch.repeat_interleave(x, repeats)
     if isinstance(repeats, int):
-        return torch.from_numpy(np.repeat(x.numpy(), repeats))
+        return torchify(np.repeat(numpyfy(x), repeats))
     else:
-        return torch.from_numpy(np.repeat(x.numpy(), repeats.numpy()))
+        return torchify(np.repeat(numpyfy(x), numpyfy(repeats)))

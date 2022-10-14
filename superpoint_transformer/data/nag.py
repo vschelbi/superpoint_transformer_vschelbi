@@ -1,11 +1,10 @@
 import h5py
 import torch
-import numpy as np
+from time import time
 from typing import List
 import superpoint_transformer
-from superpoint_transformer.data import Data, Cluster
-from superpoint_transformer.utils import tensor_idx, has_duplicates, numpyfy, \
-    select_hdf5_data, dense_to_csr, csr_to_dense
+from superpoint_transformer.data import Data
+from superpoint_transformer.utils import tensor_idx, has_duplicates
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter_sum
 
@@ -201,8 +200,8 @@ class NAG:
 
     @staticmethod
     def load(
-            path, low=0, high=-1, idx=None, idx_keys=None, keys=None,
-            update_super=True, update_sub=True):
+            path, low=0, high=-1, idx=None, keys_idx=None, keys_low=None,
+            keys=None, update_super=True, update_sub=True, verbose=False):
         """Load NAG from an HDF5 file. See `NAG.save` for writing such
         file. Options allow reading only part of the data.
 
@@ -214,20 +213,22 @@ class NAG:
             Highest partition level to read
         :param idx: list, array, tensor, slice
             Index or boolean mask used to select from low
-        :param idx_keys: list(str)
+        :param keys_idx: list(str)
             Keys on which the indexing should be applied
+        :param keys_low: list(str)
+            Keys to read for low-level. If None, all keys will be read
         :param keys: list(str)
-            Keys to load. If None, all keys will be loaded
+            Keys to read. If None, all keys will be read
         :param update_sub: bool
             See NAG.select and Data.select
         :param update_super:
             See NAG.select and Data.select
+        :param verbose: bool
         :return:
         """
-        data_list = []
+        keys_low = keys if keys_low is None and keys is not None else keys_low
 
-        from time import time
-        start = time()
+        data_list = []
         with h5py.File(path, 'r') as f:
 
             # Initialize partition levels min and max to read from the
@@ -242,61 +243,22 @@ class NAG:
                 f'partition_{k}' in f.keys()
                 for k in range(low, high + 1)])
 
-            print(f'opening file: {time() - start:0.3f}s\n')
-
+            # Apply index selection on the low only, if required. For
+            # all subsequent levels, only keys selection is available
             for i in range(low, high + 1):
-
-                start_i = time()
-
-                Data.load(f[f'partition_{i}'], idx=idx, idx_keys=idx_keys, keys=keys, update_sub=update_sub)
-
-                # Apply index selection on the low only, if required.
-                # For all subsequent levels, only keys selection is
-                # available
+                start = time()
                 if i == low:
-                    # kwargs = select_hdf5_data(
-                    #     f[f'partition_{i}'], keys=keys, idx=idx,
-                    #     idx_keys=idx_keys)
                     data = Data.load(
-                        f[f'partition_{i}'], idx=idx, idx_keys=idx_keys,
-                        keys=keys, update_sub=update_sub)
+                        f[f'partition_{i}'], idx=idx, keys_idx=keys_idx,
+                        keys=keys_low, update_sub=update_sub,
+                        verbose=verbose)
                 else:
-                    # kwargs = select_hdf5_data(
-                    #     f[f'partition_{i}'], keys=keys)
                     data = Data.load(
-                        f[f'partition_{i}'], keys=keys, update_sub=update_sub)
-
-                # # Special treatment is required to gather the
-                # # 'sub_pointers' and 'sub_points' and convert them into
-                # # a Cluster object
-                # sub_pointers = kwargs.pop('sub_pointers', None)
-                # sub_points = kwargs.pop('sub_points', None)
-                # if sub_points is not None and sub_pointers is not None:
-                #     sub = Cluster(sub_pointers, sub_points)
-                #     if i == low and idx is not None:
-                #         sub = sub.select(idx, update_sub=update_sub)[0]
-                #     kwargs['sub'] = sub
-                # 
-                # # Special treatment is required to gather the
-                # # 'y_pointers', 'y_columns', 'y_values' 'y_shape'
-                # # elements and build the y tensor back
-                # y_pointers = kwargs.pop('y_pointers', None)
-                # y_columns = kwargs.pop('y_columns', None)
-                # y_values = kwargs.pop('y_values', None)
-                # y_shape = kwargs.pop('y_shape', None)
-                # if not any(x is None for x in [y_pointers, y_columns, y_values, y_shape]):
-                #     start = time()
-                #     y = csr_to_dense(y_pointers, y_columns, y_values, y_shape)
-                #     if i == low and idx is not None:
-                #         y = y[idx]
-                #     kwargs['y'] = y
-                #     print(f'  y from CSR                  : {time() - start:0.3f}s')
-                # 
-                # data_list.append(Data(**kwargs))
-
+                        f[f'partition_{i}'], keys=keys, update_sub=False,
+                        verbose=verbose)
                 data_list.append(data)
-
-                print(f'reading level {i}: {time() - start_i:0.3f}s\n')
+                if verbose:
+                    print(f'NAG.load partition {i:<12} : {time() - start:0.3f}s\n')
 
         # In the case where update_super is not required but the low
         # level was indexed, we cannot combine the leve-0 and level-1+
