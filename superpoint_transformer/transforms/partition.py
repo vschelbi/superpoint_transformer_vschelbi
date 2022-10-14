@@ -193,7 +193,7 @@ def compute_grid_partition(data, size=2):
     aggregated based on their coordinates in a grid of step `size`.
 
     :param data:
-    :param size:
+    :param size: int or List
     :return:
     """
     # Sanity checks
