@@ -59,9 +59,9 @@ class PointFeatures(Transform):
     """
 
     def __init__(
-            self, pos=False, radius=5, rgb=True, hsv=False, lab=False,
-            density=False, linearity=True, planarity=True, scattering=True,
-            verticality=True, normal=True, length=False, surface=False,
+            self, pos=False, radius=5, rgb=False, hsv=False, lab=False,
+            density=False, linearity=False, planarity=False, scattering=False,
+            verticality=False, normal=False, length=False, surface=False,
             volume=False, curvature=False, k_min=5):
 
         self.pos = pos
