@@ -9,8 +9,8 @@ __all__ = [
 
 
 def knn_1(
-        xyz, k, r_max=1, oversample=False, verbose=False,
-        self_is_neighbor=False):
+        xyz, k, r_max=1, oversample=False, self_is_neighbor=False,
+        verbose=False):
     """Search k-NN inside for a 3D point cloud xyz. This search differs
     from `knn_2` in that it operates on a single cloud input (search and
     query are the same) and it allows oversampling the neighbors when
