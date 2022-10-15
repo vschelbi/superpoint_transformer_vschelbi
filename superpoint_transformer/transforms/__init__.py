@@ -1,5 +1,7 @@
 import sys
 from .transforms import *
+from .data import *
+from .device import *
 from .sampling import *
 from .neighbors import *
 from .features import *
