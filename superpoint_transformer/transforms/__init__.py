@@ -1,37 +1,38 @@
 import sys
-from .sampling import GridSampling3D, SaveOriginalPosId, sample_clusters
-from .neighbors import search_outliers, search_neighbors
-from .features import compute_point_features
-from .graph import compute_adjacency_graph, compute_cluster_graph
-from .partition import compute_partition, compute_grid_partition
+from .transforms import *
+from .sampling import *
+from .neighbors import *
+from .features import *
+from .graph import *
+from .partition import *
+from superpoint_transformer.data import Data
 from torch_geometric.transforms import Compose
 
 # Fuse all transforms defined in this project with the torch_geometric
-# transforms
-_custom_transforms = sys.modules[__name__]
-_torch_geometric_transforms = sys.modules["torch_geometric.transforms"]
-_intersection_names = set(_custom_transforms.__dict__) & set(_torch_geometric_transforms.__dict__)
-_intersection_names = set([module for module in _intersection_names if not module.startswith("_")])
-L_intersection_names = len(_intersection_names) > 0
+# transforms. Special attention is given to local transforms that may
+# have the same name as some torch_geometric transform
+_spt_tr = sys.modules[__name__]
+_pyg_tr = sys.modules["torch_geometric.transforms"]
+
+_intersection_tr = set(_spt_tr.__dict__) & set(_pyg_tr.__dict__)
+_intersection_tr = set([t for t in _intersection_tr if not t.startswith("_")])
 _intersection_cls = []
 
-for transform_name in _intersection_names:
-    transform_cls = getattr(_custom_transforms, transform_name)
-    if not "torch_geometric.transforms." in str(transform_cls):
-        _intersection_cls.append(transform_cls)
-L_intersection_cls = len(_intersection_cls) > 0
+for name in _intersection_tr:
+    cls = getattr(_spt_tr, name)
+    if not "torch_geometric.transforms." in str(cls):
+        _intersection_cls.append(cls)
 
-if L_intersection_names:
-    if L_intersection_cls:
-        raise Exception(
-            f"It seems that you are overriding a transform from pytorch "
-            f"geometric, this is forbidden, please rename your classes "
-            f"{_intersection_names} from {_intersection_cls}")
-    else:
-        raise Exception(
-            f"It seems you are importing transforms {_intersection_names} "
-            f"from pytorch geometric within the current code base. Please, "
-            f"remove them or add them within a class, function, etc.")
+if len(_intersection_cls) > 0:
+    raise Exception(
+        f"It seems that you are overriding a transform from pytorch "
+        f"geometric, this is forbidden, please rename your classes "
+        f"{_intersection_tr} from {_intersection_cls}")
+elif len(_intersection_tr) > 0:
+    raise Exception(
+        f"It seems you are importing transforms {_intersection_tr} "
+        f"from pytorch geometric within the current code base. Please, "
+        f"remove them or add them within a class, function, etc.")
 
 
 def instantiate_transform(transform_option, attr="transform"):
@@ -53,9 +54,9 @@ def instantiate_transform(transform_option, attr="transform"):
     except KeyError:
         lparams = None
 
-    cls = getattr(_custom_transforms, tr_name, None)
+    cls = getattr(_spt_tr, tr_name, None)
     if not cls:
-        cls = getattr(_torch_geometric_transforms, tr_name, None)
+        cls = getattr(_pyg_tr, tr_name, None)
         if not cls:
             raise ValueError(f"Transform {tr_name} is nowhere to be found")
 
@@ -85,4 +86,20 @@ def instantiate_transforms(transform_options):
     transforms = []
     for transform in transform_options:
         transforms.append(instantiate_transform(transform))
+
+    if len(transforms) <= 1:
+        return Compose(transforms)
+
+    # If multiple transforms are composed, make sure the input and
+    # output match
+    for i in range(1, len(transforms)):
+        t_out = transforms[i - 1]
+        t_in = transforms[i]
+        out_type = getattr(t_out, '_OUT_TYPE', Data)
+        in_type = getattr(t_in, '_IN_TYPE', Data)
+        if in_type != out_type:
+            raise ValueError(
+                f"Cannot compose transforms: {t_out} returns a {out_type} "
+                f"while {t_in} expects a {in_type} input.")
+
     return Compose(transforms)

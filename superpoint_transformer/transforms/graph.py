@@ -3,91 +3,119 @@ import numpy as np
 import itertools
 from scipy.spatial import Delaunay
 from torch_scatter import scatter_mean, scatter_std, scatter_min
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
 import superpoint_transformer
 from superpoint_transformer.data import Data, NAG
+from superpoint_transformer.transforms import Transform
 import superpoint_transformer.partition.utils.libpoint_utils as point_utils
-from superpoint_transformer.transforms.sampling import sample_clusters
-from superpoint_transformer.utils import print_tensor_info, isolated_nodes
+from superpoint_transformer.utils import print_tensor_info, isolated_nodes, \
+    edge_to_superedge
 
 
-def compute_adjacency_graph(data, k_adjacency, lambda_edge_weight):
-    """Create the adjacency graph edges based on the 'Data.neighbors'
-    and 'Data.distances'.
+__all__ = ['AdjacencyGraph', 'HorizontalGraphs']
+
+
+class AdjacencyGraph(Transform):
+    """Create the adjacency graph in `edge_index` and `edge_attr` based
+    on the `Data.neighbors` and `Data.distances`.
 
     NB: this graph is directed wrt Pytorch Geometric, but cut-pursuit
     happily takes this as an input.
+
+    :param k: int
+        Number of neighbors to consider for the adjacency graph
+    :param w: float
+        Scalar used to modulate the edge weight. If `w <= 0`, all edges will
+        have a weight of 1. Otherwise, edges weights will follow:
+        ```1 / (w + data.distances / data.distances.mean())```
     """
-    assert data.has_neighbors, \
-        "Level-0 must have 'neighbors' attribute to allow superpoint " \
-        "features construction."
-    assert getattr(data, 'distances', None) is not None, \
-        "Level-0 must have 'distances' attribute to allow superpoint " \
-        "features construction."
 
-    # Compute source and target indices based on neighbors
-    source = torch.arange(
-        data.num_nodes, device=data.device).repeat_interleave(k_adjacency)
-    target = data.neighbors[:, :k_adjacency].flatten()
+    def __init__(self, k, w):
+        self.k = k
+        self.w = w
 
-    # Recover the neighbors distances
-    distances = data.distances[:, :k_adjacency].flatten()
+    def _process(self, data):
+        assert data.has_neighbors, \
+            "Data must have 'neighbors' attribute to allow adjacency graph " \
+            "construction."
+        assert getattr(data, 'distances', None) is not None, \
+            "Data must have 'distances' attribute to allow adjacency graph " \
+            "construction."
+        assert self.k <= data.neighbors.shape[1]
 
-    # Account for -1 neighbors and delete corresponding edges
-    mask = target >= 0
-    source = source[mask]
-    target = target[mask]
-    distances = distances[mask]
+        # Compute source and target indices based on neighbors
+        source = torch.arange(
+            data.num_nodes, device=data.device).repeat_interleave(self.k)
+        target = data.neighbors[:, :self.k].flatten()
 
-    # Save edges and edge features in data
-    data.edge_index = torch.stack((source, target))
-    if lambda_edge_weight > 0:
-        data.edge_attr = 1 / (lambda_edge_weight + distances / distances.mean())
-    else:
-        data.edge_attr = torch.ones_like(distances)
+        # Recover the neighbors distances
+        distances = data.distances[:, :self.k].flatten()
 
-    return data
+        # Account for -1 neighbors and delete corresponding edges
+        mask = target >= 0
+        source = source[mask]
+        target = target[mask]
+        distances = distances[mask]
+
+        # Save edges and edge features in data
+        data.edge_index = torch.stack((source, target))
+        if self.w > 0:
+            data.edge_attr = 1 / (self.w + distances / distances.mean())
+        else:
+            data.edge_attr = torch.ones_like(distances)
+
+        return data
 
 
-def edge_to_superedge(edges, super_index, edge_attr=None):
-    """Convert point-level edges into superedges between clusters, based
-    on point-to-cluster indexing 'super_index'. Optionally 'edge_attr'
-    can be passed to describe edge attributes that will be returned
-    filtered and ordered to describe the superedges.
+class HorizontalGraphs(Transform):
+    """Compute the horizontal graphs for all NAG levels except its first
+    (ie the 0-level). These are the graphs connecting the segments at
+    each level, equipped with handcrafted node and edge features.
+
+    :param n_max_node: int
+        Maximum number of level-0 points to sample in each cluster to
+        when building node features
+    :param n_max_edge: int
+        Maximum number of level-0 points to sample in each cluster to
+        when building edges and edge features from Delaunay
+        triangulation and edge features
+    :param n_min: int
+        Minimum number of level-0 points to sample in each cluster,
+        unless it contains fewer points
+    :param max_dist: float or List(float)
+        Maximum distance allowed for edges. If zero, this is ignored.
+        Otherwise, edges whose distance is larger than max_dist. We pay
+        particular attention here to avoid isolating nodes by distance
+        filtering. If a node was isolated by max_dist filtering, we
+        preserve its shortest edge to avoid it, even if it is larger
+        than max_dist
     """
-    # We are only interested in the edges connecting two different
-    # clusters and not in the intra-cluster connections. So we first
-    # identify the edges of interest. This step requires having access
-    # to the 'super_index' to convert point indices into their
-    # corresponding cluster indices
-    idx_source = super_index[edges[0]]
-    idx_target = super_index[edges[1]]
-    inter_cluster = torch.where(idx_source != idx_target)[0]
 
-    # Now only consider the edges of interest (ie inter-cluster edges)
-    edges_inter = edges[:, inter_cluster]
-    edge_attr = edge_attr[inter_cluster] if edge_attr is not None else None
-    idx_source = idx_source[inter_cluster]
-    idx_target = idx_target[inter_cluster]
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
 
-    # So far we are manipulating inter-cluster edges, but there may be
-    # multiple of those for a given source-target pair. Next, we want to
-    # aggregate those into 'superedge" and compute corresponding
-    # features (designated with 'se_'). Here, we create unique and
-    # consecutive inter-cluster edge identifiers for torch_scatter
-    # operations. We use 'se' to designate 'superedge' (ie an edge
-    # between two clusters)
-    se_id = \
-        idx_source * (max(idx_source.max(), idx_target.max()) + 1) + idx_target
-    se_id, perm = consecutive_cluster(se_id)
-    se_id_source = idx_source[perm]
-    se_id_target = idx_target[perm]
-    se = torch.vstack((se_id_source, se_id_target))
+    def __init__(self, n_max_node=32, n_max_edge=64, n_min=5, max_dist=-1):
+        self.n_max_node = n_max_node
+        self.n_max_edge = n_max_edge
+        self.n_min = n_min
+        self.max_dist = max_dist
 
-    return se, se_id, edges_inter, edge_attr
+    def _process(self, nag):
+        assert isinstance(self.max_dist, (int, float, list)), \
+            "Expected a scalar or a List"
+
+        max_dist = self.max_dist
+        if not isinstance(max_dist, list):
+            max_dist = [max_dist] * (nag.num_levels - 1)
+
+        for i_level, md in zip(range(1, nag.num_levels), max_dist):
+            nag = _compute_single_horizontal_graph(
+                i_level, nag, n_max_node=self.n_max_node,
+                n_max_edge=self.n_max_edge, n_min=self.n_min, max_dist=md)
+
+        return nag
 
 
-def _compute_cluster_graph(
+def _compute_single_horizontal_graph(
         i_level, nag, n_max_node=32, n_max_edge=64, n_min=5, max_dist=-1):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster graph on level 0"
@@ -109,9 +137,8 @@ def _compute_cluster_graph(
     # Sample points among the clusters. These will be used to compute
     # cluster geometric features as well as cluster adjacency graph and
     # edge features
-    idx_samples, ptr_samples = sample_clusters(
-        nag, i_level, low=0, n_max=n_max_node, n_min=n_min,
-        return_pointers=True)
+    idx_samples, ptr_samples = nag.get_sampling(
+        i_level, low=0, n_max=n_max_node, n_min=n_min, return_pointers=True)
 
     # Compute cluster geometric features
     xyz = nag[0].pos[idx_samples].cpu().numpy()
@@ -202,7 +229,7 @@ def _compute_cluster_graph(
     # in the level-0 adjacency graph. For that reason, we need to look
     # for such isolated nodes and sample point inside them, since the
     # above approach will otherwise ignore them
-    # TODO: This approach has 2 downsizes: it samples points anywhere in
+    # TODO: This approach has 2 downsides: it samples points anywhere in
     #  the isolated cluster and does not drive the other clusters
     #  sampling around the isolated clusters. This means that edges may
     #  not be the true visibility-based, simplest edges of the isolated
@@ -220,8 +247,8 @@ def _compute_cluster_graph(
     # cluster adjacency graph and edge features. Note we sample more
     # generously here than for cluster features, because we need to
     # capture fine-grained adjacency
-    idx_samples, ptr_samples = sample_clusters(
-        nag, i_level, low=0, n_max=n_max_edge, n_min=n_min, mask=mask,
+    idx_samples, ptr_samples = nag.get_sampling(
+        i_level, low=0, n_max=n_max_edge, n_min=n_min, mask=mask,
         return_pointers=True)
 
     # To debug sampling
@@ -273,7 +300,7 @@ def _compute_cluster_graph(
 
     # Remove edges whose distance is too large. We pay articular
     # attention here to avoid isolating nodes by distance filtering. If
-    # a node would be isolated by max_dist filtering, we preserve its
+    # a node was isolated by max_dist filtering, we preserve its
     # shortest edge to avoid it, even if it is larger than max_dist
     if max_dist > 0:
         # Identify the edges that are too long
@@ -398,21 +425,5 @@ def _compute_cluster_graph(
 
     # Restore the i_level Data object, if need be
     nag._list[i_level] = data
-
-    return nag
-
-
-def compute_cluster_graph(
-        nag, n_max_node=32, n_max_edge=64, n_min=5, max_dist=-1):
-    assert isinstance(nag, NAG)
-    assert isinstance(max_dist, (int, float, list)), "Expected a scalar or a List"
-
-    if not isinstance(max_dist, list):
-        max_dist = [max_dist] * (nag.num_levels - 1)
-
-    for i_level, md in zip(range(1, nag.num_levels), max_dist):
-        nag = _compute_cluster_graph(
-            i_level, nag, n_max_node=n_max_node, n_max_edge=n_max_edge,
-            n_min=n_min, max_dist=md)
 
     return nag

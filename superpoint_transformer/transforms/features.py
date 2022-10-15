@@ -2,15 +2,15 @@ import torch
 import numpy as np
 import superpoint_transformer.partition.utils.libpoint_utils as point_utils
 from superpoint_transformer.utils.features import rgb2hsv, rgb2lab
+from superpoint_transformer.transforms import Transform
 
 
-def compute_point_features(
-        data, pos=False, radius=5, rgb=True, hsv=False, lab=False,
-        density=False, linearity=True, planarity=True, scattering=True,
-        verticality=True, normal=True, length=False, surface=False,
-        volume=False, curvature=False, k_min=5):
-    """ Compute the pointwise features that will be used for the
-    partition.
+__all__ = ['PointFeatures']
+
+
+class PointFeatures(Transform):
+    """Compute pointwise features based on what is already available in
+    the Data object.
 
     All local geometric features assume the input ``Data`` has a
     ``neighbors`` attribute, holding a ``(num_nodes, k)`` tensor of
@@ -57,106 +57,135 @@ def compute_point_features(
         computation. Points with less than k_min neighbors will receive
         0-features. Assumes ``Data.neighbors``.
     """
-    assert data.has_neighbors, \
-        "Data is expected to have a 'neighbors' attribute"
-    assert data.num_nodes < np.iinfo(np.uint32).max, \
-        "Too many nodes for `uint32` indices"
-    assert data.neighbors.max() < np.iinfo(np.uint32).max, \
-        "Too high 'neighbors' indices for `uint32` indices"
 
-    features = []
+    def __init__(
+            self, pos=False, radius=5, rgb=True, hsv=False, lab=False,
+            density=False, linearity=True, planarity=True, scattering=True,
+            verticality=True, normal=True, length=False, surface=False,
+            volume=False, curvature=False, k_min=5):
 
-    # Add xyz normalized. The scaling factor drives the maximum cluster
-    # size the partition may produce
-    if pos and data.pos is not None:
-        features.append((data.pos - data.pos.mean(dim=0)) / radius)
+        self.pos = pos
+        self.radius = radius
+        self.rgb = rgb
+        self.hsv = hsv
+        self.lab = lab
+        self.density = density
+        self.linearity = linearity
+        self.planarity = planarity
+        self.scattering = scattering
+        self.verticality = verticality
+        self.normal = normal
+        self.length = length
+        self.surface = surface
+        self.volume = volume
+        self.curvature = curvature
+        self.k_min = k_min
 
-    # Add RGB to the features. If colors are stored in int, we assume
-    # they are encoded in  [0, 255] and normalize them. Otherwise, we
-    # assume they have already been [0, 1] normalized
-    if rgb and data.rgb is not None:
-        f = data.rgb
-        if f.dtype in [torch.uint8, torch.int, torch.long]:
-            f = f.float() / 255
-        features.append(f)
+    def _process(self, data):
+        assert data.has_neighbors, \
+            "Data is expected to have a 'neighbors' attribute"
+        assert data.num_nodes < np.iinfo(np.uint32).max, \
+            "Too many nodes for `uint32` indices"
+        assert data.neighbors.max() < np.iinfo(np.uint32).max, \
+            "Too high 'neighbors' indices for `uint32` indices"
 
-    # Add HSV to the features. If colors are stored in int, we assume
-    # they are encoded in  [0, 255] and normalize them. Otherwise, we
-    # assume they have already been [0, 1] normalized. Note: for all
-    # features to live in a similar range, we normalize H in [0, 1]
-    if hsv and data.rgb is not None:
-        f = data.rgb
-        if f.dtype in [torch.uint8, torch.int, torch.long]:
-            f = f.float() / 255
-        hsv = rgb2hsv(f)
-        hsv[:, 0] /= 360.
-        features.append(hsv)
+        features = []
 
-    # Add LAB to the features. If colors are stored in int, we assume
-    # they are encoded in  [0, 255] and normalize them. Otherwise, we
-    # assume they have already been [0, 1] normalized. Note: for all
-    # features to live in a similar range, we normalize L in [0, 1] and
-    # ab in [-1, 1]
-    if lab and data.rgb is not None:
-        f = data.rgb
-        if f.dtype in [torch.uint8, torch.int, torch.long]:
-            f = f.float() / 255
-        features.append(rgb2lab(f) / 100)
+        # Add xyz normalized. The scaling factor drives the maximum
+        # cluster size the partition may produce
+        if self.pos and data.pos is not None:
+            features.append((data.pos - data.pos.mean(dim=0)) / self.radius)
 
-    # Add local surfacic density to the features. The local density is
-    # approximated as K / D² where K is the number of nearest neighbors
-    # and D is the distance of the Kth neighbor. We normalize by D²
-    # since points roughly lie on a 2D manifold. Note that this takes
-    # into account partial neighborhoods where -1 indicates absent
-    # neighbors
-    if density:
-        dmax = data.distances.max(dim=1).values
-        k = data.neighbors.ge(0).sum(dim=1)
-        features.append((k / dmax**2).view(-1, 1))
+        # Add RGB to the features. If colors are stored in int, we
+        # assume they are encoded in  [0, 255] and normalize them.
+        # Otherwise, we assume they have already been [0, 1] normalized
+        if self.rgb and data.rgb is not None:
+            f = data.rgb
+            if f.dtype in [torch.uint8, torch.int, torch.long]:
+                f = f.float() / 255
+            features.append(f)
 
-    # Add local geometric features
-    needs_geof = any((linearity, planarity, scattering, verticality, normal))
-    if needs_geof and data.pos is not None:
+        # Add HSV to the features. If colors are stored in int, we
+        # assume they are encoded in  [0, 255] and normalize them.
+        # Otherwise, we assume they have already been [0, 1] normalized.
+        # Note: for all features to live in a similar range, we
+        # normalize H in [0, 1]
+        if self.hsv and data.rgb is not None:
+            f = data.rgb
+            if f.dtype in [torch.uint8, torch.int, torch.long]:
+                f = f.float() / 255
+            hsv = rgb2hsv(f)
+            hsv[:, 0] /= 360.
+            features.append(hsv)
 
-        # Prepare data for numpy boost interface. Note: we add each
-        # point to its own neighborhood before computation
-        xyz = data.pos.cpu().numpy()
-        nn = torch.cat(
-            (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbors), dim=1)
-        k = nn.shape[1]
+        # Add LAB to the features. If colors are stored in int, we
+        # assume they are encoded in  [0, 255] and normalize them.
+        # Otherwise, we assume they have already been [0, 1] normalized.
+        # Note: for all features to live in a similar range, we
+        # normalize L in [0, 1] and ab in [-1, 1]
+        if self.lab and data.rgb is not None:
+            f = data.rgb
+            if f.dtype in [torch.uint8, torch.int, torch.long]:
+                f = f.float() / 255
+            features.append(rgb2lab(f) / 100)
 
-        # Check for missing neighbors (indicated by -1 indices)
-        n_missing = (nn < 0).sum(dim=1)
-        if (n_missing > 0).any():
-            sizes = k - n_missing
-            nn = nn[nn >= 0]
-            nn_ptr = torch.cat((torch.zeros(1), sizes.cumsum(dim=0).cpu()))
-        else:
-            nn = nn.flatten().cpu()
-            nn_ptr = torch.arange(xyz.shape[0] + 1) * k
-        nn = nn.numpy().astype('uint32')
-        nn_ptr = nn_ptr.numpy().astype('uint32')
+        # Add local surfacic density to the features. The local density
+        # is approximated as K / D² where K is the number of nearest
+        # neighbors and D is the distance of the Kth neighbor. We
+        # normalize by D² since points roughly lie on a 2D manifold.
+        # Note that this takes into account partial neighborhoods where
+        # -1 indicates absent neighbors
+        if self.density:
+            dmax = data.distances.max(dim=1).values
+            k = data.neighbors.ge(0).sum(dim=1)
+            features.append((k / dmax ** 2).view(-1, 1))
 
-        # Make sure array are contiguous before moving to C++
-        xyz = np.ascontiguousarray(xyz)
-        nn = np.ascontiguousarray(nn)
-        nn_ptr = np.ascontiguousarray(nn_ptr)
+        # Add local geometric features
+        needs_geof = any((
+            self.linearity, self.planarity, self.scattering, self.verticality,
+            self.normal))
+        if needs_geof and data.pos is not None:
 
-        # C++ geometric features computation on CPU
-        f = point_utils.compute_geometric_features(xyz, nn, nn_ptr, k_min, False)
-        f = torch.from_numpy(f.astype('float32'))
+            # Prepare data for numpy boost interface. Note: we add each
+            # point to its own neighborhood before computation
+            xyz = data.pos.cpu().numpy()
+            nn = torch.cat(
+                (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbors), dim=1)
+            k = nn.shape[1]
 
-        # Heuristic to increase the importance of verticality
-        f[:, 3] *= 2
+            # Check for missing neighbors (indicated by -1 indices)
+            n_missing = (nn < 0).sum(dim=1)
+            if (n_missing > 0).any():
+                sizes = k - n_missing
+                nn = nn[nn >= 0]
+                nn_ptr = torch.cat((torch.zeros(1), sizes.cumsum(dim=0).cpu()))
+            else:
+                nn = nn.flatten().cpu()
+                nn_ptr = torch.arange(xyz.shape[0] + 1) * k
+            nn = nn.numpy().astype('uint32')
+            nn_ptr = nn_ptr.numpy().astype('uint32')
 
-        # Select only required features
-        mask = (
-            [linearity, planarity, scattering, verticality]
-            + [normal] * 3
-            + [length, surface, volume, curvature])
-        features.append(f[:, mask].to(data.pos.device))
+            # Make sure array are contiguous before moving to C++
+            xyz = np.ascontiguousarray(xyz)
+            nn = np.ascontiguousarray(nn)
+            nn_ptr = np.ascontiguousarray(nn_ptr)
 
-    # Save all features in the Data.x attribute
-    data.x = torch.cat(features, dim=1).to(data.pos.device)
+            # C++ geometric features computation on CPU
+            f = point_utils.compute_geometric_features(
+                xyz, nn, nn_ptr, self.k_min, False)
+            f = torch.from_numpy(f.astype('float32'))
 
-    return data
+            # Heuristic to increase the importance of verticality
+            f[:, 3] *= 2
+
+            # Select only required features
+            mask = (
+                [self.linearity, self.planarity, self.scattering, self.verticality]
+                + [self.normal] * 3
+                + [self.length, self.surface, self.volume, self.curvature])
+            features.append(f[:, mask].to(data.pos.device))
+
+        # Save all features in the Data.x attribute
+        data.x = torch.cat(features, dim=1).to(data.pos.device)
+
+        return data

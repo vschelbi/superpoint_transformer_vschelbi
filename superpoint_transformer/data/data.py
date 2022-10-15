@@ -11,7 +11,7 @@ from torch_geometric.utils import coalesce, remove_self_loops
 import superpoint_transformer
 from superpoint_transformer.data.cluster import Cluster
 from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates, \
-    isolated_nodes, knn, save_tensor, load_tensor, save_dense_to_csr, \
+    isolated_nodes, knn_2, save_tensor, load_tensor, save_dense_to_csr, \
     load_csr_to_dense
 
 
@@ -326,7 +326,7 @@ class Data(PyGData):
         high = self.pos.max(dim=0).values
         low = self.pos.min(dim=0).values
         r_max = torch.linalg.norm(high - low)
-        distances, neighbors = knn(
+        distances, neighbors = knn_2(
             self.pos, self.pos[is_out], k + 1, r_max=r_max)
         distances = distances[:, 1:]
         neighbors = neighbors[:, 1:]
