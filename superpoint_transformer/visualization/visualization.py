@@ -513,7 +513,7 @@ def visualize_3d(
                 showlegend=False,
                 visible=gap is not None, ))
 
-        keys = f'Level {i_level + 1}' if gap is None \
+        keys = [f'Level {i_level + 1}'] if gap is None \
             else trace_modes[i_point_trace].keys()
         trace_modes.append(
             {k: {
@@ -645,7 +645,7 @@ def visualize_3d(
                 showlegend=False,
                 visible=gap is not None, ))
 
-        keys = f'Level {i_level + 1}' if gap is None \
+        keys = [f'Level {i_level + 1}'] if gap is None \
             else trace_modes[i_point_trace].keys()
         trace_modes.append({k: {} for k in keys})
 
