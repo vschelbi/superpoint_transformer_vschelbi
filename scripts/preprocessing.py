@@ -13,8 +13,8 @@ from tqdm import tqdm
 from superpoint_transformer.transforms import *
 from superpoint_transformer.data import Data
 from superpoint_transformer.metrics import ConfusionMatrix
-from superpoint_transformer.datasets.kitti360 import read_kitti360_window
-from superpoint_transformer.datasets.kitti360_config import WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
+from superpoint_transformer.datasets.kitti360 import read_kitti360_window, \
+    WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
 from superpoint_transformer.utils.io import host_data_root
 from superpoint_transformer.utils.io import dated_dir
 

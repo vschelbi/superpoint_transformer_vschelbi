@@ -1,6 +1,6 @@
-#----------------------------------------------------------------------#
-#          Distutils setup script for compiling python extensions      #
-#----------------------------------------------------------------------#
+# -------------------------------------------------------------------- #
+#        Distutils setup script for compiling python extensions        #
+# -------------------------------------------------------------------- #
 """ 
 Compilation command: `python scripts/setup_dependencies.py build_ext`
 Hugo Raguet, adapted by Loic Landrieu (2020), and Damien Robert (2022)
@@ -16,9 +16,9 @@ import os.path as osp
 import re
 
 
-################################################
-#          Targets and compile options         #
-################################################
+########################################################################
+#                     Targets and compile options                      #
+########################################################################
 
 # Keep track of directories of interest
 WORK_DIR = osp.realpath(os.curdir)
@@ -30,26 +30,28 @@ include_dirs = [numpy.get_include(), "../include"]
 
 # Compilation and linkage options
 # MIN_OPS_PER_THREAD roughly controls parallelization, see doc in README.md
-if os.name == 'nt': # windows
+if os.name == 'nt':  # windows
     extra_compile_args = ["/std:c++11", "/openmp", "-DMIN_OPS_PER_THREAD=10000"]
     extra_link_args = ["/lgomp"]
-elif os.name == 'posix': # linux
+elif os.name == 'posix':  # linux
     extra_compile_args = ["-std=c++11", "-fopenmp", "-DMIN_OPS_PER_THREAD=10000"]
     extra_link_args = ["-lgomp"]
 else:
     raise NotImplementedError('OS not supported yet.')
 
 
-################################################
-#              Auxiliary functions             #
-################################################
+########################################################################
+#                         Auxiliary functions                          #
+########################################################################
 
 class build_class(build):
     def initialize_options(self):
         build.initialize_options(self)
-        self.build_lib = "bin" 
+        self.build_lib = "bin"
+
     def run(self):
         build_path = self.build_lib
+
 
 def purge(dir, pattern):
     for f in os.listdir(dir):
@@ -57,9 +59,9 @@ def purge(dir, pattern):
             os.remove(osp.join(dir, f))
 
 
-################################################
-#                  Grid graph                  #
-################################################
+########################################################################
+#                              Grid graph                              #
+########################################################################
 
 # Move the appropriate working directory
 os.chdir(osp.join(PARTITION_DIR, 'grid_graph/python'))
@@ -90,10 +92,9 @@ try:
 except FileNotFoundError:
     pass
 
-
-################################################
-#             Parallel cut-pursuit             #
-################################################
+########################################################################
+#                         Parallel cut-pursuit                         #
+########################################################################
 
 # Move the appropriate working directory
 os.chdir(osp.join(PARTITION_DIR, 'parallel_cut_pursuit/python'))

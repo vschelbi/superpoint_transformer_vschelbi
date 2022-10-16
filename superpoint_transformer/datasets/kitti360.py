@@ -8,8 +8,7 @@ from datetime import datetime
 
 from torch_geometric.data import InMemoryDataset
 from superpoint_transformer.data import Data, NAG
-from superpoint_transformer.datasets.kitti360_config import CVLIBS_URL, \
-    KITTI360_NUM_CLASSES, WINDOWS, SEQUENCES, ID2TRAINID
+from superpoint_transformer.datasets.kitti360_config import *
 from superpoint_transformer.utils.download import run_command
 
 DIR = os.path.dirname(os.path.realpath(__file__))
@@ -77,12 +76,12 @@ class KITTI360(InMemoryDataset):
             self, root, split="train", transform=None, pre_transform=None,
             pre_filter=None, x32=True, y_to_csr=True):
 
-        # Initialization with downloading and all preprocessing
-        super().__init__(root, transform, pre_transform, pre_filter)
-
         self._split = split
         self.x32 = x32
         self.y_to_csr = y_to_csr
+
+        # Initialization with downloading and all preprocessing
+        super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
     def split(self):
@@ -230,6 +229,10 @@ class KITTI360(InMemoryDataset):
             window_name + '.ply')
         data = read_kitti360_window(
             raw_window_path, semantic=True, instance=False, remap=True)
+
+        # TODO: this is dirty, may cause subsequent collisions with
+        #  self.num_classes = KITTI360_NUM_CLASSES...
+        data.y[data.y == -1] = KITTI360_NUM_CLASSES
 
         # Apply pre_transform
         if self.pre_transform is not None:
