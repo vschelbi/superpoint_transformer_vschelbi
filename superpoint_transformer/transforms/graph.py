@@ -11,7 +11,7 @@ from superpoint_transformer.utils import print_tensor_info, isolated_nodes, \
     edge_to_superedge
 
 
-__all__ = ['AdjacencyGraph', 'HorizontalGraphs']
+__all__ = ['AdjacencyGraph', 'HorizontalGraphs', 'ConnectIsolated']
 
 
 class AdjacencyGraph(Transform):
@@ -427,3 +427,23 @@ def _compute_single_horizontal_graph(
     nag._list[i_level] = data
 
     return nag
+
+
+class ConnectIsolated(Transform):
+    """Creates edges for isolated nodes. Each isolated node is connected
+    to the `k` nearest nodes. If the Data graph contains edge features
+    in `Data.edge_attr`, the new edges will receive features based on
+    their length and a linear regression of the relation between
+    existing edge features and their corresponding edge length.
+
+    NB: this is an inplace operation that will modify the input data.
+
+    :param k: int
+        Number of neighbors the isolated nodes should be connected to
+    """
+
+    def __init__(self, k=1):
+        self.k = k
+
+    def _process(self, data):
+        return data.connect_isolated(k=self.k)
