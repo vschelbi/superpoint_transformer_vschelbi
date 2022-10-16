@@ -136,7 +136,9 @@ class KITTI360(InMemoryDataset):
         #  Dataset attributes and the transforms attributes. This can be
         #  a challenge because those objects are by default unhashable,
         #  but one could design a recursive search trick to get the
-        #  attribute values and concatenate them into a single tuple
+        #  attribute values and concatenate them into a single tuple.
+        #  After some thoughts: just the pre-transforms attributes
+        #  should be good, since only they drive the preprocessing.
         return 'nag'
 
     @property
