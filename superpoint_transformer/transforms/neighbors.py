@@ -41,9 +41,12 @@ class KNN(Transform):
         self.verbose = verbose
 
     def _process(self, data):
-        return knn_1(
+        neighbors, distances = knn_1(
             data.pos, self.k, r_max=self.r_max, oversample=self.oversample,
             self_is_neighbor=self.self_is_neighbor, verbose=self.verbose)
+        data.neighbors = neighbors
+        data.distances = distances
+        return data
 
 
 class Inliers(Transform):

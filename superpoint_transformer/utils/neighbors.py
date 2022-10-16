@@ -40,8 +40,9 @@ def knn_1(
             neighbors, distances, k)
 
     # Restore the neighbors and distances to the input device
-    neighbors = neighbors.to(device)
-    distances = distances.to(device)
+    if neighbors.device != device:
+        neighbors = neighbors.to(device)
+        distances = distances.to(device)
 
     if not verbose and not superpoint_transformer.is_debug_enabled():
         return neighbors, distances
