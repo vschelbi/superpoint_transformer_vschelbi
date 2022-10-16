@@ -29,7 +29,8 @@ def process(i_cloud, args):
     key = 'loading'
     start = time()
     filepath = args.filepaths[i_cloud]
-    data = read_kitti360_window(filepath, semantic=True, instance=False, remap=True)
+    data = read_kitti360_window(
+        filepath, semantic=True, instance=False, remap=True)
     data.y[data.y == -1] = KITTI360_NUM_CLASSES
     info.filepath = filepath
     info.num_nodes_raw = data.num_nodes
@@ -39,9 +40,9 @@ def process(i_cloud, args):
     key = 'voxelization'
     torch.cuda.synchronize()
     start = time()
-    n_in = data.num_nodes
+    data = DataTo('cuda')(data)
     data = GridSampling3D(
-        size=args.voxel, bins={'y': KITTI360_NUM_CLASSES + 1})(data.cuda()).cpu()
+        size=args.voxel, bins={'y': KITTI360_NUM_CLASSES + 1})(data)
     torch.cuda.synchronize()
     info.num_nodes_voxel = data.num_nodes
     info.times[key] = round(time() - start, 3)
@@ -50,36 +51,34 @@ def process(i_cloud, args):
     key = 'neighbors'
     torch.cuda.synchronize()
     start = time()
-    data = data.cuda()
-    data = search_neighbors(data, args.k_feat, r_max=args.radius)
+    data = KNN(args.k_feat, r_max=args.radius, verbose=args.verbose)(data)
     torch.cuda.synchronize()
     info.times[key] = round(time() - start, 3)
 
     # Point features
     key = 'features'
-    data = data.cpu()
+    data = DataTo('cpu')(data)
     torch.cuda.synchronize()
     start = time()
-    data = compute_point_features(
-        data, rgb=args.rgb, linearity=args.linearity, planarity=args.planarity,
+    data = PointFeatures(
+        rgb=args.rgb, linearity=args.linearity, planarity=args.planarity,
         scattering=args.scattering, verticality=args.verticality,
         normal=args.normal, length=args.length, surface=args.surface,
-        volume=args.volume, k_min=args.k_min)
+        volume=args.volume, k_min=args.k_min)(data)
     info.times[key] = round(time() - start, 3)
 
     # Adjacency
     key = 'adjacency'
     start = time()
-    data = data.cuda()
-    data = compute_adjacency_graph(data, args.k_adjacency, args.lambda_edge_weight)
+    data = DataTo('cuda')(data)
+    data = AdjacencyGraph(args.k_adjacency, args.lambda_edge_weight)(data)
     info.num_edges = data.num_edges
     info.times[key] = round(time() - start, 3)
 
     # Connect isolated points
     key = 'isolated'
     start = time()
-    data = data.cuda()
-    data = data.connect_isolated(k=args.k_min)
+    data = ConnectIsolated(k=args.k_min)(data)
     info.num_edges = data.num_edges
     info.times[key] = round(time() - start, 3)
 
@@ -87,11 +86,10 @@ def process(i_cloud, args):
     key = 'partition'
     torch.cuda.synchronize()
     start = time()
-    data = data.cpu()
-    nag = compute_partition(
-        data, args.regularization, spatial_weight=args.spatial_weight,
+    data = DataTo('cpu')(data)
+    nag = CutPursuitPartition(args.regularization, spatial_weight=args.spatial_weight,
         k_adjacency=args.k_adjacency, cutoff=args.cutoff, verbose=args.verbose,
-        iterations=args.iterations, parallel=args.parallel)
+        iterations=args.iterations, parallel=args.parallel)(data)
     torch.cuda.synchronize()
     info.num_sp = nag[1].num_nodes
     info.times[key] = round(time() - start, 3)
@@ -110,8 +108,10 @@ def process(i_cloud, args):
     info.voxel_oracle = {
         'voxel': voxel_range, 'num': [], 'cm': [], 'oa': [], 'miou': []}
     for v in voxel_range:
+        d_voxel = DataTo('cuda')(d_voxel)
         d_voxel = GridSampling3D(
-            size=v, bins={'y': KITTI360_NUM_CLASSES + 1})(d_voxel.cuda()).cpu()
+            size=v, bins={'y': KITTI360_NUM_CLASSES + 1})(d_voxel)
+        d_voxel = DataTo('cpu')(d_voxel)
         cm = ConfusionMatrix.from_histogram(d_voxel.y[:, :KITTI360_NUM_CLASSES])
         info.voxel_oracle['num'].append(d_voxel.num_nodes)
         info.voxel_oracle['cm'].append(cm)
