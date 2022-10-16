@@ -16,7 +16,7 @@ __all__ = ['AdjacencyGraph', 'HorizontalGraphs', 'ConnectIsolated']
 
 class AdjacencyGraph(Transform):
     """Create the adjacency graph in `edge_index` and `edge_attr` based
-    on the `Data.neighbors` and `Data.distances`.
+    on the `Data.neighbor_index` and `Data.distances`.
 
     NB: this graph is directed wrt Pytorch Geometric, but cut-pursuit
     happily takes this as an input.
@@ -35,17 +35,17 @@ class AdjacencyGraph(Transform):
 
     def _process(self, data):
         assert data.has_neighbors, \
-            "Data must have 'neighbors' attribute to allow adjacency graph " \
-            "construction."
+            "Data must have 'neighbor_index' attribute to allow adjacency " \
+            "graph construction."
         assert getattr(data, 'distances', None) is not None, \
             "Data must have 'distances' attribute to allow adjacency graph " \
             "construction."
-        assert self.k <= data.neighbors.shape[1]
+        assert self.k <= data.neighbor_index.shape[1]
 
         # Compute source and target indices based on neighbors
         source = torch.arange(
             data.num_nodes, device=data.device).repeat_interleave(self.k)
-        target = data.neighbors[:, :self.k].flatten()
+        target = data.neighbor_index[:, :self.k].flatten()
 
         # Recover the neighbors distances
         distances = data.distances[:, :self.k].flatten()

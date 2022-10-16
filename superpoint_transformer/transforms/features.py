@@ -32,30 +32,30 @@ class PointFeatures(Transform):
         Use LAB color. Assumes Data.rgb holds either [0, 1] floats or
         [0, 255] integers
     density: bool
-        Use local density. Assumes ``Data.neighbors`` and
+        Use local density. Assumes ``Data.neighbor_index`` and
         ``Data.distances``.
     linearity: bool
-        Use local linearity. Assumes ``Data.neighbors``.
+        Use local linearity. Assumes ``Data.neighbor_index``.
     planarity: bool
-        Use local planarity. Assumes ``Data.neighbors``.
+        Use local planarity. Assumes ``Data.neighbor_index``.
     scattering: bool
-        Use local scattering. Assumes ``Data.neighbors``.
+        Use local scattering. Assumes ``Data.neighbor_index``.
     verticality: bool
-        Use local verticality. Assumes ``Data.neighbors``.
+        Use local verticality. Assumes ``Data.neighbor_index``.
     normal: bool
-        Use local normal. Assumes ``Data.neighbors``.
+        Use local normal. Assumes ``Data.neighbor_index``.
     length: bool
-        Use local length. Assumes ``Data.neighbors``.
+        Use local length. Assumes ``Data.neighbor_index``.
     surface: bool
-        Use local surface. Assumes ``Data.neighbors``.
+        Use local surface. Assumes ``Data.neighbor_index``.
     volume: bool
-        Use local volume. Assumes ``Data.neighbors``.
+        Use local volume. Assumes ``Data.neighbor_index``.
     curvature: bool
-        Use local curvature. Assumes ``Data.neighbors``.
+        Use local curvature. Assumes ``Data.neighbor_index``.
     k_min: int
         Minimum number of neighbors to consider for geometric features
         computation. Points with less than k_min neighbors will receive
-        0-features. Assumes ``Data.neighbors``.
+        0-features. Assumes ``Data.neighbor_index``.
     """
 
     def __init__(
@@ -83,11 +83,11 @@ class PointFeatures(Transform):
 
     def _process(self, data):
         assert data.has_neighbors, \
-            "Data is expected to have a 'neighbors' attribute"
+            "Data is expected to have a 'neighbor_index' attribute"
         assert data.num_nodes < np.iinfo(np.uint32).max, \
             "Too many nodes for `uint32` indices"
-        assert data.neighbors.max() < np.iinfo(np.uint32).max, \
-            "Too high 'neighbors' indices for `uint32` indices"
+        assert data.neighbor_index.max() < np.iinfo(np.uint32).max, \
+            "Too high 'neighbor_index' indices for `uint32` indices"
 
         features = []
 
@@ -137,7 +137,7 @@ class PointFeatures(Transform):
         # -1 indicates absent neighbors
         if self.density:
             dmax = data.distances.max(dim=1).values
-            k = data.neighbors.ge(0).sum(dim=1)
+            k = data.neighbor_index.ge(0).sum(dim=1)
             features.append((k / dmax ** 2).view(-1, 1))
 
         # Add local geometric features
@@ -150,7 +150,7 @@ class PointFeatures(Transform):
             # point to its own neighborhood before computation
             xyz = data.pos.cpu().numpy()
             nn = torch.cat(
-                (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbors), dim=1)
+                (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbor_index), dim=1)
             k = nn.shape[1]
 
             # Check for missing neighbors (indicated by -1 indices)

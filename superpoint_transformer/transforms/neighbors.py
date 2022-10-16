@@ -9,8 +9,8 @@ __all__ = ['KNN', 'Inliers', 'Outliers']
 class KNN(Transform):
     """K-NN search for each point in Data.
 
-    Neighbors and corresponding distances are stored in `Data.neighbors`
-    and `Data.distances`, respectively.
+    Neighbors and corresponding distances are stored in
+    `Data.neighbor_index` and `Data.distances`, respectively.
 
     To accelerate search, neighbors are searched within a maximum radius
     of each point. This may result in points having less-than-expected
@@ -44,7 +44,7 @@ class KNN(Transform):
         neighbors, distances = knn_1(
             data.pos, self.k, r_max=self.r_max, oversample=self.oversample,
             self_is_neighbor=self.self_is_neighbor, verbose=self.verbose)
-        data.neighbors = neighbors
+        data.neighbor_index = neighbors
         data.distances = distances
         return data
 

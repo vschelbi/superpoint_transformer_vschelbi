@@ -40,8 +40,9 @@ class Data(PyGData):
         return self['pred'] if 'pred' in self._store else None
 
     @property
-    def neighbors(self):
-        return self['neighbors'] if 'neighbors' in self._store else None
+    def neighbor_index(self):
+        return self['neighbor_index'] if 'neighbor_index' in self._store \
+            else None
 
     @property
     def sub(self):
@@ -66,7 +67,7 @@ class Data(PyGData):
     @property
     def has_neighbors(self):
         """Whether the points have neighbors."""
-        return self.neighbors is not None and self.neighbors.shape[1] > 0
+        return self.neighbor_index is not None and self.neighbor_index.shape[1] > 0
 
     @property
     def has_edges(self):
@@ -139,7 +140,15 @@ class Data(PyGData):
         maintaining clusters when batching Data objects together.
         """
         return self.num_super if key in 'super_index' \
-            else super().__inc__(key, value)
+            else super().__inc__(key, value, *args, **kwargs)
+
+    def __cat_dim__(self, key, value, *args, **kwargs):
+        """Extend the PyG.Data.__inc__ behavior on '*index*' and
+        '*face*' attributes to our 'neighbor_index'. This is needed for
+        maintaining neighbors when batching Data objects together.
+        """
+        return 0 if key == 'neighbor_index' \
+            else super().__cat_dim__(key, value, *args, **kwargs)
 
     def select(self, idx, update_sub=True, update_super=True):
         """Returns a new Data with updated clusters, which indexes
@@ -257,7 +266,7 @@ class Data(PyGData):
             out_super = (idx_super, super_sub)
 
         # Index data items depending on their type
-        warn_keys = ['neighbors', 'distances']
+        warn_keys = ['neighbor_index', 'distances']
         skip_keys = ['edge_index', 'sub', 'super_index'] + warn_keys
         for key, item in self:
 

@@ -181,8 +181,8 @@ class CutPursuitPartition(Transform):
 
             # Aggregate some point attributes into the clusters. This
             # is not performed dynamically since not all attributes can
-            # be aggregated (eg 'neighbors', 'distances', 'edge_index',
-            # 'edge_attr'...)
+            # be aggregated (eg 'neighbor_index', 'distances',
+            # 'edge_index', 'edge_attr'...)
             if 'y' in d1.keys:
                 assert d1.y.dim() == 2, \
                     "Expected Data.y to hold `(num_nodes, num_classes)` " \
