@@ -137,6 +137,3 @@ git clone https://gitlab.com/1a7r0ch3/grid-graph.git superpoint_transformer/part
 
 # Compile the projects
 python scripts/setup_dependencies.py build_ext
-
-
-

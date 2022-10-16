@@ -2,16 +2,15 @@
 #          Distutils setup script for compiling python extensions      #
 #----------------------------------------------------------------------#
 """ 
-Compilation command: python setup.py build_ext
-Hugo Raguet, adapted by Loic Landrieu (2020), Damien Robert (2022)
+Compilation command: `python scripts/setup_dependencies.py build_ext`
+Hugo Raguet, adapted by Loic Landrieu (2020), and Damien Robert (2022)
 Source: https://github.com/loicland/img2svg
 """
 
 from distutils.core import setup, Extension
 from distutils.command.build import build
-from distutils.ccompiler import new_compiler
 import numpy
-import shutil # for rmtree, os.rmdir can only remove _empty_ directory
+import shutil
 import os
 import os.path as osp
 import re
@@ -125,7 +124,6 @@ try:
     shutil.rmtree("build")
 except FileNotFoundError:
     pass
-
 
 # Restore the initial working directory
 os.chdir(WORK_DIR)
