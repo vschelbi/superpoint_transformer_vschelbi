@@ -8,7 +8,8 @@ from .features import *
 from .graph import *
 from .partition import *
 from superpoint_transformer.data import Data
-from torch_geometric.transforms import Compose
+import torch_geometric.transforms as pygT
+
 
 # Fuse all transforms defined in this project with the torch_geometric
 # transforms. Special attention is given to local transforms that may
@@ -25,16 +26,17 @@ for name in _intersection_tr:
     if not "torch_geometric.transforms." in str(cls):
         _intersection_cls.append(cls)
 
-if len(_intersection_cls) > 0:
-    raise Exception(
-        f"It seems that you are overriding a transform from pytorch "
-        f"geometric, this is forbidden, please rename your classes "
-        f"{_intersection_tr} from {_intersection_cls}")
-elif len(_intersection_tr) > 0:
-    raise Exception(
-        f"It seems you are importing transforms {_intersection_tr} "
-        f"from pytorch geometric within the current code base. Please, "
-        f"remove them or add them within a class, function, etc.")
+if len(_intersection_tr) > 0:
+    if len(_intersection_cls) > 0:
+        raise Exception(
+            f"It seems that you are overriding a transform from pytorch "
+            f"geometric, this is forbidden, please rename your classes "
+            f"{_intersection_tr} from {_intersection_cls}")
+    else:
+        raise Exception(
+            f"It seems you are importing transforms {_intersection_tr} "
+            f"from pytorch geometric within the current code base. Please, "
+            f"remove them or add them within a class, function, etc.")
 
 
 def instantiate_transform(transform_option, attr="transform"):
@@ -90,7 +92,7 @@ def instantiate_transforms(transform_options):
         transforms.append(instantiate_transform(transform))
 
     if len(transforms) <= 1:
-        return Compose(transforms)
+        return pygT.Compose(transforms)
 
     # If multiple transforms are composed, make sure the input and
     # output match
@@ -104,4 +106,4 @@ def instantiate_transforms(transform_options):
                 f"Cannot compose transforms: {t_out} returns a {out_type} "
                 f"while {t_in} expects a {in_type} input.")
 
-    return Compose(transforms)
+    return pygT.Compose(transforms)
