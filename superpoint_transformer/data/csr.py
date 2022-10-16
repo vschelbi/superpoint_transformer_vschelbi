@@ -1,8 +1,12 @@
-import torch
 import copy
+import torch
+import numpy as np
 import superpoint_transformer
 from superpoint_transformer.utils import tensor_idx, is_sorted, \
     indices_to_pointers
+
+
+__all__ = ['CSRData', 'CSRBatch']
 
 
 class CSRData:
@@ -113,8 +117,7 @@ class CSRData:
     @staticmethod
     def get_batch_type():
         """Required by CSRBatch.from_csr_list."""
-        #TODO: CSRBatch
-        raise NotImplementedError
+        return CSRBatch
 
     def clone(self):
         """Shallow copy of self. This may cause issues for certain types
@@ -280,3 +283,162 @@ class CSRData:
                     print(f'{self.__class__.__name__}.__eq__: values differ')
                 return False
         return True
+
+
+class CSRBatch(CSRData):
+    """
+    Wrapper class of CSRData to build a batch from a list of CSRData
+    data and reconstruct it afterwards.
+
+    When defining a subclass A of CSRData, it is recommended to create
+    an associated CSRBatch subclass by doing the following:
+        - ABatch inherits from (A, CSRBatch)
+        - A.get_batch_type() returns ABatch
+    """
+    __csr_type__ = CSRData
+
+    def __init__(self, pointers, *args, dense=False, is_index_value=None):
+        """Basic constructor for a CSRBatch. Batches are rather
+        intended to be built using the from_csr_list() method.
+        """
+        super(CSRBatch, self).__init__(
+            pointers, *args, dense=dense, is_index_value=is_index_value)
+        self.__sizes__ = None
+
+    @property
+    def batch_pointers(self):
+        return torch.cumsum(
+            torch.cat((torch.LongTensor([0]), self.__sizes__)), dim=0) \
+            if self.__sizes__ is not None else None
+
+    @property
+    def batch_items_sizes(self):
+        return self.__sizes__ if self.__sizes__ is not None else None
+
+    @property
+    def num_batch_items(self):
+        return len(self.__sizes__) if self.__sizes__ is not None else 0
+
+    def to(self, device):
+        """Move the CSRBatch to the specified device."""
+        out = super().to(device)
+        out.__sizes__ = self.__sizes__.to(device) \
+            if self.__sizes__ is not None else None
+        return out
+
+    @staticmethod
+    def from_csr_list(csr_list):
+        assert isinstance(csr_list, list) and len(csr_list) > 0
+        assert isinstance(csr_list[0], CSRData), \
+            "All provided items must be CSRData objects."
+        csr_type = type(csr_list[0])
+        assert all([isinstance(csr, csr_type) for csr in csr_list]), \
+            "All provided items must have the same class."
+        device = csr_list[0].device
+        assert all([csr.device == device for csr in csr_list]), \
+            "All provided items must be on the same device."
+        num_values = csr_list[0].num_values
+        assert all([csr.num_values == num_values for csr in csr_list]), \
+            "All provided items must have the same number of values."
+        is_index_value = csr_list[0].is_index_value
+        if is_index_value is not None:
+            assert all([
+                np.array_equal(csr.is_index_value, is_index_value)
+                for csr in csr_list]), \
+                "All provided items must have the same is_index_value."
+        else:
+            assert all([csr.is_index_value is None for csr in csr_list]), \
+                "All provided items must have the same is_index_value."
+        if superpoint_transformer.is_debug_enabled():
+            for csr in csr_list:
+                csr.debug()
+
+        # Offsets are used to stack pointer indices and values
+        # identified as "index" value by `is_index_value` without
+        # losing the indexing information they carry.
+        offsets = torch.cumsum(torch.LongTensor(
+            [0] + [csr.num_items for csr in csr_list[:-1]]), dim=0).to(device)
+
+        # Stack pointers
+        pointers = torch.cat((
+            torch.LongTensor([0]).to(device),
+            *[csr.pointers[1:] + offset
+              for csr, offset in zip(csr_list, offsets)]), dim=0)
+
+        # Stack values
+        values = []
+        for i in range(num_values):
+            val_list = [csr.values[i] for csr in csr_list]
+            if isinstance(csr_list[0].values[i], CSRData):
+                val = CSRBatch.from_csr_list(val_list)
+            elif is_index_value[i]:
+                # "Index" values are stacked with updated indices.
+                # For Clusters, this implies all point indices are
+                # assumed to be present in the Cluster.points. There can
+                # be no point with no cluster
+                offsets = torch.LongTensor(
+                    [0] + [
+                        v.max().item() + 1 if v.shape[0] > 0 else 0
+                        for v in val_list[:-1]])
+                cum_offsets = torch.cumsum(offsets, dim=0).to(device)
+                val = torch.cat([
+                    v + o for v, o in zip(val_list, cum_offsets)], dim=0)
+            else:
+                val = torch.cat(val_list, dim=0)
+            values.append(val)
+
+        # Create the Batch object, depending on the data type
+        # Default of CSRData is CSRBatch, but subclasses of CSRData
+        # may define their own batch class inheriting from CSRBatch.
+        batch_type = csr_type.get_batch_type()
+        batch = batch_type(
+            pointers, *values, dense=False, is_index_value=is_index_value)
+        batch.__sizes__ = torch.LongTensor([csr.num_groups for csr in csr_list])
+        batch.__csr_type__ = csr_type
+
+        return batch
+
+    def to_csr_list(self):
+        if self.__sizes__ is None:
+            raise RuntimeError(
+                'Cannot reconstruct CSRData data list from batch because the '
+                'CSRBatch was not created using `CSRBatch.from_csr_list()`.')
+
+        group_pointers = self.batch_pointers
+        item_pointers = self.pointers[group_pointers]
+
+        # Recover pointers and index offsets for each CSRData item
+        pointers = [
+            self.pointers[group_pointers[i]:group_pointers[i + 1] + 1]
+            - item_pointers[i]
+            for i in range(self.num_batch_items)]
+
+        # Recover the values for each CSRData item
+        values = []
+        for i in range(self.num_values):
+            batch_value = self.values[i]
+            if isinstance(batch_value, CSRData):
+                val = batch_value.to_csr_list()
+            elif self.is_index_value[i]:
+                val = [
+                    batch_value[item_pointers[j]:item_pointers[j + 1]]
+                    - (batch_value[:item_pointers[j]].max() + 1 if j > 0 else 0)
+                    for j in range(self.num_batch_items)]
+            else:
+                val = [batch_value[item_pointers[j]:item_pointers[j + 1]]
+                       for j in range(self.num_batch_items)]
+            values.append(val)
+        values = [list(x) for x in zip(*values)]
+
+        csr_list = [
+            self.__csr_type__(
+                j, *v, dense=False, is_index_value=self.is_index_value)
+            for j, v in zip(pointers, values)]
+
+        return csr_list
+
+    def __repr__(self):
+        info = [f"{key}={getattr(self, key)}"
+                for key in [
+                    'num_batch_items', 'num_groups', 'num_items', 'device']]
+        return f"{self.__class__.__name__}({', '.join(info)})"

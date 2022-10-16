@@ -3,11 +3,14 @@ import torch
 from time import time
 from typing import List
 import superpoint_transformer
-from superpoint_transformer.data import Data
+from superpoint_transformer.data import Data, Batch
 from superpoint_transformer.utils import tensor_idx, has_duplicates, \
     arange_interleave, fast_randperm
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter_sum
+
+
+__all__ = ['NAG', 'NAGBatch']
 
 
 class NAG:
@@ -16,7 +19,7 @@ class NAG:
     """
 
     def __init__(self, data_list: List[Data]):
-        assert len(data_list) > 0,\
+        assert len(data_list) > 0, \
             "The NAG must have at least 1 level of hierarchy. Please " \
             "provide a minimum of 1 Data object."
         self._list = data_list
@@ -150,7 +153,6 @@ class NAG:
 
         # Iteratively update lower hierarchy levels
         for i in range(i_level - 1, -1, -1):
-
             # Unpack the 'out_sub' from the previous above level
             (idx_sub, sub_super) = out_sub
 
@@ -165,7 +167,6 @@ class NAG:
 
         # Iteratively update higher hierarchy levels
         for i in range(i_level + 1, self.num_levels):
-
             # Unpack the 'out_super' from the previous below level
             (idx_super, super_sub) = out_super
 
@@ -452,3 +453,20 @@ class NAG:
                     print(f'{self.__class__.__name__}.__eq__: data differ')
                 return False
         return True
+
+
+class NAGBatch(NAG):
+    """Wrapper for NAG batching."""
+
+    @staticmethod
+    def from_nag_list(nag_list):
+        # TODO: seems sluggish, need to investigate. Might be due to too
+        #  many level-0 points
+        assert isinstance(nag_list, list)
+        assert len(nag_list) > 0
+        assert all(isinstance(x, NAG) for x in nag_list)
+        return NAGBatch([
+            Batch.from_data_list(l) for l in zip(*[n._list for n in nag_list])])
+
+    def to_nag_list(self):
+        return [NAG(l) for l in zip(*[b.to_data_list() for b in self])]

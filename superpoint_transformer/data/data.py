@@ -9,13 +9,19 @@ from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_geometric.utils import coalesce, remove_self_loops
 import superpoint_transformer
-from superpoint_transformer.data.cluster import Cluster
+from superpoint_transformer.data.cluster import Cluster, ClusterBatch
 from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates, \
     isolated_nodes, knn_2, save_tensor, load_tensor, save_dense_to_csr, \
     load_csr_to_dense
 
 
+__all__ = ['Data', 'Batch']
+
+
 class Data(PyGData):
+    """Inherit from torch_geometric.Data with extensions tailored to our
+    specific needs.
+    """
 
     _INDEXABLE = [
         'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size', 'sub']
@@ -95,7 +101,7 @@ class Data(PyGData):
         return self.sub.points.max().cpu().item() + 1 if self.is_super else 0
 
     def to(self, device):
-        """Extend torch_geometric.Data.to to handle Cluster attributes.
+        """Extend `torch_geometric.Data.to` to handle Cluster attributes.
         """
         self = super().to(device)
         if self.is_super:
@@ -134,6 +140,7 @@ class Data(PyGData):
                     "creating a Data object after applying a selection of "
                     "points without updating the cluster indices.")
 
+    # TODO batching data.sub indices
     def __inc__(self, key, value, *args, **kwargs):
         """Extend the PyG.Data.__inc__ behavior on '*index*' and
         '*face*' attributes to our 'super_index'. This is needed for
@@ -566,6 +573,41 @@ class Data(PyGData):
 
 
 class Batch(PyGBatch):
-    pass
-    #TODO
-    # batching data.sub indices
+    """Inherit from torch_geometric.Batch with extensions tailored to
+    our specific needs.
+    """
+
+    @classmethod
+    def from_data_list(cls, data_list, follow_batch=None, exclude_keys=None):
+        """Overwrite torch_geometric from_data_list to be able to handle
+        Cluster objects batching.
+        """
+
+        # PyG way of batching does not recognize some local classes such
+        # as Cluster and CSRData, so it will accumulate them in lists
+        batch = super().from_data_list(
+            data_list, follow_batch=follow_batch, exclude_keys=exclude_keys)
+
+        # Dirty trick: manually convert 'sub' to a proper ClusterBatch.
+        # Note we will need to do the same in `get_example` to avoid
+        # breaking PyG Batch mechanisms
+        if batch.is_super:
+            batch.sub = ClusterBatch.from_csr_list(batch.sub)
+
+        return batch
+
+    def get_example(self, idx):
+        """Overwrite torch_geometric get_example to be able to handle
+        Cluster objects batching.
+        """
+
+        if self.is_super:
+            sub_bckp = self.sub.clone()
+            self.sub = self.sub.to_csr_list()
+
+        data = super().get_example(idx)
+
+        if self.is_super:
+            self.sub = sub_bckp
+
+        return data

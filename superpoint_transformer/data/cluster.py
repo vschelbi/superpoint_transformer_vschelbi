@@ -1,10 +1,13 @@
 import h5py
 import torch
 from time import time
-from superpoint_transformer.data.csr import CSRData
+from superpoint_transformer.data.csr import CSRData, CSRBatch
 from superpoint_transformer.utils import has_duplicates, tensor_idx, \
     save_tensor, load_tensor
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
+
+
+__all__ = ['Cluster', 'ClusterBatch']
 
 
 class Cluster(CSRData):
@@ -12,9 +15,14 @@ class Cluster(CSRData):
     dedicated to cluster-point indexing.
     """
 
-    def __init__(self, pointers, points, dense=False):
+    def __init__(self, pointers, points, dense=False, **kwargs):
         super().__init__(
             pointers, points, dense=dense, is_index_value=[True])
+
+    @staticmethod
+    def get_batch_type():
+        """Required by CSRBatch.from_csr_list."""
+        return ClusterBatch
 
     @property
     def points(self):
@@ -239,3 +247,8 @@ class Cluster(CSRData):
             print(f'Cluster.load super_index    : {time() - start:0.5f}s')
 
         return cluster, (idx_sub, sub_super)
+
+
+class ClusterBatch(Cluster, CSRBatch):
+    """Wrapper for Cluster batching."""
+    __csr_type__ = Cluster
