@@ -129,6 +129,18 @@ class KITTI360(InMemoryDataset):
             for x in self.windows]
 
     @property
+    def hash(self):
+        """Produce a unique but stable hash based on the dataset
+        attributes and its transforms attributes.
+        """
+        # TODO: create a unique but stable hash_dir name depending on
+        #  Dataset attributes and the transforms attributes. This can be
+        #  a challenge because those objects are by default unhashable,
+        #  but one could design a recursive search trick to get the
+        #  attribute values and concatenate them into a single tuple
+        return 'nag'
+
+    @property
     def processed_file_names(self):
         """The name of the files to find in the :obj:`self.processed_dir`
         folder in order to skip the processing
@@ -137,10 +149,10 @@ class KITTI360(InMemoryDataset):
         # memory
         if self.split == 'trainval':
             return [
-                osp.join(s, '3d', f'{w}.pt')
+                osp.join(s, self.hash, f'{w}.h5')
                 for s in ('train', 'val')
                 for w in self._WINDOWS[s]]
-        return [osp.join(self.split, '3d', f'{w}.pt') for w in self.windows]
+        return [osp.join(self.split, self.hash, f'{w}.h5') for w in self.windows]
 
     @property
     def submission_dir(self):
@@ -206,7 +218,7 @@ class KITTI360(InMemoryDataset):
             return
 
         # Extract useful information from <path>
-        split, modality, sequence_name, window_name = \
+        split, hash_dir, sequence_name, window_name = \
             osp.splitext(window_path)[0].split('/')[-4:]
 
         # Create necessary parent folders if need be
