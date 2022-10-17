@@ -243,7 +243,7 @@ class KITTI360(InMemoryDataset):
             nag = self.pre_transform(data)
 
         # To save some disk space, we discard some level-0 attributes
-        level0_keys = set(nag[0].keys).intersection(self._LEVEL0_SAVE_KEYS)
+        level0_keys = set(nag[0].keys) - set(self._LEVEL0_SAVE_KEYS)
         nag._list[0] = RemoveAttributes(keys=level0_keys)(nag[0])
 
         # TODO: concatenate point features into x ? Or separate rgb and
