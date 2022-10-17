@@ -22,5 +22,5 @@ class NAGToData(Transform):
     _OUT_TYPE = Data
 
     def _process(self, nag):
-        assert len(nag) == 1
+        assert nag.num_levels == 1
         return NAG[0]

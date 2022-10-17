@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import os.path as osp
 import plotly.graph_objects as go
-from superpoint_transformer.data import Data, NAG
+from superpoint_transformer.data import Data, NAG, Cluster
 from superpoint_transformer.transforms import GridSampling3D, SaveOriginalPosId
 from superpoint_transformer.utils.tensor import fast_randperm
 from torch_scatter import scatter_mean
@@ -190,10 +190,22 @@ def visualize_3d(
 
     # We work on copies of the input data, to allow modified in this
     # scope
-    input = input.clone()
-    input = NAG([input]) if isinstance(input, Data) and input.is_sub \
-        else input
+    input = input.clone().cpu()
+
+    # If the input is a simple Data object, we convert it to a NAG
+    input = NAG([input]) if isinstance(input, Data) else input
+
+    # If the last level of the NAG has super_index, we manually
+    # construct an additional Data level and append it to the NAG
+    if input[input.num_levels - 1].is_sub:
+        data_last = input[input.num_levels - 1]
+        sub = Cluster(
+            data_last.super_index, torch.arange(data_last.num_nodes),
+            dense=True)
+        pos = scatter_mean(data_last.pos, data_last.super_index, dim=0)
+        input = NAG(input.to_list() + [Data(pos=pos, sub=sub)])
     is_nag = isinstance(input, NAG)
+    num_levels = input.num_levels if is_nag else 1
 
     # Make sure alpha is in [0, 1]
     alpha = max(0, min(alpha, 1))
@@ -205,7 +217,7 @@ def visualize_3d(
 
         # Add an ID to the points before applying NAG.select
         nag_temp = input.clone()
-        for i in range(len(nag_temp)):
+        for i in range(nag_temp.num_levels):
             nag_temp._list[i] = SaveOriginalPosId()(nag_temp[i])
 
         # Apply the selection
@@ -213,7 +225,7 @@ def visualize_3d(
 
         # Indicate, for each node of the hierarchical graph, whether it
         # has been selected
-        for i in range(len(input)):
+        for i in range(num_levels):
             selected = torch.zeros(input[i].num_nodes, dtype=torch.bool)
             selected[nag_temp[i][SaveOriginalPosId.KEY]] = True
             input[i].selected = selected
@@ -237,7 +249,7 @@ def visualize_3d(
         del data_temp, selected
 
     elif is_nag:
-        for i in range(len(input)):
+        for i in range(num_levels):
             input[i].selected = torch.ones(
                 input[i].num_nodes, dtype=torch.bool)
 
@@ -464,7 +476,7 @@ def visualize_3d(
         # Round to the cm for cleaner hover info
         super_pos = (super_pos * 100).round() / 100
 
-        # Save the drawing position of centroids to faciliate vertical
+        # Save the drawing position of centroids to facilitate vertical
         # edges drawing later on
         input[i_level + 1].draw_pos = super_pos
 
@@ -526,7 +538,7 @@ def visualize_3d(
                 'hovertext': text[~input[i_level + 1].selected.numpy()]}
             for k in keys})
 
-        if i_level > 0 and v_edge and gap is not None:
+        if i_level > 0 and v_edge and gap is not None and is_nag:
             # Recover the source and target positions for vertical edges
             # between i_level -> i_level+1
             low_pos = data_i.draw_pos[data_i.selected]
@@ -597,8 +609,8 @@ def visualize_3d(
 
         # Recover corresponding source and target coordinates using the
         # previously-computed 'super_pos' cluster centroid positions
-        s_pos = super_pos[se[0]].cpu().numpy()
-        t_pos = super_pos[se[1]].cpu().numpy()
+        s_pos = super_pos[se[0]].numpy()
+        t_pos = super_pos[se[1]].numpy()
 
         # Convert into a plotly-friendly format for 3D lines
         edges = np.full((se.shape[1] * 3, 3), None)

@@ -26,11 +26,8 @@ class NAG:
         if superpoint_transformer.is_debug_enabled():
             self.debug()
 
-    def __len__(self):
-        return len(self._list)
-
     def __iter__(self):
-        for i in range(self.__len__()):
+        for i in range(self.num_levels):
             yield self[i]
 
     def get_sub_size(self, high, low=0):
@@ -55,12 +52,12 @@ class NAG:
     @property
     def num_levels(self):
         """Number of levels of hierarchy in the nested graph."""
-        return len(self)
+        return len(self._list)
 
     @property
     def num_points(self):
         """Number of points/nodes in the lower-level graph."""
-        return [d.num_points for d in self] if len(self) > 0 else 0
+        return [d.num_points for d in self] if self.num_levels > 0 else 0
 
     def to_list(self):
         """Return the Data list"""
@@ -86,7 +83,7 @@ class NAG:
     @property
     def device(self):
         """Return device of first Data in NAG."""
-        return self[0].device if len(self) > 0 else torch.Tensor().device
+        return self[0].device if self.num_levels > 0 else torch.Tensor().device
 
     @property
     def is_cuda(self):
@@ -104,7 +101,7 @@ class NAG:
         i_level: int
             The hierarchy level to return
         """
-        assert 0 <= i_level < len(self)
+        assert 0 <= i_level < self.num_levels
         return self._list[i_level]
 
     def select(self, i_level, idx):
@@ -130,7 +127,7 @@ class NAG:
             duplicate-free
         """
         assert isinstance(i_level, int)
-        assert i_level < len(self)
+        assert i_level < self.num_levels
 
         # Convert idx to a Tensor
         idx = tensor_idx(idx).to(self.device)
@@ -260,7 +257,7 @@ class NAG:
                         verbose=verbose)
                 data_list.append(data)
                 if verbose:
-                    print(f'NAG.load partition {i:<12} : {time() - start:0.3f}s\n')
+                    print(f'NAG.load lvl-{i:<12} : 'f'{time() - start:0.3f}s\n')
 
         # In the case where update_super is not required but the low
         # level was indexed, we cannot combine the leve-0 and level-1+
@@ -298,6 +295,9 @@ class NAG:
             Data.select with update_super=True)
         :return:
         """
+        assert isinstance(data, Data)
+        assert isinstance(data_list, list)
+
         if idx is None and data_list is None or len(data_list) == 0:
             return NAG([data])
 
@@ -320,18 +320,19 @@ class NAG:
 
     def debug(self):
         """Sanity checks."""
-        assert len(self) > 0
+        assert self.num_levels > 0
         for i, d in enumerate(self):
             assert isinstance(d, Data)
             if i > 0:
                 assert d.is_super
                 assert d.num_points == self[i - 1].num_super
-            if i < len(self) - 1:
+            if i < self.num_levels - 1:
                 assert d.is_sub
                 assert d.num_points == self[i + 1].num_sub
 
     def get_sampling(
-            self, high, low=0, n_max=32, n_min=1, mask=None, return_pointers=False):
+            self, high, low=0, n_max=32, n_min=1, mask=None,
+            return_pointers=False):
         """Compute indices for sampling elements at level 'low', based
         on which cluster they belong to at level 'high'. The sampling
         operation is run is without replacement and each cluster is
