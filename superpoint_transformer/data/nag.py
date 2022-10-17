@@ -462,7 +462,9 @@ class NAGBatch(NAG):
     @staticmethod
     def from_nag_list(nag_list):
         # TODO: seems sluggish, need to investigate. Might be due to too
-        #  many level-0 points
+        #  many level-0 points. The bottleneck is in the level-0
+        #  Batch.from_data_list. the 'cat' operation seems to be
+        #  dominating
         assert isinstance(nag_list, list)
         assert len(nag_list) > 0
         assert all(isinstance(x, NAG) for x in nag_list)

@@ -1,5 +1,4 @@
 import os
-import os.path as osp
 import torch
 from plyfile import PlyData
 import logging
@@ -10,6 +9,7 @@ from torch_geometric.data import InMemoryDataset
 from superpoint_transformer.data import Data, NAG
 from superpoint_transformer.datasets.kitti360_config import *
 from superpoint_transformer.utils.download import run_command
+from superpoint_transformer.transforms import RemoveAttributes
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -71,6 +71,8 @@ class KITTI360(InMemoryDataset):
     num_classes = KITTI360_NUM_CLASSES
     _WINDOWS = WINDOWS
     _SEQUENCES = SEQUENCES
+    _LEVEL0_SAVE_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
+    _LEVEL0_LOAD_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
 
     def __init__(
             self, root, split="train", transform=None, pre_transform=None,
@@ -208,9 +210,9 @@ class KITTI360(InMemoryDataset):
 
     def process(self):
         for p in tq(self.processed_paths):
-            self._process_window(p)
+            self._process_single_window(p)
 
-    def _process_window(self, window_path):
+    def _process_single_window(self, window_path):
         """Internal method called by `self.process` to preprocess a
         single KITTI360 window of 3D points.
         """
@@ -238,10 +240,25 @@ class KITTI360(InMemoryDataset):
 
         # Apply pre_transform
         if self.pre_transform is not None:
-            data = self.pre_transform(data)
+            nag = self.pre_transform(data)
+
+        # To save some disk space, we discard some level-0 attributes
+        level0_keys = set(nag[0].keys).intersection(self._LEVEL0_SAVE_KEYS)
+        nag._list[0] = RemoveAttributes(keys=level0_keys)(nag[0])
+
+        # TODO: concatenate point features into x ? Or separate rgb and
+        #  pos to avoid redundancy ?
+        # TODO: maybe drop some level-1+ keys too ? Like features and
+        #  all ?
+        # TODO: at train time, loading and batching level-0 data is
+        #  time-consuming. Make sure to load only the strict necessary !
+        # TODO: is you do not throw away level-0 neighbors, make sure
+        #  that they contain no '-1' empty neighborhoods, because if
+        #  you load them for batching, the pyg reindexing mechanism will
+        #  break indices will not index update
 
         # Save pre_transformed data to the processed dir/<path>
-        data.save(window_path, x32=self.x32, y_to_csr=self.y_to_csr)
+        nag.save(window_path, x32=self.x32, y_to_csr=self.y_to_csr)
 
     def __len__(self):
         """Number of windows in the dataset."""
@@ -251,7 +268,8 @@ class KITTI360(InMemoryDataset):
         """Load a preprocessed NAG from disk and apply `self.transform`
         if any.
         """
-        nag = NAG.load(self.processed_paths[idx])
+        nag = NAG.load(
+            self.processed_paths[idx], keys_low=self._LEVEL0_LOAD_KEYS)
         nag = nag if self.transform is None else self.transform(nag)
         return nag
 
