@@ -95,6 +95,7 @@ pip install h5py
 pip install colorhash
 pip install seaborn
 pip3 install numba --user
+pip install pytorch-lightning --user
 
 #*********************************
 
