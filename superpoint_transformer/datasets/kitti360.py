@@ -60,7 +60,7 @@ class KITTI360(InMemoryDataset):
     ----------
     root : `str`
         Root directory where the dataset should be saved.
-    split : {'train', 'val', 'test', 'trainval'}, optional
+    stage : {'train', 'val', 'test', 'trainval'}, optional
     transform : `callable`, optional
         transform function operating on data.
     pre_transform : `callable`, optional
@@ -72,13 +72,13 @@ class KITTI360(InMemoryDataset):
     _WINDOWS = WINDOWS
     _SEQUENCES = SEQUENCES
     _LEVEL0_SAVE_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
-    _LEVEL0_LOAD_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
+    _LEVEL0_LOAD_KEYS = ['pos', 'x', 'y', 'node_size', 'super_index']
 
     def __init__(
-            self, root, split="train", transform=None, pre_transform=None,
+            self, root, stage="train", transform=None, pre_transform=None,
             pre_filter=None, x32=True, y_to_csr=True):
 
-        self._split = split
+        self._stage = stage
         self.x32 = x32
         self.y_to_csr = y_to_csr
 
@@ -86,20 +86,20 @@ class KITTI360(InMemoryDataset):
         super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
-    def split(self):
-        return self._split
+    def stage(self):
+        return self._stage
 
     @property
     def has_labels(self):
         """Self-explanatory attribute needed for BaseDataset."""
-        return self.split != 'test'
+        return self.stage != 'test'
 
     @property
     def windows(self):
         """Filenames of the dataset windows."""
-        if self.split == 'trainval':
+        if self.stage == 'trainval':
             return self._WINDOWS['train'] + self._WINDOWS['val']
-        return self._WINDOWS[self.split]
+        return self._WINDOWS[self.stage]
 
     @property
     def raw_file_structure(self):
@@ -150,12 +150,12 @@ class KITTI360(InMemoryDataset):
         """
         # For 'trainval', we use files from 'train' and 'val' to save
         # memory
-        if self.split == 'trainval':
+        if self.stage == 'trainval':
             return [
                 osp.join(s, self.hash, f'{w}.h5')
                 for s in ('train', 'val')
                 for w in self._WINDOWS[s]]
-        return [osp.join(self.split, self.hash, f'{w}.h5') for w in self.windows]
+        return [osp.join(self.stage, self.hash, f'{w}.h5') for w in self.windows]
 
     @property
     def submission_dir(self):
@@ -185,13 +185,13 @@ class KITTI360(InMemoryDataset):
         # Accumulated 3D point clouds with annotations
         if not all(osp.exists(osp.join(self.raw_dir, x))
                    for x in self.raw_file_names_3d):
-            if self.split != 'test':
+            if self.stage != 'test':
                 msg = 'Accumulated Point Clouds for Train & Val (12G)'
             else:
                 msg = 'Accumulated Point Clouds for Test (1.2G)'
             self.download_message(msg)
             script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
-            run_command([f'{script} {self.raw_dir} {self.split}'])
+            run_command([f'{script} {self.raw_dir} {self.stage}'])
 
     def download_warning(self):
         # Warning message for the user about to download
@@ -221,7 +221,7 @@ class KITTI360(InMemoryDataset):
             return
 
         # Extract useful information from <path>
-        split, hash_dir, sequence_name, window_name = \
+        stage, hash_dir, sequence_name, window_name = \
             osp.splitext(window_path)[0].split('/')[-4:]
 
         # Create necessary parent folders if need be
