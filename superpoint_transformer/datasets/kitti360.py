@@ -236,7 +236,8 @@ class KITTI360(InMemoryDataset):
 
         # TODO: this is dirty, may cause subsequent collisions with
         #  self.num_classes = KITTI360_NUM_CLASSES...
-        data.y[data.y == -1] = KITTI360_NUM_CLASSES
+        if self.has_labels:
+            data.y[data.y == -1] = KITTI360_NUM_CLASSES
 
         # Apply pre_transform
         if self.pre_transform is not None:
