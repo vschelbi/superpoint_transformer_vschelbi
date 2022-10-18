@@ -7,7 +7,7 @@ from .neighbors import *
 from .features import *
 from .graph import *
 from .partition import *
-from superpoint_transformer.data import Data
+from src.data import Data
 import torch_geometric.transforms as pygT
 
 

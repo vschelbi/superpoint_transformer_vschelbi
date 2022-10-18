@@ -1,5 +1,5 @@
-from superpoint_transformer.transforms import Transform
-from superpoint_transformer.utils.neighbors import knn_1, inliers_split, \
+from src.transforms import Transform
+from src.utils.neighbors import knn_1, inliers_split, \
     outliers_split
 
 

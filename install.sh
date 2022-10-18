@@ -102,10 +102,10 @@ pip install pytorch-lightning --user
 echo
 echo "___________________ FRNN ___________________"
 echo
-git clone --recursive https://github.com/lxxue/FRNN.git superpoint_transformer/partition/FRNN
+git clone --recursive https://github.com/lxxue/FRNN.git src/partition/FRNN
 
 # install a prefix_sum routine first
-cd superpoint_transformer/partition/FRNN/external/prefix_sum
+cd src/partition/FRNN/external/prefix_sum
 python setup.py install
 
 # install FRNN
@@ -122,7 +122,7 @@ conda install -c omnia eigen3 -y
 conda install eigen -y
 conda install -c r libiconv -y
 ln -s $CONDA_PREFIX/lib/python$PYTHON/site-packages/numpy/core/include/numpy $CONDA_PREFIX/include/numpy
-cd superpoint_transformer/partition/utils
+cd src/partition/utils
 cmake . -DPYTHON_LIBRARY=$CONDA_PREFIX/lib/libpython$PYTHON.so -DPYTHON_INCLUDE_DIR=$CONDA_PREFIX/include/python$PYTHON -DBOOST_INCLUDEDIR=$CONDA_PREFIX/include -DEIGEN3_INCLUDE_DIR=$CONDA_PREFIX/include/eigen3
 make
 cd ../../..
@@ -133,8 +133,8 @@ echo "________________ Cut-Pursuit _______________"
 echo
 
 # Clone parallel-cut-pursuit and grid-graph repos
-git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git superpoint_transformer/partition/parallel_cut_pursuit
-git clone https://gitlab.com/1a7r0ch3/grid-graph.git superpoint_transformer/partition/grid_graph
+git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/partition/parallel_cut_pursuit
+git clone https://gitlab.com/1a7r0ch3/grid-graph.git src/partition/grid_graph
 
 # Compile the projects
 python scripts/setup_dependencies.py build_ext

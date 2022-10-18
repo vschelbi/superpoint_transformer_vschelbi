@@ -6,10 +6,10 @@ from tqdm.auto import tqdm as tq
 from datetime import datetime
 
 from torch_geometric.data import InMemoryDataset
-from superpoint_transformer.data import Data, NAG
-from superpoint_transformer.datasets.kitti360_config import *
-from superpoint_transformer.utils.download import run_command
-from superpoint_transformer.transforms import RemoveAttributes
+from src.data import Data, NAG
+from src.datasets.kitti360_config import *
+from src.utils.download import run_command
+from src.transforms import RemoveAttributes
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 import torch
-from superpoint_transformer.transforms import Transform
-from superpoint_transformer.data import NAG
+from src.transforms import Transform
+from src.data import NAG
 
 
 __all__ = ['DataTo', 'NAGTo']

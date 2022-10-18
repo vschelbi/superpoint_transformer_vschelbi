@@ -1,8 +1,8 @@
 import torch
 import numpy as np
-import superpoint_transformer.partition.utils.libpoint_utils as point_utils
-from superpoint_transformer.utils.features import rgb2hsv, rgb2lab
-from superpoint_transformer.transforms import Transform
+import src.partition.utils.libpoint_utils as point_utils
+from src.utils.features import rgb2hsv, rgb2lab
+from src.transforms import Transform
 
 
 __all__ = ['PointFeatures']

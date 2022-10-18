@@ -1,5 +1,5 @@
-from superpoint_transformer.transforms import Transform
-from superpoint_transformer.data import Data, NAG
+from src.transforms import Transform
+from src.data import Data, NAG
 
 
 __all__ = ['DataToNAG', 'NAGToData', 'RemoveAttributes']

@@ -18,7 +18,7 @@ class debug(object):
 
     Example:
 
-        >>> with superpoint_transformer.debug():
+        >>> with src.debug():
         ...     out = model(data.x, data.edge_index)
     """
 

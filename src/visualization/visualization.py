@@ -2,9 +2,9 @@ import torch
 import numpy as np
 import os.path as osp
 import plotly.graph_objects as go
-from superpoint_transformer.data import Data, NAG, Cluster
-from superpoint_transformer.transforms import GridSampling3D, SaveOriginalPosId
-from superpoint_transformer.utils.tensor import fast_randperm
+from src.data import Data, NAG, Cluster
+from src.transforms import GridSampling3D, SaveOriginalPosId
+from src.utils.tensor import fast_randperm
 from torch_scatter import scatter_mean
 from colorhash import ColorHash
 

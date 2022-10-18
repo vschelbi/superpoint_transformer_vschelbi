@@ -1,6 +1,6 @@
 import torch
-import superpoint_transformer
-from superpoint_transformer.partition.FRNN import frnn
+import src
+from src.partition.FRNN import frnn
 
 
 __all__ = [
@@ -44,7 +44,7 @@ def knn_1(
         neighbors = neighbors.to(device)
         distances = distances.to(device)
 
-    if not verbose and not superpoint_transformer.is_debug_enabled():
+    if not verbose and not src.is_debug_enabled():
         return neighbors, distances
 
     # Warn the user of partial and empty neighborhoods

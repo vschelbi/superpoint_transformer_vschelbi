@@ -4,9 +4,9 @@ import torch
 import numpy as np
 from torch_scatter import scatter_sum, scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from superpoint_transformer.transforms import Transform
-from superpoint_transformer.data import Data, Cluster, NAG
-from superpoint_transformer.utils.cpu import available_cpu_count
+from src.transforms import Transform
+from src.data import Data, Cluster, NAG
+from src.utils.cpu import available_cpu_count
 
 partition_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.append(partition_folder)

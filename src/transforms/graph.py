@@ -3,11 +3,11 @@ import numpy as np
 import itertools
 from scipy.spatial import Delaunay
 from torch_scatter import scatter_mean, scatter_std, scatter_min
-import superpoint_transformer
-from superpoint_transformer.data import Data, NAG
-from superpoint_transformer.transforms import Transform
-import superpoint_transformer.partition.utils.libpoint_utils as point_utils
-from superpoint_transformer.utils import print_tensor_info, isolated_nodes, \
+import src
+from src.data import Data, NAG
+from src.transforms import Transform
+import src.partition.utils.libpoint_utils as point_utils
+from src.utils import print_tensor_info, isolated_nodes, \
     edge_to_superedge
 
 
@@ -182,7 +182,7 @@ def _compute_single_horizontal_graph(
         super_index = nag[i].super_index[super_index]
 
     # To debug sampling
-    if superpoint_transformer.is_debug_enabled():
+    if src.is_debug_enabled():
         data.super_super_index = super_index
         data.node_idx_samples = idx_samples
         data.node_xyz_samples = torch.from_numpy(xyz)
@@ -252,7 +252,7 @@ def _compute_single_horizontal_graph(
         return_pointers=True)
 
     # To debug sampling
-    if superpoint_transformer.is_debug_enabled():
+    if src.is_debug_enabled():
         data.edge_idx_samples = idx_samples
 
         end = ptr_samples[1:]

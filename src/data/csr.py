@@ -1,8 +1,8 @@
 import copy
 import torch
 import numpy as np
-import superpoint_transformer
-from superpoint_transformer.utils import tensor_idx, is_sorted, \
+import src
+from src.utils import tensor_idx, is_sorted, \
     indices_to_pointers
 
 
@@ -47,7 +47,7 @@ class CSRData:
             self.is_index_value = torch.zeros(self.num_values, dtype=torch.bool)
         else:
             self.is_index_value = torch.BoolTensor(is_index_value)
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             self.debug()
 
     def debug(self):
@@ -240,7 +240,7 @@ class CSRData:
             out.pointers = pointers
             out.values = [v[val_idx] for v in self.values]
 
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             out.debug()
 
         return out
@@ -256,19 +256,19 @@ class CSRData:
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: classes differ')
             return False
         if not torch.equal(self.pointers, other.pointers):
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: pointers differ')
             return False
         if not torch.equal(self.is_index_value, other.is_index_value):
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: is_index_value differ')
             return False
         if self.num_values != other.num_values:
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: num_values differ')
             return False
         for v1, v2 in zip(self.values, other.values):
@@ -279,7 +279,7 @@ class CSRData:
             # things by using a lexsort on cluster and point indices but
             # this be a bit costly...
             if not torch.equal(v1, v2):
-                if superpoint_transformer.is_debug_enabled():
+                if src.is_debug_enabled():
                     print(f'{self.__class__.__name__}.__eq__: values differ')
                 return False
         return True
@@ -349,7 +349,7 @@ class CSRBatch(CSRData):
         else:
             assert all([csr.is_index_value is None for csr in csr_list]), \
                 "All provided items must have the same is_index_value."
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             for csr in csr_list:
                 csr.debug()
 

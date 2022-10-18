@@ -1,8 +1,8 @@
 import h5py
 import torch
 from time import time
-from superpoint_transformer.data.csr import CSRData, CSRBatch
-from superpoint_transformer.utils import has_duplicates, tensor_idx, \
+from src.data.csr import CSRData, CSRBatch
+from src.utils import has_duplicates, tensor_idx, \
     save_tensor, load_tensor
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
@@ -33,7 +33,7 @@ class Cluster(CSRData):
         assert points.device == self.device, \
             f"Points is on {points.device} while self is on {self.device}"
         self.values[0] = points
-        # if superpoint_transformer.is_debug_enabled():
+        # if src.is_debug_enabled():
         #     self.debug()
 
     @property

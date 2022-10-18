@@ -4,8 +4,8 @@ from torch_geometric.nn.pool import voxel_grid
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean, scatter_add, scatter_sum
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from superpoint_transformer.utils import fast_randperm
-from superpoint_transformer.transforms import Transform
+from src.utils import fast_randperm
+from src.transforms import Transform
 
 
 __all__ = ['Shuffle', 'SaveOriginalPosId', 'GridSampling3D']

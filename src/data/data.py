@@ -8,9 +8,9 @@ from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_geometric.utils import coalesce, remove_self_loops
-import superpoint_transformer
-from superpoint_transformer.data.cluster import Cluster, ClusterBatch
-from superpoint_transformer.utils import tensor_idx, is_dense, has_duplicates, \
+import src
+from src.data.cluster import Cluster, ClusterBatch
+from src.utils import tensor_idx, is_dense, has_duplicates, \
     isolated_nodes, knn_2, save_tensor, load_tensor, save_dense_to_csr, \
     load_csr_to_dense
 
@@ -30,7 +30,7 @@ class Data(PyGData):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             self.debug()
 
     @property
@@ -206,7 +206,7 @@ class Data(PyGData):
         idx = tensor_idx(idx).to(device)
 
         # Make sure idx contains no duplicate entries
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             assert not has_duplicates(idx), \
                 "Duplicate indices are not supported. This would cause " \
                 "ambiguities in edges and super- and sub- indices."
@@ -279,7 +279,7 @@ class Data(PyGData):
 
             # 'skip_keys' have already been dealt with earlier on, so we
             # can skip them here
-            if key in warn_keys and superpoint_transformer.is_debug_enabled():
+            if key in warn_keys and src.is_debug_enabled():
                 print(
                     f"WARNING: Data.select does not support '{key}', this "
                     f"attribute will be absent from the output")
@@ -366,7 +366,7 @@ class Data(PyGData):
             try:
                 a, b = torch.linalg.lstsq(d_1, w).solution
             except:
-                if superpoint_transformer.is_debug_enabled():
+                if src.is_debug_enabled():
                     print(
                         '\nWarning: torch.linalg.lstsq failed, trying again '
                         'on CPU')
@@ -421,28 +421,28 @@ class Data(PyGData):
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: classes differ')
             return False
         if sorted(self.keys) != sorted(other.keys):
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: keys differ')
             return False
         for k, v in self.items():
             if isinstance(v, torch.Tensor):
                 if not torch.equal(v, other[k]):
-                    if superpoint_transformer.is_debug_enabled():
+                    if src.is_debug_enabled():
                         print(f'{self.__class__.__name__}.__eq__: {k} differ')
                     return False
                 continue
             if isinstance(v, np.ndarray):
                 if not np.array_equal(v, other[k]):
-                    if superpoint_transformer.is_debug_enabled():
+                    if src.is_debug_enabled():
                         print(f'{self.__class__.__name__}.__eq__: {k} differ')
                     return False
                 continue
             if v != other[k]:
-                if superpoint_transformer.is_debug_enabled():
+                if src.is_debug_enabled():
                     print(f'{self.__class__.__name__}.__eq__: {k} differ')
                 return False
         return True

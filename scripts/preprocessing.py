@@ -10,13 +10,13 @@ import pickle
 import numpy as np
 from time import time
 from tqdm import tqdm
-from superpoint_transformer.transforms import *
-from superpoint_transformer.data import Data
-from superpoint_transformer.metrics import ConfusionMatrix
-from superpoint_transformer.datasets.kitti360 import read_kitti360_window, \
+from src.transforms import *
+from src.data import Data
+from src.metrics import ConfusionMatrix
+from src.datasets.kitti360 import read_kitti360_window, \
     WINDOWS, KITTI360_NUM_CLASSES, CLASS_NAMES
-from superpoint_transformer.utils.io import host_data_root
-from superpoint_transformer.utils.io import dated_dir
+from src.utils.io import host_data_root
+from src.utils.io import dated_dir
 
 
 def process(i_cloud, args):

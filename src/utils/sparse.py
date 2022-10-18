@@ -1,5 +1,5 @@
 import torch
-from superpoint_transformer.utils.tensor import is_dense, is_sorted, fast_repeat
+from src.utils.tensor import is_dense, is_sorted, fast_repeat
 
 
 __all__ = ['indices_to_pointers', 'dense_to_csr', 'csr_to_dense']

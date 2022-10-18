@@ -1,6 +1,6 @@
 from typing import Union, List
 from torch_geometric.transforms import BaseTransform
-from superpoint_transformer.data import Data
+from src.data import Data
 
 
 __all__ = ['Transform']

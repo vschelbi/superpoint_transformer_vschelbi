@@ -2,9 +2,9 @@ import h5py
 import torch
 from time import time
 from typing import List
-import superpoint_transformer
-from superpoint_transformer.data import Data, Batch
-from superpoint_transformer.utils import tensor_idx, has_duplicates, \
+import src
+from src.data import Data, Batch
+from src.utils import tensor_idx, has_duplicates, \
     arange_interleave, fast_randperm
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter_sum
@@ -23,7 +23,7 @@ class NAG:
             "The NAG must have at least 1 level of hierarchy. Please " \
             "provide a minimum of 1 Data object."
         self._list = data_list
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             self.debug()
 
     def __iter__(self):
@@ -133,7 +133,7 @@ class NAG:
         idx = tensor_idx(idx).to(self.device)
 
         # Make sure idx contains no duplicate entries
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             assert not has_duplicates(idx), \
                 "Duplicate indices are not supported. This would cause " \
                 "ambiguities in edges and super- and sub- indices."
@@ -369,7 +369,7 @@ class NAG:
         n_samples = n_samples.clamp(min=n_min).clamp(max=sub_size)
 
         # Sanity check
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             assert n_samples.le(sub_size).all(), \
                 "Cannot sample more than the cluster sizes."
 
@@ -397,7 +397,7 @@ class NAG:
             n_samples = n_samples.clamp(max=sub_size)
 
         # Sanity check
-        if superpoint_transformer.is_debug_enabled():
+        if src.is_debug_enabled():
             assert n_samples.le(sub_size).all(), \
                 "Cannot sample more than the cluster sizes."
 
@@ -441,16 +441,16 @@ class NAG:
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: classes differ')
             return False
         if self.num_levels != other.num_levels:
-            if superpoint_transformer.is_debug_enabled():
+            if src.is_debug_enabled():
                 print(f'{self.__class__.__name__}.__eq__: num_levels differ')
             return False
         for d1, d2 in zip(self, other):
             if d1 != d2:
-                if superpoint_transformer.is_debug_enabled():
+                if src.is_debug_enabled():
                     print(f'{self.__class__.__name__}.__eq__: data differ')
                 return False
         return True

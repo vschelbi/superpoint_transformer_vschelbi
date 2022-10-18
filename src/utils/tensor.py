@@ -182,7 +182,7 @@ def fast_randperm(n, device='cpu'):
     ```
     from time import time
     import torch
-    from superpoint_transformer.utils.tensor import fast_randperm
+    from src.utils.tensor import fast_randperm
 
     n = 100000
 
@@ -210,7 +210,7 @@ def fast_zeros(*args, dtype=None, device='cpu'):
     from time import time
     import torch
     import numpy as np
-    from superpoint_transformer.utils.tensor import fast_zeros
+    from src.utils.tensor import fast_zeros
 
     n = 1000000
     m = 20
@@ -247,7 +247,7 @@ def fast_repeat(x, repeats):
     from time import time
     import torch
     import numpy as np
-    from superpoint_transformer.utils.tensor import fast_repeat
+    from src.utils.tensor import fast_repeat
 
     n = 1000000
     rmax = 50
