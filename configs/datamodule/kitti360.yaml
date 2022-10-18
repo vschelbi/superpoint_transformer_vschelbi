@@ -1,0 +1,66 @@
+defaults:
+  - default.yaml
+
+_target_: src.datamodules.kitti360.KITTI360DataModule
+
+pre_transform:
+    - transform: DataTo
+      params:
+        device: 'cuda'
+    - transform: GridSampling3D
+      params:
+        size: 0.1
+        hist_key: 'y'
+        hist_size: 16  # this is for KITTI360 num_classes +1 for ignored
+    - transform: KNN
+      params:
+        k: 50
+        r_max: 10
+        verbose: ${verbose}
+    - transform: DataTo
+      params:
+        device: 'cpu'
+    - transform: PointFeatures
+      params:
+        rgb: True
+        hsv: False
+        lab: False
+        density: False
+        linearity: True
+        planarity: True
+        scattering: True
+        verticality: True
+        normal: False
+        length: False
+        surface: False
+        volume: False
+        curvature: True
+        k_min: 1
+    - transform: DataTo
+      params:
+        device: 'cuda'
+    - transform: AdjacencyGraph
+      params:
+        k: 10
+        w: -1
+    - transform: ConnectIsolated
+      params:
+        k: 1
+    - transform: DataTo
+      params:
+        device: 'cpu'
+    - transform: CutPursuitPartition
+      params:
+        regularization: [0.04, 0.2, 0.8, 1.4]
+        spatial_weight: [1e-2, 0, 0, 0]
+        k_adjacency: 10
+        cutoff: [10, 100, 1000, 10000]
+        iterations: 15
+        parallel: True
+        verbose: ${verbose}
+
+train_transform: null
+
+val_transform: null
+
+test_transform: null

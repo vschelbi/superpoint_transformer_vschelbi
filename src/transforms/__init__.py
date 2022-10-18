@@ -107,3 +107,20 @@ def instantiate_transforms(transform_options):
                 f"while {t_in} expects a {in_type} input.")
 
     return pygT.Compose(transforms)
+
+
+def explode_transform(transform_list):
+    """Extracts a flattened list of transforms from a Compose or from a
+    list of transforms.
+    """
+    out = []
+    if transform_list is not None:
+        if isinstance(transform_list, pygT.Compose):
+            out = copy.deepcopy(transform_list.transforms)
+        elif isinstance(transform_list, list):
+            out = copy.deepcopy(transform_list)
+        else:
+            raise Exception(
+                "Transforms should be provided either within a list or "
+                "a Compose")
+    return out

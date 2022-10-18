@@ -53,13 +53,16 @@ class GridSampling3D(Transform):
         If mode is `mean`, all the points and their features within a
         cell will be averaged. If mode is `last`, one random points per
         cell will be selected with its associated features.
-     bins: dict
-        Dictionary holding ``{'key': n_bins}`` where ``key`` is a Data
-        attribute for which we would like to aggregate values into an
-        histogram and ``n_bins`` accounts for the corresponding number
-        of bins. This is typically needed when we want to aggregate
+    hist_key: str or List(str)
+        Data attributes for which we would like to aggregate values into
+        an histogram. This is typically needed when we want to aggregate
         point labels without losing the distribution, as opposed to
         majority voting.
+    hist_size: str or List(str)
+        Must be of same size as `hist_key`, indicates the number of
+        bins for each key-histogram. This is typically needed when we
+        want to aggregate point labels without losing the distribution,
+        as opposed to majority voting.
     inplace: bool
         Whether the input Data object should be modified in-place
     verbose: bool
@@ -67,13 +70,24 @@ class GridSampling3D(Transform):
     """
 
     def __init__(
-            self, size, quantize_coords=False, mode="mean", bins={},
-            inplace=False, verbose=False):
+            self, size, quantize_coords=False, mode="mean", hist_key=None,
+            hist_size=None, inplace=False, verbose=False):
+
+        hist_key = [] if hist_key is None else hist_key
+        hist_size = [] if hist_size is None else hist_size
+        hist_key = [hist_key] if isinstance(hist_key, str) else hist_key
+        hist_size = [hist_size] if isinstance(hist_size, int) else hist_size
+
+        assert isinstance(hist_key, list)
+        assert isinstance(hist_size, list)
+        assert len(hist_key) == len(hist_size)
+
         self.grid_size = size
         self.quantize_coords = quantize_coords
         self.mode = mode
-        self.bins = bins
+        self.bins = {k: v for k, v in zip(hist_key, hist_size)}
         self.inplace = inplace
+
         if verbose:
             print(
                 "If you need to keep track of the position of your points, use "

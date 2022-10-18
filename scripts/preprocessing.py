@@ -42,7 +42,7 @@ def process(i_cloud, args):
     start = time()
     data = DataTo('cuda')(data)
     data = GridSampling3D(
-        size=args.voxel, bins={'y': KITTI360_NUM_CLASSES + 1})(data)
+        size=args.voxel, hist_key='y', hist_size=KITTI360_NUM_CLASSES + 1)(data)
     torch.cuda.synchronize()
     info.num_nodes_voxel = data.num_nodes
     info.times[key] = round(time() - start, 3)
@@ -110,7 +110,7 @@ def process(i_cloud, args):
     for v in voxel_range:
         d_voxel = DataTo('cuda')(d_voxel)
         d_voxel = GridSampling3D(
-            size=v, bins={'y': KITTI360_NUM_CLASSES + 1})(d_voxel)
+            size=v, hist_key='y', hist_size=KITTI360_NUM_CLASSES + 1)(d_voxel)
         d_voxel = DataTo('cpu')(d_voxel)
         cm = ConfusionMatrix.from_histogram(d_voxel.y[:, :KITTI360_NUM_CLASSES])
         info.voxel_oracle['num'].append(d_voxel.num_nodes)

@@ -1,0 +1,7 @@
+# @package paths
+
+# path to data directory
+data_dir: ${oc.env:DATA_ROOT}/data/
+
+# path to logging directory
+log_dir: ${oc.env:DATA_ROOT}/logs/

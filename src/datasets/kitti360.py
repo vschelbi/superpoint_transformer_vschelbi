@@ -75,12 +75,14 @@ class KITTI360(InMemoryDataset):
     _LEVEL0_LOAD_KEYS = ['pos', 'x', 'y', 'node_size', 'super_index']
 
     def __init__(
-            self, root, stage="train", transform=None, pre_transform=None,
+            self, root, stage='train', transform=None, pre_transform=None,
             pre_filter=None, x32=True, y_to_csr=True):
 
         self._stage = stage
         self.x32 = x32
         self.y_to_csr = y_to_csr
+
+        print(f'KITTI360 Dataset self.raw_dir:{osp.join(root, "raw")}')
 
         # Initialization with downloading and all preprocessing
         super().__init__(root, transform, pre_transform, pre_filter)
@@ -210,6 +212,7 @@ class KITTI360(InMemoryDataset):
 
     def process(self):
         for p in tq(self.processed_paths):
+            print(f'path: {p}')
             self._process_single_window(p)
 
     def _process_single_window(self, window_path):

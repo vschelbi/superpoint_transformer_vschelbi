@@ -1,0 +1,16 @@
+_target_: null
+
+data_dir: ${paths.data_dir}
+x32: True
+y_to_csr: True
+
+pre_transform: null
+train_transform: null
+val_transform: null
+test_transform: null
+
+# DataLoader parameters. Would be good to have them live in another file
+dataloader:
+    batch_size: 4
+    num_workers: 4
+    pin_memory: False

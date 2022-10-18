@@ -94,8 +94,13 @@ pip install plyfile
 pip install h5py
 pip install colorhash
 pip install seaborn
-pip3 install numba --user
-pip install pytorch-lightning --user
+pip3 install numba
+pip install pytorch-lightning
+pip install pyrootutils
+pip install hydra-core --upgrade
+pip install hydra-colorlog
+pip install hydra-submitit-launcher
+pip install rich
 
 #*********************************
 
