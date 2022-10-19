@@ -185,8 +185,8 @@ def visualize_3d(
     :return:
     """
     assert isinstance(input, (Data, NAG))
-    assert gap is None \
-           or isinstance(gap, torch.Tensor) and gap.shape == torch.Size([3])
+    gap = torch.Tensor(gap) if gap is not None else gap
+    assert gap is None or gap.shape == torch.Size([3])
 
     # We work on copies of the input data, to allow modified in this
     # scope
@@ -471,6 +471,7 @@ def visualize_3d(
 
         # Add the gap offset, if need be
         if gap is not None:
+
             super_pos += gap * (i_level + 1)
 
         # Round to the cm for cleaner hover info
