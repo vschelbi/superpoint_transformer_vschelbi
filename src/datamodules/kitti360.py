@@ -81,8 +81,8 @@ class KITTI360DataModule(LightningDataModule):
             x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
 
     def setup(self, stage=None):
-        """Load data. Set variables: `self.data_train`, `self.data_val`,
-        `self.data_test`.
+        """Load data. Set variables: `self.train_dataset`,
+        `self.val_dataset`, `self.test_dataset`.
 
         This method is called by lightning with both `trainer.fit()`
         and `trainer.test()`, so be careful not to execute things like
@@ -127,7 +127,7 @@ class KITTI360DataModule(LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            dataset=self.data_train,
+            dataset=self.train_dataset,
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
@@ -136,7 +136,7 @@ class KITTI360DataModule(LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(
-            dataset=self.data_val,
+            dataset=self.val_dataset,
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
@@ -145,7 +145,7 @@ class KITTI360DataModule(LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(
-            dataset=self.data_test,
+            dataset=self.test_dataset,
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
