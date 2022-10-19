@@ -73,6 +73,7 @@ class KITTI360(InMemoryDataset):
     _SEQUENCES = SEQUENCES
     _LEVEL0_SAVE_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
     _LEVEL0_LOAD_KEYS = ['pos', 'x', 'y', 'node_size', 'super_index']
+    _DATA_SUBDIR_NAME = 'kitti360'
 
     def __init__(
             self, root, stage='train', transform=None, pre_transform=None,
@@ -82,9 +83,8 @@ class KITTI360(InMemoryDataset):
         self.x32 = x32
         self.y_to_csr = y_to_csr
 
-        print(f'KITTI360 Dataset self.raw_dir:{osp.join(root, "raw")}')
-
         # Initialization with downloading and all preprocessing
+        root = osp.join(root, self._DATA_SUBDIR_NAME)
         super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
@@ -212,7 +212,6 @@ class KITTI360(InMemoryDataset):
 
     def process(self):
         for p in tq(self.processed_paths):
-            print(f'path: {p}')
             self._process_single_window(p)
 
     def _process_single_window(self, window_path):
@@ -245,6 +244,8 @@ class KITTI360(InMemoryDataset):
         # Apply pre_transform
         if self.pre_transform is not None:
             nag = self.pre_transform(data)
+        else:
+            nag = NAG([data])
 
         # To save some disk space, we discard some level-0 attributes
         level0_keys = set(nag[0].keys) - set(self._LEVEL0_SAVE_KEYS)

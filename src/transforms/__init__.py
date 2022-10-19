@@ -9,6 +9,7 @@ from .graph import *
 from .partition import *
 from src.data import Data
 import torch_geometric.transforms as pygT
+from omegaconf import OmegaConf
 
 
 # Fuse all transforms defined in this project with the torch_geometric
@@ -48,31 +49,37 @@ def instantiate_transform(transform_option, attr="transform"):
             size: 0.01
     ```
     """
+    # Read the transform name
     tr_name = getattr(transform_option, attr, None)
-    try:
-        tr_params = transform_option.get('params')  # Update to OmegaConf 2.0
-    except KeyError:
-        tr_params = None
-    try:
-        lparams = transform_option.get('lparams')  # Update to OmegaConf 2.0
-    except KeyError:
-        lparams = None
 
+    # Find the transform class corresponding to the name
     cls = getattr(_spt_tr, tr_name, None)
     if not cls:
         cls = getattr(_pyg_tr, tr_name, None)
         if not cls:
             raise ValueError(f"Transform {tr_name} is nowhere to be found")
 
+    # Parse the transform arguments
+    try:
+        tr_params = transform_option.get('params')  # Update to OmegaConf 2.0
+        if tr_params is not None:
+            tr_params = OmegaConf.to_container(tr_params, resolve=True)
+    except KeyError:
+        tr_params = None
+    try:
+        lparams = transform_option.get('lparams')  # Update to OmegaConf 2.0
+        if lparams is not None:
+            lparams = OmegaConf.to_container(lparams, resolve=True)
+    except KeyError:
+        lparams = None
+
+    # Instantiate the transform
     if tr_params and lparams:
         return cls(*lparams, **tr_params)
-
     if tr_params:
         return cls(**tr_params)
-
     if lparams:
         return cls(*lparams)
-
     return cls()
 
 
