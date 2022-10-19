@@ -331,19 +331,41 @@ class NAG:
                 assert d.num_points == self[i + 1].num_sub
 
     def get_sampling(
-            self, high, low=0, n_max=32, n_min=1, mask=None,
+            self, high=1, low=0, n_max=32, n_min=1, mask=None,
             return_pointers=False):
-        """Compute indices for sampling elements at level 'low', based
-        on which cluster they belong to at level 'high'. The sampling
-        operation is run is without replacement and each cluster is
-        sampled at least 'n_min' and at most 'n_max' times, within the
-        limits allowed by its actual size. Expects 'self.sub' attribute
-        Optionally, a 'mask' can be passed to filter out some level
-        'low'points.
+        """Compute indices to sample elements at `low`-level, based on
+        which segment they belong to at `high`-level.
 
-        Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
-        (ie level-0 points are themselves clusters of '-1' level absent
-        from the NAG object).
+        The sampling operation is run without replacement and each
+        segment is sampled at least `n_min` and at most `n_max` times,
+        within the limits allowed by its actual size.
+
+        Optionally, a `mask` can be passed to filter out some
+        `low`-level points.
+
+        :param high: int
+            Partition level of the segments we want to sample. By
+            default, `high=1` to sample the level-1 segments
+        :param low: int
+            Partition level we will sample from, guided by the `high`
+            segments. By default, `high=0` to sample the level-0 points.
+            `low=-1` is accepted when level-0 has a `sub` attribute (ie
+            level-0 points are themselves segments of `-1` level absent
+            from the NAG object).
+        :param n_max: int
+            Maximum number of `low`-level elements to sample in each
+            `high`-level segment
+        :param n_min: int
+            Minimum number of `low`-level elements to sample in each
+            `high`-level segment, within the limits of its size (ie no
+            oversampling)
+        :param mask: list, np.ndarray, torch.Tensor
+            Indicates a subset of `low`-level elements to consider. This
+            allows ignoring
+        :param return_pointers: bool
+            Whether pointers should be returned along with sampling
+            indices. These indicate which of the output `low`-level
+            sampling indices belong to which `high`-level segment
         """
         assert 0 <= n_min <= n_max
 

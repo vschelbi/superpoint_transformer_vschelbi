@@ -1,6 +1,7 @@
 from .tensor import *
 from .cpu import *
 from .features import *
+from .geometry import *
 from .graph import *
 from .io import *
 from .neighbors import *

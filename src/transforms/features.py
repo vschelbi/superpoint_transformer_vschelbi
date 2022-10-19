@@ -5,7 +5,7 @@ from src.utils.features import rgb2hsv, rgb2lab
 from src.transforms import Transform
 
 
-__all__ = ['PointFeatures']
+__all__ = ['PointFeatures', 'JitterColor', 'JitterFeatures']
 
 
 class PointFeatures(Transform):
@@ -187,5 +187,47 @@ class PointFeatures(Transform):
 
         # Save all features in the Data.x attribute
         data.x = torch.cat(features, dim=1).to(data.pos.device)
+
+        return data
+
+
+class JitterColor(Transform):
+    """Add some gaussian noise to Data.rgb.
+
+    :param sigma: float
+        Standard deviation of the gaussian noise
+    """
+
+    def __init__(self, sigma=0.05):
+        assert isinstance(sigma, (int, float))
+        self.sigma = float(sigma)
+
+    def _process(self, data):
+
+        if getattr(data, 'rgb', None) is None:
+            return data
+
+        data.rgb += torch.randn_like(data.rgb) * self.sigma
+
+        return data
+
+
+class JitterFeatures(Transform):
+    """Add some gaussian noise to Data.x.
+
+    :param sigma: float
+        Standard deviation of the gaussian noise
+    """
+
+    def __init__(self, sigma=0.01):
+        assert isinstance(sigma, (int, float))
+        self.sigma = float(sigma)
+
+    def _process(self, data):
+
+        if getattr(data, 'x', None) is None:
+            return data
+
+        data.x += torch.randn_like(data.x) * self.sigma
 
         return data

@@ -138,7 +138,8 @@ def _compute_single_horizontal_graph(
     # cluster geometric features as well as cluster adjacency graph and
     # edge features
     idx_samples, ptr_samples = nag.get_sampling(
-        i_level, low=0, n_max=n_max_node, n_min=n_min, return_pointers=True)
+        high=i_level, low=0, n_max=n_max_node, n_min=n_min,
+        return_pointers=True)
 
     # Compute cluster geometric features
     xyz = nag[0].pos[idx_samples].cpu().numpy()
@@ -248,7 +249,7 @@ def _compute_single_horizontal_graph(
     # generously here than for cluster features, because we need to
     # capture fine-grained adjacency
     idx_samples, ptr_samples = nag.get_sampling(
-        i_level, low=0, n_max=n_max_edge, n_min=n_min, mask=mask,
+        high=i_level, low=0, n_max=n_max_edge, n_min=n_min, mask=mask,
         return_pointers=True)
 
     # To debug sampling

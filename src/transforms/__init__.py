@@ -6,6 +6,7 @@ from .sampling import *
 from .neighbors import *
 from .features import *
 from .graph import *
+from .geometry import *
 from .partition import *
 from src.data import Data
 import torch_geometric.transforms as pygT
