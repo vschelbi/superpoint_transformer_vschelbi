@@ -16,7 +16,7 @@ pre_transform:
       params:
         k: 50
         r_max: 10
-        verbose: ${verbose}
+        verbose: True
     - transform: DataTo
       params:
         device: 'cpu'
@@ -57,7 +57,7 @@ pre_transform:
         cutoff: [10, 100, 1000, 10000]
         iterations: 15
         parallel: True
-        verbose: ${verbose}
+        verbose: True
 
 train_transform: null
 

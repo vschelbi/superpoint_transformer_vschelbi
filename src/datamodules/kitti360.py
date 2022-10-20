@@ -164,6 +164,9 @@ class KITTI360DataModule(LightningDataModule):
         """Things to do when loading checkpoint."""
         pass
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}'
+
 
 if __name__ == "__main__":
     import hydra
