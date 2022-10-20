@@ -139,6 +139,9 @@ class Data(PyGData):
                     " which is not the case here. This may be because you are "
                     "creating a Data object after applying a selection of "
                     "points without updating the cluster indices.")
+        if self.has_edges:
+            assert self.edge_index.max() < self.num_points
+            assert 0 <= self.edge_index.min()
 
     # TODO batching data.sub indices
     def __inc__(self, key, value, *args, **kwargs):
