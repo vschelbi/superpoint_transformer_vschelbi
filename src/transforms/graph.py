@@ -16,7 +16,7 @@ __all__ = ['AdjacencyGraph', 'HorizontalGraphs', 'ConnectIsolated']
 
 class AdjacencyGraph(Transform):
     """Create the adjacency graph in `edge_index` and `edge_attr` based
-    on the `Data.neighbor_index` and `Data.distances`.
+    on the `Data.neighbor_index` and `Data.neighbor_distance`.
 
     NB: this graph is directed wrt Pytorch Geometric, but cut-pursuit
     happily takes this as an input.
@@ -24,12 +24,12 @@ class AdjacencyGraph(Transform):
     :param k: int
         Number of neighbors to consider for the adjacency graph
     :param w: float
-        Scalar used to modulate the edge weight. If `w <= 0`, all edges will
-        have a weight of 1. Otherwise, edges weights will follow:
-        ```1 / (w + data.distances / data.distances.mean())```
+        Scalar used to modulate the edge weight. If `w <= 0`, all edges
+        will have a weight of 1. Otherwise, edges weights will follow:
+        ```1 / (w + neighbor_distance / neighbor_distance.mean())```
     """
 
-    def __init__(self, k, w):
+    def __init__(self, k=10, w=-1):
         self.k = k
         self.w = w
 
@@ -37,8 +37,8 @@ class AdjacencyGraph(Transform):
         assert data.has_neighbors, \
             "Data must have 'neighbor_index' attribute to allow adjacency " \
             "graph construction."
-        assert getattr(data, 'distances', None) is not None, \
-            "Data must have 'distances' attribute to allow adjacency graph " \
+        assert self.w <= 0 or getattr(data, 'neighbor_distance', None) is not None, \
+            "Data must have 'neighbor_distance' attribute to allow adjacency graph " \
             "construction."
         assert self.k <= data.neighbor_index.shape[1]
 
@@ -47,21 +47,19 @@ class AdjacencyGraph(Transform):
             data.num_nodes, device=data.device).repeat_interleave(self.k)
         target = data.neighbor_index[:, :self.k].flatten()
 
-        # Recover the neighbors distances
-        distances = data.distances[:, :self.k].flatten()
-
         # Account for -1 neighbors and delete corresponding edges
         mask = target >= 0
         source = source[mask]
         target = target[mask]
-        distances = distances[mask]
 
         # Save edges and edge features in data
         data.edge_index = torch.stack((source, target))
         if self.w > 0:
+            # Recover the neighbor distances and apply the masking
+            distances = data.neighbor_distance[:, :self.k].flatten()[mask]
             data.edge_attr = 1 / (self.w + distances / distances.mean())
         else:
-            data.edge_attr = torch.ones_like(distances)
+            data.edge_attr = torch.ones_like(source, dtype=torch.float)
 
         return data
 

@@ -273,7 +273,7 @@ class Data(PyGData):
             out_super = (idx_super, super_sub)
 
         # Index data items depending on their type
-        warn_keys = ['neighbor_index', 'distances']
+        warn_keys = ['neighbor_index', 'neighbor_distance']
         skip_keys = ['edge_index', 'sub', 'super_index'] + warn_keys
         for key, item in self:
 

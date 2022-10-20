@@ -47,8 +47,8 @@ class CutPursuitPartition(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, regularization, spatial_weight=1, cutoff=10, parallel=True,
-            iterations=10, k_adjacency=5, verbose=False):
+            self, regularization=5e-2, spatial_weight=1, cutoff=10,
+            parallel=True, iterations=10, k_adjacency=5, verbose=False):
         self.regularization = regularization
         self.spatial_weight = spatial_weight
         self.cutoff = cutoff
@@ -181,7 +181,7 @@ class CutPursuitPartition(Transform):
 
             # Aggregate some point attributes into the clusters. This
             # is not performed dynamically since not all attributes can
-            # be aggregated (eg 'neighbor_index', 'distances',
+            # be aggregated (eg 'neighbor_index', 'neighbor_distance',
             # 'edge_index', 'edge_attr'...)
             if 'y' in d1.keys:
                 assert d1.y.dim() == 2, \

@@ -33,7 +33,7 @@ class PointFeatures(Transform):
         [0, 255] integers
     density: bool
         Use local density. Assumes ``Data.neighbor_index`` and
-        ``Data.distances``.
+        ``Data.neighbor_distance``.
     linearity: bool
         Use local linearity. Assumes ``Data.neighbor_index``.
     planarity: bool
@@ -136,7 +136,7 @@ class PointFeatures(Transform):
         # Note that this takes into account partial neighborhoods where
         # -1 indicates absent neighbors
         if self.density:
-            dmax = data.distances.max(dim=1).values
+            dmax = data.neighbor_distance.max(dim=1).values
             k = data.neighbor_index.ge(0).sum(dim=1)
             features.append((k / dmax ** 2).view(-1, 1))
 

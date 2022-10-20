@@ -51,7 +51,7 @@ def process(i_cloud, args):
     key = 'neighbors'
     torch.cuda.synchronize()
     start = time()
-    data = KNN(args.k_feat, r_max=args.radius, verbose=args.verbose)(data)
+    data = KNN(k=args.k_feat, r_max=args.radius, verbose=args.verbose)(data)
     torch.cuda.synchronize()
     info.times[key] = round(time() - start, 3)
 
@@ -71,7 +71,7 @@ def process(i_cloud, args):
     key = 'adjacency'
     start = time()
     data = DataTo('cuda')(data)
-    data = AdjacencyGraph(args.k_adjacency, args.lambda_edge_weight)(data)
+    data = AdjacencyGraph(k=args.k_adjacency, w=args.lambda_edge_weight)(data)
     info.num_edges = data.num_edges
     info.times[key] = round(time() - start, 3)
 
@@ -87,7 +87,8 @@ def process(i_cloud, args):
     torch.cuda.synchronize()
     start = time()
     data = DataTo('cpu')(data)
-    nag = CutPursuitPartition(args.regularization, spatial_weight=args.spatial_weight,
+    nag = CutPursuitPartition(
+        regularization=args.regularization, spatial_weight=args.spatial_weight,
         k_adjacency=args.k_adjacency, cutoff=args.cutoff, verbose=args.verbose,
         iterations=args.iterations, parallel=args.parallel)(data)
     torch.cuda.synchronize()
