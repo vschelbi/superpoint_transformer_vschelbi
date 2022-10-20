@@ -1,11 +1,13 @@
 import os
 import torch
-from plyfile import PlyData
 import logging
-from tqdm.auto import tqdm as tq
+import hashlib
+from plyfile import PlyData
 from datetime import datetime
+from tqdm.auto import tqdm as tq
 
 from torch_geometric.data import InMemoryDataset
+from torch_geometric.data.dataset import _repr
 from src.data import Data, NAG
 from src.datasets.kitti360_config import *
 from src.utils.download import run_command
@@ -132,7 +134,7 @@ class KITTI360(InMemoryDataset):
             for x in self.windows]
 
     @property
-    def hash(self):
+    def pre_transform_hash(self):
         """Produce a unique but stable hash based on the dataset
         attributes and its transforms attributes.
         """
@@ -143,7 +145,9 @@ class KITTI360(InMemoryDataset):
         #  attribute values and concatenate them into a single tuple.
         #  After some thoughts: just the pre-transforms attributes
         #  should be good, since only they drive the preprocessing.
-        return 'nag'
+        if self.pre_transform is None:
+            return 'no_pre_transform'
+        return hashlib.md5(_repr(self.pre_transform).encode()).hexdigest()
 
     @property
     def processed_file_names(self):
@@ -154,10 +158,12 @@ class KITTI360(InMemoryDataset):
         # memory
         if self.stage == 'trainval':
             return [
-                osp.join(s, self.hash, f'{w}.h5')
+                osp.join(s, self.pre_transform_hash, f'{w}.h5')
                 for s in ('train', 'val')
                 for w in self._WINDOWS[s]]
-        return [osp.join(self.stage, self.hash, f'{w}.h5') for w in self.windows]
+        return [
+            osp.join(self.stage, self.pre_transform_hash, f'{w}.h5')
+            for w in self.windows]
 
     @property
     def submission_dir(self):
