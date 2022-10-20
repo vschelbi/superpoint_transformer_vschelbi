@@ -82,7 +82,8 @@ class CutPursuitPartition(Transform):
         # prepare the output as list of Data objects that will be stored in
         # a NAG structure
         num_threads = available_cpu_count() if self.parallel else 1
-        data.node_size = torch.ones(data.num_nodes)  # level-0 points all have the same importance
+        data.node_size = torch.ones(
+            data.num_nodes, device=data.device, dtype=torch.long)  # level-0 points all have the same importance
         data_list = [data]
         regularization = self.regularization
         if not isinstance(regularization, list):
@@ -128,7 +129,7 @@ class CutPursuitPartition(Transform):
             else:
                 x = d1.pos - pos_offset
             x = np.asfortranarray(x.cpu().numpy().T)
-            node_size = d1.node_size.cpu().numpy()
+            node_size = d1.node_size.float().cpu().numpy()
             coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
             coor_weights[:n_dim] *= sw
 
@@ -165,7 +166,7 @@ class CutPursuitPartition(Transform):
             edge_attr = torch.from_numpy(edges[2] / reg)
             node_size = torch.from_numpy(node_size)
             node_size_new = scatter_sum(
-                node_size.cuda(), super_index.cuda(), dim=0).cpu()
+                node_size.cuda(), super_index.cuda(), dim=0).cpu().long()
             d2 = Data(
                 pos=pos, x=x, edge_index=edge_index, edge_attr=edge_attr,
                 sub=Cluster(pointer, value), node_size=node_size_new)

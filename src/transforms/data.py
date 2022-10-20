@@ -73,6 +73,7 @@ class DropoutSegments(Transform):
 
     def __init__(self, p=0.2):
         assert isinstance(p, (float, list))
+        assert 0 <= p < 1
         self.p = p
 
     def _process(self, nag):
@@ -91,7 +92,8 @@ class DropoutSegments(Transform):
             # Shuffle the order of points
             num_nodes = nag[i_level].num_nodes
             perm = fast_randperm(num_nodes, device=device)
-            idx = perm[:int(num_nodes * p[i_level - 1])]
+            num_keep = num_nodes - int(num_nodes * p[i_level - 1])
+            idx = perm[:num_keep]
 
             # Select the nodes and update the NAG structure accordingly
             nag = nag.select(i_level, idx)
@@ -135,7 +137,7 @@ class SampleSegments(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, high=1, low=0, n_max=32, n_min=1, mask=None):
+            self, high=1, low=0, n_max=32, n_min=16, mask=None):
         assert isinstance(high, int)
         assert isinstance(low, int)
         assert isinstance(n_max, int)
