@@ -64,3 +64,9 @@ train_transform: null
 val_transform: null
 
 test_transform: null
+
+on_device_train_transform: null
+
+on_device_val_transform: null
+
+on_device_test_transform: null

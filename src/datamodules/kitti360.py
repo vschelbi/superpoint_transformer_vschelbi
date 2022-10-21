@@ -3,6 +3,7 @@ from pytorch_lightning import LightningDataModule
 from src.transforms import instantiate_transforms
 from src.datasets import KITTI360
 from src.loader import DataLoader
+from src.data import NAGBatch
 
 
 log = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ class KITTI360DataModule(LightningDataModule):
     def __init__(
             self, data_dir='', x32=True, y_to_csr=True, pre_transform=None,
             train_transform=None, val_transform=None, test_transform=None,
-            dataloader=None):
+            on_device_train_transform=None, on_device_val_transform=None,
+            on_device_test_transform=None, dataloader=None):
         super().__init__()
 
         # this line allows to access init params with 'self.hparams'
@@ -50,10 +52,15 @@ class KITTI360DataModule(LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
 
+        # Do not set the transforms directly, use self.set_transforms()
+        # instead to parse the input configs
         self.pre_transform = None
-        self.test_transform = None
         self.train_transform = None
         self.val_transform = None
+        self.test_transform = None
+        self.on_device_train_transform = None
+        self.on_device_val_transform = None
+        self.on_device_test_transform = None
 
         # Instantiate the transforms
         self.set_transforms()
@@ -68,16 +75,19 @@ class KITTI360DataModule(LightningDataModule):
         KITTI360(
             self.hparams.data_dir, stage='train',
             transform=self.train_transform, pre_transform=self.pre_transform,
+            on_device_transform=self.on_device_train_transform,
             x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
 
         KITTI360(
             self.hparams.data_dir, stage='val',
             transform=self.val_transform, pre_transform=self.pre_transform,
+            on_device_transform=self.on_device_val_transform,
             x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
 
         KITTI360(
             self.hparams.data_dir, stage='test',
             transform=self.test_transform, pre_transform=self.pre_transform,
+            on_device_transform=self.on_device_test_transform,
             x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
 
     def setup(self, stage=None):
@@ -88,23 +98,25 @@ class KITTI360DataModule(LightningDataModule):
         and `trainer.test()`, so be careful not to execute things like
         random split twice!
         """
-        if stage is None or stage == 'train':
-            self.train_dataset = KITTI360(
-                self.hparams.data_dir, stage='train',
-                transform=self.train_transform, pre_transform=self.pre_transform,
-                x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+        self.train_dataset = KITTI360(
+            self.hparams.data_dir, stage='train',
+            transform=self.train_transform, pre_transform=self.pre_transform,
+            on_device_transform=self.on_device_train_transform,
+            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
 
-        if stage is None or stage == 'val':
-            self.val_dataset = KITTI360(
-                self.hparams.data_dir, stage='val',
-                transform=self.val_transform, pre_transform=self.pre_transform,
-                x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+        self.val_dataset = KITTI360(
+            self.hparams.data_dir, stage='val',
+            transform=self.val_transform, pre_transform=self.pre_transform,
+            on_device_transform=self.on_device_val_transform,
+            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
 
-        if stage is None or stage == 'test':
-            self.test_dataset = KITTI360(
-                self.hparams.data_dir, stage='test',
-                transform=self.test_transform, pre_transform=self.pre_transform,
-                x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+        self.test_dataset = KITTI360(
+            self.hparams.data_dir, stage='test',
+            transform=self.test_transform, pre_transform=self.pre_transform,
+            on_device_transform=self.on_device_test_transform,
+            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+
+        self.predict_dataset = None
 
     def set_transforms(self):
         """Parse in self.hparams in search for '*transform*' keys and
@@ -131,8 +143,7 @@ class KITTI360DataModule(LightningDataModule):
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
-            shuffle=True,
-        )
+            shuffle=True)
 
     def val_dataloader(self):
         return DataLoader(
@@ -140,8 +151,7 @@ class KITTI360DataModule(LightningDataModule):
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
-            shuffle=False,
-        )
+            shuffle=False)
 
     def test_dataloader(self):
         return DataLoader(
@@ -149,8 +159,10 @@ class KITTI360DataModule(LightningDataModule):
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
-            shuffle=False,
-        )
+            shuffle=False)
+
+    def predict_dataloader(self):
+        raise NotImplementedError
 
     def teardown(self, stage=None):
         """Clean up after fit or test."""
@@ -163,6 +175,40 @@ class KITTI360DataModule(LightningDataModule):
     def load_state_dict(self, state_dict):
         """Things to do when loading checkpoint."""
         pass
+
+    def on_after_batch_transfer(self, nag_list, dataloader_idx):
+        """Intended to call on-device operations. Typically,
+        NAGBatch.from_nag_list and some Transforms like SampleSegments
+        and DropoutSegments are faster on GPU and we may prefer
+        executing those on GPU rather than in CPU-based DataLoader.
+
+        Use self.on_device_<stage>_transform, to benefit from this hook.
+        """
+        # Since NAGBatch.from_nag_list takes a bit of time, we asked
+        # src.loader.DataLoader to simply pass a list of NAG objects,
+        # waiting for to be batched on device.
+        nag = NAGBatch.from_nag_list(nag_list)
+
+        # Here we run on_device_transform, which contains NAG transforms
+        # that we could not / did not want to run using CPU-based
+        # DataLoaders
+        if self.trainer.training:
+            on_device_transform = self.on_device_train_transform
+        elif self.trainer.validating:
+            on_device_transform = self.on_device_val_transform
+        elif self.trainer.testing:
+            on_device_transform = self.on_device_test_transform
+        elif self.trainer.predicting:
+            raise NotImplementedError('No on_device_predict_transform yet...')
+        else:
+            log.warning(
+                'Unsure which stage we are in, defaulting to '
+                'self.on_device_train_transform')
+            on_device_transform = self.on_device_train_transform
+        if on_device_transform is None:
+            return nag
+        else:
+            return on_device_transform(nag)
 
     def __repr__(self):
         return f'{self.__class__.__name__}'

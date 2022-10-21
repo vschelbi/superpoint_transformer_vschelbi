@@ -69,6 +69,11 @@ class KITTI360(InMemoryDataset):
         pre_transform function operating on data.
     pre_filter : `callable`, optional
         pre_filter function operating on data.
+    on_device_transform: `callable`, optional
+        on_device_transform function operating on data, in the
+        'on_after_batch_transfer' hook. This is where GPU-based
+        augmentations should be, as well as any Transform you do not
+        want to run in CPU-based DataLoaders
     """
     num_classes = KITTI360_NUM_CLASSES
     _WINDOWS = WINDOWS
@@ -79,11 +84,12 @@ class KITTI360(InMemoryDataset):
 
     def __init__(
             self, root, stage='train', transform=None, pre_transform=None,
-            pre_filter=None, x32=True, y_to_csr=True):
+            pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True):
 
         self._stage = stage
         self.x32 = x32
         self.y_to_csr = y_to_csr
+        self.on_device_transform = on_device_transform
 
         # Initialization with downloading and all preprocessing
         root = osp.join(root, self._DATA_SUBDIR_NAME)
