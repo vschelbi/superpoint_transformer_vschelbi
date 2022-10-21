@@ -1,6 +1,7 @@
 import copy
 import h5py
 import torch
+import warnings
 import numpy as np
 import os.path as osp
 from time import time
@@ -586,10 +587,15 @@ class Batch(PyGBatch):
         Cluster objects batching.
         """
 
-        # PyG way of batching does not recognize some local classes such
-        # as Cluster and CSRData, so it will accumulate them in lists
-        batch = super().from_data_list(
-            data_list, follow_batch=follow_batch, exclude_keys=exclude_keys)
+        # Local hack to avoid being overflowed with pesky warnings
+        # see: https://github.com/pyg-team/pytorch_geometric/issues/4848
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+
+            # PyG way of batching does not recognize some local classes such
+            # as Cluster and CSRData, so it will accumulate them in lists
+            batch = super().from_data_list(
+                data_list, follow_batch=follow_batch, exclude_keys=exclude_keys)
 
         # Dirty trick: manually convert 'sub' to a proper ClusterBatch.
         # Note we will need to do the same in `get_example` to avoid
