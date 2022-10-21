@@ -65,8 +65,24 @@ val_transform: null
 
 test_transform: null
 
-on_device_train_transform: null
+on_device_train_transform:
+    - transform: SampleSegments
+      params:
+        high: 1
+        low: 0
+        n_max: 32
+        n_min: 16
+    - transform: DropoutSegments
+      params:
+        p: 0.2
 
-on_device_val_transform: null
+# Should we actually sample at validation time ?
+on_device_val_transform:
+    - transform: SampleSegments
+      params:
+        high: 1
+        low: 0
+        n_max: 32
+        n_min: 16
 
-on_device_test_transform: null
+on_device_test_transform: ${datamodule.on_device_val_transform}

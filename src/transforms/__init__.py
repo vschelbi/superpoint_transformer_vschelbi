@@ -8,6 +8,7 @@ from .features import *
 from .graph import *
 from .geometry import *
 from .partition import *
+from .debug import *
 from src.data import Data
 import torch_geometric.transforms as pygT
 from omegaconf import OmegaConf
