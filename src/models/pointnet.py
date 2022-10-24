@@ -36,8 +36,8 @@ class PointNetModule(LightningModule):
         # for tracking best so far validation accuracy
         self.val_acc_best = MaxMetric()
 
-    def forward(self, x, idx):
-        return self.net(x, idx)
+    def forward(self, pos, x, idx):
+        return self.net(pos, x, idx)
 
     def on_train_start(self):
         # by default lightning executes validation step sanity checks before training starts,
@@ -51,16 +51,19 @@ class PointNetModule(LightningModule):
         print()
         print()
 
-        x = nag[0].x
-        super_index = nag[0].super_index
-
         # TODO: for now, we supervise on y.argmax, but could also train
         #  on smoother histogram supervision
+        # Recover level-0 features, position, segment indices and labels
+        x = nag[0].x
+        pos = nag[0].pos
+        super_index = nag[0].super_index
         y = nag[0].y.argmax(dim=1)
 
-        logits = self.forward(x, super_index)
+        # Inference on the batch
+        logits = self.forward(pos, x, super_index)
         loss = self.criterion(logits, y)
         preds = torch.argmax(logits, dim=1)
+
         return loss, preds, y
 
     def training_step(self, batch: Any, batch_idx: int):
@@ -132,9 +135,7 @@ class PointNetModule(LightningModule):
                     "scheduler": scheduler,
                     "monitor": "val/loss",
                     "interval": "epoch",
-                    "frequency": 1,
-                },
-            }
+                    "frequency": 1}}
         return {"optimizer": optimizer}
 
 

@@ -3,29 +3,34 @@ from torch_scatter import scatter
 
 
 __all__ = [
-    'SegmentMaxPool', 'SegmentMinPool', 'SegmentSumPool', 'SegmentMeanPool']
+    'SegmentPool', 'SegmentMaxPool', 'SegmentMinPool', 'SegmentSumPool',
+    'SegmentMeanPool']
 
 
 class SegmentPool(nn.Module):
-    _REDUCE = 'sum'
-    def __init__(self):
+    def __init__(self, reduce='sum'):
         super().__init__()
+        self.reduce = reduce
 
     def forward(self, x, idx):
-        scatter(x, idx, reduce=self.reduce)
+        scatter(x, idx, dim=0, reduce=self.reduce)
 
 
 class SegmentMaxPool(SegmentPool):
-    _REDUCE = 'max'
+    def __init__(self):
+        super().__init__(reduce='max')
 
 
 class SegmentMinPool(SegmentPool):
-    _REDUCE = 'min'
+    def __init__(self):
+        super().__init__(reduce='min')
 
 
 class SegmentMeanPool(SegmentPool):
-    _REDUCE = 'mean'
+    def __init__(self):
+        super().__init__(reduce='mean')
 
 
 class SegmentSumPool(SegmentPool):
-    _REDUCE = 'sum'
+    def __init__(self):
+        super().__init__(reduce='sum')
