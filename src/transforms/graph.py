@@ -11,7 +11,7 @@ from src.utils import print_tensor_info, isolated_nodes, \
     edge_to_superedge
 
 
-__all__ = ['AdjacencyGraph', 'HorizontalGraphs', 'ConnectIsolated']
+__all__ = ['AdjacencyGraph', 'HorizontalGraphs', 'ConnectIsolated', 'NodeSize']
 
 
 class AdjacencyGraph(Transform):
@@ -446,3 +446,29 @@ class ConnectIsolated(Transform):
 
     def _process(self, data):
         return data.connect_isolated(k=self.k)
+
+
+class NodeSize(Transform):
+    """Compute the number of `low`-level elements are contained in each
+    segment, at each above-level. Results are save in the `node_size`
+    attribute of the corresponding Data objects.
+
+    Note: `low=-1` is accepted when level-0 has a `sub` attribute
+    (ie level-0 points are themselves segments of `-1` level absent
+    from the NAG object).
+
+    :param low: int
+        Level whose elements we want to count
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, low=0):
+        assert isinstance(low, int) and low >= -1
+        self.low = low
+
+    def _process(self, nag):
+        for i_level in range(self.low + 1, nag.num_levels):
+            nag[i_level].node_size = nag.get_sub_size(i_level, low=self.low)
+        return nag
