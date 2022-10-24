@@ -11,7 +11,7 @@ from torch_geometric.data.dataset import _repr
 from src.data import Data, NAG
 from src.datasets.kitti360_config import *
 from src.utils.download import run_command
-from src.transforms import RemoveAttributes
+from src.transforms import RemoveKeys
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -261,7 +261,7 @@ class KITTI360(InMemoryDataset):
 
         # To save some disk space, we discard some level-0 attributes
         level0_keys = set(nag[0].keys) - set(self._LEVEL0_SAVE_KEYS)
-        nag._list[0] = RemoveAttributes(keys=level0_keys)(nag[0])
+        nag._list[0] = RemoveKeys(keys=level0_keys)(nag[0])
 
         # TODO: concatenate point features into x ? Or separate rgb and
         #  pos to avoid redundancy ?

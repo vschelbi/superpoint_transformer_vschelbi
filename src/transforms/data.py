@@ -4,8 +4,8 @@ from src.transforms import Transform
 
 
 __all__ = [
-    'DataToNAG', 'NAGToData', 'RemoveAttributes', 'NAGRemoveAttributes',
-    'AddFeatByKey', 'NAGAddFeatByKey']
+    'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeyToX',
+    'NAGAddKeyToX']
 
 
 class DataToNAG(Transform):
@@ -29,7 +29,7 @@ class NAGToData(Transform):
         return NAG[0]
 
 
-class RemoveAttributes(Transform):
+class RemoveKeys(Transform):
     """Remove attributes of a Data object based on their name.
 
     :param keys: list(str)
@@ -53,7 +53,7 @@ class RemoveAttributes(Transform):
         return data
 
 
-class NAGRemoveAttributes(Transform):
+class NAGRemoveKeys(Transform):
     """Remove attributes of a NAG object based on their name.
 
     :param level: int or str
@@ -92,7 +92,7 @@ class NAGRemoveAttributes(Transform):
         else:
             raise ValueError(f'Unsupported level={self.level}')
 
-        transforms = [RemoveAttributes(keys=k) for k in level_keys]
+        transforms = [RemoveKeys(keys=k) for k in level_keys]
 
         for i_level in range(nag.num_levels):
             nag._list[i_level] = transforms[i_level](nag._list[i_level])
@@ -100,7 +100,7 @@ class NAGRemoveAttributes(Transform):
         return nag
 
 
-class AddFeatByKey(Transform):
+class AddKeyToX(Transform):
     """Get attributes from their keys and concatenate them to x.
 
     :param keys: str or list(str)
@@ -166,7 +166,7 @@ class AddFeatByKey(Transform):
         return data
 
 
-class NAGAddFeatByKey(Transform):
+class NAGAddKeyToX(Transform):
     """Get attributes from their keys and concatenate them to x.
 
     :param level: int or str
@@ -207,7 +207,7 @@ class NAGAddFeatByKey(Transform):
             raise ValueError(f'Unsupported level={self.level}')
 
         transforms = [
-            AddFeatByKey(
+            AddKeyToX(
                 keys=k, strict=self.strict, delete_after=self.delete_after)
             for k in level_keys]
 
