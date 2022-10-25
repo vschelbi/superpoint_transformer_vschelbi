@@ -13,7 +13,7 @@ class SegmentPool(nn.Module):
         self.reduce = reduce
 
     def forward(self, x, idx):
-        scatter(x, idx, dim=0, reduce=self.reduce)
+        return scatter(x, idx, dim=0, reduce=self.reduce)
 
 
 class SegmentMaxPool(SegmentPool):

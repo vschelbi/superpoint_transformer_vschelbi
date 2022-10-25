@@ -3,135 +3,98 @@
 import numpy as np
 import torch
 import os
+from torchmetrics.classification import MulticlassConfusionMatrix
+from src.utils import histogram_to_atomic
 
 
-class ConfusionMatrix:
-    """Streaming interface to allow for any source of predictions. 
-    Initialize it, count predictions one by one, then print confusion
-    matrix and intersection-union score"""
+class ConfusionMatrix(MulticlassConfusionMatrix):
+    """TorchMetrics's MulticlassConfusionMatrix but tailored to our
+    needs. In particular, new methods allow computing OA, mAcc, mIoU
+    and per-class IoU.
 
-    def __init__(self, number_of_labels=2):
-        self.number_of_labels = number_of_labels
-        self.confusion_matrix = None
+    :param num_classes: int
+        Number of classes in the confusion matrix
+    :param ignore_index: int
+        Specifies a target value that is ignored and does not
+        contribute to the metric calculation
+    :param pointwise: bool
+        If True and when target is a 2D tensor. Target will be treated
+        as a histogram and metrics will be computed at a point
+        level. Otherwise, any 2D target will be argmaxed along its
+        2nd dimension to recover the dominant label in each
+        histogram and the metrics will be computed at the segment
+        level. See `self.update()`
+    """
 
-    @staticmethod
-    def create_from_matrix(confusion_matrix):
-        assert confusion_matrix.shape[0] == confusion_matrix.shape[1]
-        matrix = ConfusionMatrix(confusion_matrix.shape[0])
-        matrix.confusion_matrix = confusion_matrix
-        return matrix
+    def __init__(self, num_classes, ignore_index=None, pointwise=True):
+        super().__init__(
+            num_classes, ignore_index=ignore_index, normalize=None,
+            validate_args=False)
+        self.pointwise = pointwise
 
-    def count_predicted_batch(self, ground_truth_vec, predicted):
-        assert np.max(predicted) < self.number_of_labels
-        if torch.is_tensor(ground_truth_vec):
-            ground_truth_vec = ground_truth_vec.numpy()
-        if torch.is_tensor(predicted):
-            predicted = predicted.numpy()
-        batch_confusion = np.bincount(
-            self.number_of_labels * ground_truth_vec.astype(int) + predicted,
-            minlength=self.number_of_labels ** 2).reshape(
-            self.number_of_labels, self.number_of_labels)
-        if self.confusion_matrix is None:
-            self.confusion_matrix = batch_confusion
-        else:
-            self.confusion_matrix += batch_confusion
+    def update(self, preds, target):
+        """Update state with predictions and targets. Extends the
+        `MulticlassConfusionMatrix.update()` with the possibility to
+        pass histograms as targets. This is needed when computing
+        point-level metrics from segments classification.
 
-    def get_count(self, ground_truth, predicted):
-        """Labels are integers from 0 to number_of_labels-1."""
-        return self.confusion_matrix[ground_truth][predicted]
-
-    def get_confusion_matrix(self):
-        """Returns list of lists of integers; use it as
-        result[ground_truth][predicted] to know how many samples of
-        class ground_truth were reported as class predicted.
+        :param preds: Tensor
+            Predictions
+        :param target: Tensor
+            Ground truth
         """
-        return self.confusion_matrix
+        # If we want to compute poitnwise metrics and received
+        # histograms as target labels
+        if self.pointwise and target.dim() > 1 and target.shape[1] > 1:
+            target, preds = histogram_to_atomic(target, preds)
 
-    def get_intersection_union_per_class(self):
-        """ Computes the intersection over union of each class in the 
-        confusion matrix
-        Return:
-            (iou, missing_class_mask) - iou for class as well as a mask
-            highlighting existing classes
-        """
-        TP_plus_FN = np.sum(self.confusion_matrix, axis=0)
-        TP_plus_FP = np.sum(self.confusion_matrix, axis=1)
-        TP = np.diagonal(self.confusion_matrix)
-        union = TP_plus_FN + TP_plus_FP - TP
-        iou = 1e-8 + TP / (union + 1e-8)
-        existing_class_mask = union > 1e-3
-        return iou, existing_class_mask
+        # If we received histograms as target labels but want to compute
+        # segment-level metrics only
+        elif not self.pointwise and target.dim() > 1:
+            if target.shape[1] == 1:
+                target = target.squeeze()
+            else:
+                target = target.argmax(dim=1)
 
-    def get_overall_accuracy(self):
-        """returns 64-bit float"""
-        confusion_matrix = self.confusion_matrix
-        matrix_diagonal = 0
-        all_values = 0
-        for row in range(self.number_of_labels):
-            for column in range(self.number_of_labels):
-                all_values += confusion_matrix[row][column]
-                if row == column:
-                    matrix_diagonal += confusion_matrix[row][column]
-        if all_values == 0:
-            all_values = 1
-        return float(matrix_diagonal) / all_values
-
-    def get_average_intersection_union(self, missing_as_one=False):
-        """ Get the mIoU metric by ignoring missing labels. 
-        If missing_as_one is True then treats missing classes in the IoU
-        as 1
-        """
-        values, existing_classes_mask = self.get_intersection_union_per_class()
-        if np.sum(existing_classes_mask) == 0:
-            return 0
-        if missing_as_one:
-            values[~existing_classes_mask] = 1
-            existing_classes_mask[:] = True
-        return np.sum(values[existing_classes_mask]) / np.sum(existing_classes_mask)
-
-    def get_mean_class_accuracy(self):  # added
-        re = 0
-        label_presents = 0
-        for i in range(self.number_of_labels):
-            total_gt = np.sum(self.confusion_matrix[i, :])
-            if total_gt:
-                label_presents += 1
-                re = re + self.confusion_matrix[i][i] / max(1, total_gt)
-        if label_presents == 0:
-            return 0
-        return re / label_presents
-
-    def count_gt(self, ground_truth):
-        return self.confusion_matrix[ground_truth, :].sum()
+        super().update(preds, target)
 
     @classmethod
-    def from_histogram(cls, y, class_names=None, verbose=False):
-        assert y.ndim == 2
+    def from_matrix(cls, confusion_matrix):
+        assert confusion_matrix.shape[0] == confusion_matrix.shape[1]
+        matrix = cls(confusion_matrix.shape[0])
+        matrix.confmat = confusion_matrix
+        return matrix
+
+    @classmethod
+    def from_histogram(cls, h, class_names=None, verbose=False):
+        assert h.ndim == 2
+        device = h.device
 
         # Initialization
-        num_nodes, num_classes = y.shape
+        num_nodes, num_classes = h.shape
 
         # Instantiate the ConfusionMatrix object
         cm = cls(num_classes)
 
         # Compute the dominant class in each superpoint
-        pred_super = y.argmax(dim=1)
+        pred_super = h.argmax(dim=1)
 
         # Compute the corresponding pointwise prediction and ground truth
-        gt = torch.arange(num_classes).repeat(num_nodes).repeat_interleave(
-            y.flatten())
-        pred = pred_super.repeat_interleave(y.sum(dim=1))
+        gt = torch.arange(
+            num_classes, device=device).repeat(num_nodes).repeat_interleave(
+            h.flatten())
+        pred = pred_super.repeat_interleave(h.sum(dim=1))
 
         # Store in the ConfusionMatrix
-        cm.count_predicted_batch(gt.numpy(), pred.numpy())
+        cm(pred, gt)
 
         if not verbose:
             return cm
 
         # Compute and print the metrics
-        print(f'OA: {100 * cm.get_overall_accuracy():0.2f}')
-        print(f'mIoU: {100 * cm.get_average_intersection_union():0.2f}')
-        class_iou = cm.get_intersection_union_per_class()
+        print(f'OA: {100 * cm.oa():0.2f}')
+        print(f'mIoU: {100 * cm.miou():0.2f}')
+        class_iou = cm.iou()
         class_names = class_names if class_names else range(num_nodes)
         for c, iou, seen in zip(class_names, class_iou[0], class_iou[1]):
             if not seen:
@@ -141,12 +104,75 @@ class ConfusionMatrix:
 
         return cm
 
+    def iou(self):
+        """Computes the Intersection over Union of each class in the
+        confusion matrix
+        Return:
+            (iou, missing_class_mask) - iou for class as well as a mask
+            highlighting existing classes
+        """
+        TP_plus_FN = self.confmat.sum(dim=0)
+        TP_plus_FP = self.confmat.sum(dim=1)
+        TP = self.confmat.diag()
+        union = TP_plus_FN + TP_plus_FP - TP
+        iou = 1e-8 + TP / (union + 1e-8)
+        existing_class_mask = union > 1e-3
+        return iou, existing_class_mask
+
+    def oa(self):
+        """Compute the Overall Accuracy of the confusion matrix.
+        """
+        confusion_matrix = self.confmat
+        matrix_diagonal = 0
+        all_values = 0
+        for row in range(self.num_classes):
+            for column in range(self.num_classes):
+                all_values += confusion_matrix[row][column]
+                if row == column:
+                    matrix_diagonal += confusion_matrix[row][column]
+        if all_values == 0:
+            all_values = 1
+        return float(matrix_diagonal) / all_values
+
+    def miou(self, missing_as_one=False):
+        """Computes the mean Intersection over Union of the confusion
+        matrix. Get the mIoU metric by ignoring missing labels.
+
+        :param missing_as_one: bool
+            If True, then treats missing classes in the IoU as 1
+        """
+        values, existing_classes_mask = self.iou()
+        if existing_classes_mask.sum() == 0:
+            return 0
+        if missing_as_one:
+            values[~existing_classes_mask] = 1
+            existing_classes_mask[:] = True
+        return values[existing_classes_mask].sum() / existing_classes_mask.sum()
+
+    def macc(self):
+        """Compute the mean of per-class accuracy in the confusion
+        matrix.
+        """
+        re = 0
+        label_presents = 0
+        for i in range(self.num_classes):
+            total_gt = self.confmat[i, :].sum()
+            if total_gt:
+                label_presents += 1
+                re = re + self.confmat[i][i] / max(1, total_gt)
+        if label_presents == 0:
+            return 0
+        return re / label_presents
+
 
 def save_confusion_matrix(cm, path2save, ordered_names):
     import seaborn as sns
     import matplotlib.pyplot as plt
 
     sns.set(font_scale=5)
+
+    if isinstance(cm, torch.Tensor):
+        cm = cm.cpu().float().numpy()
 
     template_path = os.path.join(path2save, "{}.svg")
     # PRECISION

@@ -38,9 +38,9 @@ class PointClassifier(nn.Module):
     normalization.
     """
     def __init__(
-            self, in_channels, num_classes):
+            self, in_channels, num_classes, bias=True):
         super().__init__()
-        self.classifier = nn.Linear(in_channels, num_classes, bias=False),
+        self.classifier = nn.Linear(in_channels, num_classes, bias=bias)
 
     def forward(self, x):
         return self.classifier(x)

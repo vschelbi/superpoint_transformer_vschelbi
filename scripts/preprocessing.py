@@ -116,8 +116,8 @@ def process(i_cloud, args):
         cm = ConfusionMatrix.from_histogram(d_voxel.y[:, :KITTI360_NUM_CLASSES])
         info.voxel_oracle['num'].append(d_voxel.num_nodes)
         info.voxel_oracle['cm'].append(cm)
-        info.voxel_oracle['oa'].append(cm.get_overall_accuracy())
-        info.voxel_oracle['miou'].append(cm.get_average_intersection_union())
+        info.voxel_oracle['oa'].append(cm.oa())
+        info.voxel_oracle['miou'].append(cm.miou())
     del d_voxel
 
     # Compute the oracle pointwise prediction for each segmentation level
@@ -133,8 +133,8 @@ def process(i_cloud, args):
             verbose=args.verbose)
         info.cm.append(cm)
         info.segment_oracle['num'].append(d.num_nodes)
-        info.segment_oracle['oa'].append(cm.get_overall_accuracy())
-        info.segment_oracle['miou'].append(cm.get_average_intersection_union())
+        info.segment_oracle['oa'].append(cm.oa())
+        info.segment_oracle['miou'].append(cm.miou())
 
     return info
 

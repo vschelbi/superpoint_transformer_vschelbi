@@ -7,6 +7,7 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils import fast_randperm
 from src.transforms import Transform
 from src.data import NAG
+from src.utils.metrics import atomic_to_histogram
 
 
 __all__ = [
@@ -231,56 +232,60 @@ def _group_data(
 
         # For keys requiring a voting scheme or a histogram
         if key in _VOTING_KEYS or key in bins.keys():
-
-            assert item.ge(0).all(),\
-                "Mean aggregation only supports positive integers"
-            assert item.dtype in [torch.uint8, torch.int, torch.long], \
-                "Mean aggregation only supports positive integers"
-            assert item.ndim <= 2, \
-                "Voting and histograms are only supported for 1D and " \
-                "2D tensors"
-
-            # Initialization
             voting = key not in bins.keys()
             n_bins = item.max() if voting else bins[key]
-
-            # Important: if values are already 2D, we consider them to
-            # be histograms and will simply scatter_add them
-            if item.ndim == 2:
-                # Aggregate the histograms
-                hist = scatter_add(item, cluster, dim=0)
-                data[key] = hist
-
-                # Either save the histogram or the majority vote
-                data[key] = hist.argmax(dim=-1) if voting else hist
-                continue
-
-            # Convert values to one-hot encoding. Values are
-            # temporarily offset to 0 to save some memory and
-            # compute in one-hot encoding and scatter_add
-            offset = item.min()
-            item = torch.nn.functional.one_hot(item - offset)
-
-            # Count number of occurrence of each value
-            hist = scatter_add(item, cluster, dim=0)
-            N = hist.shape[0]
-            device = hist.device
-
-            # Prepend 0 columns to the histogram for bins
-            # removed due to offsetting
-            bins_before = torch.zeros(
-                N, offset, device=device, dtype=torch.long)
-            hist = torch.cat((bins_before, hist), dim=1)
-
-            # Append columns to the histogram for unobserved
-            # classes/bins
-            bins_after = torch.zeros(
-                N, n_bins - hist.shape[1], device=device,
-                dtype=torch.long)
-            hist = torch.cat((hist, bins_after), dim=1)
-
-            # Either save the histogram or the majority vote
+            hist = atomic_to_histogram(item, cluster, n_bins=n_bins)
             data[key] = hist.argmax(dim=-1) if voting else hist
+
+            # assert item.ge(0).all(),\
+            #     "Mean aggregation only supports positive integers"
+            # assert item.dtype in [torch.uint8, torch.int, torch.long], \
+            #     "Mean aggregation only supports positive integers"
+            # assert item.ndim <= 2, \
+            #     "Voting and histograms are only supported for 1D and " \
+            #     "2D tensors"
+            #
+            # # Initialization
+            # voting = key not in bins.keys()
+            # n_bins = item.max() if voting else bins[key]
+            #
+            # # Important: if values are already 2D, we consider them to
+            # # be histograms and will simply scatter_add them
+            # if item.ndim == 2:
+            #     # Aggregate the histograms
+            #     hist = scatter_add(item, cluster, dim=0)
+            #     data[key] = hist
+            #
+            #     # Either save the histogram or the majority vote
+            #     data[key] = hist.argmax(dim=-1) if voting else hist
+            #     continue
+            #
+            # # Convert values to one-hot encoding. Values are
+            # # temporarily offset to 0 to save some memory and
+            # # compute in one-hot encoding and scatter_add
+            # offset = item.min()
+            # item = torch.nn.functional.one_hot(item - offset)
+            #
+            # # Count number of occurrence of each value
+            # hist = scatter_add(item, cluster, dim=0)
+            # N = hist.shape[0]
+            # device = hist.device
+            #
+            # # Prepend 0 columns to the histogram for bins
+            # # removed due to offsetting
+            # bins_before = torch.zeros(
+            #     N, offset, device=device, dtype=torch.long)
+            # hist = torch.cat((bins_before, hist), dim=1)
+            #
+            # # Append columns to the histogram for unobserved
+            # # classes/bins
+            # bins_after = torch.zeros(
+            #     N, n_bins - hist.shape[1], device=device,
+            #     dtype=torch.long)
+            # hist = torch.cat((hist, bins_after), dim=1)
+            #
+            # # Either save the histogram or the majority vote
+            # data[key] = hist.argmax(dim=-1) if voting else hist
 
         # Standard behavior, where attributes are simply
         # averaged across the clusters

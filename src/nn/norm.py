@@ -41,10 +41,15 @@ class SegmentUnitNorm(nn.Module):
         super().__init__()
 
     def forward(self, pos, idx):
-        mini = scatter(pos, idx, dim=0, reduce='min')
-        maxi = scatter(pos, idx, dim=0, reduce='max')
-        mean = scatter(pos, idx, dim=0, reduce='mean')
-        diameter = (maxi - mini).max()
-        pos = (pos - mean) / (diameter + 1e-2)
+        min_segment = scatter(pos, idx, dim=0, reduce='min')
+        max_segment = scatter(pos, idx, dim=0, reduce='max')
 
-        return pos, diameter
+        mean_segment = scatter(pos, idx, dim=0, reduce='mean')
+        diameter_segment = (max_segment - min_segment).max(dim=1).values
+
+        mean = mean_segment[idx]
+        diameter = diameter_segment[idx]
+
+        pos = (pos - mean) / (diameter.view(-1, 1) + 1e-2)
+
+        return pos, diameter_segment
