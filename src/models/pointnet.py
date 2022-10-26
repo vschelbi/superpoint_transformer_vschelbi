@@ -57,17 +57,12 @@ class PointNetModule(LightningModule):
         # By default lightning executes validation step sanity checks
         # before training starts, so we need to make sure `*_best`
         # metrics do not store anything from these checks
+        self.val_cm.reset()
         self.val_iou_best.reset()
         self.val_oa_best.reset()
         self.val_macc_best.reset()
 
     def step(self, nag):
-        print()
-        print()
-        print(f'Step received batch={nag}')
-        print()
-        print()
-
         # Recover level-0 features, position, segment indices and labels
         x = nag[0].x
         pos = nag[0].pos
@@ -93,7 +88,6 @@ class PointNetModule(LightningModule):
         return loss, preds, y
 
     def training_step(self, batch: Any, batch_idx: int):
-        print('in training_step...')
         loss, preds, targets = self.step(batch)
 
         # update and log metrics
@@ -120,7 +114,6 @@ class PointNetModule(LightningModule):
         self.train_cm.reset()
 
     def validation_step(self, batch: Any, batch_idx: int):
-        print('in validation_step...')
         loss, preds, targets = self.step(batch)
 
         # update and log metrics
@@ -159,7 +152,6 @@ class PointNetModule(LightningModule):
         self.val_cm.reset()
 
     def test_step(self, batch: Any, batch_idx: int):
-        print('in test_step...')
         loss, preds, targets = self.step(batch)
 
         # update and log metrics
