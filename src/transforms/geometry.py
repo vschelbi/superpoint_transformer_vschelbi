@@ -42,14 +42,19 @@ class JitterPosition(Transform):
         self.sigma = sigma
 
     def _process(self, nag):
+        device = nag.device
+
         if not isinstance(self.sigma, list):
             sigma = [self.sigma] * nag.num_levels
         else:
             sigma = self.sigma
+
         for i_level in range(nag.num_levels):
-            if sigma[i_level] <= 0:
+
+            if sigma[i_level] <= 0 or getattr(nag[i_level], 'pos', None) is None:
                 continue
-            noise = torch.randn_like(nag[i_level].pos) * sigma[i_level]
+
+            noise = torch.randn_like(nag[i_level].pos, device=device) * sigma[i_level]
             nag[i_level].pos += noise
 
         return nag
@@ -88,15 +93,17 @@ class RandomTiltAndRotate(Transform):
         self.theta = float(abs(theta))
 
     def _process(self, nag):
+        device = nag.device
+
         # Generate the random rotation axis
         sigma = self.phi / 180. * np.pi / 3
         distribution = torch.distributions.MultivariateNormal(
-            torch.zeros(2), torch.eye(2) * sigma)
-        axis = torch.cat((distribution.sample(), torch.ones(1)))
+            torch.zeros(2, device=device), torch.eye(2, device=device) * sigma)
+        axis = torch.cat((distribution.sample(), torch.ones(1, device=device)))
         axis /= axis.norm()
 
         # Generate the random rotation angle
-        theta = torch.rand(1) * 2 * self.theta - self.theta
+        theta = torch.rand(1, device=device) * 2 * self.theta - self.theta
 
         # Compute the rotation matrix
         R = rodrigues_rotation_matrix(axis, theta)
@@ -155,7 +162,7 @@ class RandomAnisotropicScale(Transform):
 
     def _process(self, nag):
         # Generate the random scales
-        scale = 1 + (torch.rand(1) * 2 * self.delta - self.delta)
+        scale = 1 + (torch.rand(1) * 2 * self.delta - self.delta).to(nag.device)
 
         for i_level in range(nag.num_levels):
             nag[i_level].pos = nag[i_level].pos * scale
@@ -196,16 +203,16 @@ class RandomAxisFlip(Transform):
         self.p = p
 
     def _process(self, nag):
-        if torch.rand(1) > self.p:
+        if torch.rand(1, device=nag.device) > self.p:
             return nag
 
         axis = self.axis
         for i_level in range(nag.num_levels):
-            nag[i_level].pos[:, axis] = -nag[i_level].pos[:, axis]
+            nag[i_level].pos[:, axis] *= -1
 
             # If the nodes have a `normal` attribute, we also adapt
             # their orientations accordingly
             if getattr(nag[i_level], 'normal', None) is not None:
-                nag[i_level].normal[:, axis] = -nag[i_level].normal[:, axis]
+                nag[i_level].normal[:, axis] *= -1
 
         return nag

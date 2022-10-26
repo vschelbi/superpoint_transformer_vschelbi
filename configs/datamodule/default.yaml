@@ -15,5 +15,5 @@ on_device_test_transform: null
 # DataLoader parameters. Would be good to have them live in another file
 dataloader:
     batch_size: 4
-    num_workers: 4
+    num_workers: 2
     pin_memory: False

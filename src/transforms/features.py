@@ -3,6 +3,7 @@ import numpy as np
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils.features import rgb2hsv, rgb2lab
 from src.transforms import Transform
+from src.data import NAG
 
 
 __all__ = ['PointFeatures', 'JitterColor', 'JitterFeatures']
@@ -192,42 +193,70 @@ class PointFeatures(Transform):
 
 
 class JitterColor(Transform):
-    """Add some gaussian noise to Data.rgb.
+    """Add some gaussian noise to data.rgb for all data in a NAG.
 
-    :param sigma: float
-        Standard deviation of the gaussian noise
+    :param sigma: float or List(float)
+        Standard deviation of the gaussian noise. A list may be passed
+        to transform NAG levels with different parameters. Passing
+        sigma <= 0 will prevent any jittering.
     """
 
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
     def __init__(self, sigma=0.05):
-        assert isinstance(sigma, (int, float))
+        assert isinstance(sigma, (int, float, list))
         self.sigma = float(sigma)
 
-    def _process(self, data):
+    def _process(self, nag):
+        device = nag.device
 
-        if getattr(data, 'rgb', None) is None:
-            return data
+        if not isinstance(self.sigma, list):
+            sigma = [self.sigma] * nag.num_levels
+        else:
+            sigma = self.sigma
 
-        data.rgb += torch.randn_like(data.rgb) * self.sigma
+        for i_level in range(nag.num_levels):
 
-        return data
+            if sigma[i_level] <= 0 or getattr(nag[i_level], 'rgb', None) is None:
+                continue
+
+            noise = torch.randn_like(nag[i_level].rgb, device=device) * self.sigma
+            nag[i_level].rgb += noise
+
+        return nag
 
 
 class JitterFeatures(Transform):
-    """Add some gaussian noise to Data.x.
+    """Add some gaussian noise to data.x for all data in a NAG.
 
-    :param sigma: float
-        Standard deviation of the gaussian noise
+    :param sigma: float or List(float)
+        Standard deviation of the gaussian noise. A list may be passed
+        to transform NAG levels with different parameters. Passing
+        sigma <= 0 will prevent any jittering.
     """
 
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
     def __init__(self, sigma=0.01):
-        assert isinstance(sigma, (int, float))
+        assert isinstance(sigma, (int, float, list))
         self.sigma = float(sigma)
 
-    def _process(self, data):
+    def _process(self, nag):
+        device = nag.device
 
-        if getattr(data, 'x', None) is None:
-            return data
+        if not isinstance(self.sigma, list):
+            sigma = [self.sigma] * nag.num_levels
+        else:
+            sigma = self.sigma
 
-        data.x += torch.randn_like(data.x) * self.sigma
+        for i_level in range(nag.num_levels):
 
-        return data
+            if sigma[i_level] <= 0 or getattr(nag[i_level], 'x', None) is None:
+                continue
+
+            noise = torch.randn_like(nag[i_level].x, device=device) * self.sigma
+            nag[i_level].x += noise
+
+        return nag

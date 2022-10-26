@@ -188,6 +188,7 @@ class KITTI360DataModule(LightningDataModule):
         # src.loader.DataLoader to simply pass a list of NAG objects,
         # waiting for to be batched on device.
         nag = NAGBatch.from_nag_list(nag_list)
+        del nag_list
 
         # Here we run on_device_transform, which contains NAG transforms
         # that we could not / did not want to run using CPU-based
