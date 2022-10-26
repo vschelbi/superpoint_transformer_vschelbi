@@ -104,9 +104,13 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
 
         return cm
 
-    def iou(self):
+    def iou(self, as_percent=True):
         """Computes the Intersection over Union of each class in the
         confusion matrix
+
+        :param as_percent: bool
+            If True, the returned metric is expressed in [0, 100]
+
         Return:
             (iou, missing_class_mask) - iou for class as well as a mask
             highlighting existing classes
@@ -117,10 +121,15 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         union = TP_plus_FN + TP_plus_FP - TP
         iou = 1e-8 + TP / (union + 1e-8)
         existing_class_mask = union > 1e-3
+        if as_percent:
+            iou *= 100
         return iou, existing_class_mask
 
-    def oa(self):
+    def oa(self, as_percent=True):
         """Compute the Overall Accuracy of the confusion matrix.
+
+        :param as_percent: bool
+            If True, the returned metric is expressed in [0, 100]
         """
         confusion_matrix = self.confmat
         matrix_diagonal = 0
@@ -132,16 +141,20 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
                     matrix_diagonal += confusion_matrix[row][column]
         if all_values == 0:
             all_values = 1
+        if as_percent:
+            matrix_diagonal *= 100
         return float(matrix_diagonal) / all_values
 
-    def miou(self, missing_as_one=False):
+    def miou(self, missing_as_one=False, as_percent=True):
         """Computes the mean Intersection over Union of the confusion
         matrix. Get the mIoU metric by ignoring missing labels.
 
         :param missing_as_one: bool
             If True, then treats missing classes in the IoU as 1
+        :param as_percent: bool
+            If True, the returned metric is expressed in [0, 100]
         """
-        values, existing_classes_mask = self.iou()
+        values, existing_classes_mask = self.iou(as_percent=as_percent)
         if existing_classes_mask.sum() == 0:
             return 0
         if missing_as_one:
@@ -149,9 +162,12 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
             existing_classes_mask[:] = True
         return values[existing_classes_mask].sum() / existing_classes_mask.sum()
 
-    def macc(self):
+    def macc(self, as_percent=True):
         """Compute the mean of per-class accuracy in the confusion
         matrix.
+
+        :param as_percent: bool
+            If True, the returned metric is expressed in [0, 100]
         """
         re = 0
         label_presents = 0
@@ -162,6 +178,8 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
                 re = re + self.confmat[i][i] / max(1, total_gt)
         if label_presents == 0:
             return 0
+        if as_percent:
+            re *= 100
         return re / label_presents
 
 
