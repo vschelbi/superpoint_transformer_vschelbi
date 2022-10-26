@@ -1,5 +1,8 @@
 _target_: src.models.pointnet.PointNetModule
 num_classes: 15  # this is for KITTI360 num_classes
+class_names: ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
+              'traffic light', 'traffic sign', 'vegetation', 'terrain',
+              'person', 'car', 'truck', 'motorcycle', 'bicycle', 'ignored']
 pointwise_metrics: True
 
 optimizer:
@@ -17,6 +20,6 @@ scheduler:
 
 net:
   _target_: src.models.components.pointnet.PointNet
-  local_channels: [10, 64, 128, 256]
-  global_channels: [257, 64, 32]
+  local_channels: [10, 32, 64, 128]
+  global_channels: [129, 64, 32]
   num_classes: ${model.num_classes}

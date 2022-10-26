@@ -209,7 +209,7 @@ class KITTI360DataModule(LightningDataModule):
         if on_device_transform is None:
             return nag
         else:
-            return on_device_transform(nag).detach()
+            return on_device_transform(nag)
 
     def __repr__(self):
         return f'{self.__class__.__name__}'

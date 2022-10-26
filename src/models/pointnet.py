@@ -11,7 +11,7 @@ class PointNetModule(LightningModule):
     """A LightningModule for PointNet."""
 
     def __init__(
-            self, net, optimizer, scheduler, num_classes,
+            self, net, optimizer, scheduler, num_classes, class_names=None,
             pointwise_metrics=True):
         super().__init__()
 
@@ -32,6 +32,8 @@ class PointNetModule(LightningModule):
         # unclassified/ignored points, which are given num_classes
         # labels
         self.num_classes = num_classes
+        self.class_names = class_names if class_names is not None \
+            else [f'class-{i}' for i in range(num_classes)]
         self.pointwise_metrics = pointwise_metrics
         self.train_cm = ConfusionMatrix(
             num_classes, ignore_index=num_classes, pointwise=pointwise_metrics)
@@ -108,9 +110,9 @@ class PointNetModule(LightningModule):
         self.log("train/miou", self.train_cm.miou(), prog_bar=True)
         self.log("train/oa", self.train_cm.oa(), prog_bar=True)
         self.log("train/macc", self.train_cm.macc(), prog_bar=True)
-        for i_class, (iou, seen) in enumerate(zip(*self.train_cm.iou())):
+        for iou, seen, name in zip(*self.train_cm.iou(), self.class_names):
             if seen:
-                self.log(f"train/iou_class-{i_class}", iou, prog_bar=True)
+                self.log(f"train/iou_{name}", iou, prog_bar=True)
         self.train_cm.reset()
 
     def validation_step(self, batch: Any, batch_idx: int):
@@ -134,9 +136,9 @@ class PointNetModule(LightningModule):
         self.log("val/miou", miou, prog_bar=True)
         self.log("val/oa", oa, prog_bar=True)
         self.log("val/macc", macc, prog_bar=True)
-        for i_class, (iou, seen) in enumerate(zip(*self.val_cm.iou())):
+        for iou, seen, name in zip(*self.val_cm.iou(), self.class_names):
             if seen:
-                self.log(f"val/iou_class-{i_class}", iou, prog_bar=True)
+                self.log(f"val/iou_{name}", iou, prog_bar=True)
 
         self.val_iou_best(iou)  # update best-so-far metric
         self.val_oa_best(oa)  # update best-so-far metric
@@ -168,9 +170,9 @@ class PointNetModule(LightningModule):
         self.log("test/miou", self.test_cm.miou(), prog_bar=True)
         self.log("test/oa", self.test_cm.oa(), prog_bar=True)
         self.log("test/macc", self.test_cm.macc(), prog_bar=True)
-        for i_class, (iou, seen) in enumerate(zip(*self.test_cm.iou())):
+        for iou, seen, name in zip(*self.test_cm.iou(), self.class_names):
             if seen:
-                self.log(f"test/iou_class-{i_class}", iou, prog_bar=True)
+                self.log(f"test/iou_{name}", iou, prog_bar=True)
         self.test_cm.reset()
 
     def configure_optimizers(self):
