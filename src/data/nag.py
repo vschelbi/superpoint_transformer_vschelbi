@@ -67,6 +67,11 @@ class NAG:
         """Return a new NAG instance containing the Data clones."""
         return self.__class__([d.clone() for d in self])
 
+    def detach(self):
+        """Detach all tensors in the NAG."""
+        self._list = [d.detach() for d in self]
+        return self
+
     def to(self, device):
         """Move the NAG with all Data in it to device."""
         self._list = [d.to(device) for d in self]

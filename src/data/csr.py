@@ -79,6 +79,13 @@ class CSRData:
             assert self.is_index_value.shape[0] == self.num_values, \
                 "is_index_value size must match the number of value tensors."
 
+    def detach(self):
+        """Detach all tensors in the CSRData."""
+        self.pointers = self.pointers.detach()
+        for i in range(self.num_values):
+            self.values[i] = self.values[i].detach()
+        return self
+
     def to(self, device):
         """Move the CSRData to the specified device."""
         self.pointers = self.pointers.to(device)

@@ -101,6 +101,15 @@ class Data(PyGData):
     def num_sub(self):
         return self.sub.points.max().cpu().item() + 1 if self.is_super else 0
 
+    def detach(self):
+        """Extend `torch_geometric.Data.detach` to handle Cluster
+        attributes.
+        """
+        self = super().detach()
+        if self.is_super:
+            self.sub = self.sub.detach()
+        return self
+
     def to(self, device):
         """Extend `torch_geometric.Data.to` to handle Cluster attributes.
         """
