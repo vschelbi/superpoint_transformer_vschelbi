@@ -144,13 +144,12 @@ class Data(PyGData):
             assert self.edge_index.max() < self.num_points
             assert 0 <= self.edge_index.min()
 
-    # TODO batching data.sub indices
     def __inc__(self, key, value, *args, **kwargs):
         """Extend the PyG.Data.__inc__ behavior on '*index*' and
         '*face*' attributes to our 'super_index'. This is needed for
         maintaining clusters when batching Data objects together.
         """
-        return self.num_super if key in 'super_index' \
+        return self.num_super if key in ['super_index'] \
             else super().__inc__(key, value, *args, **kwargs)
 
     def __cat_dim__(self, key, value, *args, **kwargs):
