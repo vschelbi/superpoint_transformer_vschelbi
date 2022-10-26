@@ -237,6 +237,7 @@ def _group_data(
             hist = atomic_to_histogram(item, cluster, n_bins=n_bins)
             data[key] = hist.argmax(dim=-1) if voting else hist
 
+            # TODO: remove this if tested ad approved
             # assert item.ge(0).all(),\
             #     "Mean aggregation only supports positive integers"
             # assert item.dtype in [torch.uint8, torch.int, torch.long], \
