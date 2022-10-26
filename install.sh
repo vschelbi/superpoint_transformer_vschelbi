@@ -101,6 +101,7 @@ pip install hydra-core --upgrade
 pip install hydra-colorlog
 pip install hydra-submitit-launcher
 pip install rich
+pip install torch_tb_profiler
 
 #*********************************
 
