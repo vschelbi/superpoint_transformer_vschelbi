@@ -48,7 +48,7 @@ class PointNetModule(LightningModule):
         self.test_loss = MeanMetric()
 
         # For tracking best-so-far validation metrics
-        self.val_iou_best = MaxMetric()
+        self.val_miou_best = MaxMetric()
         self.val_oa_best = MaxMetric()
         self.val_macc_best = MaxMetric()
 
@@ -60,7 +60,7 @@ class PointNetModule(LightningModule):
         # before training starts, so we need to make sure `*_best`
         # metrics do not store anything from these checks
         self.val_cm.reset()
-        self.val_iou_best.reset()
+        self.val_miou_best.reset()
         self.val_oa_best.reset()
         self.val_macc_best.reset()
 
@@ -140,14 +140,14 @@ class PointNetModule(LightningModule):
             if seen:
                 self.log(f"val/iou_{name}", iou, prog_bar=True)
 
-        self.val_iou_best(iou)  # update best-so-far metric
+        self.val_miou_best(miou)  # update best-so-far metric
         self.val_oa_best(oa)  # update best-so-far metric
         self.val_macc_best(macc)  # update best-so-far metric
 
         # log `*_best` metrics this way, using `.compute()` instead of
         # passing the whole torchmetric object, because otherwise metric
         # would be reset by lightning after each epoch
-        self.log("val/iou_best", self.val_iou_best.compute(), prog_bar=True)
+        self.log("val/miou_best", self.val_miou_best.compute(), prog_bar=True)
         self.log("val/oa_best", self.val_oa_best.compute(), prog_bar=True)
         self.log("val/macc_best", self.val_macc_best.compute(), prog_bar=True)
 
