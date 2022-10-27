@@ -20,6 +20,6 @@ scheduler:
 
 net:
   _target_: src.models.components.pointnet.PointNet
-  local_channels: [10, 32, 64, 128]
+  local_channels: [11, 32, 64, 128]
   global_channels: [129, 64, 32]
   num_classes: ${model.num_classes}
