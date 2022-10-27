@@ -27,7 +27,7 @@ echo
 echo "_______________ Prerequisites _______________"
 echo "  - conda"
 echo "  - cuda >= 10.2 (tested with `echo ${CUDA_SUPPORTED[*]}`)"
-echo "  - gcc >= 7"
+echo "  - 8.0 >= gcc >= 7"
 echo
 echo
 
