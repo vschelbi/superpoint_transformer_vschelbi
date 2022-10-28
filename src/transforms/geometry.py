@@ -97,10 +97,17 @@ class RandomTiltAndRotate(Transform):
 
         # Generate the random rotation axis
         sigma = self.phi / 180. * np.pi / 3
-        distribution = torch.distributions.MultivariateNormal(
-            torch.zeros(2, device=device), torch.eye(2, device=device) * sigma)
-        axis = torch.cat((distribution.sample(), torch.ones(1, device=device)))
-        axis /= axis.norm()
+        if sigma > 0:
+            means = torch.zeros(2, device=device)
+            stds = torch.eye(2, device=device) * sigma
+            distribution = torch.distributions.MultivariateNormal(means, stds)
+            axis_xy = distribution.sample()
+            axis_z = torch.ones(1, device=device)
+            axis = torch.cat((axis_xy, axis_z))
+            axis /= axis.norm()
+        else:
+            axis = torch.zeros(3, device=device, dtype=torch.float)
+            axis[2] = 1
 
         # Generate the random rotation angle
         theta = torch.rand(1, device=device) * 2 * self.theta - self.theta
