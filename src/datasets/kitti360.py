@@ -113,13 +113,13 @@ class KITTI360(InMemoryDataset):
 
     @property
     def raw_file_structure(self):
-        return """
-    root_dir/
+        return f"""
+    {self.self.root}/
         └── raw/
             └── data_3d_semantics/
-                └── 2013_05_28_drive_{seq:0>4}_sync/
+                └── 2013_05_28_drive_{{seq:0>4}}_sync/
                     └── static/
-                        └── {start_frame:0>10}_{end_frame:0>10}.ply
+                        └── {{start_frame:0>10}}_{{end_frame:0>10}}.ply
             """
 
     @property
