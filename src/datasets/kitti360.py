@@ -194,7 +194,7 @@ class KITTI360(InMemoryDataset):
 
         # Location of the KITTI-360 download shell scripts
         here = osp.dirname(osp.abspath(__file__))
-        scripts_dir = osp.join(here, '../../../scripts/datasets')
+        scripts_dir = osp.join(here, '../../scripts/datasets')
 
         # Accumulated 3D point clouds with annotations
         if not all(osp.exists(osp.join(self.raw_dir, x))
