@@ -4,104 +4,90 @@ import numpy as np
 import torch
 import os
 from torchmetrics.classification import MulticlassConfusionMatrix
-from src.utils import histogram_to_atomic
-
+from torch_scatter import scatter_add
 
 class ConfusionMatrix(MulticlassConfusionMatrix):
     """TorchMetrics's MulticlassConfusionMatrix but tailored to our
     needs. In particular, new methods allow computing OA, mAcc, mIoU
-    and per-class IoU.
+    and per-class IoU. The `update` method also supports registering
+    segment-level predictions along with label histograms. This allows
+    speeding up metrics computation without flattening all predictions
+    and labels histograms into potentially-huge point-wise tensors.
 
     :param num_classes: int
         Number of classes in the confusion matrix
     :param ignore_index: int
         Specifies a target value that is ignored and does not
         contribute to the metric calculation
-    :param pointwise: bool
-        If True and when target is a 2D tensor. Target will be treated
-        as a histogram and metrics will be computed at a point
-        level. Otherwise, any 2D target will be argmaxed along its
-        2nd dimension to recover the dominant label in each
-        histogram and the metrics will be computed at the segment
-        level. See `self.update()`
     """
 
-    def __init__(self, num_classes, ignore_index=None, pointwise=True):
+    def __init__(self, num_classes, ignore_index=None):
         super().__init__(
             num_classes, ignore_index=ignore_index, normalize=None,
             validate_args=False)
-        self.pointwise = pointwise
 
-    def update(self, preds, target):
+    def update(self, preds, target): # TODO change update to compute metric from histogram rather than brute-force atomic pred...
         """Update state with predictions and targets. Extends the
         `MulticlassConfusionMatrix.update()` with the possibility to
-        pass histograms as targets. This is needed when computing
-        point-level metrics from segments classification.
+        pass histograms as targets. This is typically useful for
+        computing point-wise metrics from segment-wise predictions and
+        label histograms.
 
         :param preds: Tensor
             Predictions
         :param target: Tensor
             Ground truth
         """
-        # If we want to compute poitnwise metrics and received
-        # histograms as target labels
-        if self.pointwise and target.dim() > 1 and target.shape[1] > 1:
-            target, preds = histogram_to_atomic(target, preds)
+        assert not target.is_floating_point()
+        assert preds.shape[0] == target.shape[0]
+        assert preds.dim() <= 2
+        assert target.dim() <= 2
+        if target.dim() == 2:
+            assert target.shape[1] in [1, self.num_classes]
 
-        # If we received histograms as target labels but want to compute
-        # segment-level metrics only
-        elif not self.pointwise and target.dim() > 1:
-            if target.shape[1] == 1:
-                target = target.squeeze()
-            else:
-                target = target.argmax(dim=1)
+        # If logits or probas are passed for preds, take the argmax for
+        # the majority class
+        if preds.dim() == 2:
+            preds = preds.argmax(dim=1)
+        if preds.is_floating_point():
+            preds = preds.long()
 
+        # If target is a 2D histogram of labels, we directly compute the
+        # confusion matrix from the histograms without computing the
+        # corresponding atomic pred-target 1D-tensor pairs
+        if target.dim() == 2 and target.shape[1] == self.num_classes:
+            if 0 <= self.ignore_index < self.num_classes:
+                target[self.ignore_index] = 0
+            confmat = scatter_add(
+                target.float(), preds, dim=0, dim_size=self.num_classes)
+            self.confmat += confmat.T.long()
+            return
+
+        # Flatten single-column 2D target
+        if target.dim() == 2 and target.shape[1] == 1:
+            target = target.squeeze()
+
+        # Basic parent-class update on 1D tensors
         super().update(preds, target)
 
     @classmethod
-    def from_matrix(cls, confusion_matrix):
+    def from_confusion_matrix(cls, confusion_matrix):
         assert confusion_matrix.shape[0] == confusion_matrix.shape[1]
-        matrix = cls(confusion_matrix.shape[0])
-        matrix.confmat = confusion_matrix
-        return matrix
+        assert not confusion_matrix.is_floating_point()
+        cm = cls(confusion_matrix.shape[0])
+        cm.confmat = confusion_matrix.long()
+        return cm
 
     @classmethod
-    def from_histogram(cls, h, class_names=None, verbose=False):
+    def from_histogram(cls, h):
+        """Create a ConfusionMatrix from 2D tensors representing label
+        histograms. The metrics are computed assuming the prediction
+        associated with each histogram is the dominant label.
+        """
         assert h.ndim == 2
-        device = h.device
-
-        # Initialization
-        num_nodes, num_classes = h.shape
-
-        # Instantiate the ConfusionMatrix object
-        cm = cls(num_classes)
-
-        # Compute the dominant class in each superpoint
-        pred_super = h.argmax(dim=1)
-
-        # Compute the corresponding pointwise prediction and ground truth
-        gt = torch.arange(
-            num_classes, device=device).repeat(num_nodes).repeat_interleave(
-            h.flatten())
-        pred = pred_super.repeat_interleave(h.sum(dim=1))
-
-        # Store in the ConfusionMatrix
-        cm(pred, gt)
-
-        if not verbose:
-            return cm
-
-        # Compute and print the metrics
-        print(f'OA: {100 * cm.oa():0.2f}')
-        print(f'mIoU: {100 * cm.miou():0.2f}')
-        class_iou = cm.iou()
-        class_names = class_names if class_names else range(num_nodes)
-        for c, iou, seen in zip(class_names, class_iou[0], class_iou[1]):
-            if not seen:
-                print(f'  {c:<13}: not seen')
-                continue
-            print(f'  {c:<13}: {100 * iou:0.2f}')
-
+        assert not h.is_floating_point()
+        cm = cls(h.shape[1])
+        cm(h.argmax(dim=1), h)
         return cm
 
     def iou(self, as_percent=True):
@@ -181,6 +167,30 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         if as_percent:
             re *= 100
         return re / label_presents
+
+    def print_metrics(self, class_names=None):
+        """Helper to print the OA, mAcc, mIoU and per-class IoU.
+
+        :param class_names: optional list(str)
+            List of class names to be used for pretty-printing per-class
+            IoU scores
+        """
+        oa = self.oa()
+        macc = self.macc()
+        miou = self.miou()
+        class_iou = self.iou()
+
+        print(f'OA: {oa:0.2f}')
+        print(f'mAcc: {macc:0.2f}')
+        print(f'mIoU: {miou:0.2f}')
+
+        class_names = class_names if class_names is not None \
+            else [f'class-{i}' for i in range(self.num_classes)]
+        for c, iou, seen in zip(class_names, class_iou[0], class_iou[1]):
+            if not seen:
+                print(f'  {c:<13}: not seen')
+                continue
+            print(f'  {c:<13}: {iou:0.2f}')
 
 
 def save_confusion_matrix(cm, path2save, ordered_names):

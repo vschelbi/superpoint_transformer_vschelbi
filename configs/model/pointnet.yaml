@@ -3,7 +3,7 @@ num_classes: 15  # this is for KITTI360 num_classes
 class_names: ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
               'traffic light', 'traffic sign', 'vegetation', 'terrain',
               'person', 'car', 'truck', 'motorcycle', 'bicycle', 'ignored']
-pointwise_metrics: True
+pointwise_loss: True
 
 optimizer:
   _target_: torch.optim.Adam

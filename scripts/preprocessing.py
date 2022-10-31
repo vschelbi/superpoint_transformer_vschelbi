@@ -126,11 +126,10 @@ def process(i_cloud, args):
     info.cm = []
     info.segment_oracle = {'num': [], 'oa': [], 'miou': []}
     for i, d in enumerate(nag):
+        cm = ConfusionMatrix.from_histogram(d.y[:, :KITTI360_NUM_CLASSES])
         if args.verbose:
             print(f'\nLevel-{i} purity')
-        cm = ConfusionMatrix.from_histogram(
-            d.y[:, :KITTI360_NUM_CLASSES], class_names=CLASS_NAMES,
-            verbose=args.verbose)
+            cm.print_metrics(class_names=CLASS_NAMES)
         info.cm.append(cm)
         info.segment_oracle['num'].append(d.num_nodes)
         info.segment_oracle['oa'].append(cm.oa())

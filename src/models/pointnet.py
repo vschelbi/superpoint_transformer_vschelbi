@@ -4,7 +4,7 @@ import torch
 from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from src.metrics import ConfusionMatrix
-from src.utils import histogram_to_atomic, atomic_to_histogram
+from src.utils import loss_with_target_histogram, atomic_to_histogram
 
 
 class PointNetModule(LightningModule):
@@ -12,7 +12,7 @@ class PointNetModule(LightningModule):
 
     def __init__(
             self, net, optimizer, scheduler, num_classes, class_names=None,
-            pointwise_metrics=True):
+            pointwise_loss=True):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -26,6 +26,7 @@ class PointNetModule(LightningModule):
         # for unclassified/ignored points, which are given num_classes
         # labels
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=num_classes)
+        self.pointwise_loss = pointwise_loss
 
         # Metric objects for calculating and averaging accuracy across
         # batches. We add `ignore_index=num_classes` to account for
@@ -34,13 +35,12 @@ class PointNetModule(LightningModule):
         self.num_classes = num_classes
         self.class_names = class_names if class_names is not None \
             else [f'class-{i}' for i in range(num_classes)]
-        self.pointwise_metrics = pointwise_metrics
         self.train_cm = ConfusionMatrix(
-            num_classes, ignore_index=num_classes, pointwise=pointwise_metrics)
+            num_classes, ignore_index=num_classes)
         self.val_cm = ConfusionMatrix(
-            num_classes, ignore_index=num_classes, pointwise=pointwise_metrics)
+            num_classes, ignore_index=num_classes)
         self.test_cm = ConfusionMatrix(
-            num_classes, ignore_index=num_classes, pointwise=pointwise_metrics)
+            num_classes, ignore_index=num_classes)
 
         # For averaging loss across batches
         self.train_loss = MeanMetric()
@@ -69,25 +69,24 @@ class PointNetModule(LightningModule):
         x = nag[0].x
         pos = nag[0].pos
         idx = nag[0].super_index
-        y_voxel = nag[0].y
+        y = nag[0].y
 
         # Convert level-0 labels to segment-level histograms, while
         # accounting for the extra class for unlabeled/ignored points
-        y_hist = atomic_to_histogram(y_voxel, idx, n_bins=self.num_classes + 1)
+        y_hist = atomic_to_histogram(y, idx, n_bins=self.num_classes + 1)
 
         # Inference on the batch
         logits = self.forward(pos, x, idx)
-
-        # Compute the loss on either point-level or segment-level
-        if self.pointwise_metrics:
-            y, logits = histogram_to_atomic(y_hist, logits)
-        else:
-            y = y_hist.argmax(dim=1)
-
-        loss = self.criterion(logits, y)
         preds = torch.argmax(logits, dim=1)
 
-        return loss, preds, y
+        # Compute the loss either in a point-wise or segment-wise
+        # fashion
+        if self.pointwise_loss:
+            loss = loss_with_target_histogram(self.criterion, logits, y_hist)
+        else:
+            loss = self.criterion(logits, y_hist.argmax(dim=1))
+
+        return loss, preds, y_hist
 
     def training_step(self, batch: Any, batch_idx: int):
         loss, preds, targets = self.step(batch)
