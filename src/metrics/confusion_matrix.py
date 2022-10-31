@@ -43,7 +43,7 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         assert preds.dim() <= 2
         assert target.dim() <= 2
         if target.dim() == 2:
-            assert target.shape[1] in [1, self.num_classes]
+            assert target.shape[1] == 1 or target.shape[1] == self.num_classes
 
         # If logits or probas are passed for preds, take the argmax for
         # the majority class

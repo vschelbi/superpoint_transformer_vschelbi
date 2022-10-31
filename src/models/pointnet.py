@@ -75,6 +75,10 @@ class PointNetModule(LightningModule):
         # accounting for the extra class for unlabeled/ignored points
         y_hist = atomic_to_histogram(y, idx, n_bins=self.num_classes + 1)
 
+        # Remove the last bin of the histogram, accounting for
+        # unlabeled/ignored points
+        y_hist = y_hist[:, :self.num_classes]
+
         # Inference on the batch
         logits = self.forward(pos, x, idx)
         preds = torch.argmax(logits, dim=1)
