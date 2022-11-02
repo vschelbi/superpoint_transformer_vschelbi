@@ -74,7 +74,9 @@ on_device_train_transform:
         n_min: 16
     - transform: DropoutSegments
       params:
-        p: 0.2
+        ratio: 0.2
+        by_size: False
+        by_class: False
     - transform: JitterPosition
       params:
         sigma: 0.03

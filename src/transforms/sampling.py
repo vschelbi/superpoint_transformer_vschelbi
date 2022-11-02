@@ -237,57 +237,6 @@ def _group_data(
             hist = atomic_to_histogram(item, cluster, n_bins=n_bins)
             data[key] = hist.argmax(dim=-1) if voting else hist
 
-            # TODO: remove this if tested ad approved
-            # assert item.ge(0).all(),\
-            #     "Mean aggregation only supports positive integers"
-            # assert item.dtype in [torch.uint8, torch.int, torch.long], \
-            #     "Mean aggregation only supports positive integers"
-            # assert item.ndim <= 2, \
-            #     "Voting and histograms are only supported for 1D and " \
-            #     "2D tensors"
-            #
-            # # Initialization
-            # voting = key not in bins.keys()
-            # n_bins = item.max() if voting else bins[key]
-            #
-            # # Important: if values are already 2D, we consider them to
-            # # be histograms and will simply scatter_add them
-            # if item.ndim == 2:
-            #     # Aggregate the histograms
-            #     hist = scatter_add(item, cluster, dim=0)
-            #     data[key] = hist
-            #
-            #     # Either save the histogram or the majority vote
-            #     data[key] = hist.argmax(dim=-1) if voting else hist
-            #     continue
-            #
-            # # Convert values to one-hot encoding. Values are
-            # # temporarily offset to 0 to save some memory and
-            # # compute in one-hot encoding and scatter_add
-            # offset = item.min()
-            # item = torch.nn.functional.one_hot(item - offset)
-            #
-            # # Count number of occurrence of each value
-            # hist = scatter_add(item, cluster, dim=0)
-            # N = hist.shape[0]
-            # device = hist.device
-            #
-            # # Prepend 0 columns to the histogram for bins
-            # # removed due to offsetting
-            # bins_before = torch.zeros(
-            #     N, offset, device=device, dtype=torch.long)
-            # hist = torch.cat((bins_before, hist), dim=1)
-            #
-            # # Append columns to the histogram for unobserved
-            # # classes/bins
-            # bins_after = torch.zeros(
-            #     N, n_bins - hist.shape[1], device=device,
-            #     dtype=torch.long)
-            # hist = torch.cat((hist, bins_after), dim=1)
-            #
-            # # Either save the histogram or the majority vote
-            # data[key] = hist.argmax(dim=-1) if voting else hist
-
         # Standard behavior, where attributes are simply
         # averaged across the clusters
         else:
@@ -310,37 +259,79 @@ class DropoutSegments(Transform):
     `SampleSegments` first before `DropoutSegments`, to minimize the
     number of level-0 points to manipulate.
 
-    :param p: float or list(float)
+    :param ratio: float or list(float)
         Portion of nodes to be dropped. A list may be passed to prune
-        NAG 1+ levels with different probabilities.
+        NAG 1+ levels with different probabilities
+    :param by_size: bool
+        If True, the segment size will affect the chances of being
+        dropped out. The smaller the segment, the greater its chances
+        to be dropped
+    :param by_class: bool
+        If True, the classes will affect the chances of being
+        dropped out. The smaller the segment, the greater its chances
+        to be dropped
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, p=0.2):
-        assert isinstance(p, (float, list))
-        assert 0 <= p < 1
-        self.p = p
+    def __init__(self, ratio=0.2, by_size=False, by_class=False):
+        assert isinstance(ratio, (float, list))
+        assert 0 <= ratio < 1
+        self.ratio = ratio
+        self.by_size = by_size
+        self.by_class = by_class
 
     def _process(self, nag):
-        if not isinstance(self.p, list):
-            p = [self.p] * (nag.num_levels - 1)
+        if not isinstance(self.ratio, list):
+            ratio = [self.ratio] * (nag.num_levels - 1)
         else:
-            p = self.p
+            ratio = self.ratio
 
         # Drop some nodes from each NAG level. Note that we start
-        # dropping from the highest to the lowest level, to accelerate training
+        # dropping from the highest to the lowest level, to accelerate
+        # training
         device = nag.device
         for i_level in range(nag.num_levels - 1, 0, -1):
-            if p[i_level - 1] <= 0:
+
+            # Negative max_ratios prevent dropout
+            if ratio[i_level - 1] <= 0:
                 continue
 
-            # Shuffle the order of points
+            # Prepare sampling
             num_nodes = nag[i_level].num_nodes
-            perm = fast_randperm(num_nodes, device=device)
-            num_keep = num_nodes - int(num_nodes * p[i_level - 1])
-            idx = perm[:num_keep]
+            num_keep = num_nodes - int(num_nodes * ratio[i_level - 1])
+
+            # Initialize all segments with the same weights
+            weights = torch.ones(num_nodes, device=device)
+
+            # Compute per-segment weights solely based on the segment
+            # size. This is biased towards large segments
+            if self.by_size:
+                node_size = nag.get_sub_size(i_level, low=0)
+                size_weights = 1 / (node_size ** 0.333)
+                size_weights /= size_weights.sum()
+                weights += size_weights
+
+            # Compute per-class weights based on class frequencies in
+            # the current NAG and give a weight to each segment
+            # based on the rarest class it contains. This is biased
+            # towards sampling rare classes
+            if self.by_class and nag[i_level].y is not None:
+                counts = nag[i_level].y.sum(dim=0).sqrt()
+                scores = 1 / (counts + 1)
+                scores /= scores.sum()
+                mask = nag[i_level].y.gt(0)
+                class_weights = (mask * scores.view(1, -1)).max(dim=1).values
+                class_weights /= class_weights.sum()
+                weights += class_weights.squeeze()
+
+            # Normalize the weights again, in case size or class weights
+            # were added
+            weights /= weights.sum()
+
+            # Generate sampling indices
+            idx = torch.multinomial(weights, num_keep, replacement=False)
 
             # Select the nodes and update the NAG structure accordingly
             nag = nag.select(i_level, idx)
