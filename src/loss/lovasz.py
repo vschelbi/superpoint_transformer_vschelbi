@@ -38,26 +38,31 @@ class LovaszLoss(_Loss):
         histograms...)
     :param ignore_index: int
         Class index to ignore
+    :param weight: Tensor
+        Class weights. Although this functionality is computationally
+        sound, it has no theoretical guarantees regarding the loss
+        landscape or convergence properties
     """
 
     def __init__(
             self, normalization='softmax', class_to_sum='present',
-            ignore_index=-1, reduction='sum'):
+            reduction='sum', ignore_index=-1, weight=None):
         super().__init__(reduction=reduction)
         self.ignore_index = ignore_index
         self.normalization = normalization
         self.class_to_sum = class_to_sum
+        self.weight = weight
 
     def forward(self, input, target):
         return lovasz(
             input, target, normalization=self.normalization,
             class_to_sum=self.class_to_sum, reduction=self.reduction,
-            ignore_index=self.ignore_index)
+            ignore_index=self.ignore_index, weight=self.weight)
 
 
 def lovasz(
         logits, labels, normalization='softmax', class_to_sum='present',
-        reduction='sum', ignore_index=-1):
+        reduction='sum', ignore_index=-1, weight=None):
     """Multi-class Lovasz-Softmax loss.
 
     Re-implementation of:
@@ -90,6 +95,10 @@ def lovasz(
         histograms...)
     :param ignore_index: int
         Class index to ignore
+    :param weight: Tensor
+        Class weights. Although this functionality is computationally
+        sound, it has no theoretical guarantees regarding the loss
+        landscape or convergence properties
     """
     assert logits.dim() == 2
     assert labels.dim() == 1
@@ -147,6 +156,8 @@ def lovasz(
 
     # Compute the final loss
     loss = (errors * lovasz_gradient(fg))
+    if weight is not None:
+        loss = loss * weight.view(1, -1)
     if reduction == 'sum':
         return loss.mean(dim=1).sum()
     else:

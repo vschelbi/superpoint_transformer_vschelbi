@@ -1,9 +1,7 @@
 _target_: src.models.pointnet.PointNetModule
 num_classes: 15  # this is for KITTI360 num_classes
-class_names: ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
-              'traffic light', 'traffic sign', 'vegetation', 'terrain',
-              'person', 'car', 'truck', 'motorcycle', 'bicycle', 'ignored']
 pointwise_loss: True
+weighted_loss: True
 
 optimizer:
   _target_: torch.optim.Adam
@@ -23,3 +21,7 @@ net:
   local_channels: [11, 32, 64, 128]
   global_channels: [129, 64, 32]
   num_classes: ${model.num_classes}
+
+criterion:
+  _target_: torch.nn.CrossEntropyLoss
+#  _target_: src.loss.LovaszLoss:

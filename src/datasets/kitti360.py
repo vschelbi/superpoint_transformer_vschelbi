@@ -76,6 +76,7 @@ class KITTI360(InMemoryDataset):
         want to run in CPU-based DataLoaders
     """
     num_classes = KITTI360_NUM_CLASSES
+    class_names = CLASS_NAMES
     _WINDOWS = WINDOWS
     _SEQUENCES = SEQUENCES
     _LEVEL0_SAVE_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
@@ -276,6 +277,43 @@ class KITTI360(InMemoryDataset):
 
         # Save pre_transformed data to the processed dir/<path>
         nag.save(window_path, x32=self.x32, y_to_csr=self.y_to_csr)
+
+    def get_class_weight(self, smooth='sqrt'):
+        """Compute class weights based on the labels distribution in the
+        dataset. Optionally a 'smooth' function may be passed to
+        smoothen the weights statistics.
+        """
+        assert smooth in [None, 'sqrt', 'log']
+
+        # Read the first NAG just to know how many levels we have in the
+        # preprocessed NAGs.
+        nag = self[0]
+        low = nag.num_levels - 1
+
+        # Make sure the dataset has labels
+        if nag[0].y is None:
+            raise ValueError(
+                f'{self} does not have labels to compute class weights on.')
+        del nag
+
+        # To be as fast as possible, we read only the last level of each
+        # NAG, and accumulate the class counts from the label histograms
+        counts = torch.zeros(self.num_classes)
+        for i in range(len(self)):
+            y = NAG.load(self.processed_paths[i], low=low, keys_low=['y'])[0].y
+            counts += y.sum(dim=0)[:self.num_classes]
+
+        # Compute the class weights. Optionally, a 'smooth' function may
+        # be applied to smoothen the weights statistics
+        if smooth == 'sqrt':
+            counts = counts.sqrt()
+        if smooth == 'log':
+            counts = counts.log()
+
+        weights = 1 / (counts + 1)
+        weights /= weights.sum()
+
+        return weights
 
     def __len__(self):
         """Number of windows in the dataset."""

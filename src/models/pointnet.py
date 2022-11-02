@@ -1,18 +1,21 @@
 from typing import Any, List
-
 import torch
+import logging
 from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from src.metrics import ConfusionMatrix
 from src.utils import loss_with_target_histogram, atomic_to_histogram
 
 
+log = logging.getLogger(__name__)
+
+
 class PointNetModule(LightningModule):
     """A LightningModule for PointNet."""
 
     def __init__(
-            self, net, optimizer, scheduler, num_classes, class_names=None,
-            pointwise_loss=True):
+            self, net, criterion, optimizer, scheduler, num_classes,
+            class_names=None, pointwise_loss=True, weighted_loss=True):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -25,8 +28,9 @@ class PointNetModule(LightningModule):
         # Loss function. We add `ignore_index=num_classes` to account
         # for unclassified/ignored points, which are given num_classes
         # labels
-        self.criterion = torch.nn.CrossEntropyLoss(ignore_index=num_classes)
+        self.criterion = criterion
         self.pointwise_loss = pointwise_loss
+        self.weighted_loss = weighted_loss
 
         # Metric objects for calculating and averaging accuracy across
         # batches. We add `ignore_index=num_classes` to account for
@@ -54,6 +58,38 @@ class PointNetModule(LightningModule):
 
     def forward(self, pos, x, idx):
         return self.net(pos, x, idx)
+
+    def on_fit_start(self):
+        # This is a bit of a late initialization for the LightningModule
+        # At this point, we can access some LightningDataModule-related
+        # parameters that were not available beforehand. So we take this
+        # opportunity to catch the number of classes or class weights
+        # from the LightningDataModule
+
+        # Get the LightningDataModule number of classes and make sure it
+        # matches self.num_classes. We could also forcefully update the
+        # LightningModule with this new information but it could easily
+        # become tedious to track all places where num_classes affects
+        # the LightningModule object.
+        num_classes = self.trainer.datamodule.train_dataset.num_classes
+        assert num_classes == self.num_classes, \
+            f'LightningModule has {self.num_classes} classes while the ' \
+            f'LightningDataModule has {num_classes} classes.'
+
+        self.class_names = self.trainer.datamodule.train_dataset.class_names
+
+        if not self.weighted_loss:
+            return
+
+        if not hasattr(self.criterion, 'weight'):
+            log.warning(
+                f"{self.criterion} does not have a 'weight' attribute. "
+                f"Class weights will be ignored...")
+            return
+
+        # Set class weights for the
+        weight = self.trainer.datamodule.train_dataset.get_class_weight()
+        self.criterion.weight = weight.to(self.device)
 
     def on_train_start(self):
         # By default lightning executes validation step sanity checks
