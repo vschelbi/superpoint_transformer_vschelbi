@@ -24,4 +24,3 @@ net:
 
 criterion:
   _target_: torch.nn.CrossEntropyLoss
-#  _target_: src.loss.LovaszLoss:

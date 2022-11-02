@@ -110,18 +110,28 @@ def lovasz(
     if reduction != 'none' and reduction != 'sum':
         raise ValueError(reduction + " is not valid")
 
+    # Exclude the 0-point edge case
+    if logits.numel() == 0:
+        return logits * 0.
+
+    # Initialize class weights to 1s if not provided
+    class_weight = torch.ones_like(logits[0]) if weight is None else weight
+
     # Remove the unnecessary data based on ignore_index
     point_mask = labels != ignore_index
     logits = logits[point_mask]
     labels = labels[point_mask]
     if 0 <= ignore_index < logits.shape[1]:
-        logits = logits[:, [c != ignore_index for c in range(logits.shape[1])]]
+        class_mask = [c != ignore_index for c in range(logits.shape[1])]
+        logits = logits[:, class_mask]
+        class_weight = class_weight[class_mask]
 
     # Initialize some shared parameters
     device = logits.device
     num_classes = logits.shape[1]
 
-    # Exclude the 0-point edge case
+    # Again, exclude the 0-point situation, in case the point_mask
+    # removed the only points we initially had
     if logits.numel() == 0:
         return logits * 0.
 
@@ -149,6 +159,7 @@ def lovasz(
         class_mask[class_to_sum] = True
     fg = fg[:, class_mask]
     errors = errors[:, class_mask]
+    class_weight = class_weight[class_mask]
 
     # Sort by descending order of error, for each class
     errors, perm = errors.sort(dim=0, descending=True)
@@ -156,8 +167,7 @@ def lovasz(
 
     # Compute the final loss
     loss = (errors * lovasz_gradient(fg))
-    if weight is not None:
-        loss = loss * weight.view(1, -1)
+    loss = loss * class_weight.view(1, -1)
     if reduction == 'sum':
         return loss.mean(dim=1).sum()
     else:
