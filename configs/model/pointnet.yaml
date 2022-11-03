@@ -1,4 +1,4 @@
-_target_: src.models.pointnet.PointNetModule
+_target_: src.models.pointnet.PointSegmentationModule
 num_classes: 15  # this is for KITTI360 num_classes
 pointwise_loss: True
 weighted_loss: True
@@ -17,6 +17,7 @@ scheduler:
   patience: 10
 
 net:
+  up
   _target_: src.models.components.pointnet.PointNet
   local_channels: [11, 32, 64, 128]
   global_channels: [129, 64, 32]

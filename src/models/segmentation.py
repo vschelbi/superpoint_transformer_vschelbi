@@ -10,8 +10,8 @@ from src.utils import loss_with_target_histogram, atomic_to_histogram
 log = logging.getLogger(__name__)
 
 
-class PointNetModule(LightningModule):
-    """A LightningModule for PointNet."""
+class PointSegmentationModule(LightningModule):
+    """A LightningModule for semantic segmentation of point clouds."""
 
     def __init__(
             self, net, criterion, optimizer, scheduler, num_classes,

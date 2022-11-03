@@ -22,6 +22,8 @@ class PointMLP(nn.Module):
     """MLP operating on point features à la PointNet. You can think of
     it as a series of 1x1 conv -> 1D batch norm -> activation.
     """
+    #TODO: add optional dropout to pointmlp like in
+    # https://github.com/microsoft/Swin-Transformer/blob/d19503d7fbed704792a5e5a3a5ee36f9357d26c1/models/swin_transformer.py#L26
     def __init__(
             self, channels, activation=nn.LeakyReLU(0.2, inplace=True),
             bn_momentum=0.1, bias=False):
