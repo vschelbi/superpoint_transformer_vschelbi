@@ -2,47 +2,98 @@ from torch import nn
 from src.nn.norm import FastBatchNorm1d
 
 
-__all__ = ['PointMLP', 'PointClassifier']
+__all__ = ['MLP', 'FFN', 'Classifier']
 
 
 def mlp(
-        channels, activation=nn.LeakyReLU(0.2, inplace=True), bn_momentum=0.1,
-        bias=False):
-    """Credits: https://github.com/torch-points3d/torch-points3d"""
-    return nn.Sequential(
-        *[
-            nn.Sequential(
-                nn.Linear(channels[i - 1], channels[i], bias=bias),
-                FastBatchNorm1d(channels[i], momentum=bn_momentum),
-                activation)
-            for i in range(1, len(channels))])
+        dims, activation=nn.LeakyReLU(0.2, inplace=True),
+        last_activation=True, norm=FastBatchNorm1d, momentum=0.1,
+        dropout=None):
+    """Helper to build MLP-like structures.
+
+    :param dims: List[int]
+        List of channel sizes. Expects `len(dims) >= 2`
+    :param activation: nn.Module instance
+        Non-linearity
+    :param last_activation: bool
+        Whether the last layer should have an activation
+    :param norm: nn.Module
+        Normalization. Can be None, for FFN for instance
+    :param momentum: float
+        Normalization momentum
+    :param dropout: float in [0, 1]
+        Dropout on the output features. No dropout layer will be
+        created if `dropout=None` or `dropout < 0`
+    :return:
+    """
+    assert len(dims) >= 2
+
+    # Only use bias if no normalization is applied
+    bias = norm is None
+
+    # Iteratively build the layers based on dims
+    modules = []
+    for i in range(1, len(dims)):
+        modules.append(nn.Linear(dims[i - 1], dims[i], bias=bias))
+        if norm is not None:
+            modules.append(norm(dims[i], momentum=momentum))
+        if activation is not None and (last_activation or i < len(dims) - 1):
+            modules.append(activation)
+
+    # Add final dropout if required
+    if dropout is not None and dropout > 0:
+        modules.append(nn.Dropout(dropout, inplace=True))
+
+    return nn.Sequential(*modules)
 
 
-class PointMLP(nn.Module):
-    """MLP operating on point features à la PointNet. You can think of
+class MLP(nn.Module):
+    """MLP operating on features [N, D] tensors. You can think of
     it as a series of 1x1 conv -> 1D batch norm -> activation.
     """
-    #TODO: add optional dropout to pointmlp like in
-    # https://github.com/microsoft/Swin-Transformer/blob/d19503d7fbed704792a5e5a3a5ee36f9357d26c1/models/swin_transformer.py#L26
     def __init__(
-            self, channels, activation=nn.LeakyReLU(0.2, inplace=True),
-            bn_momentum=0.1, bias=False):
+            self, dims, activation=nn.LeakyReLU(0.2, inplace=True),
+            norm=FastBatchNorm1d, momentum=0.1, dropout=None):
         super().__init__()
         self.mlp = mlp(
-            channels, activation=activation, bn_momentum=bn_momentum, bias=bias)
+            dims, activation=activation, last_activation=True, norm=norm,
+            momentum=momentum, dropout=dropout)
 
     def forward(self, x):
         return self.mlp(x)
 
 
-class PointClassifier(nn.Module):
+class FFN(nn.Module):
+    """Feed-Forward Network as used in Transformers. By convention,
+    these MLPs have 2 Linear layers and no normalization, the last layer
+    has no activation and an optional dropout may be applied on the
+    output features.
+    """
+    def __init__(
+            self, dim, hidden_dim=None, out_dim=None,
+            activation=nn.LeakyReLU(0.2, inplace=True), dropout=None):
+        super().__init__()
+
+        # Build the channel sizes for the 2 linear layers
+        hidden_dim = hidden_dim or dim
+        out_dim = out_dim or dim
+        channels = [dim, hidden_dim, out_dim]
+
+        self.ffn = mlp(
+            channels, activation=activation, last_activation=False, norm=None,
+            dropout=dropout)
+
+    def forward(self, x):
+        return self.ffn(x)
+
+
+class Classifier(nn.Module):
     """A simple fully-connected head with no activation and no
     normalization.
     """
-    def __init__(
-            self, in_channels, num_classes, bias=True):
+    def __init__(self, in_dim, num_classes, bias=True):
         super().__init__()
-        self.classifier = nn.Linear(in_channels, num_classes, bias=bias)
+        self.classifier = nn.Linear(in_dim, num_classes, bias=bias)
 
     def forward(self, x):
         return self.classifier(x)

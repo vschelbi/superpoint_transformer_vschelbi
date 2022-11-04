@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from src.nn import PointMLP, PointClassifier, SegmentPool, SegmentUnitNorm
+from src.nn import MLP, Classifier, ScatterPool, ScatterUnitNorm
 
 
 class PointNet(nn.Module):
@@ -13,24 +13,24 @@ class PointNet(nn.Module):
         assert global_channels is None or len(global_channels) > 1
         assert global_channels is not None or local_channels is not None
 
-        self.sphere_norm = SegmentUnitNorm()
+        self.sphere_norm = ScatterUnitNorm()
 
         if local_channels is not None and len(local_channels) > 1:
-            self.local_nn = PointMLP(local_channels)
+            self.local_nn = MLP(local_channels)
             last_channel = local_channels[-1]
         else:
             self.local_nn = None
 
         if global_channels is not None and len(global_channels) > 1:
-            self.global_nn = PointMLP(global_channels)
+            self.global_nn = MLP(global_channels)
             last_channel = global_channels[-1]
         else:
             self.global_nn = None
 
-        self.pool = SegmentPool(reduce=reduce)
+        self.pool = ScatterPool(reduce=reduce)
 
         if num_classes is not None:
-            self.head = PointClassifier(last_channel, num_classes)
+            self.head = Classifier(last_channel, num_classes)
         else:
             self.head = None
 

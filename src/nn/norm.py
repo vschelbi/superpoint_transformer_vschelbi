@@ -2,7 +2,7 @@ from torch import nn
 from torch_scatter import scatter
 
 
-__all__ = ['FastBatchNorm1d', 'SegmentUnitNorm']
+__all__ = ['FastBatchNorm1d', 'ScatterUnitNorm']
 
 
 class FastBatchNorm1d(nn.Module):
@@ -36,10 +36,7 @@ class FastBatchNorm1d(nn.Module):
                 "Non supported number of dimensions {}".format(x.dim()))
 
 
-class SegmentUnitNorm(nn.Module):
-    def __init__(self):
-        super().__init__()
-
+class ScatterUnitNorm(nn.Module):
     def forward(self, pos, idx):
         min_segment = scatter(pos, idx, dim=0, reduce='min')
         max_segment = scatter(pos, idx, dim=0, reduce='max')
