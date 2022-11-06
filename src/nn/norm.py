@@ -1,8 +1,9 @@
 from torch import nn
 from torch_scatter import scatter
+from torch_geometric.nn.norm import LayerNorm
 
 
-__all__ = ['FastBatchNorm1d', 'ScatterUnitNorm']
+__all__ = ['FastBatchNorm1d', 'ScatterUnitNorm', 'LayerNorm']
 
 
 class FastBatchNorm1d(nn.Module):
@@ -37,11 +38,10 @@ class FastBatchNorm1d(nn.Module):
 
 
 class ScatterUnitNorm(nn.Module):
-    def forward(self, pos, idx):
-        min_segment = scatter(pos, idx, dim=0, reduce='min')
-        max_segment = scatter(pos, idx, dim=0, reduce='max')
-
-        mean_segment = scatter(pos, idx, dim=0, reduce='mean')
+    def forward(self, pos, idx, num_super=None):
+        min_segment = scatter(pos, idx, dim=0, dim_size=num_super, reduce='min')
+        max_segment = scatter(pos, idx, dim=0, dim_size=num_super, reduce='max')
+        mean_segment = scatter(pos, idx, dim=0, dim_size=num_super, reduce='mean')
         diameter_segment = (max_segment - min_segment).max(dim=1).values
 
         mean = mean_segment[idx]

@@ -92,7 +92,7 @@ class PointSegmentationModule(LightningModule):
         self.criterion.weight = weight.to(self.device)
 
     def on_train_start(self):
-        # By default lightning executes validation step sanity checks
+        # By default, lightning executes validation step sanity checks
         # before training starts, so we need to make sure `*_best`
         # metrics do not store anything from these checks
         self.val_cm.reset()
@@ -116,6 +116,8 @@ class PointSegmentationModule(LightningModule):
         y_hist = y_hist[:, :self.num_classes]
 
         # Inference on the batch
+        # TODO: expand FORWARD to general case of NAG, not just P1
+        #  PointNet: need to pass list of [x], [idx] and [dim_size]
         logits = self.forward(pos, x, idx)
         preds = torch.argmax(logits, dim=1)
 

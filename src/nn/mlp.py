@@ -8,7 +8,7 @@ __all__ = ['MLP', 'FFN', 'Classifier']
 def mlp(
         dims, activation=nn.LeakyReLU(0.2, inplace=True),
         last_activation=True, norm=FastBatchNorm1d, momentum=0.1,
-        dropout=None):
+        drop=None):
     """Helper to build MLP-like structures.
 
     :param dims: List[int]
@@ -21,9 +21,9 @@ def mlp(
         Normalization. Can be None, for FFN for instance
     :param momentum: float
         Normalization momentum
-    :param dropout: float in [0, 1]
+    :param drop: float in [0, 1]
         Dropout on the output features. No dropout layer will be
-        created if `dropout=None` or `dropout < 0`
+        created if `drop=None` or `drop < 0`
     :return:
     """
     assert len(dims) >= 2
@@ -41,8 +41,8 @@ def mlp(
             modules.append(activation)
 
     # Add final dropout if required
-    if dropout is not None and dropout > 0:
-        modules.append(nn.Dropout(dropout, inplace=True))
+    if drop is not None and drop > 0:
+        modules.append(nn.Dropout(drop, inplace=True))
 
     return nn.Sequential(*modules)
 
@@ -53,11 +53,11 @@ class MLP(nn.Module):
     """
     def __init__(
             self, dims, activation=nn.LeakyReLU(0.2, inplace=True),
-            norm=FastBatchNorm1d, momentum=0.1, dropout=None):
+            norm=FastBatchNorm1d, momentum=0.1, drop=None):
         super().__init__()
         self.mlp = mlp(
             dims, activation=activation, last_activation=True, norm=norm,
-            momentum=momentum, dropout=dropout)
+            momentum=momentum, drop=drop)
 
     def forward(self, x):
         return self.mlp(x)
@@ -71,7 +71,7 @@ class FFN(nn.Module):
     """
     def __init__(
             self, dim, hidden_dim=None, out_dim=None,
-            activation=nn.LeakyReLU(0.2, inplace=True), dropout=None):
+            activation=nn.LeakyReLU(0.2, inplace=True), drop=None):
         super().__init__()
 
         # Build the channel sizes for the 2 linear layers
@@ -81,7 +81,7 @@ class FFN(nn.Module):
 
         self.ffn = mlp(
             channels, activation=activation, last_activation=False, norm=None,
-            dropout=dropout)
+            drop=drop)
 
     def forward(self, x):
         return self.ffn(x)
