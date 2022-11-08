@@ -1,4 +1,4 @@
-_target_: src.models.pointnet.PointSegmentationModule
+_target_: src.models.segmentation.PointSegmentationModule
 num_classes: 15  # this is for KITTI360 num_classes
 pointwise_loss: True
 weighted_loss: True
@@ -16,12 +16,13 @@ scheduler:
   factor: 0.1
   patience: 10
 
-net:
-  up
-  _target_: src.models.components.pointnet.PointNet
-  local_channels: [11, 32, 64, 128]
-  global_channels: [129, 64, 32]
-  num_classes: ${model.num_classes}
-
 criterion:
   _target_: torch.nn.CrossEntropyLoss
+
+net:
+  _target_: src.models.components.pointnet.PointNet
+  point_mlp: [11, 32, 64, 128]
+  down_mlp: [129, 64, 32]
+  point_drop: null
+  down_drop: null
+  pool: 'max'

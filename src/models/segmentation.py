@@ -24,7 +24,7 @@ class PointSegmentationModule(LightningModule):
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False, ignore=["net"])
 
-        # nn.Module that will do the actual computation
+        # Network that will do the actual computation
         self.net = net
 
         # Segmentation head

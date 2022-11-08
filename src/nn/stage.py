@@ -40,6 +40,8 @@ class Stage(nn.Module):
             mlp_activation=nn.LeakyReLU(0.2), mlp_norm=FastBatchNorm1d,
             mlp_drop=None, **transformer_kwargs):
 
+        super().__init__()
+
         self.dim = dim
         self.num_blocks = num_blocks
 
@@ -233,12 +235,15 @@ class PointStage(Stage):
         # used in potential subsequent network stages
         self.sphere_norm = ScatterUnitNorm()
 
+        # Fusion operator to combine point features with coordinates
+        self.fusion = CatFusion()
+
     def forward(self, pos, x, super_index, num_super=None):
         # Normalize each segment to a unit sphere
-        pos, diameter = self.sphere_norm(pos, super_index, dim_size=num_super)
+        pos, diameter = self.sphere_norm(pos, super_index, num_super=num_super)
 
         # Add normalized coordinates to the point features
-        x = torch.cat((x, pos), dim=1)
+        x = self.fusion(x, pos)
 
         # Point-wise MLP
         x = self.in_mlp(x)

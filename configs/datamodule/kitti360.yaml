@@ -59,11 +59,15 @@ pre_transform:
         parallel: True
         verbose: True
 
-train_transform: null
+train_transform:
+    - transform: NAGRemoveKeys
+      params:
+        level: '1+'
+        keys: ['x']
 
-val_transform: null
+val_transform: ${datamodule.train_transform}
 
-test_transform: null
+test_transform: ${datamodule.train_transform}
 
 on_device_train_transform:
     - transform: SampleSegments

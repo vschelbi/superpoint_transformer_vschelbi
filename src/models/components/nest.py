@@ -2,7 +2,8 @@ import torch
 from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
-from src.nn import PointStage, DownNFuseStage, UpNFuseStage, FastBatchNorm1d
+from src.nn import PointStage, DownNFuseStage, UpNFuseStage, FastBatchNorm1d, \
+    CatFusion
 
 
 __all__ = ['NeST']
@@ -78,6 +79,10 @@ class NeST(nn.Module):
             point_mlp, mlp_activation=mlp_activation, mlp_norm=mlp_norm,
             mlp_drop=point_drop)
 
+        # Operator to append the segment diameter returned by the
+        # PointStage to the NAG's level-1 features
+        self.diameter_fusion = CatFusion()
+
         # Transformer encoder (down) Stages operating on Level-i data
         if len(down_dim) > 0:
             self.down_stages = nn.ModuleList([
@@ -99,7 +104,7 @@ class NeST(nn.Module):
             self.down_stages = None
 
         # Transformer decoder (up) Stages operating on Level-i data
-        if len(down_dim) > 0:
+        if len(up_dim) > 0:
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
                     dim, num_blocks=num_blocks, in_mlp=in_mlp, out_mlp=out_mlp,
@@ -151,7 +156,7 @@ class NeST(nn.Module):
             num_super=nag[1].num_nodes)
 
         # Append the diameter to the level-1 features
-        nag[1].x = torch.cat((nag[1].x, diameter), dim=1)
+        nag[1].x = self.diameter_fusion(nag[1].x, diameter.view(-1, 1))
 
         # Iteratively encode level-1 and above
         down_outputs = []

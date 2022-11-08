@@ -78,7 +78,7 @@ class NAGRemoveKeys(Transform):
 
     def _process(self, nag):
 
-        level_keys = [] * nag.num_levels
+        level_keys = [[]] * nag.num_levels
         if isinstance(self.level, int):
             level_keys[self.level] = self.keys
         elif self.level == 'all':

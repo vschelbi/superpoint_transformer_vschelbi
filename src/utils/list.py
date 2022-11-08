@@ -27,7 +27,7 @@ def listify_with_reference(arg_ref, *args):
         return [], *([] for _ in args)
 
     if not isinstance(arg_ref, list):
-        return arg_ref, *args_out
+        return [arg_ref], *[[a] for a in args_out]
 
     if len(arg_ref) == 0:
         return [], *([] for _ in args)
