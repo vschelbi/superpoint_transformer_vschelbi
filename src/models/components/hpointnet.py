@@ -29,7 +29,7 @@ class HPointNet(NeST):
 
     def __init__(
             self, point_mlp, down_mlp, up_mlp, point_drop=None, down_drop=None,
-            up_drop=None, activation=nn.LeakyReLU(0.2), norm=FastBatchNorm1d,
+            up_drop=None, activation=nn.LeakyReLU(), norm=FastBatchNorm1d,
             pool='max', unpool='index', fusion='cat'):
 
         down_dim = [mlp[-1] for mlp in down_mlp]

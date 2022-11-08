@@ -37,7 +37,7 @@ class Stage(nn.Module):
 
     def __init__(
             self, dim, num_blocks=1, in_mlp=None, out_mlp=None,
-            mlp_activation=nn.LeakyReLU(0.2), mlp_norm=FastBatchNorm1d,
+            mlp_activation=nn.LeakyReLU(), mlp_norm=FastBatchNorm1d,
             mlp_drop=None, **transformer_kwargs):
 
         super().__init__()
@@ -218,7 +218,7 @@ class PointStage(Stage):
     """
 
     def __init__(
-            self, in_mlp, mlp_activation=nn.LeakyReLU(0.2),
+            self, in_mlp, mlp_activation=nn.LeakyReLU(),
             mlp_norm=FastBatchNorm1d, mlp_drop=None):
 
         assert len(in_mlp) > 1, \

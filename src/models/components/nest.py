@@ -41,7 +41,7 @@ class NeST(nn.Module):
             up_attn_drop=None,
             up_drop_path=None,
 
-            mlp_activation=nn.LeakyReLU(0.2),
+            mlp_activation=nn.LeakyReLU(),
             mlp_norm=FastBatchNorm1d,
             qkv_bias=True,
             qk_scale=None,

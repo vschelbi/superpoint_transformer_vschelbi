@@ -20,7 +20,7 @@ class PointNet(NeST):
 
     def __init__(
             self, point_mlp, down_mlp, point_drop=None, down_drop=None,
-            activation=nn.LeakyReLU(0.2), norm=FastBatchNorm1d, pool='max'):
+            activation=nn.LeakyReLU(), norm=FastBatchNorm1d, pool='max'):
         super().__init__(
             point_mlp, point_drop=point_drop, down_dim=down_mlp[-1],
             down_in_mlp=down_mlp, down_mlp_drop=down_drop, down_num_blocks=0,

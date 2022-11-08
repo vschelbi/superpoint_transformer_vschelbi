@@ -6,9 +6,8 @@ __all__ = ['MLP', 'FFN', 'Classifier']
 
 
 def mlp(
-        dims, activation=nn.LeakyReLU(0.2, inplace=True),
-        last_activation=True, norm=FastBatchNorm1d, momentum=0.1,
-        drop=None):
+        dims, activation=nn.LeakyReLU(), last_activation=True,
+        norm=FastBatchNorm1d, momentum=0.1, drop=None):
     """Helper to build MLP-like structures.
 
     :param dims: List[int]
@@ -53,8 +52,8 @@ class MLP(nn.Module):
     """
 
     def __init__(
-            self, dims, activation=nn.LeakyReLU(0.2, inplace=True),
-            norm=FastBatchNorm1d, momentum=0.1, drop=None):
+            self, dims, activation=nn.LeakyReLU(), norm=FastBatchNorm1d,
+            momentum=0.1, drop=None):
         super().__init__()
         self.mlp = mlp(
             dims, activation=activation, last_activation=True, norm=norm,
@@ -73,8 +72,8 @@ class FFN(nn.Module):
     """
 
     def __init__(
-            self, dim, hidden_dim=None, out_dim=None,
-            activation=nn.LeakyReLU(0.2, inplace=True), drop=None):
+            self, dim, hidden_dim=None, out_dim=None, activation=nn.LeakyReLU(),
+            drop=None):
         super().__init__()
 
         # Build the channel sizes for the 2 linear layers
