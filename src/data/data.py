@@ -61,6 +61,26 @@ class Data(PyGData):
         """Index of the superpoint each point belongs to."""
         return self['super_index'] if 'super_index' in self._store else None
 
+    def norm_index(self, mode='graph'):
+        """Index to be used for LayerNorm.
+
+        :param mode: str
+            Normalization mode. 'graph' will normalize per graph (ie per
+            cloud, ie per batch). 'node' will normalize per node (ie per
+            point). 'segment' will normalize per segment (ie per
+            cluster)
+        """
+        batch = getattr(self, 'batch', torch.zeros_like(self.super_index))
+        if mode == 'graph':
+            return batch
+        elif mode == 'node':
+            return torch.arange(self.num_nodes, device=self.device)
+        elif mode == 'segment':
+            num_batches = batch.max() + 1
+            return self.super_index * num_batches + num_batches
+        else:
+            raise NotImplementedError(f"Unkown mode='{mode}'")
+
     @property
     def is_super(self):
         """Whether the points are superpoints for a denser sub-graph."""

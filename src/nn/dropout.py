@@ -26,6 +26,7 @@ class DropPath(nn.Module):
 
     credit: https://github.com/rwightman/pytorch-image-models
     """
+
     def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob

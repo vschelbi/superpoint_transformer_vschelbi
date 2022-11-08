@@ -8,6 +8,7 @@ __all__ = ['FastBatchNorm1d', 'ScatterUnitNorm', 'LayerNorm']
 
 class FastBatchNorm1d(nn.Module):
     """Credits: https://github.com/torch-points3d/torch-points3d"""
+
     def __init__(self, num_features, momentum=0.1, **kwargs):
         super().__init__()
         self.batch_norm = nn.BatchNorm1d(num_features, momentum=momentum, **kwargs)

@@ -10,21 +10,23 @@ __all__ = ['TransformerBlock']
 
 
 class TransformerBlock(nn.Module):
-    """TransformerBlock is composed of
-    - residual SelfAttentionBlock
-    - residual MLP conv1x1 (equivalent of FFN) (NO BATCHNORM !!!)
-    - ScatterLayerNorm can be Pre-LN or Post-LN (default is pre-LN) (see in Swin-T) (see Pre-LN Transformer: https://arxiv.org/pdf/2002.04745.pdf)
-        - pre-LN: LN inside the residual branches, right before the SelfAttentionBlock and MLP blocks
-        - post-LN (setup from seminal transformer paper https://arxiv.org/abs/1706.03762 but https://arxiv.org/pdf/2002.04745.pdf proves bad gradients at initialization and requires warmup): LN after each residual sum
-    - stochastic depth with drop_path
-    - activation
+    """Base block of the Transformer architecture:
 
-    see SwinT SwinTransformerBlock for details:
-    https://github.com/microsoft/Swin-Transformer/blob/d19503d7fbed704792a5e5a3a5ee36f9357d26c1/models/swin_transformer.py#L175
+        x ----------------- + ----------------- + -->
+            \              |   \               |
+             -- LN -- SA --     -- LN -- FFN --
+
+    Where:
+        - LN: LayerNorm
+        - SA: Self-Attention
+        - FFN: Feed-Forward Network
+
+    Inspired by: https://github.com/microsoft/Swin-Transformer
     """
+
     def __init__(
-            self, dim, num_heads, qkv_bias=True, qk_scale=None, ffn_ratio=4,
-            drop=None, attn_drop=None, drop_path=None, activation=nn.GELU(),
+            self, dim, num_heads=1, qkv_bias=True, qk_scale=None, ffn_ratio=4,
+            residual_drop=None, attn_drop=None, drop_path=None, activation=nn.GELU(),
             pre_ln=True, no_sa=False, no_ffn=False):
         super().__init__()
 
@@ -39,7 +41,7 @@ class TransformerBlock(nn.Module):
             self.sa = SelfAttentionBlock(
                 dim, num_heads=num_heads, in_dim=None, out_dim=dim,
                 qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop,
-                drop=drop)
+                drop=residual_drop)
 
         # Feed-Forward Network residual branch
         self.no_ffn = no_ffn
@@ -48,18 +50,30 @@ class TransformerBlock(nn.Module):
             self.ffn_ratio = ffn_ratio
             self.ffn = FFN(
                 dim, hidden_dim=int(dim * ffn_ratio), activation=activation,
-                drop=drop)
+                drop=residual_drop)
 
         # Optional DropPath module for stochastic depth
         self.drop_path = DropPath(drop_path) \
             if drop_path is not None and drop_path > 0 else nn.Identity()
 
-    def forward(self, x, edge_index, norm_index, num_super=None):
-        """"""
+    def forward(self, x, norm_index, edge_index=None):
+        """
+        :param x: FloatTensor or shape (N, C)
+            Node features
+        :param norm_index: LongTensor or shape (N)
+            Node indices for the LayerNorm
+        :param edge_index: LongTensor of shape (2, E)
+            Edges in torch_geometric [[sources], [targets]] format for
+            the self-attention module
+        :return:
+        """
         assert x.dim() == 2, 'x should be a 2D Tensor'
         assert x.is_floating_point(), 'x should be a 2D FloatTensor'
-        assert edge_index.dim() == 2, 'edge_index should be a 2D LongTensor'
-        assert not edge_index.is_floating_point(), \
+        assert norm_index.dim() == 1 and norm_index.shape[0] == x.shape[0], \
+            'norm_index should be a 1D LongTensor'
+        assert edge_index is None or edge_index.dim() == 2, \
+            'edge_index should be a 2D LongTensor'
+        assert edge_index is None or not edge_index.is_floating_point(), \
             'edge_index should be a 2D LongTensor'
 
         # Keep track of x for the residual connection
@@ -68,10 +82,10 @@ class TransformerBlock(nn.Module):
         # Self-Attention residual branch
         if not self.no_sa and self.pre_ln:
             x = self.sa_norm(x, norm_index)
-            x = self.sa(x, edge_index, num_super=num_super)
+            x = self.sa(x, edge_index)
             x = shortcut + self.drop_path(x)
         if not self.no_sa and not self.pre_ln:
-            x = self.sa(x, edge_index, num_super=num_super)
+            x = self.sa(x, edge_index)
             x = self.drop_path(x)
             x = self.sa_norm(shortcut + x, norm_index)
 
@@ -85,4 +99,4 @@ class TransformerBlock(nn.Module):
             x = self.drop_path(x)
             x = self.ffn_norm(shortcut + x, norm_index)
 
-        return x
+        return x, norm_index, edge_index

@@ -22,6 +22,7 @@ class SelfAttentionBlock(nn.Module):
     :param attn_drop:
     :param drop:
     """
+
     def __init__(
             self, dim, num_heads=1, in_dim=None, out_dim=None, qkv_bias=True,
             qk_scale=None, attn_drop=None, drop=None):
@@ -46,7 +47,7 @@ class SelfAttentionBlock(nn.Module):
         # TODO: define relative positional encoding parameters and
         #  trunacted-normal initialize them (see Swin-T implementation)
 
-    def forward(self, x, edge_index, num_super=None):
+    def forward(self, x, edge_index):
         """
         :param x: Tensor of shape (N, C)
             Features
@@ -84,7 +85,7 @@ class SelfAttentionBlock(nn.Module):
         # Compute the attention scores with scaled softmax
         # TODO: need to scale the softmax based on the number of
         #  elements in each group ?
-        attn = softmax(compat, index=s, dim=0, num_nodes=num_super)  # [E, H]
+        attn = softmax(compat, index=s, dim=0, num_nodes=N)  # [E, H]
 
         # TODO: add the relative positional encodings to the
         #  compatibilities here
@@ -95,7 +96,7 @@ class SelfAttentionBlock(nn.Module):
 
         # Apply the attention on the values
         x = (v * attn.unsqueeze(-1)).view(N, self.dim)    # [E, C]
-        x = scatter_sum(x, s, dim=0, dim_size=num_super)  # [N, C]
+        x = scatter_sum(x, s, dim=0, dim_size=N)  # [N, C]
 
         # Optional linear projection of features
         if self.out_proj is not None:

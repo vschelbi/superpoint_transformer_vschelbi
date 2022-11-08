@@ -51,6 +51,7 @@ class MLP(nn.Module):
     """MLP operating on features [N, D] tensors. You can think of
     it as a series of 1x1 conv -> 1D batch norm -> activation.
     """
+
     def __init__(
             self, dims, activation=nn.LeakyReLU(0.2, inplace=True),
             norm=FastBatchNorm1d, momentum=0.1, drop=None):
@@ -58,6 +59,7 @@ class MLP(nn.Module):
         self.mlp = mlp(
             dims, activation=activation, last_activation=True, norm=norm,
             momentum=momentum, drop=drop)
+        self.out_dim = dims[-1]
 
     def forward(self, x):
         return self.mlp(x)
@@ -69,6 +71,7 @@ class FFN(nn.Module):
     has no activation and an optional dropout may be applied on the
     output features.
     """
+
     def __init__(
             self, dim, hidden_dim=None, out_dim=None,
             activation=nn.LeakyReLU(0.2, inplace=True), drop=None):
@@ -82,6 +85,7 @@ class FFN(nn.Module):
         self.ffn = mlp(
             channels, activation=activation, last_activation=False, norm=None,
             drop=drop)
+        self.out_dim = out_dim
 
     def forward(self, x):
         return self.ffn(x)
@@ -91,6 +95,7 @@ class Classifier(nn.Module):
     """A simple fully-connected head with no activation and no
     normalization.
     """
+
     def __init__(self, in_dim, num_classes, bias=True):
         super().__init__()
         self.classifier = nn.Linear(in_dim, num_classes, bias=bias)

@@ -13,3 +13,4 @@ from .utils import *
 from .metrics import *
 from .loss import *
 from .memory import *
+from .nn import *

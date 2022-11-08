@@ -1,10 +1,11 @@
-from typing import Any, List
 import torch
 import logging
 from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from src.metrics import ConfusionMatrix
-from src.utils import loss_with_target_histogram, atomic_to_histogram
+from src.utils import loss_with_target_histogram, atomic_to_histogram, \
+    init_weights
+from src.nn import Classifier
 
 
 log = logging.getLogger(__name__)
@@ -15,7 +16,8 @@ class PointSegmentationModule(LightningModule):
 
     def __init__(
             self, net, criterion, optimizer, scheduler, num_classes,
-            class_names=None, pointwise_loss=True, weighted_loss=True):
+            class_names=None, pointwise_loss=True, weighted_loss=True,
+            custom_init=True):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -24,6 +26,15 @@ class PointSegmentationModule(LightningModule):
 
         # nn.Module that will do the actual computation
         self.net = net
+
+        # Segmentation head
+        self.head = Classifier(self.net.out_dim, num_classes)
+
+        # Custom weight initialization. In particular, this applies
+        # Xavier / Glorot initialization on Linear layers
+        if custom_init:
+            self.net.apply(init_weights)
+            self.head.apply(init_weights)
 
         # Loss function. We add `ignore_index=num_classes` to account
         # for unclassified/ignored points, which are given num_classes
@@ -56,8 +67,9 @@ class PointSegmentationModule(LightningModule):
         self.val_oa_best = MaxMetric()
         self.val_macc_best = MaxMetric()
 
-    def forward(self, pos, x, idx):
-        return self.net(pos, x, idx)
+    def forward(self, nag):
+        x = self.net(nag)
+        return self.head(x)
 
     def on_fit_start(self):
         # This is a bit of a late initialization for the LightningModule
@@ -101,9 +113,7 @@ class PointSegmentationModule(LightningModule):
         self.val_macc_best.reset()
 
     def step(self, nag):
-        # Recover level-0 features, position, segment indices and labels
-        x = nag[0].x
-        pos = nag[0].pos
+        # Recover level-0 segment indices and labels
         idx = nag[0].super_index
         y = nag[0].y
 
@@ -116,9 +126,7 @@ class PointSegmentationModule(LightningModule):
         y_hist = y_hist[:, :self.num_classes]
 
         # Inference on the batch
-        # TODO: expand FORWARD to general case of NAG, not just P1
-        #  PointNet: need to pass list of [x], [idx] and [dim_size]
-        logits = self.forward(pos, x, idx)
+        logits = self.forward(nag)
         preds = torch.argmax(logits, dim=1)
 
         # Compute the loss either in a point-wise or segment-wise
@@ -130,7 +138,7 @@ class PointSegmentationModule(LightningModule):
 
         return loss, preds, y_hist
 
-    def training_step(self, batch: Any, batch_idx: int):
+    def training_step(self, batch, batch_idx):
         loss, preds, targets = self.step(batch)
 
         # update and log metrics
@@ -146,7 +154,7 @@ class PointSegmentationModule(LightningModule):
         # backpropagation will fail!
         return {"loss": loss, "preds": preds, "targets": targets}
 
-    def training_epoch_end(self, outputs: List[Any]):
+    def training_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `training_step()`
         self.log("train/miou", self.train_cm.miou(), prog_bar=True)
         self.log("train/oa", self.train_cm.oa(), prog_bar=True)
@@ -156,7 +164,7 @@ class PointSegmentationModule(LightningModule):
                 self.log(f"train/iou_{name}", iou, prog_bar=True)
         self.train_cm.reset()
 
-    def validation_step(self, batch: Any, batch_idx: int):
+    def validation_step(self, batch, batch_idx):
         loss, preds, targets = self.step(batch)
 
         # update and log metrics
@@ -168,7 +176,7 @@ class PointSegmentationModule(LightningModule):
 
         return {"loss": loss, "preds": preds, "targets": targets}
 
-    def validation_epoch_end(self, outputs: List[Any]):
+    def validation_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `validation_step()`
         miou = self.val_cm.miou()
         oa = self.val_cm.oa()
@@ -194,7 +202,7 @@ class PointSegmentationModule(LightningModule):
 
         self.val_cm.reset()
 
-    def test_step(self, batch: Any, batch_idx: int):
+    def test_step(self, batch, batch_idx):
         loss, preds, targets = self.step(batch)
 
         # update and log metrics
@@ -206,7 +214,7 @@ class PointSegmentationModule(LightningModule):
 
         return {"loss": loss, "preds": preds, "targets": targets}
 
-    def test_epoch_end(self, outputs: List[Any]):
+    def test_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `test_step()`
         self.log("test/miou", self.test_cm.miou(), prog_bar=True)
         self.log("test/oa", self.test_cm.oa(), prog_bar=True)
