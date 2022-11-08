@@ -20,12 +20,16 @@ criterion:
   _target_: torch.nn.CrossEntropyLoss
 
 net:
-  _target_: src.models.components.pointnet.PointNet
+  _target_: src.models.components.hpointnet.HPointNet
   point_mlp: [11, 32, 64, 128]
-  down_mlp: [129, 64, 32]
+  down_mlp: [[129, 64, 64], [64, 64, 64], [64, 64, 64], [64, 64, 64]]
+  up_mlp: [[128, 64, 64], [128, 64, 64], [128, 64, 64]]
   point_drop: null
   down_drop: null
+  up_drop: null
   pool: 'max'
+  unpool: 'index'
+  fusion: 'cat'
   activation:
     _target_: torch.nn.LeakyReLU
     negative_slope: 0.01
