@@ -33,8 +33,10 @@ def listify_with_reference(arg_ref, *args):
         return [], *([] for _ in args)
 
     for i, a in enumerate(args_out):
+        if not isinstance(a, list):
+            a = [a]
         if len(a) != len(arg_ref):
-            a = [a] * len(arg_ref)
+            a = a * len(arg_ref)
         args_out[i] = a
 
     return arg_ref, *args_out

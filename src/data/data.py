@@ -70,14 +70,23 @@ class Data(PyGData):
             point). 'segment' will normalize per segment (ie per
             cluster)
         """
-        batch = getattr(self, 'batch', torch.zeros_like(self.super_index))
+        if getattr(self, 'batch', None) is not None:
+            batch = self.batch
+        else:
+            batch = torch.zeros(
+                self.num_nodes, device=self.device, dtype=torch.long)
+        if self.super_index is not None:
+            super_index = self.super_index
+        else:
+            super_index = torch.zeros(
+                self.num_nodes, device=self.device, dtype=torch.long)
         if mode == 'graph':
             return batch
         elif mode == 'node':
             return torch.arange(self.num_nodes, device=self.device)
         elif mode == 'segment':
             num_batches = batch.max() + 1
-            return self.super_index * num_batches + num_batches
+            return super_index * num_batches + batch
         else:
             raise NotImplementedError(f"Unkown mode='{mode}'")
 
