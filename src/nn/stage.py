@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from src.nn import MLP, TransformerBlock, FastBatchNorm1d, ScatterUnitNorm
+from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm
 from src.nn.pool import *
 from src.nn.unpool import *
 from src.nn.fusion import *
@@ -45,6 +45,15 @@ class Stage(nn.Module):
         self.dim = dim
         self.num_blocks = num_blocks
 
+        # ScatterUnitNorm converts global node coordinates to
+        # segment-level coordinates expressed in a unit-sphere. The
+        # corresponding scaling factor (diameter) is returned, to be
+        # used in potential subsequent stages
+        self.pos_norm = UnitSphereNorm()
+
+        # Fusion operator to combine node features with coordinates
+        self.pos_fusion = CatFusion()
+
         # MLP to change input channel size
         if in_mlp is not None:
             assert in_mlp[-1] == dim
@@ -81,17 +90,30 @@ class Stage(nn.Module):
             return self.in_mlp.out_dim
         return self.dim
 
-    def forward(self, x, norm_index, edge_index=None):
+    def forward(
+            self, x, norm_index, pos=None, node_size=None, super_index=None,
+            edge_index=None):
+
+        # Append normalized coordinates to the point features
+        if pos is not None:
+            pos, diameter = self.pos_norm(pos, super_index, w=node_size)
+            x = self.pos_fusion(x, pos)
+        else:
+            diameter = None
+
+        # MLP on input features to change channel size
         if self.in_mlp is not None:
             x = self.in_mlp(x)
 
+        # Transformer blocks
         if self.blocks is not None:
             x = self.blocks(x, norm_index, edge_index=edge_index)
 
+        # MLP on output features to change channel size
         if self.out_mlp is not None:
             x = self.out_mlp(x)
 
-        return x
+        return x, diameter
 
 
 class DownStage(Stage):
@@ -118,9 +140,12 @@ class DownStage(Stage):
             raise NotImplementedError(f'Unknown pool={pool} mode')
 
     def forward(
-            self, x, norm_index, pool_index, edge_index=None, num_super=None):
+            self, x, norm_index, pool_index, pos=None, node_size=None,
+            super_index=None, edge_index=None, num_super=None):
         x = self.pool(x, index=pool_index, dim_size=num_super)
-        return super().forward(x, norm_index, edge_index=None)
+        return super().forward(
+            x, norm_index, pos=pos, node_size=node_size,
+            super_index=super_index, edge_index=edge_index)
 
 
 class DownNFuseStage(Stage):
@@ -158,10 +183,12 @@ class DownNFuseStage(Stage):
             raise NotImplementedError(f'Unknown fusion={fusion} mode')
 
     def forward(
-            self, x1, x2, norm_index, pool_index, edge_index=None,
-            num_super=None):
+            self, x1, x2, norm_index, pool_index, pos=None, node_size=None,
+            super_index=None, edge_index=None, num_super=None):
         x = self.fusion(x1, self.pool(x2, index=pool_index, dim_size=num_super))
-        return super().forward(x, norm_index, edge_index=None)
+        return super().forward(
+            x, norm_index, pos=pos, node_size=node_size,
+            super_index=super_index, edge_index=edge_index)
 
 
 class UpNFuseStage(Stage):
@@ -194,9 +221,13 @@ class UpNFuseStage(Stage):
         else:
             raise NotImplementedError(f'Unknown fusion={fusion} mode')
 
-    def forward(self, x1, x2, norm_index, unpool_index, edge_index=None):
+    def forward(
+            self, x1, x2, norm_index, unpool_index, pos=None, node_size=None,
+            super_index=None, edge_index=None):
         x = self.fusion(x1, self.unpool(x2, unpool_index))
-        return super().forward(x, norm_index, edge_index=None)
+        return super().forward(
+            x, norm_index, pos=pos, node_size=node_size,
+            super_index=super_index, edge_index=edge_index)
 
 
 class PointStage(Stage):
@@ -233,19 +264,11 @@ class PointStage(Stage):
         # cluster-level coordinates expressed in a unit-sphere. The
         # corresponding scaling factor (diameter) is returned, to be
         # used in potential subsequent network stages
-        self.sphere_norm = ScatterUnitNorm()
+        self.sphere_norm = UnitSphereNorm()
 
         # Fusion operator to combine point features with coordinates
         self.fusion = CatFusion()
 
-    def forward(self, pos, x, super_index, num_super=None):
-        # Normalize each segment to a unit sphere
-        pos, diameter = self.sphere_norm(pos, super_index, num_super=num_super)
-
-        # Add normalized coordinates to the point features
-        x = self.fusion(x, pos)
-
-        # Point-wise MLP
-        x = self.in_mlp(x)
-
-        return x, diameter
+    def forward(self, x, pos, node_size=None, super_index=None):
+        return super().forward(
+            x, None, pos=pos, node_size=node_size, super_index=super_index)

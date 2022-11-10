@@ -22,11 +22,15 @@ criterion:
 net:
   _target_: src.models.components.hpointnet.HPointNet
   point_mlp: [11, 32, 64, 128]
-  down_mlp: [[129, 64, 64], [64, 64, 64], [64, 64, 64], [64, 64, 64]]
-  up_mlp: [[128, 64, 64], [128, 64, 64], [128, 64, 64]]
+  down_mlp: [[132, 64, 64], [68, 64, 64], [68, 64, 64], [68, 64, 64]]
+  up_mlp: [[131, 64, 64], [131, 64, 64], [131, 64, 64]]
   point_drop: null
   down_drop: null
   up_drop: null
+  down_inject_pos: True
+  down_inject_x: True
+  up_inject_pos: True
+  up_inject_x: False
   pool: 'max'
   unpool: 'index'
   fusion: 'cat'

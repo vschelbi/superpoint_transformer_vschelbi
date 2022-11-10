@@ -1,9 +1,10 @@
 from torch import nn
 from torch_scatter import scatter
+from src.utils import scatter_mean_weighted
 from torch_geometric.nn.norm import LayerNorm
 
 
-__all__ = ['FastBatchNorm1d', 'ScatterUnitNorm', 'LayerNorm']
+__all__ = ['FastBatchNorm1d', 'UnitSphereNorm', 'LayerNorm']
 
 
 class FastBatchNorm1d(nn.Module):
@@ -38,16 +39,68 @@ class FastBatchNorm1d(nn.Module):
                 "Non supported number of dimensions {}".format(x.dim()))
 
 
-class ScatterUnitNorm(nn.Module):
-    def forward(self, pos, idx, num_super=None):
+class UnitSphereNorm(nn.Module):
+    """Normalize positions of same-segment nodes in a unit sphere.
+    """
+
+    def forward(self, pos, idx, w=None, num_super=None):
+        if w is not None:
+            assert w.ge(0).all() and w.sum() > 0, \
+                "At least one node must had a strictly positive weights"
+        if idx is None:
+            return self._forward(pos, w=w)
+        return self._forward_scatter(pos, idx, w=w, num_super=num_super)
+
+    def _forward(self, pos, w=None):
+        """Forward without scatter operations, in case `idx` is not
+        provided. Applies the sphere normalization on all pos
+        coordinates together.
+        """
+        # Compute the diameter (ie the maximum span along the main axes
+        # here)
+        min_ = pos.min(dim=0).values
+        max_ = pos.max(dim=0).values
+        diameter = (max_ - min_).max()
+
+        # Compute the center of the nodes. If node weights are provided,
+        # the weighted mean is computed
+        if w is None:
+            center = pos.mean(dim=0)
+        else:
+            w_sum = w.float().sum()
+            w_sum = 1 if w_sum == 0 else w_sum
+            center = (pos * w.view(-1, 1).float()).sum(dim=0) / w_sum
+        center = center.view(1, -1)
+
+        # Unit-sphere normalization
+        pos = (pos - center) / (diameter + 1e-2)
+
+        return pos, diameter.view(1, 1)
+
+    def _forward_scatter(self, pos, idx, w=None, num_super=None):
+        """Forward with scatter operations, in case `idx` is provided.
+        Applies the sphere normalization for each segment separately.
+        """
+        # Compute the diameter (ie the maximum span along the main axes
+        # here)
         min_segment = scatter(pos, idx, dim=0, dim_size=num_super, reduce='min')
         max_segment = scatter(pos, idx, dim=0, dim_size=num_super, reduce='max')
-        mean_segment = scatter(pos, idx, dim=0, dim_size=num_super, reduce='mean')
         diameter_segment = (max_segment - min_segment).max(dim=1).values
 
-        mean = mean_segment[idx]
+        # Compute the center of the nodes. If node weights are provided,
+        # the weighted mean is computed
+        if w is None:
+            center_segment = scatter(
+                pos, idx, dim=0, dim_size=num_super, reduce='mean')
+        else:
+            center_segment = scatter_mean_weighted(
+                pos, idx, w, dim_size=num_super)
+
+        # Compute per-node center and diameter
+        center = center_segment[idx]
         diameter = diameter_segment[idx]
 
-        pos = (pos - mean) / (diameter.view(-1, 1) + 1e-2)
+        # Unit-sphere normalization
+        pos = (pos - center) / (diameter.view(-1, 1) + 1e-2)
 
-        return pos, diameter_segment
+        return pos, diameter_segment.view(-1, 1)

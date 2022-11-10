@@ -29,8 +29,9 @@ class HPointNet(NeST):
 
     def __init__(
             self, point_mlp, down_mlp, up_mlp, point_drop=None, down_drop=None,
-            up_drop=None, activation=nn.LeakyReLU(), norm=FastBatchNorm1d,
-            pool='max', unpool='index', fusion='cat'):
+            down_inject_pos=True, down_inject_x=False, up_drop=None,
+            up_inject_pos=True, up_inject_x=False, activation=nn.LeakyReLU(),
+            norm=FastBatchNorm1d, pool='max', unpool='index', fusion='cat'):
 
         down_dim = [mlp[-1] for mlp in down_mlp]
         up_dim = [mlp[-1] for mlp in up_mlp]
@@ -38,6 +39,8 @@ class HPointNet(NeST):
         super().__init__(
             point_mlp, point_drop=point_drop, down_dim=down_dim,
             down_in_mlp=down_mlp, down_mlp_drop=down_drop, down_num_blocks=0,
+            down_inject_pos=down_inject_pos, down_inject_x=down_inject_x,
             up_dim=up_dim, up_in_mlp=up_mlp, up_mlp_drop=up_drop,
-            up_num_blocks=0, mlp_activation=activation, mlp_norm=norm,
+            up_num_blocks=0, up_inject_pos=up_inject_pos,
+            up_inject_x=up_inject_x, mlp_activation=activation, mlp_norm=norm,
             pool=pool, unpool=unpool, fusion=fusion)
