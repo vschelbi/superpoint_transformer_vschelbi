@@ -38,7 +38,7 @@ class Stage(nn.Module):
     def __init__(
             self, dim, num_blocks=1, in_mlp=None, out_mlp=None,
             mlp_activation=nn.LeakyReLU(), mlp_norm=FastBatchNorm1d,
-            mlp_drop=None, **transformer_kwargs):
+            mlp_drop=None, pos_encoding=False, **transformer_kwargs):
 
         super().__init__()
 
@@ -52,7 +52,7 @@ class Stage(nn.Module):
         self.pos_norm = UnitSphereNorm()
 
         # Fusion operator to combine node features with coordinates
-        self.pos_fusion = CatFusion()
+        self.pos_fusion = CatFusion() if not pos_encoding else FourierEncoding(dim, x_dim=None, f_min=1e-1, f_max=1e1):
 
         # MLP to change input channel size
         if in_mlp is not None:

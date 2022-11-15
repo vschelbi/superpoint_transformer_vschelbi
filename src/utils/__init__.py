@@ -15,3 +15,4 @@ from .loss import *
 from .memory import *
 from .nn import *
 from .scatter import *
+from .encoding import *
