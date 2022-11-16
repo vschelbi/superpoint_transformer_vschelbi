@@ -1,5 +1,5 @@
 from torch import nn
-from src.nn import FastBatchNorm1d
+from src.nn import FastBatchNorm1d, CatInjection
 from src.models.components import NeST
 
 
@@ -31,7 +31,9 @@ class HPointNet(NeST):
             self, point_mlp, down_mlp, up_mlp, point_drop=None, down_drop=None,
             down_inject_pos=True, down_inject_x=False, up_drop=None,
             up_inject_pos=True, up_inject_x=False, activation=nn.LeakyReLU(),
-            norm=FastBatchNorm1d, pool='max', unpool='index', fusion='cat'):
+            point_pos_injection=CatInjection, point_pos_injection_x_dim=None,
+            pos_injection=CatInjection, norm=FastBatchNorm1d, pool='max',
+            unpool='index', fusion='cat'):
 
         down_dim = [mlp[-1] for mlp in down_mlp]
         up_dim = [mlp[-1] for mlp in up_mlp]
@@ -42,5 +44,7 @@ class HPointNet(NeST):
             down_inject_pos=down_inject_pos, down_inject_x=down_inject_x,
             up_dim=up_dim, up_in_mlp=up_mlp, up_mlp_drop=up_drop,
             up_num_blocks=0, up_inject_pos=up_inject_pos,
-            up_inject_x=up_inject_x, mlp_activation=activation, mlp_norm=norm,
-            pool=pool, unpool=unpool, fusion=fusion)
+            up_inject_x=up_inject_x, point_pos_injection=point_pos_injection,
+            point_pos_injection_x_dim=point_pos_injection_x_dim,
+            pos_injection=pos_injection, mlp_activation=activation,
+            mlp_norm=norm, pool=pool, unpool=unpool, fusion=fusion)

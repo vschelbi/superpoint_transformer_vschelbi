@@ -3,7 +3,8 @@ from torch import nn
 from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm
 from src.nn.pool import *
 from src.nn.unpool import *
-from src.nn.fusion import *
+from src.nn.fusion import fusion_factory
+from src.nn.injection import *
 
 
 __all__ = ['Stage', 'DownStage', 'DownNFuseStage', 'UpNFuseStage', 'PointStage']
@@ -12,8 +13,10 @@ __all__ = ['Stage', 'DownStage', 'DownNFuseStage', 'UpNFuseStage', 'PointStage']
 class Stage(nn.Module):
     """A Stage has the following structure:
 
-        x -- in_MLP -- TransformerBlock -- out_MLP -->
-           (optional)   (x num_blocks)   (optional)
+         x  -- PosInjection -- in_MLP -- TransformerBlock -- out_MLP -->
+                   |         (optional)   (* num_blocks)   (optional)
+        pos -- SphereNorm
+    (optional)
 
     :param dim: int
         Number of channels for the TransformerBlock
@@ -31,6 +34,11 @@ class Stage(nn.Module):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
+    :param pos_injection: BasePositionalInjection
+        Child class of BasePositionalInjection
+    :param pos_injection_x_dim: int
+        Dimension of point features x, to be linearly projected to ’dim’
+        before the PositionalInjection
     :param transformer_kwargs:
         Keyword arguments for the TransformerBlock
     """
@@ -38,21 +46,13 @@ class Stage(nn.Module):
     def __init__(
             self, dim, num_blocks=1, in_mlp=None, out_mlp=None,
             mlp_activation=nn.LeakyReLU(), mlp_norm=FastBatchNorm1d,
-            mlp_drop=None, pos_encoding=False, **transformer_kwargs):
+            mlp_drop=None, pos_injection=CatInjection, pos_injection_x_dim=None,
+            **transformer_kwargs):
 
         super().__init__()
 
         self.dim = dim
         self.num_blocks = num_blocks
-
-        # ScatterUnitNorm converts global node coordinates to
-        # segment-level coordinates expressed in a unit-sphere. The
-        # corresponding scaling factor (diameter) is returned, to be
-        # used in potential subsequent stages
-        self.pos_norm = UnitSphereNorm()
-
-        # Fusion operator to combine node features with coordinates
-        self.pos_fusion = CatFusion() if not pos_encoding else FourierEncoding(dim, x_dim=None, f_min=1e-1, f_max=1e1):
 
         # MLP to change input channel size
         if in_mlp is not None:
@@ -60,8 +60,10 @@ class Stage(nn.Module):
             self.in_mlp = MLP(
                 in_mlp, activation=mlp_activation, norm=mlp_norm, momentum=0.1,
                 drop=mlp_drop)
+            in_dim = in_mlp[0]
         else:
             self.in_mlp = None
+            in_dim = dim
 
         # MLP to change output channel size
         if out_mlp is not None:
@@ -80,6 +82,16 @@ class Stage(nn.Module):
         else:
             self.blocks = None
 
+        # UnitSphereNorm converts global node coordinates to
+        # segment-level coordinates expressed in a unit-sphere. The
+        # corresponding scaling factor (diameter) is returned, to be
+        # used in potential subsequent stages
+        self.pos_norm = UnitSphereNorm()
+
+        # Fusion operator to combine node positions with node features
+        self.pos_injection = fusion_factory('second') if pos_injection is None \
+            else pos_injection(dim=in_dim, x_dim=pos_injection_x_dim)
+
     @property
     def out_dim(self):
         if self.out_mlp is not None:
@@ -97,7 +109,7 @@ class Stage(nn.Module):
         # Append normalized coordinates to the point features
         if pos is not None:
             pos, diameter = self.pos_norm(pos, super_index, w=node_size)
-            x = self.pos_fusion(x, pos)
+            x = self.pos_injection(pos, x)
         else:
             diameter = None
 
@@ -175,12 +187,7 @@ class DownNFuseStage(Stage):
             raise NotImplementedError(f'Unknown pool={pool} mode')
 
         # Fusion operator
-        if fusion in ['cat', 'concatenate', 'concatenation']:
-            self.fusion = CatFusion()
-        elif fusion in ['residual', '+']:
-            self.fusion = ResidualFusion()
-        else:
-            raise NotImplementedError(f'Unknown fusion={fusion} mode')
+        self.fusion = fusion_factory(fusion)
 
     def forward(
             self, x1, x2, norm_index, pool_index, pos=None, node_size=None,
@@ -214,12 +221,7 @@ class UpNFuseStage(Stage):
             raise NotImplementedError(f'Unknown unpool={unpool} mode')
 
         # Fusion operator
-        if fusion in ['cat', 'concatenate', 'concatenation']:
-            self.fusion = CatFusion()
-        elif fusion in ['residual', '+']:
-            self.fusion = ResidualFusion()
-        else:
-            raise NotImplementedError(f'Unknown fusion={fusion} mode')
+        self.fusion = fusion_factory(fusion)
 
     def forward(
             self, x1, x2, norm_index, unpool_index, pos=None, node_size=None,
@@ -235,7 +237,10 @@ class PointStage(Stage):
     is similar to the point-wise part of PointNet, operating on Level-1
     segments. A PointStage has the following structure:
 
-        x -- ScatterUnitNorm -- in_MLP -->
+         x  -- PosInjection -- in_MLP -->
+                   |         (optional)
+        pos -- SphereNorm
+    (optional)
 
     :param in_mlp: List, optional
         Channels for the input MLP. The last channel must match
@@ -246,11 +251,17 @@ class PointStage(Stage):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
+    :param pos_injection: BasePositionalInjection
+        Child class of BasePositionalInjection
+    :param pos_injection_x_dim: int
+        Dimension of point features x, to be linearly projected to ’dim’
+        before the PositionalInjection
     """
 
     def __init__(
             self, in_mlp, mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d, mlp_drop=None):
+            mlp_norm=FastBatchNorm1d, mlp_drop=None, pos_injection=CatInjection,
+            pos_injection_x_dim=None):
 
         assert len(in_mlp) > 1, \
             'in_mlp should be a list of channels of length >= 2'
@@ -258,16 +269,8 @@ class PointStage(Stage):
         super().__init__(
             in_mlp[-1], num_blocks=0, in_mlp=in_mlp, out_mlp=None,
             mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-            mlp_drop=mlp_drop)
-
-        # ScatterUnitNorm converts global point coordinates to
-        # cluster-level coordinates expressed in a unit-sphere. The
-        # corresponding scaling factor (diameter) is returned, to be
-        # used in potential subsequent network stages
-        self.sphere_norm = UnitSphereNorm()
-
-        # Fusion operator to combine point features with coordinates
-        self.fusion = CatFusion()
+            mlp_drop=mlp_drop, pos_injection=pos_injection, 
+            pos_injection_x_dim=pos_injection_x_dim)
 
     def forward(self, x, pos, node_size=None, super_index=None):
         return super().forward(

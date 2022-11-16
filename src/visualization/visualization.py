@@ -62,7 +62,7 @@ def int_to_plotly_rgb(x):
 def hex_to_tensor(h):
     h = h.lstrip('#')
     rgb = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-    return torch.Tensor(rgb) / 255
+    return torch.tensor(rgb) / 255
 
 
 def feats_to_rgb(feats, normalize=False):
@@ -185,7 +185,7 @@ def visualize_3d(
     :return:
     """
     assert isinstance(input, (Data, NAG))
-    gap = torch.Tensor(gap) if gap is not None else gap
+    gap = torch.tensor(gap) if gap is not None else gap
     assert gap is None or gap.shape == torch.Size([3])
 
     # We work on copies of the input data, to allow modified in this

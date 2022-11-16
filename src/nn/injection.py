@@ -2,25 +2,39 @@ import numpy as np
 import torch
 import torch.nn as nn
 from src.utils import positional_encoding
-from src.nn.fusion import ResidualFusion
+from src.nn.fusion import fusion_factory
 
 
-__all__ = ['FourierEncoding', 'LearnableFourierPositionalEncoding']
+__all__ = [
+    'CatInjection', 'AdditiveInjection', 'FourierInjection',
+    'LearnableFourierInjection']
 
 
-class BasePositionalEncoding(nn.Module):
-    def __init__(self, dim, x_dim=None):
-        """Base class for positional encoding. Takes care of additive
+class BasePositionalInjection(nn.Module):
+    def __init__(self, dim=None, x_dim=None, fusion='additive', **kwargs):
+        """Base class for positional information injection. Takes care
         fusion with a potential embedding vector.
 
         Child classes are expected to overwrite the `_encode` method.
 
-        :param dim: positional encoding dimension
-        :param x_dim:
+        :param dim: int
+            Positional encoding dimension
+        :param x_dim: int
+            If provided, the input feature embeddings will undergo a
+            linear projection ’x_dim -> dim’ before being fused with the
+            positional encodings
+        :param fusion: str
+            Fusion mechanism to merge positional encodings with feature
+            embeddings
         """
+        super().__init__()
         self.dim = dim
-        self.fusion = ResidualFusion()
-        self.proj = nn.Identity() if x_dim is None else nn.Linear(x_dim, dim)
+        self.fusion = fusion
+        self.proj = nn.Identity() if x_dim is None or dim is None \
+            else nn.Linear(x_dim, dim)
+
+        # Fusion operator
+        self.fusion = fusion_factory(fusion)
 
     def _encode(self):
         raise NotImplementedError
@@ -28,11 +42,35 @@ class BasePositionalEncoding(nn.Module):
     def forward(self, pos, x):
         if x is not None:
             x = self.proj(x)
-        return self.fusion(self.encode(pos), x)
+        return self.fusion(self._encode(pos), x)
 
 
-class FourierEncoding(BasePositionalEncoding):
-    def __init__(self, dim, x_dim=None, f_min=1e-1, f_max=1e1):
+class CatInjection(BasePositionalInjection):
+    def __init__(self, **kwargs):
+        """Simple child class of BasePositionalInjection equivalent to
+        a CatFusion.
+        """
+        super().__init__(dim=None, x_dim=None, fusion='cat')
+
+    def _encode(self, pos):
+        return pos
+
+
+class AdditiveInjection(BasePositionalInjection):
+    def __init__(self, **kwargs):
+        """Simple child class of BasePositionalInjection equivalent to
+        an AdditiveFusion.
+        """
+        super().__init__(dim=None, x_dim=None, fusion='additive')
+
+    def _encode(self, pos):
+        return pos
+
+
+class FourierInjection(BasePositionalInjection):
+    def __init__(
+            self, dim=None, x_dim=None, fusion='additive', f_min=1e-1,
+            f_max=1e1, **kwargs):
         """Convert [N, M] M-dimensional positions into [N, dim] encodings
         using sine and cosine decomposition along each axis. Expects dim
         to be a multiple of 2*M, for each of the M-dimensions to have
@@ -40,12 +78,13 @@ class FourierEncoding(BasePositionalEncoding):
 
         Input positions are expected to be normalized in [-1, 1] before
         encoding. This operation is important, since passing positions
-        outside of this range will result in ambiguities where two
-        distinct positions have the same encoding.
+        outside this range will result in ambiguities where two distinct
+        positions have the same encoding.
 
         :param dim: positional encoding dimension
         """
-        super().__init__(dim, x_dim=x_dim)
+        assert dim is not None
+        super().__init__(dim=dim, x_dim=x_dim, fusion=fusion, **kwargs)
         self.f_min = f_min
         self.f_max = f_max
 
@@ -54,7 +93,7 @@ class FourierEncoding(BasePositionalEncoding):
             pos, self.dim, f_min=self.f_min, f_max=self.f_max)
 
 
-class LearnableFourierPositionalEncoding(nn.Module):
+class LearnableFourierInjection(BasePositionalInjection):
     def __init__(self, M: int, F_dim: int, H_dim: int, D: int, gamma: float):
         """Learnable Fourier Features from:
             https://arxiv.org/pdf/2106.02795.pdf (Algorithm 1)

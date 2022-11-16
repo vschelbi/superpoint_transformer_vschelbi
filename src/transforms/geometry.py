@@ -165,7 +165,7 @@ class RandomAnisotropicScale(Transform):
         if isinstance(delta, (float, int)):
             delta = [float(delta)] * 3
         assert len(delta) == 3
-        self.delta = torch.Tensor(delta).abs().view(1, -1)
+        self.delta = torch.tensor(delta).abs().view(1, -1)
 
     def _process(self, nag):
         # Generate the random scales

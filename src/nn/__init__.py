@@ -7,3 +7,4 @@ from .fusion import *
 from .dropout import *
 from .transformer import *
 from .stage import *
+from .injection import *

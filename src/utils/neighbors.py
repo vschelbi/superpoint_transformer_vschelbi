@@ -73,8 +73,8 @@ def knn_2(x_search, x_query, k, r_max=1):
     assert x_query.dim() == 2
     assert x_query.shape[1] == x_search.shape[1]
 
-    k = torch.Tensor([k])
-    r_max = torch.Tensor([r_max])
+    k = torch.tensor([k])
+    r_max = torch.tensor([r_max])
 
     # Data initialization
     device = x_search.device

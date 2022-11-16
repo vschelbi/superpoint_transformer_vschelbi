@@ -161,7 +161,7 @@ class Data(PyGData):
         for key, item in self:
             if torch.is_tensor(item):
                 return item.device
-        return torch.Tensor().device
+        return torch.tensor([]).device
 
     def debug(self):
         """Sanity checks."""

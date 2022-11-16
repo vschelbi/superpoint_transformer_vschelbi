@@ -40,7 +40,8 @@ class FastBatchNorm1d(nn.Module):
 
 
 class UnitSphereNorm(nn.Module):
-    """Normalize positions of same-segment nodes in a unit sphere.
+    """Normalize positions of same-segment nodes in a unit sphere of
+    diameter 1 (ie radius 1/2).
     """
 
     def forward(self, pos, idx, w=None, num_super=None):

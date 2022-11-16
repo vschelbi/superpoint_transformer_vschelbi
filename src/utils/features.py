@@ -58,7 +58,7 @@ def rgb2lab(rgb):
     rgb *= 100
 
     # RGB to XYZ conversion
-    m = torch.Tensor([
+    m = torch.tensor([
         [0.4124, 0.2126, 0.0193],
         [0.3576, 0.7152, 0.1192],
         [0.1805, 0.0722, 0.9505]], device=device)
@@ -66,7 +66,7 @@ def rgb2lab(rgb):
 
     # Observer=2°, Illuminant=D6
     # ref_X=95.047, ref_Y=100.000, ref_Z=108.883
-    scale = torch.Tensor([[95.047, 100.0, 108.883]], device=device)
+    scale = torch.tensor([[95.047, 100.0, 108.883]], device=device)
     xyz /= scale
 
     # Prepare XYZ for LAB
@@ -76,7 +76,7 @@ def rgb2lab(rgb):
 
     # XYZ to LAB conversion
     lab = torch.zeros_like(xyz)
-    m = torch.Tensor([
+    m = torch.tensor([
         [0, 500, 0],
         [116, -500, 200],
         [0, 0, -200]], device=device)

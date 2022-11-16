@@ -88,7 +88,8 @@ class NAG:
     @property
     def device(self):
         """Return device of first Data in NAG."""
-        return self[0].device if self.num_levels > 0 else torch.Tensor().device
+        return self[0].device if self.num_levels > 0 \
+            else torch.tensor([]).device
 
     @property
     def is_cuda(self):

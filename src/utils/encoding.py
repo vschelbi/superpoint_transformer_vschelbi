@@ -42,11 +42,11 @@ def positional_encoding(pos, dim, f_min=1e-1, f_max=1e1):
 
     # Make sure M divides dim
     N, M = pos.shape
-    assert dim % M == 0, \
-        "`dim` must be a multiple of the number of input spatial dimensions"
+    #assert dim % M == 0, \
+    #    "`dim` must be a multiple of the number of input spatial dimensions"
     D = dim // M
-    assert D % 2 == 0, \
-        "`dim / dim` must be a even number"
+    #assert D % 2 == 0, \
+    #    "`dim / M` must be a even number"
 
     # To avoid uncomfortable border effects with -1 and +1 coordinates
     # having the same (or very close) encodings, we convert [-1, 1]
@@ -54,14 +54,21 @@ def positional_encoding(pos, dim, f_min=1e-1, f_max=1e1):
     pos = pos * torch.pi / 2
 
     # Compute frequencies on a logarithmic of range from f_min to f_max
-    f_min = torch.Tensor([f_min], device=pos.device)
-    f_max = torch.Tensor([f_max], device=pos.device)
-    w = torch.logspace(f_max.log().item(), f_min.log().item(), D)
+    device = pos.device
+    f_min = torch.tensor([f_min], device=device)
+    f_max = torch.tensor([f_max], device=device)
+    w = torch.logspace(f_max.log().item(), f_min.log().item(), D, device=device)
 
     # Compute sine and cosine encodings
     pos_enc = pos.view(N, M, 1) * w.view(1, -1)
     pos_enc[:, :, ::2] = pos_enc[:, :, ::2].cos()
     pos_enc[:, :, 1::2] = pos_enc[:, :, 1::2].sin()
     pos_enc = pos_enc.view(N, -1)
+
+    # In case dim is not a multiple of 2 * M, we pad missing dimensions
+    # with zeros
+    if pos_enc.shape[1] < dim:
+        zeros = torch.zeros(N, dim - pos_enc.shape[1], device=device)
+        pos_enc = torch.hstack((pos_enc, zeros))
 
     return pos_enc

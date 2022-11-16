@@ -2,7 +2,24 @@ import torch
 from torch import nn
 
 
-__all__ = ['CatFusion', 'ResidualFusion', 'TakeFirstFusion', 'TakeSecondFusion']
+__all__ = ['CatFusion', 'AdditiveFusion', 'TakeFirstFusion', 'TakeSecondFusion']
+
+
+def fusion_factory(mode):
+    """Return the fusion class from an input string.
+
+    :param mode: str
+    """
+    if mode in ['cat', 'concatenate', 'concatenation', '|']:
+        return CatFusion()
+    elif mode in ['residual', 'additive', '+']:
+        return AdditiveFusion()
+    elif mode in ['first', '1', '1st']:
+        return TakeFirstFusion()
+    elif mode in ['second', '2', '2nd']:
+        return TakeSecondFusion()
+    else:
+        raise NotImplementedError(f"Unknown mode='{mode}'")
 
 
 class BaseFusion(nn.Module):
@@ -24,7 +41,7 @@ class CatFusion(BaseFusion):
         return torch.cat((x1, x2), dim=1)
 
 
-class ResidualFusion(BaseFusion):
+class AdditiveFusion(BaseFusion):
     def _func(self, x1, x2):
         return x1 + x2
 

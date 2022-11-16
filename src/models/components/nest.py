@@ -3,7 +3,7 @@ from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import PointStage, DownNFuseStage, UpNFuseStage, FastBatchNorm1d, \
-    CatFusion
+    CatFusion, CatInjection
 
 
 __all__ = ['NeST']
@@ -18,6 +18,8 @@ class NeST(nn.Module):
 
             point_mlp,
             point_drop=None,
+            point_pos_injection=CatInjection,
+            point_pos_injection_x_dim=None,
 
             down_dim=None,
             down_in_mlp=None,
@@ -54,6 +56,7 @@ class NeST(nn.Module):
             no_sa=False,
             no_ffn=False,
 
+            pos_injection=CatInjection,
             pool='max',
             unpool='index',
             fusion='cat',
@@ -85,7 +88,8 @@ class NeST(nn.Module):
         # PointNet-like module operating on Level-0 data
         self.point_stage = PointStage(
             point_mlp, mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-            mlp_drop=point_drop)
+            mlp_drop=point_drop, pos_injection=point_pos_injection,
+            pos_injection_x_dim=point_pos_injection_x_dim)
 
         # Operator to append the features such as the diameter or other 
         # handcrafted features to the NAG's features
@@ -101,7 +105,8 @@ class NeST(nn.Module):
                     qk_scale=qk_scale, ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
-                    no_sa=no_sa, no_ffn=no_ffn, pool=pool, fusion=fusion)
+                    no_sa=no_sa, no_ffn=no_ffn, pool=pool, fusion=fusion,
+                    pos_injection=pos_injection)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path
                 in zip(
@@ -121,7 +126,8 @@ class NeST(nn.Module):
                     qk_scale=qk_scale, ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
-                    no_sa=no_sa, no_ffn=no_ffn, unpool=unpool, fusion=fusion)
+                    no_sa=no_sa, no_ffn=no_ffn, unpool=unpool, fusion=fusion,
+                    pos_injection=pos_injection)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path
                 in zip(
