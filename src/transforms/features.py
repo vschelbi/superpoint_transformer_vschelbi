@@ -59,6 +59,9 @@ class PointFeatures(Transform):
         0-features. Assumes ``Data.neighbor_index``.
     """
 
+    # TODO: augment with Rep-SURF umbrella features ?
+    # TODO: Random PointNet + PCA features ?
+
     def __init__(
             self, pos=False, radius=5, rgb=False, hsv=False, lab=False,
             density=False, linearity=False, planarity=False, scattering=False,

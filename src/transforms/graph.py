@@ -169,6 +169,9 @@ def _compute_single_horizontal_graph(
     # express them as oriented in the z+ half-space
     data.normal[data.normal[:, 2] < 0] *= -1
 
+    # TODO: augment with Rep-SURF umbrella features ?
+    # TODO: Random PointNet + PCA features ?
+
     # To guide the sampling for superedges, we want to sample among
     # points whose neighbors in the level-0 adjacency graph belong to
     # a different cluster in the i_level graph. To this end, we first
@@ -276,6 +279,12 @@ def _compute_single_horizontal_graph(
     # may be worth investigating alternatives if speedups are needed
     pos = nag[0].pos[idx_samples]
     tri = Delaunay(pos.numpy())
+
+    # TODO: alternative to Delaunay: search all clusters with at least 1
+    #  point within R of 1 point of the cluster:
+    #  - dumb: radius search on segment centroids
+    #  - better: search intersection between self bbox+R and all bboxes
+    #    (can this be vectorized ?) -> https://math.stackexchange.com/questions/2651710/simplest-way-to-determine-if-two-3d-boxes-intersect
 
     # Concatenate all edges of the triangulation
     pairs = torch.LongTensor(list(itertools.combinations(range(4), 2)))
