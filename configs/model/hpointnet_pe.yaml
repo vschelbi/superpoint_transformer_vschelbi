@@ -5,13 +5,13 @@ weighted_loss: True
 
 optimizer:
   _target_: torch.optim.Adam
-  _partial_: true
+  _partial_: True
   lr: 0.01
   weight_decay: 0.0
 
 scheduler:
   _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  _partial_: true
+  _partial_: True
   mode: min
   factor: 0.1
   patience: 10
@@ -33,11 +33,13 @@ net:
   up_inject_x: False
   point_pos_injection:
     _target_: src.nn.FourierInjection
-    _partial_: true
+    _partial_: True
   point_pos_injection_x_dim: 8
+  point_cat_diameter: False
   pos_injection:
     _target_: src.nn.FourierInjection
-    _partial_: true
+    _partial_: True
+  cat_diameter: False
   pool: 'max'
   unpool: 'index'
   fusion: 'cat'

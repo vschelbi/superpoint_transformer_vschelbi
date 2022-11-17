@@ -20,6 +20,7 @@ class NeST(nn.Module):
             point_drop=None,
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
+            point_cat_diameter=False,
 
             down_dim=None,
             down_in_mlp=None,
@@ -57,6 +58,7 @@ class NeST(nn.Module):
             no_ffn=False,
 
             pos_injection=CatInjection,
+            cat_diameter=False,
             pool='max',
             unpool='index',
             fusion='cat',
@@ -89,7 +91,8 @@ class NeST(nn.Module):
         self.point_stage = PointStage(
             point_mlp, mlp_activation=mlp_activation, mlp_norm=mlp_norm,
             mlp_drop=point_drop, pos_injection=point_pos_injection,
-            pos_injection_x_dim=point_pos_injection_x_dim)
+            pos_injection_x_dim=point_pos_injection_x_dim,
+            cat_diameter=point_cat_diameter)
 
         # Operator to append the features such as the diameter or other 
         # handcrafted features to the NAG's features
@@ -106,7 +109,7 @@ class NeST(nn.Module):
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
                     no_sa=no_sa, no_ffn=no_ffn, pool=pool, fusion=fusion,
-                    pos_injection=pos_injection)
+                    pos_injection=pos_injection, cat_diameter=cat_diameter)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path
                 in zip(

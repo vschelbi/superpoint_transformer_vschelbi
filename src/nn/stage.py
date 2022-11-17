@@ -47,7 +47,7 @@ class Stage(nn.Module):
             self, dim, num_blocks=1, in_mlp=None, out_mlp=None,
             mlp_activation=nn.LeakyReLU(), mlp_norm=FastBatchNorm1d,
             mlp_drop=None, pos_injection=CatInjection, pos_injection_x_dim=None,
-            **transformer_kwargs):
+            cat_diameter=False, **transformer_kwargs):
 
         super().__init__()
 
@@ -92,6 +92,8 @@ class Stage(nn.Module):
         self.pos_injection = fusion_factory('second') if pos_injection is None \
             else pos_injection(dim=in_dim, x_dim=pos_injection_x_dim)
 
+        self.diam_injection = fusion_factory('cat') if cat_diameter else None
+
     @property
     def out_dim(self):
         if self.out_mlp is not None:
@@ -106,12 +108,20 @@ class Stage(nn.Module):
             self, x, norm_index, pos=None, node_size=None, super_index=None,
             edge_index=None):
 
-        # Append normalized coordinates to the point features
+        # Append normalized coordinates to the node features
         if pos is not None:
             pos, diameter = self.pos_norm(pos, super_index, w=node_size)
             x = self.pos_injection(pos, x)
         else:
             diameter = None
+
+        # Inject the parent segment diameter to the node features if
+        # need be
+        if self.diam_injection is not None and diameter is not None:
+            if super_index is None:
+                x = self.diam_injection(diameter.repeat(x.shape[0], 1), x)
+            else:
+                x = self.diam_injection(diameter[super_index], x)
 
         # MLP on input features to change channel size
         if self.in_mlp is not None:
@@ -261,7 +271,7 @@ class PointStage(Stage):
     def __init__(
             self, in_mlp, mlp_activation=nn.LeakyReLU(),
             mlp_norm=FastBatchNorm1d, mlp_drop=None, pos_injection=CatInjection,
-            pos_injection_x_dim=None):
+            pos_injection_x_dim=None, cat_diameter=False):
 
         assert len(in_mlp) > 1, \
             'in_mlp should be a list of channels of length >= 2'
@@ -270,7 +280,7 @@ class PointStage(Stage):
             in_mlp[-1], num_blocks=0, in_mlp=in_mlp, out_mlp=None,
             mlp_activation=mlp_activation, mlp_norm=mlp_norm,
             mlp_drop=mlp_drop, pos_injection=pos_injection, 
-            pos_injection_x_dim=pos_injection_x_dim)
+            pos_injection_x_dim=pos_injection_x_dim, cat_diameter=cat_diameter)
 
     def forward(self, x, pos, node_size=None, super_index=None):
         return super().forward(

@@ -32,7 +32,8 @@ class HPointNet(NeST):
             down_inject_pos=True, down_inject_x=False, up_drop=None,
             up_inject_pos=True, up_inject_x=False, activation=nn.LeakyReLU(),
             point_pos_injection=CatInjection, point_pos_injection_x_dim=None,
-            pos_injection=CatInjection, norm=FastBatchNorm1d, pool='max',
+            point_cat_diameter=False, pos_injection=CatInjection,
+            cat_diameter=False, norm=FastBatchNorm1d, pool='max',
             unpool='index', fusion='cat'):
 
         down_dim = [mlp[-1] for mlp in down_mlp]
@@ -46,5 +47,6 @@ class HPointNet(NeST):
             up_num_blocks=0, up_inject_pos=up_inject_pos,
             up_inject_x=up_inject_x, point_pos_injection=point_pos_injection,
             point_pos_injection_x_dim=point_pos_injection_x_dim,
-            pos_injection=pos_injection, mlp_activation=activation,
-            mlp_norm=norm, pool=pool, unpool=unpool, fusion=fusion)
+            point_cat_diameter=point_cat_diameter, pos_injection=pos_injection,
+            cat_diameter=cat_diameter, mlp_activation=activation, mlp_norm=norm,
+            pool=pool, unpool=unpool, fusion=fusion)
