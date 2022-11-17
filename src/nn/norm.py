@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from torch_scatter import scatter
 from src.utils import scatter_mean_weighted
@@ -42,15 +43,34 @@ class FastBatchNorm1d(nn.Module):
 class UnitSphereNorm(nn.Module):
     """Normalize positions of same-segment nodes in a unit sphere of
     diameter 1 (ie radius 1/2).
+
+    :param log_diameter: bool
+        Whether the returned diameter should be log-normalized. This may
+        be useful if using the diameter as a feature in downstream
+        learning tasks
     """
+
+    def __init__(self, log_diameter=True):
+        super().__init__()
+        self.log_diameter = log_diameter
 
     def forward(self, pos, idx, w=None, num_super=None):
         if w is not None:
             assert w.ge(0).all() and w.sum() > 0, \
                 "At least one node must had a strictly positive weights"
+
+        # Normalization
         if idx is None:
-            return self._forward(pos, w=w)
-        return self._forward_scatter(pos, idx, w=w, num_super=num_super)
+            pos, diameter = self._forward(pos, w=w)
+        else:
+            pos, diameter = self._forward_scatter(pos, idx, w=w, num_super=num_super)
+
+        # Log-normalize the diameter if required. This facilitates using
+        # the diameter as a feature in downstream learning tasks
+        if self.log_diameter:
+            diameter = torch.log(diameter + 1)
+
+        return pos, diameter
 
     def _forward(self, pos, w=None):
         """Forward without scatter operations, in case `idx` is not
