@@ -50,7 +50,7 @@ class UnitSphereNorm(nn.Module):
         learning tasks
     """
 
-    def __init__(self, log_diameter=True):
+    def __init__(self, log_diameter=False):
         super().__init__()
         self.log_diameter = log_diameter
 

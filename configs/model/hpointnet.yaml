@@ -22,8 +22,8 @@ criterion:
 net:
   _target_: src.models.components.hpointnet.HPointNet
   point_mlp: [11, 32, 64, 128]
-  down_mlp: [[132, 64, 64], [68, 64, 64], [68, 64, 64], [68, 64, 64]]
-  up_mlp: [[131, 64, 64], [131, 64, 64], [131, 64, 64]]
+  down_mlp: [[132, 128, 128], [132, 128, 128], [132, 128, 128], [132, 128, 128]]
+  up_mlp: [[259, 128, 128], [259, 128, 128], [259, 256, 256]]
   point_drop: null
   down_drop: null
   up_drop: null
