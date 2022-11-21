@@ -145,7 +145,7 @@ def visualize_3d(
         class_colors=None, voxel=-1, max_points=50000, point_size=3,
         centroid_size=None, error_color=None, centroids=False, v_edge=False,
         h_edge=False, h_edge_attr=False, gap=None, select=None, alpha=0.1,
-        alpha_super=None, **kwargs):
+        alpha_super=None, h_edge_width=None, v_edge_width=None, **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
@@ -562,7 +562,7 @@ def visualize_3d(
 
             # Since plotly 3D lines do not support opacity, we draw
             # these edges as super thin to limit clutter
-            edge_width = 0.5
+            edge_width = 0.5 if v_edge_width is None else v_edge_width
 
             # Draw the level i -> i+1 vertical edges. NB we only draw
             # edges that are selected and do not draw the unselected
@@ -631,11 +631,11 @@ def visualize_3d(
             colors = feats_to_rgb(edge_attr, normalize=True)
             colors = rgb_to_plotly_rgb(colors)
             colors = np.repeat(colors, 3)
-            edge_width = point_size * 3
+            edge_width = point_size if h_edge_width is None else h_edge_width
 
         else:
             colors = np.zeros((edges.shape[0], 3))
-            edge_width = point_size
+            edge_width = point_size if h_edge_width is None else h_edge_width
 
         selected_edge = input[i_level + 1].selected[se].all(axis=0)
         selected_edge = selected_edge.repeat_interleave(3).numpy()
