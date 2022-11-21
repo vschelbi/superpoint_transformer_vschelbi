@@ -58,7 +58,7 @@ pre_transform:
         iterations: 15
         parallel: True
         verbose: True
-    - transform: DataTo
+    - transform: NAGTo
       params:
         device: 'cuda'
     - transform: SegmentFeatures
@@ -70,7 +70,7 @@ pre_transform:
         n_max_edge: 64
         n_min: 5
         max_dist: [5, 10, 100, 100]
-    - transform: DataTo
+    - transform: NAGTo
       params:
         device: 'cpu'
 
