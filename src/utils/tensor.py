@@ -9,27 +9,35 @@ __all__ = [
     'torch_to_numpy', 'fast_randperm', 'fast_zeros', 'fast_repeat']
 
 
-def tensor_idx(idx):
+def tensor_idx(idx, device=None):
     """Convert an int, slice, list or numpy index to a torch.LongTensor.
     """
+    if device is None and hasattr(idx, 'device'):
+        device = idx.device
+    elif device is None:
+        device = 'cpu'
+
     if idx is None:
-        idx = torch.LongTensor([])
+        idx = torch.tensor([], device=device, dtype=torch.long)
     elif isinstance(idx, int):
-        idx = torch.LongTensor([idx])
+        idx = torch.tensor([idx], device=device, dtype=torch.long)
     elif isinstance(idx, list):
-        idx = torch.LongTensor(idx)
+        idx = torch.tensor(idx, device=device, dtype=torch.long)
     elif isinstance(idx, slice):
-        idx = torch.arange(idx.stop)[idx]
+        idx = torch.arange(idx.stop, device=device)[idx]
     elif isinstance(idx, np.ndarray):
-        idx = torch.from_numpy(idx)
+        idx = torch.from_numpy(idx).to(device)
     # elif not isinstance(idx, torch.LongTensor):
     #     raise NotImplementedError
+
     if isinstance(idx, torch.BoolTensor):
         idx = torch.where(idx)[0]
+
     assert idx.dtype is torch.int64, \
-        "Expected LongTensor but got {idx.type} instead."
+        f"Expected LongTensor but got {idx.dtype} instead."
     # assert idx.shape[0] > 0, \
     #     "Expected non-empty indices. At least one index must be provided."
+
     return idx
 
 

@@ -4,7 +4,7 @@ from .data import *
 from .device import *
 from .sampling import *
 from .neighbors import *
-from .features import *
+from .point import *
 from .graph import *
 from .geometry import *
 from .partition import *

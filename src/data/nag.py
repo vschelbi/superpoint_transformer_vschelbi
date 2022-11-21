@@ -414,8 +414,9 @@ class NAG:
             super_index = self[i_level].super_index[super_index]
 
         # If a mask is provided, only keep the corresponding points.
-        # This also requires updating the 'sub_size' and 'n_samples'
-        mask = tensor_idx(mask)
+        # This also requires updating the `sub_size` and `n_samples`
+        from src.utils import print_tensor_info
+        mask = tensor_idx(mask, device=self.device)
         if mask.shape[0] > 0:
             point_index = point_index[mask]
             super_index = super_index[mask]

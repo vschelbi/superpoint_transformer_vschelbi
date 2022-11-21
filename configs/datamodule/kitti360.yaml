@@ -58,12 +58,45 @@ pre_transform:
         iterations: 15
         parallel: True
         verbose: True
+    - transform: DataTo
+      params:
+        device: 'cuda'
+    - transform: SegmentFeatures
+      params:
+        n_max_node: 32
+        n_min: 5
+    - transform: EdgeFeatures
+      params:
+        n_max_edge: 64
+        n_min: 5
+        max_dist: [5, 10, 100, 100]
+    - transform: DataTo
+      params:
+        device: 'cpu'
 
 train_transform:
     - transform: NAGRemoveKeys
       params:
         level: '1+'
         keys: ['x']
+#    - transform: NAGAddKeyToX
+#      params:
+#        level: '1+'
+#        keys: [
+#          'linearity',
+#          'planarity',
+#          'scattering',
+#          'verticality',
+#          'curvature',
+#          'log_length',
+#          'log_surface',
+#          'log_volume',
+#          'normal',
+#          'log_size']
+#    - transform: NAGSelectEdgeAttr
+#      params:
+#        level: '1+'
+#        keys: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 val_transform: ${datamodule.train_transform}
 
@@ -87,6 +120,9 @@ on_device_train_transform:
     - transform: JitterFeatures
       params:
         sigma: 0.01
+#    - transform: JitterEdgeFeatures
+#      params:
+#        sigma: 0.01
     - transform: RandomTiltAndRotate
       params:
         phi: 2
