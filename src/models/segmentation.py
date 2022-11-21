@@ -22,7 +22,7 @@ class PointSegmentationModule(LightningModule):
 
         # Allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
-        self.save_hyperparameters(logger=False, ignore=["net"])
+        self.save_hyperparameters(logger=False, ignore=['net', 'criterion'])
 
         # Network that will do the actual computation
         self.net = net
