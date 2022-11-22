@@ -157,7 +157,7 @@ class AddKeyToX(Transform):
         return data
 
     def _process(self, data):
-        if self.keys is None or len(self.keys == 0):
+        if self.keys is None or len(self.keys) == 0:
             return data
 
         for key in self.keys:
@@ -192,7 +192,7 @@ class NAGAddKeyToX(Transform):
 
     def _process(self, nag):
 
-        level_keys = [] * nag.num_levels
+        level_keys = [[]] * nag.num_levels
         if isinstance(self.level, int):
             level_keys[self.level] = self.keys
         elif self.level == 'all':

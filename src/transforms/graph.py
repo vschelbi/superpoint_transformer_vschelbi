@@ -628,7 +628,7 @@ class NAGSelectEdgeAttr(Transform):
 
     def _process(self, nag):
 
-        level_idx = [] * nag.num_levels
+        level_idx = [[]] * nag.num_levels
         if isinstance(self.level, int):
             level_idx[self.level] = self.idx
         elif self.level == 'all':
