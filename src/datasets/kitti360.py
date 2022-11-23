@@ -1,20 +1,17 @@
 import os
 import torch
 import logging
-import hashlib
 from plyfile import PlyData
-from datetime import datetime
-from tqdm.auto import tqdm as tq
-
-from torch_geometric.data import InMemoryDataset
-from torch_geometric.data.dataset import _repr
-from src.data import Data, NAG
+from src.datasets import BaseDataset, MiniDataset
+from src.data import Data
 from src.datasets.kitti360_config import *
 from src.utils.download import run_command
-from src.transforms import RemoveKeys
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
+
+
+__all__ = ['KITTI360', 'MiniKITTI360']
 
 
 ########################################################################
@@ -53,7 +50,7 @@ def read_kitti360_window(
 #                               KITTI360                               #
 ########################################################################
 
-class KITTI360(InMemoryDataset):
+class KITTI360(BaseDataset):
     """KITTI360 dataset.
 
     Dataset website: http://www.cvlibs.net/datasets/kitti-360/
@@ -75,124 +72,38 @@ class KITTI360(InMemoryDataset):
         augmentations should be, as well as any Transform you do not
         want to run in CPU-based DataLoaders
     """
-    num_classes = KITTI360_NUM_CLASSES
-    class_names = CLASS_NAMES
-    _WINDOWS = WINDOWS
-    _SEQUENCES = SEQUENCES
-    _LEVEL0_SAVE_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
-    _LEVEL0_LOAD_KEYS = ['pos', 'x', 'y', 'node_size', 'super_index']
-    _DATA_SUBDIR_NAME = 'kitti360'
-
-    def __init__(
-            self, root, stage='train', transform=None, pre_transform=None,
-            pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True):
-
-        self._stage = stage
-        self.x32 = x32
-        self.y_to_csr = y_to_csr
-        self.on_device_transform = on_device_transform
-
-        # Initialization with downloading and all preprocessing
-        root = osp.join(root, self._DATA_SUBDIR_NAME)
-        super().__init__(root, transform, pre_transform, pre_filter)
 
     @property
-    def stage(self):
-        return self._stage
-
-    @property
-    def has_labels(self):
-        """Self-explanatory attribute needed for BaseDataset."""
-        return self.stage != 'test'
-
-    @property
-    def windows(self):
-        """Filenames of the dataset windows."""
-        if self.stage == 'trainval':
-            return self._WINDOWS['train'] + self._WINDOWS['val']
-        return self._WINDOWS[self.stage]
-
-    @property
-    def raw_file_structure(self):
-        return f"""
-    {self.root}/
-        └── raw/
-            └── data_3d_semantics/
-                └── 2013_05_28_drive_{{seq:0>4}}_sync/
-                    └── static/
-                        └── {{start_frame:0>10}}_{{end_frame:0>10}}.ply
-            """
-
-    @property
-    def raw_file_names(self):
-        """The file paths to find in order to skip the download."""
-        return self.raw_file_names_3d
-
-    @property
-    def raw_file_names_3d(self):
-        """Some of the file paths to find in order to skip the download.
-        Those are not directly specified inside of self.raw_file_names
-        in case self.raw_file_names would need to be extended (eg with
-        3D bounding boxes files).
+    def class_names(self):
+        """List of string names for dataset classes. This list may be
+        one-item larger than `self.num_classes` if the last label
+        corresponds to 'unlabelled' or 'ignored' indices, indicated as
+        `-1` in the dataset labels.
         """
-        return [
-            osp.join('data_3d_semantics', x.split('/')[0], 'static',
-                x.split('/')[1] + '.ply')
-            for x in self.windows]
+        raise CLASS_NAMES
 
     @property
-    def pre_transform_hash(self):
-        """Produce a unique but stable hash based on the dataset
-        attributes and its transforms attributes.
+    def num_classes(self):
+        """Number of classes in the dataset. May be one-item smaller
+        than `self.class_names`, to account for the last class name
+        being optionally used for 'unlabelled' or 'ignored' classes,
+        indicated as `-1` in the dataset labels.
         """
-        # TODO: create a unique but stable hash_dir name depending on
-        #  Dataset attributes and the transforms attributes. This can be
-        #  a challenge because those objects are by default unhashable,
-        #  but one could design a recursive search trick to get the
-        #  attribute values and concatenate them into a single tuple.
-        #  After some thoughts: just the pre-transforms attributes
-        #  should be good, since only they drive the preprocessing.
-        if self.pre_transform is None:
-            return 'no_pre_transform'
-        return hashlib.md5(_repr(self.pre_transform).encode()).hexdigest()
+        raise KITTI360_NUM_CLASSES
 
     @property
-    def processed_file_names(self):
-        """The name of the files to find in the :obj:`self.processed_dir`
-        folder in order to skip the processing
+    def all_clouds(self):
+        """Dictionary holding lists of paths to the clouds, for each
+        stage.
+
+        The following structure is expected:
+            `{'train': [...], 'val': [...], 'test': [...]}`
         """
-        # For 'trainval', we use files from 'train' and 'val' to save
-        # memory
-        if self.stage == 'trainval':
-            return [
-                osp.join(s, self.pre_transform_hash, f'{w}.h5')
-                for s in ('train', 'val')
-                for w in self._WINDOWS[s]]
-        return [
-            osp.join(self.stage, self.pre_transform_hash, f'{w}.h5')
-            for w in self.windows]
+        return WINDOWS
 
-    @property
-    def submission_dir(self):
-        """Submissions are saved in the `submissions` folder, in the
-        same hierarchy as `raw` and `processed` directories. Each
-        submission has a sub-directory of its own, named based on the
-        date and time of creation.
+    def download_dataset(self):
+        """Download the KITTI-360 dataset.
         """
-        submissions_dir = osp.join(self.root, "submissions")
-        date = '-'.join([
-            f'{getattr(datetime.now(), x)}'
-            for x in ['year', 'month', 'day']])
-        time = '-'.join([
-            f'{getattr(datetime.now(), x)}'
-            for x in ['hour', 'minute', 'second']])
-        submission_name = f'{date}_{time}'
-        path = osp.join(submissions_dir, submission_name)
-        return path
-
-    def download(self):
-        self.download_warning()
-
         # Location of the KITTI-360 download shell scripts
         here = osp.dirname(osp.abspath(__file__))
         scripts_dir = osp.join(here, '../../scripts')
@@ -208,143 +119,71 @@ class KITTI360(InMemoryDataset):
             script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
             run_command([f'{script} {self.raw_dir} {self.stage}'])
 
-    def download_warning(self):
-        # Warning message for the user about to download
-        print(
-            f"WARNING: You are about to download KITTI-360 data from: "
-            f"{CVLIBS_URL}")
-        print("Files will be organized in the following structure:")
-        print(self.raw_file_structure)
-        print("")
-        print("Press any key to continue, or CTRL-C to exit.")
-        input("")
-        print("")
+            def read_single_raw_cloud(self, cloud_path):
+                """Read a single raw cloud and return a Data object, ready to
+                be passed to `self.pre_transform`.
+                """
+                # Extract useful information from <path>
+                stage, hash_dir, sequence_name, cloud_name = \
+                    osp.splitext(cloud_path)[0].split('/')[-4:]
 
-    def download_message(self, msg):
-        print(f'Downloading "{msg}" to {self.raw_dir}...')
+                # Read the raw cloud data
+                raw_cloud_path = osp.join(
+                    self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
+                    cloud_name + '.ply')
+                data = read_kitti360_window(
+                    raw_cloud_path, semantic=True, instance=False, remap=True)
 
-    def process(self):
-        for p in tq(self.processed_paths):
-            self._process_single_window(p)
+                return data
 
-    def _process_single_window(self, window_path):
-        """Internal method called by `self.process` to preprocess a
-        single KITTI360 window of 3D points.
+    @property
+    def raw_file_structure(self):
+        return f"""
+    {self.root}/
+        └── raw/
+            └── data_3d_semantics/
+                └── 2013_05_28_drive_{{seq:0>4}}_sync/
+                    └── static/
+                        └── {{start_frame:0>10}}_{{end_frame:0>10}}.ply
+            """
+
+    def cloud_to_relative_raw_path(self, cloud):
+        """Given a cloud name as stored in `self.clouds`, return the
+        path (relative to `self.raw_dir`) of the corresponding raw
+        cloud.
         """
-        # If required files exist, skip processing
-        if osp.exists(window_path):
-            return
+        return osp.join(
+            'data_3d_semantics', cloud.split('/')[0], 'static',
+            cloud.split('/')[1] + '.ply')
 
+    def processed_to_raw_path(self, processed_path):
+        """Return the raw cloud path corresponding to the input
+        processed path.
+        """
         # Extract useful information from <path>
-        stage, hash_dir, sequence_name, window_name = \
-            osp.splitext(window_path)[0].split('/')[-4:]
+        stage, hash_dir, sequence_name, cloud_name = \
+            osp.splitext(processed_path)[0].split('/')[-4:]
 
-        # Create necessary parent folders if need be
-        os.makedirs(osp.dirname(window_path), exist_ok=True)
-
-        # Read the raw window data
-        raw_window_path = osp.join(
+        # Read the raw cloud data
+        raw_path = osp.join(
             self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-            window_name + '.ply')
-        data = read_kitti360_window(
-            raw_window_path, semantic=True, instance=False, remap=True)
+            cloud_name + '.ply')
 
-        # TODO: this is dirty, may cause subsequent collisions with
-        #  self.num_classes = KITTI360_NUM_CLASSES...
-        if self.has_labels:
-            data.y[data.y == -1] = KITTI360_NUM_CLASSES
+        return raw_path
 
-        # Apply pre_transform
-        if self.pre_transform is not None:
-            nag = self.pre_transform(data)
-        else:
-            nag = NAG([data])
 
-        # To save some disk space, we discard some level-0 attributes
-        level0_keys = set(nag[0].keys) - set(self._LEVEL0_SAVE_KEYS)
-        nag._list[0] = RemoveKeys(keys=level0_keys)(nag[0])
 
-        # TODO: concatenate point features into x ? Or separate rgb and
-        #  pos to avoid redundancy ?
-        # TODO: maybe drop some level-1+ keys too ? Like features and
-        #  all ?
-        # TODO: at train time, loading and batching level-0 data is
-        #  time-consuming. Make sure to load only the strict necessary !
-        # TODO: is you do not throw away level-0 neighbors, make sure
-        #  that they contain no '-1' empty neighborhoods, because if
-        #  you load them for batching, the pyg reindexing mechanism will
-        #  break indices will not index update
 
-        # Save pre_transformed data to the processed dir/<path>
-        nag.save(window_path, x32=self.x32, y_to_csr=self.y_to_csr)
 
-    def get_class_weight(self, smooth='sqrt'):
-        """Compute class weights based on the labels distribution in the
-        dataset. Optionally a 'smooth' function may be passed to
-        smoothen the weights statistics.
-        """
-        assert smooth in [None, 'sqrt', 'log']
 
-        # Read the first NAG just to know how many levels we have in the
-        # preprocessed NAGs.
-        nag = self[0]
-        low = nag.num_levels - 1
-
-        # Make sure the dataset has labels
-        if nag[0].y is None:
-            raise ValueError(
-                f'{self} does not have labels to compute class weights on.')
-        del nag
-
-        # To be as fast as possible, we read only the last level of each
-        # NAG, and accumulate the class counts from the label histograms
-        counts = torch.zeros(self.num_classes)
-        for i in range(len(self)):
-            y = NAG.load(self.processed_paths[i], low=low, keys_low=['y'])[0].y
-            counts += y.sum(dim=0)[:self.num_classes]
-
-        # Compute the class weights. Optionally, a 'smooth' function may
-        # be applied to smoothen the weights statistics
-        if smooth == 'sqrt':
-            counts = counts.sqrt()
-        if smooth == 'log':
-            counts = counts.log()
-
-        weights = 1 / (counts + 1)
-        weights /= weights.sum()
-
-        return weights
-
-    def __len__(self):
-        """Number of windows in the dataset."""
-        return len(self.windows)
-
-    def __getitem__(self, idx):
-        """Load a preprocessed NAG from disk and apply `self.transform`
-        if any.
-        """
-        nag = NAG.load(
-            self.processed_paths[idx], keys_low=self._LEVEL0_LOAD_KEYS)
-        nag = nag if self.transform is None else self.transform(nag)
-        return nag
 
 
 ########################################################################
 #                         MiniKITTI360Cylinder                         #
 ########################################################################
 
-class MiniKITTI360(KITTI360):
+class MiniKITTI360(MiniDataset, KITTI360):
     """A mini version of KITTI360 with only a few windows for
     experimentation.
     """
-    _WINDOWS = {k: v[:2] for k, v in WINDOWS.items()}
-
-    # We have to include this method, otherwise the parent class skips
-    # processing
-    def process(self):
-        super().process()
-
-    # We have to include this method, otherwise the parent class skips
-    # processing
-    def download(self):
-        super().download()
+    _NUM_MINI = 2
