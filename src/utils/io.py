@@ -31,11 +31,11 @@ def dated_dir(root, create=False):
     return path
 
 
+#TODO: remove this for deployment !
 def host_data_root():
     """Read the host machine's name and return the known $DATA_ROOT
     directory
     """
-    #TODO: remove this for deployment
     HOST = socket.gethostname()
     if HOST == 'DEL2001W017':
         DATA_ROOT = '/media/drobert-admin/DATA2/datasets'
@@ -43,6 +43,8 @@ def host_data_root():
         DATA_ROOT = '/var/data/drobert/datasets'
     elif HOST == '9c81b1a54ad8':
         DATA_ROOT = '/raid/dataset/pointcloud/data'
+    elif HOST.endswith('sis.cnes.fr'):
+        DATA_ROOT = '/home/qt/robertda/scratch/datasets'
     else:
         raise NotImplementedError(
             f"Unknown host '{HOST}', cannot set DATA_ROOT")

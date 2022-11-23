@@ -72,8 +72,8 @@ echo "________________ Installation _______________"
 echo
 
 # Create deep_view_aggregation environment from yml
-conda env create -f ${YML_FILE}  #********************************* CREATE YML FILE
-#conda create --name $PROJECT_NAME python=$PYTHON -y
+#conda env create -f ${YML_FILE}  #********************************* CREATE YML FILE
+conda create --name $PROJECT_NAME python=$PYTHON -y
 
 # Activate the env
 source ${CONDA_DIR}/etc/profile.d/conda.sh  
