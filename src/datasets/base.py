@@ -193,6 +193,7 @@ class BaseDataset(InMemoryDataset):
         """
         # For 'trainval', we use files from 'train' and 'val' to save
         # memory
+        # TODO better deal with trainval and val for S3DIS
         if self.stage == 'trainval':
             return [
                 osp.join(s, self.pre_transform_hash, f'{w}.h5')

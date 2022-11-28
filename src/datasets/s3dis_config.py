@@ -5,6 +5,11 @@ import numpy as np
 #                         Download information                         #
 ########################################################################
 
+FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScDimvNMCGhy_rmBA2gHfDu3naktRm6A8BPwAWWDv-Uhm6Shw/viewform?c=0&w=1"
+DOWNLOAD_URL = "https://drive.google.com/uc?id=0BweDykwS9vIobkVPN0wzRzFwTDg&export=download"
+ZIP_NAME = "Stanford3dDataset_v1.2_Version.zip"
+UNZIP_NAME = "Stanford3dDataset_v1.2"
+path_file = osp.join(DIR, "s3dis.patch")
 
 ########################################################################
 #                              Data splits                             #
@@ -88,7 +93,8 @@ OBJECT_COLOR = np.asarray([
 OBJECT_LABEL = {name: i for i, name in INV_OBJECT_LABEL.items()}
 
 def object_name_to_label(object_class):
-    """Convert from object name to int label.
+    """Convert from object name to int label. By default, if an unknown
+    object nale
     """
     object_label = OBJECT_LABEL.get(object_class, OBJECT_LABEL["clutter"])  #TODO: default to "clutter"=12 or to "ignored"=-1 ?
     return object_label

@@ -1,22 +1,139 @@
-import os
+import glob
 import torch
 import logging
 import pandas as pd
+import os.path as osp
 from src.datasets import BaseDataset, MiniDataset
-from src.data import Data
+from src.data import Data, Batch
 from src.datasets.s3dis_config import *
 from src.utils.download import run_command
 
-DIR = os.path.dirname(os.path.realpath(__file__))
+DIR = osp.dirname(osp.realpath(__file__))
 log = logging.getLogger(__name__)
 
 
-__all__ = ['KITTI360', 'MiniKITTI360']
+__all__ = ['S3DIS', 'MiniS3DIS']
 
 
 ########################################################################
 #                                 Utils                                #
 ########################################################################
+
+def read_s3dis_area(
+        area_dir, xyz=True, rgb=True, semantic=True, instance=False,
+        is_val=True, verbose=False):
+    """Read all S3DIS object-wise annotations in a given Area directory.
+    All room-wise data are accumulated into a single cloud.
+
+    :param area_dir: str
+        Absolute path to the Area directory, eg: '/some/path/Area_1'
+    :param xyz: bool
+        Whether XYZ coordinates should be saved in the output Data.pos
+    :param rgb: bool
+        Whether RGB colors should be saved in the output Data.rgb
+    :param semantic: bool
+        Whether semantic labels should be saved in the output Data.y
+    :param instance: bool
+        Whether instance labels should be saved in the output Data.y
+    :param is_val: bool
+        Whether the output `Batch.is_val` should carry a boolean label
+        indicating whether they belong to the Area validation split
+    :param verbose: bool
+        Verbosity
+    :return:
+        Batch of accumulated points clouds
+    """
+    # List the object-wise annotation files in the room
+    room_directories = sorted(glob.glob(osp.join(area_dir, '*')))
+    return Batch.from_data_list([
+        read_s3dis_room(
+            r, xyz=xyz, rgb=rgb, semantic=semantic, instance=instance,
+            is_val=is_val, verbose=verbose)
+        for r in room_directories])
+
+
+def read_s3dis_room(
+        room_dir, xyz=True, rgb=True, semantic=True, instance=False,
+        is_val=False, verbose=False):
+    """Read all S3DIS object-wise annotations in a given room directory.
+
+    :param room_dir: str
+        Absolute path to the room directory, eg:
+        '/some/path/Area_1/office_1'
+    :param xyz: bool
+        Whether XYZ coordinates should be saved in the output `Data.pos`
+    :param rgb: bool
+        Whether RGB colors should be saved in the output `Data.rgb`
+    :param semantic: bool
+        Whether semantic labels should be saved in the output `Data.y`
+    :param instance: bool
+        Whether instance labels should be saved in the output `Data.y`
+    :param is_val: bool
+        Whether the output `Data.is_val` should carry a boolean label
+        indicating whether they belong to their Area validation split
+    :param verbose: bool
+        Verbosity
+    :return: Data
+    """
+    # Initialize accumulators for xyz, RGB, semantic label and instance
+    # label
+    xyz_list = [] if xyz else None
+    rgb_list = [] if rgb else None
+    y_list = [] if semantic else None
+    o_list = [] if instance else None
+
+    # List the object-wise annotation files in the room
+    objects = sorted(glob.glob(osp.join(room_dir, 'Annotations', '*.txt')))
+    for i_object, path in objects:
+        object_name = osp.splitext(osp.basename(path))[0]
+        if verbose:
+            log.debug(f"Reading object {i_object}: {object_name}")
+
+        # Remove the trailing number in the object name to isolate the
+        # object class (eg 'chair_24' -> 'chair')
+        object_class = object_name.split('_')[0]
+
+        # Convert object class string to int label. Note that by default
+        # if an unknown class is read, it will be treated as 'clutter'.
+        # This is necessary because an unknown 'staris' class can be
+        # found in some rooms
+        label = OBJECT_LABEL.get(object_class, OBJECT_LABEL['clutter'])
+        points = pd.read_csv(path, sep=' ', header=None).values
+
+        if xyz:
+            xyz_list.append(
+                np.ascontiguousarray(points[:, 0:3], dtype='float32'))
+
+        if rgb:
+            try:
+                rgb_list.append(
+                    np.ascontiguousarray(points[:, 3:6], dtype='uint8'))
+            except ValueError:
+                rgb_list.append(np.zeros((points.shape[0], 3), dtype='uint8'))
+                log.warning(f"WARN - corrupted rgb data for file {path}")
+
+        if semantic:
+            y_list.append(np.full(N, label, dtype='int64'))
+            
+        if instance:
+            o_list.append(np.full(points.shape[0], i_object, dtype='int64'))
+    
+    # Concatenate and convert to torch
+    xyz_data = torch.from_numpy(np.concatenate(xyz_list, 0)) if xyz else None
+    rgb_data = torch.from_numpy(np.concatenate(rgb_list, 0)) if rgb else None
+    y_data = torch.from_numpy(np.concatenate(y_list, 0)) if semantic else None
+    o_data = torch.from_numpy(np.concatenate(o_list, 0)) if instance else None
+
+    # Store into a Data object
+    data = Data(pos=xyz_data, rgb=rgb_data, y=y_data, o=o_data)
+
+    # Add is_val attribute if need be
+    if is_val:
+        data.is_val = torch.ones(data.num_nodes, dtype=torch.bool) * (
+                osp.basename(room_dir) in VALIDATION_ROOMS)
+
+    return data
+
 
 def read_s3dis_format(
         train_file, room_name, label_out=True, verbose=False, debug=False):
@@ -60,7 +177,7 @@ def read_s3dis_format(
         objects = glob.glob(osp.join(train_file, "Annotations/*.txt"))
         i_object = 1
         for single_object in objects:
-            object_name = os.path.splitext(os.path.basename(single_object))[0]
+            object_name = osp.splitext(osp.basename(single_object))[0]
             if verbose:
                 log.debug("adding object " + str(i_object) + " : " + object_name)
             object_class = object_name.split("_")[0]
@@ -108,10 +225,10 @@ def read_s3dis_area(
 
 
 ########################################################################
-#                               KITTI360                               #
+#                               S3DIS                               #
 ########################################################################
 
-class KITTI360(BaseDataset):
+class S3DIS(BaseDataset):
     """S3DIS dataset.
 
     Dataset website: http://buildingparser.stanford.edu/dataset.html
@@ -150,7 +267,7 @@ class KITTI360(BaseDataset):
         being optionally used for 'unlabelled' or 'ignored' classes,
         indicated as `-1` in the dataset labels.
         """
-        raise KITTI360_NUM_CLASSES
+        raise S3DIS_NUM_CLASSES
 
     @property
     def all_clouds(self):
@@ -160,7 +277,9 @@ class KITTI360(BaseDataset):
         The following structure is expected:
             `{'train': [...], 'val': [...], 'test': [...]}`
         """
-        return WINDOWS
+        # TODO this will be problematic for 'trainval' in S3DIS. Not a
+        #  simple list concatenation for S3DIS...
+        return {train:f'Area_{i}'}
 
     def download_dataset(self):
         """Download the KITTI-360 dataset.
@@ -180,32 +299,31 @@ class KITTI360(BaseDataset):
             script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
             run_command([f'{script} {self.raw_dir} {self.stage}'])
 
-            def read_single_raw_cloud(self, cloud_path):
-                """Read a single raw cloud and return a Data object, ready to
-                be passed to `self.pre_transform`.
-                """
-                # Extract useful information from <path>
-                stage, hash_dir, sequence_name, cloud_name = \
-                    osp.splitext(cloud_path)[0].split('/')[-4:]
+    def read_single_raw_cloud(self, cloud_path):
+        """Read a single raw cloud and return a Data object, ready to
+        be passed to `self.pre_transform`.
+        """
+        # Extract useful information from <path>
+        stage, hash_dir, sequence_name, cloud_name = \
+            osp.splitext(cloud_path)[0].split('/')[-4:]
 
-                # Read the raw cloud data
-                raw_cloud_path = osp.join(
-                    self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-                    cloud_name + '.ply')
-                data = read_kitti360_window(
-                    raw_cloud_path, semantic=True, instance=False, remap=True)
+        # Read the raw cloud data
+        raw_cloud_path = osp.join(
+            self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
+            cloud_name + '.ply')
+        data = read_kitti360_window(
+            raw_cloud_path, semantic=True, instance=False, remap=True)
 
-                return data
+        return data
 
     @property
     def raw_file_structure(self):
         return f"""
     {self.root}/
         └── raw/
-            └── data_3d_semantics/
-                └── 2013_05_28_drive_{{seq:0>4}}_sync/
-                    └── static/
-                        └── {{start_frame:0>10}}_{{end_frame:0>10}}.ply
+            └── {ZIP_NAME}
+            └── Area_{{i_area:1>6}}/
+                └── ...
             """
 
     def cloud_to_relative_raw_path(self, cloud):

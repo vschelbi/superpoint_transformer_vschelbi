@@ -119,22 +119,22 @@ class KITTI360(BaseDataset):
             script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
             run_command([f'{script} {self.raw_dir} {self.stage}'])
 
-            def read_single_raw_cloud(self, cloud_path):
-                """Read a single raw cloud and return a Data object, ready to
-                be passed to `self.pre_transform`.
-                """
-                # Extract useful information from <path>
-                stage, hash_dir, sequence_name, cloud_name = \
-                    osp.splitext(cloud_path)[0].split('/')[-4:]
+    def read_single_raw_cloud(self, cloud_path):
+        """Read a single raw cloud and return a Data object, ready to
+        be passed to `self.pre_transform`.
+        """
+        # Extract useful information from <path>
+        stage, hash_dir, sequence_name, cloud_name = \
+            osp.splitext(cloud_path)[0].split('/')[-4:]
 
-                # Read the raw cloud data
-                raw_cloud_path = osp.join(
-                    self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-                    cloud_name + '.ply')
-                data = read_kitti360_window(
-                    raw_cloud_path, semantic=True, instance=False, remap=True)
+        # Read the raw cloud data
+        raw_cloud_path = osp.join(
+            self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
+            cloud_name + '.ply')
+        data = read_kitti360_window(
+            raw_cloud_path, semantic=True, instance=False, remap=True)
 
-                return data
+        return data
 
     @property
     def raw_file_structure(self):
