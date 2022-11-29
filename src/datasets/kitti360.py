@@ -2,7 +2,7 @@ import os
 import torch
 import logging
 from plyfile import PlyData
-from src.datasets import BaseDataset, MiniDataset
+from src.datasets import BaseDataset
 from src.data import Data
 from src.datasets.kitti360_config import *
 from src.utils.download import run_command
@@ -166,8 +166,26 @@ class KITTI360(BaseDataset):
 #                             MiniKITTI360                             #
 ########################################################################
 
-class MiniKITTI360(MiniDataset, KITTI360):
+class MiniKITTI360(KITTI360):
     """A mini version of KITTI360 with only a few windows for
     experimentation.
     """
     _NUM_MINI = 2
+
+    @property
+    def all_cloud_ids(self):
+        return {k: v[:self._NUM_MINI] for k, v in super().all_cloud_ids.items()}
+
+    @property
+    def data_subdir_name(self):
+        return self.__class__.__bases__[0].__name__.lower()
+
+    # We have to include this method, otherwise the parent class skips
+    # processing
+    def process(self):
+        super().process()
+
+    # We have to include this method, otherwise the parent class skips
+    # processing
+    def download(self):
+        super().download()

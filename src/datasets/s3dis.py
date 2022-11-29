@@ -5,10 +5,9 @@ import gdown
 import shutil
 import logging
 import pandas as pd
-from src.datasets import BaseDataset, MiniDataset
+from src.datasets import BaseDataset
 from src.data import Data, Batch
 from src.datasets.s3dis_config import *
-from src.utils.download import run_command
 from torch_geometric.data import extract_zip
 from src.utils import available_cpu_count, starmap_with_kwargs
 
@@ -277,8 +276,26 @@ class S3DIS(BaseDataset):
 #                              MiniS3DIS                               #
 ########################################################################
 
-class MiniS3DIS(MiniDataset, S3DIS):
+class MiniS3DIS(S3DIS):
     """A mini version of S3DIS with only 2 areas per stage for
     experimentation.
     """
     _NUM_MINI = 2
+
+    @property
+    def all_cloud_ids(self):
+        return {k: v[:self._NUM_MINI] for k, v in super().all_cloud_ids.items()}
+
+    @property
+    def data_subdir_name(self):
+        return self.__class__.__bases__[0].__name__.lower()
+
+    # We have to include this method, otherwise the parent class skips
+    # processing
+    def process(self):
+        super().process()
+
+    # We have to include this method, otherwise the parent class skips
+    # processing
+    def download(self):
+        super().download()

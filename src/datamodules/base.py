@@ -51,10 +51,11 @@ class BaseDataModule(LightningDataModule):
             self, data_dir='', x32=True, y_to_csr=True, pre_transform=None,
             train_transform=None, val_transform=None, test_transform=None,
             on_device_train_transform=None, on_device_val_transform=None,
-            on_device_test_transform=None, dataloader=None, mini=False):
+            on_device_test_transform=None, dataloader=None, mini=False,
+            trainval=False):
         super().__init__()
 
-        # this line allows to access init params with 'self.hparams'
+        # This line allows to access init params with 'self.hparams'
         # attribute also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
 
@@ -88,6 +89,13 @@ class BaseDataModule(LightningDataModule):
             return self._MINIDATASET_CLASS
         return self._DATASET_CLASS
 
+    @property
+    def train_stage(self):
+        """Return either 'train' or 'trainval' depending on how
+        `self.hparams.trainval` is configured.
+        """
+        return 'trainval' if self.hparams.trainval else 'train'
+
     def prepare_data(self):
         """Download and heavy preprocessing of data should be triggered
         here.
@@ -96,7 +104,7 @@ class BaseDataModule(LightningDataModule):
         it will not be preserved outside this scope.
         """
         self.dataset_class(
-            self.hparams.data_dir, stage='train',
+            self.hparams.data_dir, stage=self.train_stage,
             transform=self.train_transform, pre_transform=self.pre_transform,
             on_device_transform=self.on_device_train_transform,
             x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
@@ -122,7 +130,7 @@ class BaseDataModule(LightningDataModule):
         random split twice!
         """
         self.train_dataset = self.dataset_class(
-            self.hparams.data_dir, stage='train',
+            self.hparams.data_dir, stage=self.train_stage,
             transform=self.train_transform, pre_transform=self.pre_transform,
             on_device_transform=self.on_device_train_transform,
             x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)

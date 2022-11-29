@@ -14,7 +14,7 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
 
 
-__all__ = ['BaseDataset', 'MiniDataset']
+__all__ = ['BaseDataset']
 
 
 ########################################################################
@@ -461,36 +461,3 @@ class BaseDataset(InMemoryDataset):
         nag = nag if self.transform is None else self.transform(nag)
 
         return nag
-
-
-########################################################################
-#                             MiniDataset                              #
-########################################################################
-
-class MiniDataset:
-    """A class to make a BaseDataset smaller with only 2 clouds from
-    each stage, for experimentation. This class is useless by itself,
-    it should be used for multiple inheritance on a BaseDataset class.
-
-    For instance:
-
-    ```
-    MyDataset(MiniDataset, BaseDataset):
-        ...
-    ```
-    """
-    _NUM_MINI = 2
-
-    @property
-    def all_cloud_ids(self):
-        return {k: v[:self._NUM_MINI] for k, v in super().all_cloud_ids.items()}
-
-    # We have to include this method, otherwise the parent class skips
-    # processing
-    def process(self):
-        super().process()
-
-    # We have to include this method, otherwise the parent class skips
-    # processing
-    def download(self):
-        super().download()

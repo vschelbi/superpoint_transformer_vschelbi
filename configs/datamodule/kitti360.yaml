@@ -104,7 +104,7 @@ on_device_train_transform:
         sigma: 0.01
     - transform: RandomTiltAndRotate
       params:
-        phi: 2
+        phi: 0.1
         theta: 180
     - transform: RandomAnisotropicScale
       params:

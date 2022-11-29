@@ -1,6 +1,4 @@
 import torch
-import random
-import numpy as np
 from src.data import NAG
 from src.transforms import Transform
 from src.utils.geometry import rodrigues_rotation_matrix
@@ -96,7 +94,7 @@ class RandomTiltAndRotate(Transform):
         device = nag.device
 
         # Generate the random rotation axis
-        sigma = self.phi / 180. * np.pi / 3
+        sigma = self.phi / 180. * torch.pi / 3
         if sigma > 0:
             means = torch.zeros(2, device=device)
             stds = torch.eye(2, device=device) * sigma
