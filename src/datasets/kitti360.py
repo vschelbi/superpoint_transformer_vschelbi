@@ -80,7 +80,7 @@ class KITTI360(BaseDataset):
         corresponds to 'unlabelled' or 'ignored' indices, indicated as
         `-1` in the dataset labels.
         """
-        raise CLASS_NAMES
+        return CLASS_NAMES
 
     @property
     def num_classes(self):
@@ -89,10 +89,10 @@ class KITTI360(BaseDataset):
         being optionally used for 'unlabelled' or 'ignored' classes,
         indicated as `-1` in the dataset labels.
         """
-        raise KITTI360_NUM_CLASSES
+        return KITTI360_NUM_CLASSES
 
     @property
-    def all_clouds(self):
+    def all_cloud_ids(self):
         """Dictionary holding lists of paths to the clouds, for each
         stage.
 
@@ -119,22 +119,12 @@ class KITTI360(BaseDataset):
             script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
             run_command([f'{script} {self.raw_dir} {self.stage}'])
 
-    def read_single_raw_cloud(self, cloud_path):
+    def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
-        # Extract useful information from <path>
-        stage, hash_dir, sequence_name, cloud_name = \
-            osp.splitext(cloud_path)[0].split('/')[-4:]
-
-        # Read the raw cloud data
-        raw_cloud_path = osp.join(
-            self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-            cloud_name + '.ply')
-        data = read_kitti360_window(
+        return read_kitti360_window(
             raw_cloud_path, semantic=True, instance=False, remap=True)
-
-        return data
 
     @property
     def raw_file_structure(self):
@@ -147,39 +137,33 @@ class KITTI360(BaseDataset):
                         └── {{start_frame:0>10}}_{{end_frame:0>10}}.ply
             """
 
-    def cloud_to_relative_raw_path(self, cloud):
-        """Given a cloud name as stored in `self.clouds`, return the
+    def id_to_relative_raw_path(self, id):
+        """Given a cloud id as stored in `self.cloud_ids`, return the
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
         return osp.join(
-            'data_3d_semantics', cloud.split('/')[0], 'static',
-            cloud.split('/')[1] + '.ply')
+            'data_3d_semantics', id.split('/')[0], 'static',
+            id.split('/')[1] + '.ply')
 
     def processed_to_raw_path(self, processed_path):
         """Return the raw cloud path corresponding to the input
         processed path.
         """
         # Extract useful information from <path>
-        stage, hash_dir, sequence_name, cloud_name = \
+        stage, hash_dir, sequence_name, cloud_id = \
             osp.splitext(processed_path)[0].split('/')[-4:]
 
         # Read the raw cloud data
         raw_path = osp.join(
             self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-            cloud_name + '.ply')
+            cloud_id + '.ply')
 
         return raw_path
 
 
-
-
-
-
-
-
 ########################################################################
-#                         MiniKITTI360Cylinder                         #
+#                             MiniKITTI360                             #
 ########################################################################
 
 class MiniKITTI360(MiniDataset, KITTI360):

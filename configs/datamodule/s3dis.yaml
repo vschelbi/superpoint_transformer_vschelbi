@@ -1,0 +1,130 @@
+defaults:
+  - default.yaml
+
+_target_: src.datamodules.s3dis.S3DISDataModule
+
+pre_transform:
+
+    - transform: GridSampling3D
+      params:
+        size: 0.05
+        hist_key: 'y'
+        hist_size: 14  # this is for S3DIS_NUM_CLASSES +1 for ignored
+    - transform: DataTo
+      params:
+        device: 'cuda'
+    - transform: KNN
+      params:
+        k: 50
+        r_max: 3
+        verbose: True
+    - transform: DataTo
+      params:
+        device: 'cpu'
+    - transform: PointFeatures
+      params:
+        rgb: True
+        hsv: False
+        lab: False
+        density: False
+        linearity: True
+        planarity: True
+        scattering: True
+        verticality: True
+        normal: False
+        length: False
+        surface: False
+        volume: False
+        curvature: True
+        k_min: 1
+    - transform: DataTo
+      params:
+        device: 'cuda'
+    - transform: AdjacencyGraph
+      params:
+        k: 10
+        w: -1
+    - transform: ConnectIsolated
+      params:
+        k: 1
+    - transform: DataTo
+      params:
+        device: 'cpu'
+    - transform: CutPursuitPartition
+      params:
+        regularization: [0.04, 0.2, 0.8, 1.4]
+        spatial_weight: [1e-2, 0, 0, 0]
+        k_adjacency: 10
+        cutoff: [10, 100, 1000, 10000]
+        iterations: 15
+        parallel: True
+        verbose: True
+    - transform: NAGTo
+      params:
+        device: 'cuda'
+    - transform: SegmentFeatures
+      params:
+        n_max_node: 32
+        n_min: 5
+    - transform: EdgeFeatures
+      params:
+        n_max_edge: 64
+        n_min: 5
+        max_dist: [3, 10, 30, 100]
+    - transform: NAGTo
+      params:
+        device: 'cpu'
+
+train_transform:
+#    - transform: NAGRemoveKeys
+#      params:
+#        level: '0'
+#        keys: [ 'is_val' ]
+    - transform: NAGRemoveKeys
+      params:
+        level: '1+'
+        keys: ['x']
+
+val_transform: ${datamodule.train_transform}
+
+test_transform: ${datamodule.train_transform}
+
+on_device_train_transform:
+    - transform: SampleSegments
+      params:
+        high: 1
+        low: 0
+        n_max: 32
+        n_min: 16
+    - transform: DropoutSegments
+      params:
+        ratio: 0.2
+        by_size: False
+        by_class: False
+    - transform: JitterPosition
+      params:
+        sigma: 0.03
+    - transform: JitterFeatures
+      params:
+        sigma: 0.01
+    - transform: RandomTiltAndRotate
+      params:
+        phi: 2
+        theta: 180
+    - transform: RandomAnisotropicScale
+      params:
+        delta: 0.2
+    - transform: RandomAxisFlip
+      params:
+        p: 0.5
+
+# Should we actually sample at validation time ?
+on_device_val_transform:
+    - transform: SampleSegments
+      params:
+        high: 1
+        low: 0
+        n_max: 64
+        n_min: 16
+
+on_device_test_transform: ${datamodule.on_device_val_transform}

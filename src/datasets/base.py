@@ -35,7 +35,7 @@ class BaseDataset(InMemoryDataset):
         def num_classes(self):
             pass
 
-        def all_clouds(self):
+        def all_cloud_ids(self):
             pass
 
         def download_dataset(self):
@@ -52,7 +52,7 @@ class BaseDataset(InMemoryDataset):
             # differs from the default
             pass
 
-        def cloud_to_relative_raw_path(self):
+        def id_to_relative_raw_path(self):
             # Optional: only if your raw or processed file structure
             # differs from the default
             pass
@@ -80,13 +80,26 @@ class BaseDataset(InMemoryDataset):
         'on_after_batch_transfer' hook. This is where GPU-based
         augmentations should be, as well as any Transform you do not
         want to run in CPU-based DataLoaders
+    val_mixed_in_train: bool
+        whether the 'val' stage data is saved in the same clouds as the
+        'train' stage. This may happen when the stage splits are
+        performed inside the clouds. In this case, `__getitem__` will be
+        in charge of separating stage-specific data upon reading
+    test_mixed_in_val: bool
+        whether the 'test' stage data is saved in the same clouds as the
+        'val' stage. This may happen when the stage splits are
+        performed inside the clouds. In this case, `__getitem__` will be
+        in charge of separating stage-specific data upon reading
     """
-    _LEVEL0_SAVE_KEYS = ['pos', 'x', 'rgb', 'y', 'node_size', 'super_index']
-    _LEVEL0_LOAD_KEYS = ['pos', 'x', 'y', 'node_size', 'super_index']
+    _LEVEL0_SAVE_KEYS = [
+        'pos', 'x', 'rgb', 'y', 'node_size', 'super_index', 'is_val']
+    _LEVEL0_LOAD_KEYS = [
+        'pos', 'x', 'y', 'node_size', 'super_index', 'is_val']
 
     def __init__(
             self, root, stage='train', transform=None, pre_transform=None,
-            pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True):
+            pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True,
+            val_mixed_in_train=False, test_mixed_in_val=False):
 
         assert stage in ['train', 'val', 'trainval', 'test']
 
@@ -97,6 +110,13 @@ class BaseDataset(InMemoryDataset):
         self.x32 = x32
         self.y_to_csr = y_to_csr
         self.on_device_transform = on_device_transform
+        self.val_mixed_in_train = val_mixed_in_train
+        self.test_mixed_in_val = test_mixed_in_val
+
+        # Sanity check on the cloud ids. Ensures cloud ids are unique
+        # across all stages, unless `val_mixed_in_train` or
+        # `test_mixed_in_val` is True
+        self.check_cloud_ids()
 
         # Initialization with downloading and all preprocessing
         root = osp.join(root, self.data_subdir_name)
@@ -132,8 +152,8 @@ class BaseDataset(InMemoryDataset):
         return self._stage
 
     @property
-    def all_clouds(self):
-        """Dictionary holding lists of paths to the clouds, for each
+    def all_cloud_ids(self):
+        """Dictionary holding lists of clouds ids, for each
         stage.
 
         The following structure is expected:
@@ -142,12 +162,29 @@ class BaseDataset(InMemoryDataset):
         raise NotImplementedError
 
     @property
-    def clouds(self):
-        """Filenames of the dataset clouds, based on its `stage`.
+    def cloud_ids(self):
+        """IDs of the dataset clouds, based on its `stage`.
         """
         if self.stage == 'trainval':
-            return self.all_clouds['train'] + self.all_clouds['val']
-        return self.all_clouds[self.stage]
+            return list(set(self.all_cloud_ids['train'] + self.all_cloud_ids['val']))
+        return list(set(self.all_cloud_ids[self.stage]))
+
+    def check_cloud_ids(self):
+        """Make sure the `all_cloud_ids` are valid. More specifically,
+        the cloud ids must be unique across all stages, unless
+        `val_mixed_in_train=True` or `test_mixed_in_val=True`, in
+        which case some clouds may appear in several stages
+        """
+        train = set(self.all_cloud_ids['train'])
+        val = set(self.all_cloud_ids['val'])
+        test = set(self.all_cloud_ids['test'])
+
+        assert len(train.intersection(val)) == 0 or self.val_mixed_in_train, \
+            "Cloud ids must be unique across all the 'train' and 'val' " \
+            "stages, unless `val_mixed_in_train=True`"
+        assert len(val.intersection(test)) == 0 or self.test_mixed_in_val, \
+            "Cloud ids must be unique across all the 'val' and 'test' " \
+            "stages, unless `test_mixed_in_val=True`"
 
     @property
     def raw_file_structure(self):
@@ -163,19 +200,19 @@ class BaseDataset(InMemoryDataset):
 
     @property
     def raw_file_names_3d(self):
-        """Some of the file paths to find in order to skip the download.
-        Those are not directly specified inside of `self.raw_file_names`
+        """Some file paths to find in order to skip the download.
+        Those are not directly specified inside `self.raw_file_names`
         in case `self.raw_file_names` would need to be extended (eg with
         3D bounding boxes files).
         """
-        return [self.cloud_to_relative_raw_path(x) for x in self.clouds]
+        return [self.id_to_relative_raw_path(x) for x in self.cloud_ids]
 
-    def cloud_to_relative_raw_path(self, cloud):
-        """Given a cloud name as stored in `self.clouds`, return the
+    def id_to_relative_raw_path(self, id):
+        """Given a cloud id as stored in `self.cloud_ids`, return the
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
-        return osp.join(cloud + '.ply')
+        return osp.join(id + '.ply')
 
     @property
     def pre_transform_hash(self):
@@ -193,15 +230,19 @@ class BaseDataset(InMemoryDataset):
         """
         # For 'trainval', we use files from 'train' and 'val' to save
         # memory
-        # TODO better deal with trainval and val for S3DIS
+        if self.stage == 'trainval' and self.val_mixed_in_train:
+            return [
+                osp.join('train', self.pre_transform_hash, f'{w}.h5')
+                for s in ('train', 'val')
+                for w in self.all_cloud_ids[s]]
         if self.stage == 'trainval':
             return [
                 osp.join(s, self.pre_transform_hash, f'{w}.h5')
                 for s in ('train', 'val')
-                for w in self.all_clouds[s]]
+                for w in self.all_cloud_ids[s]]
         return [
             osp.join(self.stage, self.pre_transform_hash, f'{w}.h5')
-            for w in self.clouds]
+            for w in self.cloud_ids]
 
     def processed_to_raw_path(self, processed_path):
         """Given a processed cloud path from `self.processed_paths`,
@@ -211,12 +252,12 @@ class BaseDataset(InMemoryDataset):
         default structure.
         """
         # Extract useful information from <path>
-        stage, hash_dir, cloud_name = \
+        stage, hash_dir, cloud_id = \
             osp.splitext(processed_path)[0].split('/')[-3:]
 
         # Read the raw cloud data
-        raw_ext = self.raw_file_names_3d[0].splitext[1]
-        raw_path = osp.join(self.raw_dir, cloud_name + raw_ext)
+        raw_ext = osp.splitext(self.raw_file_names_3d[0])[1]
+        raw_path = osp.join(self.raw_dir, cloud_id + raw_ext)
 
         return raw_path
 
@@ -224,7 +265,7 @@ class BaseDataset(InMemoryDataset):
     def submission_dir(self):
         """Submissions are saved in the `submissions` folder, in the
         same hierarchy as `raw` and `processed` directories. Each
-        submission has a sub-directory of its own, named based on the
+        submission has a subdirectory of its own, named based on the
         date and time of creation.
         """
         submissions_dir = osp.join(self.root, "submissions")
@@ -250,21 +291,45 @@ class BaseDataset(InMemoryDataset):
 
     def download_warning(self):
         # Warning message for the user about to download
-        print(
+        log.info(
             f"WARNING: You are about to download {self.__class__.__name__} "
             f"data.")
         if self.raw_file_structure is not None:
-            print("Files will be organized in the following structure:")
-            print(self.raw_file_structure)
-        print("")
-        print("Press any key to continue, or CTRL-C to exit.")
+            log.info("Files will be organized in the following structure:")
+            log.info(self.raw_file_structure)
+        log.info("")
+        log.info("Press any key to continue, or CTRL-C to exit.")
         input("")
-        print("")
+        log.info("")
 
     def download_message(self, msg):
-        print(f'Downloading "{msg}" to {self.raw_dir}...')
+        log.info(f'Downloading "{msg}" to {self.raw_dir}...')
 
     def process(self):
+        # If some stages have mixed clouds (they rely on the same cloud
+        # files and the split is operated at reading time by
+        # `__getitem__`), we create symlinks between the necessary
+        # folders, to avoid duplicate preprocessing computation
+        hash_dir = self.pre_transform_hash
+        train_dir = osp.join(self.processed_dir, 'train', hash_dir)
+        val_dir = osp.join(self.processed_dir, 'val', hash_dir)
+        test_dir = osp.join(self.processed_dir, 'test', hash_dir)
+        if not osp.exists(train_dir):
+            os.makedirs(train_dir, exist_ok=True)
+        if not osp.exists(val_dir):
+            if self.val_mixed_in_train:
+                os.makedirs(osp.dirname(val_dir), exist_ok=True)
+                os.symlink(train_dir, val_dir, target_is_directory=True)
+            else:
+                os.makedirs(val_dir, exist_ok=True)
+        if not osp.exists(test_dir):
+            if self.test_mixed_in_val:
+                os.makedirs(osp.dirname(test_dir), exist_ok=True)
+                os.symlink(val_dir, test_dir, target_is_directory=True)
+            else:
+                os.makedirs(test_dir, exist_ok=True)
+
+        # Process clouds one by one
         for p in tq(self.processed_paths):
             self._process_single_cloud(p)
 
@@ -305,8 +370,9 @@ class BaseDataset(InMemoryDataset):
         #  you load them for batching, the pyg reindexing mechanism will
         #  break indices will not index update
         nag.save(cloud_path, x32=self.x32, y_to_csr=self.y_to_csr)
+        del nag
 
-    def read_single_raw_cloud(self, path):
+    def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
@@ -315,7 +381,7 @@ class BaseDataset(InMemoryDataset):
     def get_class_weight(self, smooth='sqrt'):
         """Compute class weights based on the labels distribution in the
         dataset. Optionally a 'smooth' function may be passed to
-        smoothen the weights statistics.
+        smoothen the weights' statistics.
         """
         assert smooth in [None, 'sqrt', 'log']
 
@@ -351,20 +417,36 @@ class BaseDataset(InMemoryDataset):
 
     def __len__(self):
         """Number of clouds in the dataset."""
-        return len(self.clouds)
+        return len(self.cloud_ids)
 
     def __getitem__(self, idx):
         """Load a preprocessed NAG from disk and apply `self.transform`
         if any.
         """
+        # Read the NAG
         nag = NAG.load(
             self.processed_paths[idx], keys_low=self._LEVEL0_LOAD_KEYS)
+
+        # Separate stage-specific data if need be
+        # TODO: this might not be ideal and slow down training. Move
+        #  this to on-device transform ?
+        if self.stage == 'train' and self.val_mixed_in_train:
+            nag = nag.select(0, torch.where(~nag[0].is_val)[0])
+        if self.stage == 'val' and self.val_mixed_in_train:
+            nag = nag.select(0, torch.where(nag[0].is_val)[0])
+        if self.stage == 'val' and self.test_mixed_in_val:
+            nag = nag.select(0, torch.where(nag[0].is_val)[0])
+        if self.stage == 'test' and self.test_mixed_in_val:
+            nag = nag.select(0, torch.where(~nag[0].is_val)[0])
+
+        # Apply transforms
         nag = nag if self.transform is None else self.transform(nag)
+
         return nag
 
 
 ########################################################################
-#                         MiniS3DISCylinder                         #
+#                             MiniDataset                              #
 ########################################################################
 
 class MiniDataset:
@@ -382,8 +464,8 @@ class MiniDataset:
     _NUM_MINI = 2
 
     @property
-    def all_clouds(self):
-        return {k: v[:self._NUM_MINI] for k, v in super().all_clouds.items()}
+    def all_cloud_ids(self):
+        return {k: v[:self._NUM_MINI] for k, v in super().all_cloud_ids.items()}
 
     # We have to include this method, otherwise the parent class skips
     # processing

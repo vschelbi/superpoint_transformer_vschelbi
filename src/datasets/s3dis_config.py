@@ -1,15 +1,19 @@
 import numpy as np
+import os.path as osp
 
 
 ########################################################################
 #                         Download information                         #
 ########################################################################
 
+# Credit: https://github.com/torch-points3d/torch-points3d
+
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScDimvNMCGhy_rmBA2gHfDu3naktRm6A8BPwAWWDv-Uhm6Shw/viewform?c=0&w=1"
 DOWNLOAD_URL = "https://drive.google.com/uc?id=0BweDykwS9vIobkVPN0wzRzFwTDg&export=download"
-ZIP_NAME = "Stanford3dDataset_v1.2_Version.zip"
+ZIP_NAME = "Stanford3dDataset_v1.2.zip"
 UNZIP_NAME = "Stanford3dDataset_v1.2"
-path_file = osp.join(DIR, "s3dis.patch")
+PATCH_FILE = osp.join(osp.dirname(osp.realpath(__file__)), "s3dis.patch")
+
 
 ########################################################################
 #                              Data splits                             #
@@ -74,7 +78,7 @@ INV_OBJECT_LABEL = {
 
 CLASS_NAMES = [INV_OBJECT_LABEL[i] for i in range(S3DIS_NUM_CLASSES)] + ['ignored']
 
-OBJECT_COLOR = np.asarray([
+CLASS_COLORS = np.asarray([
     [233, 229, 107],  # 'ceiling'   ->  yellow
     [95, 156, 196],   # 'floor'     ->  blue
     [179, 116, 81],   # 'wall'      ->  brown
@@ -96,5 +100,5 @@ def object_name_to_label(object_class):
     """Convert from object name to int label. By default, if an unknown
     object nale
     """
-    object_label = OBJECT_LABEL.get(object_class, OBJECT_LABEL["clutter"])  #TODO: default to "clutter"=12 or to "ignored"=-1 ?
+    object_label = OBJECT_LABEL.get(object_class, OBJECT_LABEL["clutter"])
     return object_label

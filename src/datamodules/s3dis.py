@@ -1,12 +1,12 @@
 import logging
 from src.datamodules.base import BaseDataModule
-from src.datasets import KITTI360, MiniKITTI360
+from src.datasets import S3DIS, MiniS3DIS
 
 
 log = logging.getLogger(__name__)
 
 
-class KITTI360DataModule(BaseDataModule):
+class S3DISDataModule(BaseDataModule):
     """LightningDataModule for KITTI360 dataset.
 
     A DataModule implements 5 key methods:
@@ -33,8 +33,8 @@ class KITTI360DataModule(BaseDataModule):
     Read the docs:
         https://pytorch-lightning.readthedocs.io/en/latest/data/datamodule.html
     """
-    _DATASET_CLASS = KITTI360
-    _MINIDATASET_CLASS = MiniKITTI360
+    _DATASET_CLASS = S3DIS
+    _MINIDATASET_CLASS = MiniS3DIS
 
 
 if __name__ == "__main__":
@@ -43,6 +43,6 @@ if __name__ == "__main__":
     import pyrootutils
 
     root = pyrootutils.setup_root(__file__, pythonpath=True)
-    cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "kitti360.yaml")
+    cfg = omegaconf.OmegaConf.load(root / "configs" / "datamodule" / "s3dis.yaml")
     cfg.data_dir = str(root / "data")
     _ = hydra.utils.instantiate(cfg)

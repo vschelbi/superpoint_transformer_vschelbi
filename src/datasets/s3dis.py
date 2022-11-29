@@ -1,12 +1,16 @@
+import os
+import os.path as osp
 import glob
 import torch
+import gdown
+import shutil
 import logging
 import pandas as pd
-import os.path as osp
 from src.datasets import BaseDataset, MiniDataset
 from src.data import Data, Batch
 from src.datasets.s3dis_config import *
 from src.utils.download import run_command
+from torch_geometric.data import extract_zip
 
 DIR = osp.dirname(osp.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -44,17 +48,36 @@ def read_s3dis_area(
         Batch of accumulated points clouds
     """
     # List the object-wise annotation files in the room
-    room_directories = sorted(glob.glob(osp.join(area_dir, '*')))
-    return Batch.from_data_list([
-        read_s3dis_room(
-            r, xyz=xyz, rgb=rgb, semantic=semantic, instance=instance,
-            is_val=is_val, verbose=verbose)
-        for r in room_directories])
+    room_directories = sorted(
+        [x for x in glob.glob(osp.join(area_dir, '*')) if osp.isdir(x)])
+
+    #TODO: clean up the multiprocessing. In particular: support
+    # `read_s3dis_room` kwargs using partial of something
+    import multiprocessing
+    with multiprocessing.get_context("spawn").Pool(processes=4) as pool:
+        data_list = pool.map(read_s3dis_room, room_directories)
+
+    batch = Batch.from_data_list(data_list)
+
+#    # Read all rooms in the Area and concatenate point clouds in a Batch
+#    batch = Batch.from_data_list([
+#        read_s3dis_room(
+#            r, xyz=xyz, rgb=rgb, semantic=semantic, instance=instance,
+#            is_val=is_val, verbose=verbose)
+#        for r in room_directories])
+
+    # Convert from Batch to Data
+    data_dict = batch.to_dict()
+    del data_dict['batch']
+    del data_dict['ptr']
+    data = Data(**data_dict)
+
+    return data
 
 
 def read_s3dis_room(
         room_dir, xyz=True, rgb=True, semantic=True, instance=False,
-        is_val=False, verbose=False):
+        is_val=True, verbose=False):
     """Read all S3DIS object-wise annotations in a given room directory.
 
     :param room_dir: str
@@ -75,6 +98,9 @@ def read_s3dis_room(
         Verbosity
     :return: Data
     """
+    if verbose:
+        log.debug(f"Reading room: {room_dir}")
+
     # Initialize accumulators for xyz, RGB, semantic label and instance
     # label
     xyz_list = [] if xyz else None
@@ -84,7 +110,7 @@ def read_s3dis_room(
 
     # List the object-wise annotation files in the room
     objects = sorted(glob.glob(osp.join(room_dir, 'Annotations', '*.txt')))
-    for i_object, path in objects:
+    for i_object, path in enumerate(objects):
         object_name = osp.splitext(osp.basename(path))[0]
         if verbose:
             log.debug(f"Reading object {i_object}: {object_name}")
@@ -113,11 +139,11 @@ def read_s3dis_room(
                 log.warning(f"WARN - corrupted rgb data for file {path}")
 
         if semantic:
-            y_list.append(np.full(N, label, dtype='int64'))
-            
+            y_list.append(np.full(points.shape[0], label, dtype='int64'))
+
         if instance:
             o_list.append(np.full(points.shape[0], i_object, dtype='int64'))
-    
+
     # Concatenate and convert to torch
     xyz_data = torch.from_numpy(np.concatenate(xyz_list, 0)) if xyz else None
     rgb_data = torch.from_numpy(np.concatenate(rgb_list, 0)) if rgb else None
@@ -135,95 +161,6 @@ def read_s3dis_room(
     return data
 
 
-def read_s3dis_format(
-        train_file, room_name, label_out=True, verbose=False, debug=False):
-    """Read room data from S3DIS raw format and return a Data object.
-    """
-
-    room_type = room_name.split("_")[0]
-    room_label = ROOM_TYPES[room_type]
-    raw_path = osp.join(train_file, "{}.txt".format(room_name))
-    if debug:
-        reader = pd.read_csv(raw_path, delimiter="\n")
-        RECOMMENDED = 6
-        for idx, row in enumerate(reader.values):
-            row = row[0].split(" ")
-            if len(row) != RECOMMENDED:
-                log.info("1: {} row {}: {}".format(raw_path, idx, row))
-
-            try:
-                for r in row:
-                    r = float(r)
-            except:
-                log.info("2: {} row {}: {}".format(raw_path, idx, row))
-
-        return True
-    else:
-        room_ver = pd.read_csv(raw_path, sep=" ", header=None).values
-        xyz = np.ascontiguousarray(room_ver[:, 0:3], dtype="float32")
-        try:
-            rgb = np.ascontiguousarray(room_ver[:, 3:6], dtype="uint8")
-        except ValueError:
-            rgb = np.zeros((room_ver.shape[0], 3), dtype="uint8")
-            log.warning("WARN - corrupted rgb data for file %s" % raw_path)
-        if not label_out:
-            return xyz, rgb
-        n_ver = len(room_ver)
-        del room_ver
-        nn = NearestNeighbors(n_neighbors=1, algorithm="kd_tree").fit(xyz)
-        semantic_labels = np.zeros((n_ver,), dtype="int64")
-        room_label = np.asarray([room_label])
-        instance_labels = np.zeros((n_ver,), dtype="int64")
-        objects = glob.glob(osp.join(train_file, "Annotations/*.txt"))
-        i_object = 1
-        for single_object in objects:
-            object_name = osp.splitext(osp.basename(single_object))[0]
-            if verbose:
-                log.debug("adding object " + str(i_object) + " : " + object_name)
-            object_class = object_name.split("_")[0]
-            object_label = object_name_to_label(object_class)
-            obj_ver = pd.read_csv(single_object, sep=" ", header=None).values
-            _, obj_ind = nn.kneighbors(obj_ver[:, 0:3])
-            semantic_labels[obj_ind] = object_label
-            instance_labels[obj_ind] = i_object
-            i_object = i_object + 1
-
-        return (
-            torch.from_numpy(xyz),
-            torch.from_numpy(rgb),
-            torch.from_numpy(semantic_labels),
-            torch.from_numpy(instance_labels),
-            torch.from_numpy(room_label),
-        )
-
-def read_s3dis_area(
-        filepath, xyz=True, rgb=True, semantic=True, instance=False,
-        remap=False):
-    data = Data()
-    with open(filepath, "rb") as f:
-        window = PlyData.read(f)
-        attributes = [p.name for p in window['vertex'].properties]
-
-        if xyz:
-            data.pos = torch.stack([
-                torch.FloatTensor(window["vertex"][axis])
-                for axis in ["x", "y", "z"]], dim=-1)
-
-        if rgb:
-            data.rgb = torch.stack([
-                torch.FloatTensor(window["vertex"][axis])
-                for axis in ["red", "green", "blue"]], dim=-1) / 255
-
-        if semantic and 'semantic' in attributes:
-            y = torch.LongTensor(window["vertex"]['semantic'])
-            data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
-
-        if instance and 'instance' in attributes:
-            data.instance = torch.LongTensor(window["vertex"]['instance'])
-
-    return data
-
-
 ########################################################################
 #                               S3DIS                               #
 ########################################################################
@@ -237,6 +174,8 @@ class S3DIS(BaseDataset):
     ----------
     root : `str`
         Root directory where the dataset should be saved.
+    fold : `int`
+        Integer in [1, ..., 6] indicating the Test Area
     stage : {'train', 'val', 'test', 'trainval'}, optional
     transform : `callable`, optional
         transform function operating on data.
@@ -251,6 +190,10 @@ class S3DIS(BaseDataset):
         want to run in CPU-based DataLoaders
     """
 
+    def __init__(self, *args, fold=5, **kwargs):
+        self.fold = fold
+        super().__init__(*args, val_mixed_in_train=True, **kwargs)
+
     @property
     def class_names(self):
         """List of string names for dataset classes. This list may be
@@ -258,7 +201,7 @@ class S3DIS(BaseDataset):
         corresponds to 'unlabelled' or 'ignored' indices, indicated as
         `-1` in the dataset labels.
         """
-        raise CLASS_NAMES
+        return CLASS_NAMES
 
     @property
     def num_classes(self):
@@ -267,102 +210,82 @@ class S3DIS(BaseDataset):
         being optionally used for 'unlabelled' or 'ignored' classes,
         indicated as `-1` in the dataset labels.
         """
-        raise S3DIS_NUM_CLASSES
+        return S3DIS_NUM_CLASSES
 
     @property
-    def all_clouds(self):
-        """Dictionary holding lists of paths to the clouds, for each
+    def all_cloud_ids(self):
+        """Dictionary holding lists of clouds ids, for each
         stage.
 
         The following structure is expected:
             `{'train': [...], 'val': [...], 'test': [...]}`
         """
-        # TODO this will be problematic for 'trainval' in S3DIS. Not a
-        #  simple list concatenation for S3DIS...
-        return {train:f'Area_{i}'}
+        return {
+            'train': [f'Area_{i}' for i in range(1, 7) if i != self.fold],
+            'val': [f'Area_{i}' for i in range(1, 7) if i != self.fold],
+            'test': [f'Area_{self.fold}']}
 
     def download_dataset(self):
-        """Download the KITTI-360 dataset.
+        """Download the S3DIS dataset.
         """
-        # Location of the KITTI-360 download shell scripts
-        here = osp.dirname(osp.abspath(__file__))
-        scripts_dir = osp.join(here, '../../scripts')
+        # Download the whole dataset as a single zip file
+        if not osp.exists(osp.join(self.root, ZIP_NAME)):
+            self.download_zip()
 
-        # Accumulated 3D point clouds with annotations
-        if not all(osp.exists(osp.join(self.raw_dir, x))
-                   for x in self.raw_file_names_3d):
-            if self.stage != 'test':
-                msg = 'Accumulated Point Clouds for Train & Val (12G)'
-            else:
-                msg = 'Accumulated Point Clouds for Test (1.2G)'
-            self.download_message(msg)
-            script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
-            run_command([f'{script} {self.raw_dir} {self.stage}'])
+        # Unzip the file and rename it into the `root/raw/` directory. This
+        # directory contains the raw Area folders from the zip
+        extract_zip(osp.join(self.root, ZIP_NAME), self.root)
+        shutil.rmtree(self.raw_dir)
+        os.rename(osp.join(self.root, UNZIP_NAME), self.raw_dir)
 
-    def read_single_raw_cloud(self, cloud_path):
+        # Patch some erroneous values in the dataset
+        cmd = f"patch -ruN -p0 -d  {self.raw_dir} < {PATCH_FILE}"
+        run_command(cmd)
+
+    def download_zip(self):
+        """Download the S3DIS dataset as a single zip file.
+        """
+        log.info(
+            f"Please, register yourself by filling up the form at {FORM_URL}")
+        log.info("***")
+        log.info(
+            "Press any key to continue, or CTRL-C to exit. By continuing, "
+            "you confirm having filled up the form.")
+        input("")
+        gdown.download(DOWNLOAD_URL, osp.join(self.root, ZIP_NAME), quiet=False)
+
+    def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
-        # Extract useful information from <path>
-        stage, hash_dir, sequence_name, cloud_name = \
-            osp.splitext(cloud_path)[0].split('/')[-4:]
-
-        # Read the raw cloud data
-        raw_cloud_path = osp.join(
-            self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-            cloud_name + '.ply')
-        data = read_kitti360_window(
-            raw_cloud_path, semantic=True, instance=False, remap=True)
-
-        return data
+        return read_s3dis_area(
+            raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=False,
+            is_val=True, verbose=False)
 
     @property
     def raw_file_structure(self):
         return f"""
     {self.root}/
+        └── {ZIP_NAME}
         └── raw/
-            └── {ZIP_NAME}
             └── Area_{{i_area:1>6}}/
                 └── ...
             """
 
-    def cloud_to_relative_raw_path(self, cloud):
-        """Given a cloud name as stored in `self.clouds`, return the
+    def id_to_relative_raw_path(self, id):
+        """Given a cloud id as stored in `self.cloud_ids`, return the
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
-        return osp.join(
-            'data_3d_semantics', cloud.split('/')[0], 'static',
-            cloud.split('/')[1] + '.ply')
-
-    def processed_to_raw_path(self, processed_path):
-        """Return the raw cloud path corresponding to the input
-        processed path.
-        """
-        # Extract useful information from <path>
-        stage, hash_dir, sequence_name, cloud_name = \
-            osp.splitext(processed_path)[0].split('/')[-4:]
-
-        # Read the raw cloud data
-        raw_path = osp.join(
-            self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-            cloud_name + '.ply')
-
-        return raw_path
-
-
-
-
-
-
+        return id
 
 
 ########################################################################
-#                         MiniKITTI360Cylinder                         #
+#                              MiniS3DIS                               #
 ########################################################################
 
-class MiniKITTI360(MiniDataset, KITTI360):
-    """A mini version of KITTI360 with only a few windows for
+class MiniS3DIS(MiniDataset, S3DIS):
+    """A mini version of S3DIS with only 2 areas per stage for
     experimentation.
     """
     _NUM_MINI = 2
