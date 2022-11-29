@@ -166,8 +166,10 @@ class BaseDataset(InMemoryDataset):
         """IDs of the dataset clouds, based on its `stage`.
         """
         if self.stage == 'trainval':
-            return list(set(self.all_cloud_ids['train'] + self.all_cloud_ids['val']))
-        return list(set(self.all_cloud_ids[self.stage]))
+           ids = self.all_cloud_ids['train'] + self.all_cloud_ids['val']
+        else:
+            ids = self.all_cloud_ids[self.stage]
+        return sorted(list(set(ids)))
 
     def check_cloud_ids(self):
         """Make sure the `all_cloud_ids` are valid. More specifically,

@@ -1,5 +1,4 @@
 import os
-import os.path as osp
 import glob
 import torch
 import gdown
@@ -11,6 +10,7 @@ from src.data import Data, Batch
 from src.datasets.s3dis_config import *
 from src.utils.download import run_command
 from torch_geometric.data import extract_zip
+from src.utils import available_cpu_count, starmap_with_kwargs
 
 DIR = osp.dirname(osp.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ __all__ = ['S3DIS', 'MiniS3DIS']
 
 def read_s3dis_area(
         area_dir, xyz=True, rgb=True, semantic=True, instance=False,
-        is_val=True, verbose=False):
+        is_val=True, verbose=False, processes=-1):
     """Read all S3DIS object-wise annotations in a given Area directory.
     All room-wise data are accumulated into a single cloud.
 
@@ -44,6 +44,9 @@ def read_s3dis_area(
         indicating whether they belong to the Area validation split
     :param verbose: bool
         Verbosity
+    :param processes: int
+        Number of processes to use when reading rooms. `processes < 1`
+        will use all CPUs available
     :return:
         Batch of accumulated points clouds
     """
@@ -51,20 +54,14 @@ def read_s3dis_area(
     room_directories = sorted(
         [x for x in glob.glob(osp.join(area_dir, '*')) if osp.isdir(x)])
 
-    #TODO: clean up the multiprocessing. In particular: support
-    # `read_s3dis_room` kwargs using partial of something
-    import multiprocessing
-    with multiprocessing.get_context("spawn").Pool(processes=4) as pool:
-        data_list = pool.map(read_s3dis_room, room_directories)
-
-    batch = Batch.from_data_list(data_list)
-
-#    # Read all rooms in the Area and concatenate point clouds in a Batch
-#    batch = Batch.from_data_list([
-#        read_s3dis_room(
-#            r, xyz=xyz, rgb=rgb, semantic=semantic, instance=instance,
-#            is_val=is_val, verbose=verbose)
-#        for r in room_directories])
+    # Read all rooms in the Area and concatenate point clouds in a Batch
+    processes = available_cpu_count() if processes < 1 else processes
+    args_iter = [[r] for r in room_directories]
+    kwargs_iter = {
+        'xyz': xyz, 'rgb': rgb, 'semantic': semantic, 'instance': instance,
+        'is_val': is_val, 'verbose': verbose}
+    batch = Batch.from_data_list(starmap_with_kwargs(
+        read_s3dis_room, args_iter, kwargs_iter, processes=processes))
 
     # Convert from Batch to Data
     data_dict = batch.to_dict()
@@ -237,10 +234,6 @@ class S3DIS(BaseDataset):
         extract_zip(osp.join(self.root, ZIP_NAME), self.root)
         shutil.rmtree(self.raw_dir)
         os.rename(osp.join(self.root, UNZIP_NAME), self.raw_dir)
-
-        # Patch some erroneous values in the dataset
-        cmd = f"patch -ruN -p0 -d  {self.raw_dir} < {PATCH_FILE}"
-        run_command(cmd)
 
     def download_zip(self):
         """Download the S3DIS dataset as a single zip file.

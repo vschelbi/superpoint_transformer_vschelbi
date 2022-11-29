@@ -12,7 +12,6 @@ FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLScDimvNMCGhy_rmBA2gHfDu3nak
 DOWNLOAD_URL = "https://drive.google.com/uc?id=0BweDykwS9vIobkVPN0wzRzFwTDg&export=download"
 ZIP_NAME = "Stanford3dDataset_v1.2.zip"
 UNZIP_NAME = "Stanford3dDataset_v1.2"
-PATCH_FILE = osp.join(osp.dirname(osp.realpath(__file__)), "s3dis.patch")
 
 
 ########################################################################
