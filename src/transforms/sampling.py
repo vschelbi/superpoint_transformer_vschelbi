@@ -175,7 +175,7 @@ def _group_data(
     """
 
     # Keys for which voxel aggregation will be based on majority voting
-    _VOTING_KEYS = ['y', 'instance_labels', 'super_index']
+    _VOTING_KEYS = ['y', 'instance_labels', 'super_index', 'is_val']
 
     # Keys for which voxel aggregation will be based on majority voting
     _LAST_KEYS = ['batch', SaveOriginalPosId.KEY]

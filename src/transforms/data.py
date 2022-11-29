@@ -5,7 +5,7 @@ from src.transforms import Transform
 
 __all__ = [
     'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeyToX',
-    'NAGAddKeyToX']
+    'NAGAddKeyToX', 'NAGSelectByKey']
 
 
 class DataToNAG(Transform):
@@ -213,5 +213,80 @@ class NAGAddKeyToX(Transform):
 
         for i_level in range(nag.num_levels):
             nag._list[i_level] = transforms[i_level](nag._list[i_level])
+
+        return nag
+
+
+class NAGSelectByKey(Transform):
+    """Select the i-level nodes based on a key. The corresponding key is
+    expected to exist in the i-level attributes and should hold a 1D
+    boolean mask.
+
+    :param key: str
+        Key attribute expected to be found in the input NAG's `level`.
+        The `key` attribute should carry a 1D boolean mask over the
+        `level` nodes
+    :param level: int
+        NAG level based on which to operate the selection
+    :param negation: bool
+        Whether the mask or its complementary should be used
+    :param strict: bool, optional
+        Whether we want to raise an error if the key is not found or if
+        it does not carry a 1D boolean mask
+    :param delete_after: bool, optional
+        Whether the `key` attribute should be removed after selection
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(
+            self, key=None, level=0, negation=False, strict=True,
+            delete_after=True):
+        assert key is not None
+        self.key = key
+        self.level = level
+        self.negation = negation
+        self.strict = strict
+        self.delete_after = delete_after
+
+    def _process(self, nag):
+        # Ensure the key exists
+        if self.key not in nag[self.level].keys:
+            if self.strict:
+                raise ValueError(
+                    f'Input NAG does not have `{self.key}` attribute at '
+                    f'level `{self.level}`')
+            return nag
+
+        # Read the mask
+        mask = nag[self.level][self.key]
+
+        # Ensure the mask is a boolean tensor
+        dtype = mask.dtype
+        if dtype != torch.bool:
+            if self.strict:
+                raise ValueError(
+                    f'`{self.key}` attribute has dtype={dtype} but '
+                    f'dtype=torch.bool was expected')
+            return nag
+
+        # Ensure the mask size matches
+        expected_size = torch.Size((nag[self.level].num_nodes,))
+        actual_size = mask.shape
+        if expected_size != actual_size:
+            if self.strict:
+                raise ValueError(
+                    f'`{self.key}` attribute has shape={actual_size} but '
+                    f'shape={expected_size} was expected')
+            return nag
+
+        # Call NAG.select using the mask on the `level` nodes
+        mask = ~mask if self.negation else mask
+        nag = nag.select(self.level, torch.where(mask)[0])
+
+        # Remove the key if need be
+        if self.delete_after:
+            nag[self.level][self.key] = None
 
         return nag

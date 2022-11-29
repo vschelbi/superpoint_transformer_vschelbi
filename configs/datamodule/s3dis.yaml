@@ -76,10 +76,6 @@ pre_transform:
         device: 'cpu'
 
 train_transform:
-#    - transform: NAGRemoveKeys
-#      params:
-#        level: '0'
-#        keys: [ 'is_val' ]
     - transform: NAGRemoveKeys
       params:
         level: '1+'

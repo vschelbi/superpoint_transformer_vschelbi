@@ -8,7 +8,7 @@ from tqdm.auto import tqdm as tq
 from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.dataset import _repr
 from src.data import NAG
-from src.transforms import RemoveKeys
+from src.transforms import RemoveKeys, NAGSelectByKey, NAGRemoveKeys
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -83,13 +83,15 @@ class BaseDataset(InMemoryDataset):
     val_mixed_in_train: bool
         whether the 'val' stage data is saved in the same clouds as the
         'train' stage. This may happen when the stage splits are
-        performed inside the clouds. In this case, `__getitem__` will be
-        in charge of separating stage-specific data upon reading
+        performed inside the clouds. In this case, an
+        `on_device_transform` will be automatically created to separate
+        stage-specific data upon reading
     test_mixed_in_val: bool
         whether the 'test' stage data is saved in the same clouds as the
         'val' stage. This may happen when the stage splits are
-        performed inside the clouds. In this case, `__getitem__` will be
-        in charge of separating stage-specific data upon reading
+        performed inside the clouds. In this case, an
+        `on_device_transform` will be automatically created to separate
+        stage-specific data upon reading
     """
     _LEVEL0_SAVE_KEYS = [
         'pos', 'x', 'rgb', 'y', 'node_size', 'super_index', 'is_val']
@@ -121,6 +123,31 @@ class BaseDataset(InMemoryDataset):
         # Initialization with downloading and all preprocessing
         root = osp.join(root, self.data_subdir_name)
         super().__init__(root, transform, pre_transform, pre_filter)
+
+        # If `val_mixed_in_train` or `test_mixed_in_val`, we will need
+        # to separate some stage-related data at reading time.
+        # Since this operation can be computationally-costly, we prefer
+        # postponing it to the `on_device_transform`. To this end, we
+        # prepend the adequate transform to the dataset's
+        # `on_device_transform`. Otherwise, if we have no mixed-stages,
+        # we simply remove all `is_val` attributes in the
+        # `on_device_transform`
+        if self.stage == 'train' and self.val_mixed_in_train:
+            t = NAGSelectByKey(key='is_val', negation=True)
+        elif self.stage == 'val' and self.val_mixed_in_train or self.test_mixed_in_val:
+            t = NAGSelectByKey(key='is_val', negation=False)
+        elif self.stage == 'test' and self.test_mixed_in_val:
+            t = NAGSelectByKey(key='is_val', negation=True)
+        else:
+            t = NAGRemoveKeys(level='all', keys=['is_val'], strict=False)
+
+        # Make sure a NAGRemoveKeys for `is_val` does not already exist
+        # in the `on_device_transform` before prepending the transform
+        if not any(
+                isinstance(odt, NAGSelectByKey) and odt.key == 'is_val'
+                for odt in self.on_device_transform.transforms):
+            self.on_device_transform.transforms = \
+                [t] + self.on_device_transform.transforms
 
     @property
     def class_names(self):
@@ -310,8 +337,9 @@ class BaseDataset(InMemoryDataset):
     def process(self):
         # If some stages have mixed clouds (they rely on the same cloud
         # files and the split is operated at reading time by
-        # `__getitem__`), we create symlinks between the necessary
-        # folders, to avoid duplicate preprocessing computation
+        # `on_device_transform`), we create symlinks between the
+        # necessary folders, to avoid duplicate preprocessing
+        # computation
         hash_dir = self.pre_transform_hash
         train_dir = osp.join(self.processed_dir, 'train', hash_dir)
         val_dir = osp.join(self.processed_dir, 'val', hash_dir)
@@ -428,18 +456,6 @@ class BaseDataset(InMemoryDataset):
         # Read the NAG
         nag = NAG.load(
             self.processed_paths[idx], keys_low=self._LEVEL0_LOAD_KEYS)
-
-        # Separate stage-specific data if need be
-        # TODO: this might not be ideal and slow down training. Move
-        #  this to on-device transform ?
-        if self.stage == 'train' and self.val_mixed_in_train:
-            nag = nag.select(0, torch.where(~nag[0].is_val)[0])
-        if self.stage == 'val' and self.val_mixed_in_train:
-            nag = nag.select(0, torch.where(nag[0].is_val)[0])
-        if self.stage == 'val' and self.test_mixed_in_val:
-            nag = nag.select(0, torch.where(nag[0].is_val)[0])
-        if self.stage == 'test' and self.test_mixed_in_val:
-            nag = nag.select(0, torch.where(~nag[0].is_val)[0])
 
         # Apply transforms
         nag = nag if self.transform is None else self.transform(nag)
