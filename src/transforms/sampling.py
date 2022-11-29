@@ -233,7 +233,7 @@ def _group_data(
         # For keys requiring a voting scheme or a histogram
         if key in _VOTING_KEYS or key in bins.keys():
             voting = key not in bins.keys()
-            n_bins = item.max() if voting else bins[key]
+            n_bins = item.max() + 1 if voting else bins[key]
             hist = atomic_to_histogram(item, cluster, n_bins=n_bins)
             data[key] = hist.argmax(dim=-1) if voting else hist
 

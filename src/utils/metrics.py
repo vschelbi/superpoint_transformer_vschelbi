@@ -52,16 +52,20 @@ def atomic_to_histogram(item, idx, n_bins=None):
         "2D tensors"
 
     # Initialization
-    n_bins = item.max() if n_bins is None else n_bins
+    n_bins = item.max() + 1 if n_bins is None else n_bins
+
+    # Temporarily convert input item to long
+    in_dtype = item.dtype
+    item = item.long()
 
     # Important: if values are already 2D, we consider them to
     # be histograms and will simply scatter_add them
     if item.ndim == 2:
         return scatter_add(item, idx, dim=0)
 
-    # Convert values to one-hot encoding. Values are
-    # temporarily offset to 0 to save some memory and
-    # compute in one-hot encoding and scatter_add
+    # Convert values to one-hot encoding. Values are temporarily offset
+    # to 0 to save some memory and compute in one-hot encoding and
+    # scatter_add
     offset = item.min()
     item = torch.nn.functional.one_hot(item - offset)
 
@@ -70,17 +74,19 @@ def atomic_to_histogram(item, idx, n_bins=None):
     N = hist.shape[0]
     device = hist.device
 
-    # Prepend 0 columns to the histogram for bins
-    # removed due to offsetting
+    # Prepend 0 columns to the histogram for bins removed due to
+    # offsetting
     bins_before = torch.zeros(
         N, offset, device=device, dtype=torch.long)
     hist = torch.cat((bins_before, hist), dim=1)
 
-    # Append columns to the histogram for unobserved
-    # classes/bins
+    # Append columns to the histogram for unobserved classes/bins
     bins_after = torch.zeros(
         N, n_bins - hist.shape[1], device=device,
         dtype=torch.long)
     hist = torch.cat((hist, bins_after), dim=1)
+
+    # Restore input dtype
+    hist = hist.to(in_dtype)
 
     return hist
