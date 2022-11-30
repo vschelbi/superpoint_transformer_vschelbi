@@ -76,9 +76,9 @@ class Stage(nn.Module):
 
         # Transformer blocks
         if num_blocks > 0:
-            self.blocks = nn.Sequential(
+            self.blocks = nn.Sequential(*(
                 TransformerBlock(dim, **transformer_kwargs)
-                for _ in range(num_blocks))
+                for _ in range(num_blocks)))
         else:
             self.blocks = None
 
