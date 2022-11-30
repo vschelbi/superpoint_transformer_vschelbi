@@ -600,7 +600,7 @@ class SelectEdgeAttr(Transform):
         self.idx = tensor_idx(idx) if idx is not None else None
 
     def _process(self, data):
-        if self.idx is None:
+        if self.idx is None or getattr(data, 'edge_attr', None) is None:
             return data
         data.edge_attr = data.edge_attr[:, self.idx.to(device=data.device)]
         return data
@@ -628,7 +628,7 @@ class NAGSelectEdgeAttr(Transform):
 
     def _process(self, nag):
 
-        level_idx = [[]] * nag.num_levels
+        level_idx = [None] * nag.num_levels
         if isinstance(self.level, int):
             level_idx[self.level] = self.idx
         elif self.level == 'all':
