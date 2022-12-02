@@ -76,9 +76,12 @@ class Stage(nn.Module):
 
         # Transformer blocks
         if num_blocks > 0:
-            self.blocks = nn.Sequential(*(
+            # self.blocks = nn.Sequential(*(
+            #     TransformerBlock(dim, **transformer_kwargs)
+            #     for _ in range(num_blocks)))
+            self.blocks = nn.ModuleList(
                 TransformerBlock(dim, **transformer_kwargs)
-                for _ in range(num_blocks)))
+                for _ in range(num_blocks))
         else:
             self.blocks = None
 
@@ -129,7 +132,10 @@ class Stage(nn.Module):
 
         # Transformer blocks
         if self.blocks is not None:
-            x = self.blocks(x, norm_index, edge_index=edge_index)
+            for block in self.blocks:
+                x, norm_index, edge_index = block(
+                    x, norm_index, edge_index=edge_index)
+            # x = self.blocks(x, norm_index, edge_index=edge_index)
 
         # MLP on output features to change channel size
         if self.out_mlp is not None:

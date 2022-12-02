@@ -26,8 +26,8 @@ class TransformerBlock(nn.Module):
 
     def __init__(
             self, dim, num_heads=1, qkv_bias=True, qk_scale=None, ffn_ratio=4,
-            residual_drop=None, attn_drop=None, drop_path=None, activation=nn.GELU(),
-            pre_ln=True, no_sa=False, no_ffn=False):
+            residual_drop=None, attn_drop=None, drop_path=None,
+            activation=nn.GELU(), pre_ln=True, no_sa=False, no_ffn=False):
         super().__init__()
 
         self.dim = dim

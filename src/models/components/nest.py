@@ -34,6 +34,7 @@ class NeST(nn.Module):
             down_drop_path=None,
             down_inject_pos=True,
             down_inject_x=False,
+            down_pos_injection_x_dim=None,
 
             up_dim=None,
             up_in_mlp=None,
@@ -47,6 +48,7 @@ class NeST(nn.Module):
             up_drop_path=None,
             up_inject_pos=True,
             up_inject_x=False,
+            up_pos_injection_x_dim=None,
 
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=FastBatchNorm1d,
@@ -75,17 +77,17 @@ class NeST(nn.Module):
         # Convert input arguments to nested lists
         (down_dim, down_in_mlp, down_out_mlp, down_mlp_drop, down_num_heads,
          down_num_blocks, down_ffn_ratio, down_residual_drop, down_attn_drop,
-         down_drop_path) = listify_with_reference(
+         down_drop_path, down_pos_injection_x_dim) = listify_with_reference(
             down_dim, down_in_mlp, down_out_mlp, down_mlp_drop, down_num_heads,
             down_num_blocks, down_ffn_ratio, down_residual_drop, down_attn_drop,
-            down_drop_path)
+            down_drop_path, down_pos_injection_x_dim)
 
         (up_dim, up_in_mlp, up_out_mlp, up_mlp_drop, up_num_heads,
          up_num_blocks, up_ffn_ratio, up_residual_drop, up_attn_drop,
-         up_drop_path) = listify_with_reference(
+         up_drop_path, up_pos_injection_x_dim) = listify_with_reference(
             up_dim, up_in_mlp, up_out_mlp, up_mlp_drop, up_num_heads,
             up_num_blocks, up_ffn_ratio, up_residual_drop, up_attn_drop,
-            up_drop_path)
+            up_drop_path, up_pos_injection_x_dim)
 
         # PointNet-like module operating on Level-0 data
         self.point_stage = PointStage(
@@ -109,13 +111,17 @@ class NeST(nn.Module):
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
                     no_sa=no_sa, no_ffn=no_ffn, pool=pool, fusion=fusion,
-                    pos_injection=pos_injection, cat_diameter=cat_diameter)
+                    pos_injection=pos_injection,
+                    pos_injection_x_dim=pos_injection_x_dim,
+                    cat_diameter=cat_diameter)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
-                    ffn_ratio, residual_drop, attn_drop, drop_path
+                    ffn_ratio, residual_drop, attn_drop, drop_path,
+                    pos_injection_x_dim
                 in zip(
                     down_dim, down_num_blocks, down_in_mlp, down_out_mlp,
                     down_mlp_drop, down_num_heads, down_ffn_ratio,
-                    down_residual_drop, down_attn_drop, down_drop_path)])
+                    down_residual_drop, down_attn_drop, down_drop_path,
+                    down_pos_injection_x_dim)])
         else:
             self.down_stages = None
 
@@ -130,13 +136,16 @@ class NeST(nn.Module):
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
                     no_sa=no_sa, no_ffn=no_ffn, unpool=unpool, fusion=fusion,
-                    pos_injection=pos_injection)
+                    pos_injection=pos_injection,
+                    pos_injection_x_dim=pos_injection_x_dim)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
-                    ffn_ratio, residual_drop, attn_drop, drop_path
+                    ffn_ratio, residual_drop, attn_drop, drop_path,
+                    pos_injection_x_dim
                 in zip(
                     up_dim, up_num_blocks, up_in_mlp, up_out_mlp,
                     up_mlp_drop, up_num_heads, up_ffn_ratio,
-                    up_residual_drop, up_attn_drop, up_drop_path)])
+                    up_residual_drop, up_attn_drop, up_drop_path,
+                    up_pos_injection_x_dim)])
         else:
             self.up_stages = None
 

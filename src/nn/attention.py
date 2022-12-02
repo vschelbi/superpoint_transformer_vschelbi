@@ -95,7 +95,7 @@ class SelfAttentionBlock(nn.Module):
             attn = self.attn_drop(attn)
 
         # Apply the attention on the values
-        x = (v * attn.unsqueeze(-1)).view(N, self.dim)    # [E, C]
+        x = (v * attn.unsqueeze(-1)).view(E, self.dim)    # [E, C]
         x = scatter_sum(x, s, dim=0, dim_size=N)  # [N, C]
 
         # Optional linear projection of features
