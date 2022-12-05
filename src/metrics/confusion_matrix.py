@@ -56,7 +56,8 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         # confusion matrix from the histograms without computing the
         # corresponding atomic pred-target 1D-tensor pairs
         if target.dim() == 2 and target.shape[1] == self.num_classes:
-            if 0 <= self.ignore_index < self.num_classes:
+            if self.ignore_index is not None and \
+                    0 <= self.ignore_index < self.num_classes:
                 target[self.ignore_index] = 0
             confmat = scatter_add(
                 target.float(), preds, dim=0, dim_size=self.num_classes)
