@@ -280,7 +280,7 @@ class MiniS3DIS(S3DIS):
     """A mini version of S3DIS with only 2 areas per stage for
     experimentation.
     """
-    _NUM_MINI = 2
+    _NUM_MINI = 1
 
     @property
     def all_cloud_ids(self):
