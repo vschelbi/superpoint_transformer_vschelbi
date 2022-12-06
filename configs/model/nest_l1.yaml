@@ -43,10 +43,10 @@ scheduler:
 #  _partial_: True
 #  mode: 'min'
 #  factor: 0.3
-#  patience: 1
+#  patience: 10
 #  min_lr: 1e-6
 #  warmup_init_lr: 1e-6
-#  num_warmup: 1
+#  num_warmup: 20
 #  warmup_strategy: 'cos'
 
 criterion:
