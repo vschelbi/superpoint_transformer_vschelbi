@@ -166,3 +166,6 @@ class ReduceLROnPlateauWithWarmup(_WarmupLR):
     """ReduceLROnPlateau with warmup.
     """
     _SCHEDULER_CLASS = ReduceLROnPlateau
+
+
+ON_PLATEAU_SCHEDULERS = (ReduceLROnPlateau, ReduceLROnPlateauWithWarmup)

@@ -6,6 +6,7 @@ from src.metrics import ConfusionMatrix
 from src.utils import loss_with_target_histogram, atomic_to_histogram, \
     init_weights
 from src.nn import Classifier
+from src.optim.lr_scheduler import ON_PLATEAU_SCHEDULERS
 
 
 log = logging.getLogger(__name__)
@@ -234,13 +235,15 @@ class PointSegmentationModule(LightningModule):
         optimizer = self.hparams.optimizer(params=self.parameters())
         if self.hparams.scheduler is not None:
             scheduler = self.hparams.scheduler(optimizer=optimizer)
+            reduce_on_plateau = isinstance(scheduler, ON_PLATEAU_SCHEDULERS)
             return {
                 "optimizer": optimizer,
                 "lr_scheduler": {
                     "scheduler": scheduler,
                     "monitor": "val/loss",
                     "interval": "epoch",
-                    "frequency": 1}}
+                    "frequency": 1,
+                    "reduce_on_plateau": reduce_on_plateau}}
         return {"optimizer": optimizer}
 
 
