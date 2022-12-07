@@ -17,7 +17,7 @@ net:
   down_out_mlp: null
   down_mlp_drop: null
   down_num_heads: 4
-  down_num_blocks: 2
+  down_num_blocks: 3
   down_ffn_ratio: 2
   down_residual_drop: null
   down_attn_drop: null
