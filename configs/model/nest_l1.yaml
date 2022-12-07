@@ -1,56 +1,5 @@
-_target_: src.models.segmentation.PointSegmentationModule
-num_classes: 15  # this is for KITTI360 num_classes
-pointwise_loss: True
-weighted_loss: True
-
-optimizer:
-  _target_: torch.optim.Adam
-  _partial_: True
-  lr: 0.01
-  weight_decay: 0.0
-
-#optimizer:
-#  _target_: torch.optim.AdamW
-#  _partial_: True
-#  lr: 0.01
-#  weight_decay: 0.01
-
-#scheduler:
-#  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-#  _partial_: True
-#  mode: min
-#  factor: 0.3
-#  patience: 10
-#  min_lr: 1e-6
-
-#scheduler:
-#  _target_: torch.optim.lr_scheduler.CosineAnnealingLR
-#  _partial_: True
-#  T_max: 200
-#  eta_min: 1e-6
-
-scheduler:
-  _target_: src.optim.CosineAnnealingLRWithWarmup
-  _partial_: True
-  T_max: 180
-  eta_min: 1e-6
-  warmup_init_lr: 1e-6
-  num_warmup: 20
-  warmup_strategy: 'cos'
-
-#scheduler:
-#  _target_: src.optim.ReduceLROnPlateauWithWarmup
-#  _partial_: True
-#  mode: 'min'
-#  factor: 0.3
-#  patience: 10
-#  min_lr: 1e-6
-#  warmup_init_lr: 1e-6
-#  num_warmup: 20
-#  warmup_strategy: 'cos'
-
-criterion:
-  _target_: torch.nn.CrossEntropyLoss
+defaults:
+  - default.yaml
 
 net:
   _target_: src.models.components.nest.NeST
@@ -68,7 +17,7 @@ net:
   down_out_mlp: null
   down_mlp_drop: null
   down_num_heads: 4
-  down_num_blocks: 1
+  down_num_blocks: 2
   down_ffn_ratio: 2
   down_residual_drop: null
   down_attn_drop: null

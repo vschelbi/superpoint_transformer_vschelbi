@@ -1,23 +1,5 @@
-_target_: src.models.segmentation.PointSegmentationModule
-num_classes: 15  # this is for KITTI360 num_classes
-pointwise_loss: True
-weighted_loss: True
-
-optimizer:
-  _target_: torch.optim.Adam
-  _partial_: true
-  lr: 0.01
-  weight_decay: 0.0
-
-scheduler:
-  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
-  _partial_: true
-  mode: min
-  factor: 0.1
-  patience: 10
-
-criterion:
-  _target_: torch.nn.CrossEntropyLoss
+defaults:
+  - default.yaml
 
 net:
   _target_: src.models.components.pointnet.PointNet
