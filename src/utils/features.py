@@ -79,7 +79,7 @@ def rgb2lab(rgb):
     m = torch.tensor([
         [0, 500, 0],
         [116, -500, 200],
-        [0, 0, -200]], device=device)
+        [0, 0, -200]], device=device, dtype=torch.float)
     lab = xyz @ m
     lab[:, 0] -= 16
     lab = lab.round(decimals=4)
