@@ -306,10 +306,11 @@ class DropoutSegments(Transform):
             weights = torch.ones(num_nodes, device=device)
 
             # Compute per-segment weights solely based on the segment
-            # size. This is biased towards large segments
+            # size. This is biased towards preserving large segments in
+            # the sampling
             if self.by_size:
                 node_size = nag.get_sub_size(i_level, low=0)
-                size_weights = 1 / (node_size ** 0.333)
+                size_weights = node_size ** 0.333
                 size_weights /= size_weights.sum()
                 weights += size_weights
 
