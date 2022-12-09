@@ -142,7 +142,8 @@ def read_s3dis_room(
 
     # Concatenate and convert to torch
     xyz_data = torch.from_numpy(np.concatenate(xyz_list, 0)) if xyz else None
-    rgb_data = torch.from_numpy(np.concatenate(rgb_list, 0)) if rgb else None
+    rgb_data = torch.from_numpy(np.concatenate(rgb_list, 0)).float() / 255 \
+        if rgb else None
     y_data = torch.from_numpy(np.concatenate(y_list, 0)) if semantic else None
     o_data = torch.from_numpy(np.concatenate(o_list, 0)) if instance else None
 
