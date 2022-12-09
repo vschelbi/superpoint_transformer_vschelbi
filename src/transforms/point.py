@@ -267,7 +267,36 @@ class JitterFeatures(Transform):
         return nag
 
 
-class ColorAutoContrast(Transform):
+class ColorTransform(Transform):
+    """Parent class for color-based point Transforms, to avoid redundant
+    code.
+
+    :param x_idx: int
+        If specified, the colors will be searched in
+        `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
+    """
+
+    def __init__(self, x_idx=None):
+        self.x_idx = x_idx
+
+    def __call__(self, data):
+        if self.x_idx is None and getattr(data, 'rgb', None) is not None:
+            data.rgb = self._apply_func(data.rgb)
+        elif self.x_idx is not None and getattr(data, 'x', None) is not None:
+            data.x[:, self.x_idx:self.x_idx + 3] = self._apply_func(
+                data.x[:, self.x_idx:self.x_idx + 3])
+        return data
+
+    def _apply_func(self, rgb):
+        assert rgb.dtype == torch.float and 0 <= rgb.min() \
+               and rgb.max() <= 1, 'expected float colors in [0, 1]'
+        return self._func(rgb)
+
+    def _func(self, rgb):
+        raise NotImplementedError
+
+
+class ColorAutoContrast(ColorTransform):
     """Apply some random contrast to the point colors.
 
     credit: https://github.com/guochengqian/openpoints
@@ -276,57 +305,55 @@ class ColorAutoContrast(Transform):
         Probability of the transform to be applied
     :param blend: float (optional)
         Blend factor, controlling the contrasting intensity
+    :param x_idx: int
+        If specified, the colors will be searched in
+        `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
     """
 
-    def __init__(self, p=0.2, blend=None):
+    def __init__(self, p=0.2, blend=None, x_idx=None):
+        super().__init__(x_idx=x_idx)
         self.p = p
         self.blend = blend
 
-    def __call__(self, data):
-        if getattr(data, 'rgb', None) is not None:
-            return data
-
-        device = data.device
-
-        assert data.rgb.dtype == torch.float and 0 <= data.rgb.min() \
-               and data.rgb.max() <= 1, 'expected float colors in [0, 1]'
+    def _func(self, rgb):
+        device = rgb.device
 
         if torch.rand(1, device=device) < self.p:
 
             # Compute the contrasted colors
-            lo = data.rgb.min(dim=0).values.view(1, -1)
-            hi = data.rgb.max(dim=0).values.view(1, -1)
-            contrast_feat = (data.rgb - lo) / (hi - lo)
+            lo = rgb.min(dim=0).values.view(1, -1)
+            hi = rgb.max(dim=0).values.view(1, -1)
+            contrast_feat = (rgb - lo) / (hi - lo)
 
             # Blend the maximum contrast with the current color
             blend = torch.rand(1, device=device) \
                 if self.blend is None else self.blend
-            data.rgb = (1 - blend) * data.rgb + blend * contrast_feat
+            rgb = (1 - blend) * rgb + blend * contrast_feat
 
-        return data
+        return rgb
 
 
-class ColorDrop(Transform):
+class ColorDrop(ColorTransform):
     """Randomly set point colors to 0.
 
     :param p: float
         Probability of the transform to be applied
+    :param x_idx: int
+        If specified, the colors will be searched in
+        `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
     """
 
-    def __init__(self, p=0.2):
+    def __init__(self, p=0.2, x_idx=None):
+        super().__init__(x_idx=x_idx)
         self.p = p
 
-    def __call__(self, data):
-        if getattr(data, 'rgb', None) is not None:
-            return data
-
-        if torch.rand(1, device=data.device) < self.p:
-            data.rgb *= 0
-
-        return data
+    def _func(self, rgb):
+        if torch.rand(1, device=rgb.device) < self.p:
+            rgb *= 0
+        return rgb
 
 
-class ColorNormalize(Transform):
+class ColorNormalize(ColorTransform):
     """Normalize the colors using given means and standard deviations.
 
     credit: https://github.com/guochengqian/openpoints
@@ -335,28 +362,26 @@ class ColorNormalize(Transform):
         Channel-wise means
     :param std: list
         Channel-wise standard deviations
+    :param x_idx: int
+        If specified, the colors will be searched in
+        `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
     """
 
     def __init__(
             self, mean=[0.5136457, 0.49523646, 0.44921124],
-            std=[0.18308958, 0.18415008, 0.19252081]):
+            std=[0.18308958, 0.18415008, 0.19252081], x_idx=None):
+        super().__init__(x_idx=x_idx)
         self.mean = torch.tensor(mean).float().view(1, -1)
         self.std = torch.tensor(std).float().view(1, -1)
         assert self.std.gt(0).all(), "std values must be >0"
 
-    def __call__(self, data):
-        if getattr(data, 'rgb', None) is not None:
-            return data
-
-        device = data.device
+    def _func(self, rgb):
+        device = rgb.device
 
         if self.mean.device != device or self.std.device != device:
             self.mean = self.mean.to(device)
             self.std = self.std.to(device)
 
-        assert data.rgb.dtype == torch.float and 0 <= data.rgb.min() \
-               and data.rgb.max() <= 1, 'expected float colors in [0, 1]'
+        rgb = (rgb - self.mean) / self.std
 
-        data.rgb = (data.rgb - self.mean) / self.std
-
-        return data
+        return rgb
