@@ -6,7 +6,9 @@ from src.transforms import Transform
 from src.data import NAG
 
 
-__all__ = ['PointFeatures', 'JitterColor', 'JitterFeatures']
+__all__ = [
+    'PointFeatures', 'JitterColor', 'JitterFeatures', 'ColorAutoContrast',
+    'ColorDrop', 'ColorNormalize']
 
 
 class PointFeatures(Transform):
@@ -263,3 +265,98 @@ class JitterFeatures(Transform):
             nag[i_level].x += noise
 
         return nag
+
+
+class ColorAutoContrast(Transform):
+    """Apply some random contrast to the point colors.
+
+    credit: https://github.com/guochengqian/openpoints
+
+    :param p: float
+        Probability of the transform to be applied
+    :param blend: float (optional)
+        Blend factor, controlling the contrasting intensity
+    """
+
+    def __init__(self, p=0.2, blend=None):
+        self.p = p
+        self.blend = blend
+
+    def __call__(self, data):
+        if getattr(data, 'rgb', None) is not None:
+            return data
+
+        device = data.device
+
+        assert data.rgb.dtype == torch.float and 0 <= data.rgb.min() \
+               and data.rgb.max() <= 1, 'expected float colors in [0, 1]'
+
+        if torch.rand(1, device=device) < self.p:
+
+            # Compute the contrasted colors
+            lo = data.rgb.min(dim=0).values.view(1, -1)
+            hi = data.rgb.max(dim=0).values.view(1, -1)
+            contrast_feat = (data.rgb - lo) / (hi - lo)
+
+            # Blend the maximum contrast with the current color
+            blend = torch.rand(1, device=device) \
+                if self.blend is None else self.blend
+            data.rgb = (1 - blend) * data.rgb + blend * contrast_feat
+
+        return data
+
+
+class ColorDrop(Transform):
+    """Randomly set point colors to 0.
+
+    :param p: float
+        Probability of the transform to be applied
+    """
+
+    def __init__(self, p=0.2):
+        self.p = p
+
+    def __call__(self, data):
+        if getattr(data, 'rgb', None) is not None:
+            return data
+
+        if torch.rand(1, device=data.device) < self.p:
+            data.rgb *= 0
+
+        return data
+
+
+class ColorNormalize(Transform):
+    """Normalize the colors using given means and standard deviations.
+
+    credit: https://github.com/guochengqian/openpoints
+
+    :param mean: list
+        Channel-wise means
+    :param std: list
+        Channel-wise standard deviations
+    """
+
+    def __init__(
+            self, mean=[0.5136457, 0.49523646, 0.44921124],
+            std=[0.18308958, 0.18415008, 0.19252081]):
+        self.mean = torch.tensor(mean).float().view(1, -1)
+        self.std = torch.tensor(std).float().view(1, -1)
+        assert self.std.gt(0).all(), "std values must be >0"
+
+    def __call__(self, data):
+        if getattr(data, 'rgb', None) is not None:
+            return data
+
+        device = data.device
+
+        if self.mean.device != device or self.std.device != device:
+            self.mean = self.mean.to(device)
+            self.std = self.std.to(device)
+
+        assert data.rgb.dtype == torch.float and 0 <= data.rgb.min() \
+               and data.rgb.max() <= 1, 'expected float colors in [0, 1]'
+
+        data.rgb = (data.rgb - self.mean) / self.std
+
+        return data
