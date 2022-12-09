@@ -21,5 +21,6 @@ scheduler:
 
 criterion:
   _target_: torch.nn.CrossEntropyLoss
+  label_smoothing: 0.0
 
 net: ???
