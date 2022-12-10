@@ -289,18 +289,18 @@ class ColorTransform(Transform):
         return data
 
     def _apply_func(self, rgb):
-        if rgb.dtype != torch.float:
-            print(
-                f'WARNING: received rgb.dtype{rgb.dtype}, expected float '
-                f'colors in [0, 1]')
-        if rgb.min() < 0:
-            print(
-                f'WARNING: received rgb.min()={rgb.min()}, expected float '
-                f'colors in [0, 1]')
-        if rgb.max() > 1:
-            print(
-                f'WARNING: received rgb.max()={rgb.max()}, expected float '
-                f'colors in [0, 1]')
+        #if rgb.dtype != torch.float:
+        #    print(
+        #        f'WARNING: received rgb.dtype{rgb.dtype}, expected float '
+        #        f'colors in [0, 1]')
+        #if rgb.min() < 0:
+        #    print(
+        #        f'WARNING: received rgb.min()={rgb.min()}, expected float '
+        #        f'colors in [0, 1]')
+        #if rgb.max() > 1:
+        #    print(
+        #        f'WARNING: received rgb.max()={rgb.max()}, expected float '
+        #        f'colors in [0, 1]')
         return self._func(rgb)
 
     def _func(self, rgb):
