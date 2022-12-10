@@ -8,7 +8,8 @@ from src.data import NAG
 
 __all__ = [
     'PointFeatures', 'JitterColor', 'JitterFeatures', 'ColorAutoContrast',
-    'ColorDrop', 'ColorNormalize']
+    'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop', 'ColorNormalize',
+    'NAGColorNormalize']
 
 
 class PointFeatures(Transform):
@@ -279,7 +280,7 @@ class ColorTransform(Transform):
     def __init__(self, x_idx=None):
         self.x_idx = x_idx
 
-    def __call__(self, data):
+    def _process(self, data):
         if self.x_idx is None and getattr(data, 'rgb', None) is not None:
             data.rgb = self._apply_func(data.rgb)
         elif self.x_idx is not None and getattr(data, 'x', None) is not None:
@@ -333,6 +334,57 @@ class ColorAutoContrast(ColorTransform):
         return rgb
 
 
+class NAGColorAutoContrast(ColorAutoContrast):
+    """Apply some random contrast to the point colors.
+
+    credit: https://github.com/guochengqian/openpoints
+
+    :param level: int or str
+        Level at which to remove attributes. Can be an int or a str. If
+        the latter, 'all' will apply on all levels, 'i+' will apply on
+        level-i and above, 'i-' will apply on level-i and below
+    :param p: float
+        Probability of the transform to be applied
+    :param blend: float (optional)
+        Blend factor, controlling the contrasting intensity
+    :param x_idx: int
+        If specified, the colors will be searched in
+        `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, *args, level='all', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.level = level
+
+    def _process(self, nag):
+
+        level_p = [-1] * nag.num_levels
+        if isinstance(self.level, int):
+            level_p[self.level] = self.p
+        elif self.level == 'all':
+            level_p = [self.p] * nag.num_levels
+        elif self.level[-1] == '+':
+            i = int(self.level[:-1])
+            level_p[i:] = [self.p] * (nag.num_levels - i)
+        elif self.level[-1] == '-':
+            i = int(self.level[:-1])
+            level_p[:i] = [self.p] * i
+        else:
+            raise ValueError(f'Unsupported level={self.level}')
+
+        transforms = [
+            ColorAutoContrast(p=p, blend=self.blend, x_idx=self.x_idx)
+            for p in level_p]
+
+        for i_level in range(nag.num_levels):
+            nag._list[i_level] = transforms[i_level](nag._list[i_level])
+
+        return nag
+
+
 class ColorDrop(ColorTransform):
     """Randomly set point colors to 0.
 
@@ -351,6 +403,51 @@ class ColorDrop(ColorTransform):
         if torch.rand(1, device=rgb.device) < self.p:
             rgb *= 0
         return rgb
+
+
+class NAGColorDrop(ColorDrop):
+    """Randomly set point colors to 0.
+
+    :param level: int or str
+        Level at which to remove attributes. Can be an int or a str. If
+        the latter, 'all' will apply on all levels, 'i+' will apply on
+        level-i and above, 'i-' will apply on level-i and below
+    :param p: float
+        Probability of the transform to be applied
+    :param x_idx: int
+        If specified, the colors will be searched in
+        `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, *args, level='all', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.level = level
+
+    def _process(self, nag):
+
+        level_p = [-1] * nag.num_levels
+        if isinstance(self.level, int):
+            level_p[self.level] = self.p
+        elif self.level == 'all':
+            level_p = [self.p] * nag.num_levels
+        elif self.level[-1] == '+':
+            i = int(self.level[:-1])
+            level_p[i:] = [self.p] * (nag.num_levels - i)
+        elif self.level[-1] == '-':
+            i = int(self.level[:-1])
+            level_p[:i] = [self.p] * i
+        else:
+            raise ValueError(f'Unsupported level={self.level}')
+
+        transforms = [ColorDrop(p=p, x_idx=self.x_idx) for p in level_p]
+
+        for i_level in range(nag.num_levels):
+            nag._list[i_level] = transforms[i_level](nag._list[i_level])
+
+        return nag
 
 
 class ColorNormalize(ColorTransform):
@@ -385,3 +482,59 @@ class ColorNormalize(ColorTransform):
         rgb = (rgb - self.mean) / self.std
 
         return rgb
+
+
+class NAGColorNormalize(ColorNormalize):
+    """Normalize the colors using given means and standard deviations.
+
+    credit: https://github.com/guochengqian/openpoints
+
+    :param level: int or str
+        Level at which to remove attributes. Can be an int or a str. If
+        the latter, 'all' will apply on all levels, 'i+' will apply on
+        level-i and above, 'i-' will apply on level-i and below
+    :param mean: list
+        Channel-wise means
+    :param std: list
+        Channel-wise standard deviations
+    :param x_idx: int
+        If specified, the colors will be searched in
+        `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, *args, level='all', **kwargs):
+        super().__init__(*args, **kwargs)
+        self.level = level
+
+    def _process(self, nag):
+
+        level_mean = [[0, 0, 0]] * nag.num_levels
+        level_std = [[1, 1, 1]] * nag.num_levels
+        if isinstance(self.level, int):
+            level_mean[self.level] = self.mean
+            level_std[self.level] = self.std
+        elif self.level == 'all':
+            level_mean = [self.mean] * nag.num_levels
+            level_std = [self.std] * nag.num_levels
+        elif self.level[-1] == '+':
+            i = int(self.level[:-1])
+            level_mean[i:] = [self.mean] * (nag.num_levels - i)
+            level_std[i:] = [self.std] * (nag.num_levels - i)
+        elif self.level[-1] == '-':
+            i = int(self.level[:-1])
+            level_mean[:i] = [self.mean] * i
+            level_std[:i] = [self.std] * i
+        else:
+            raise ValueError(f'Unsupported level={self.level}')
+
+        transforms = [
+            ColorNormalize(mean=mean, std=std, x_idx=self.x_idx)
+            for mean, std in zip(level_mean, level_std)]
+
+        for i_level in range(nag.num_levels):
+            nag._list[i_level] = transforms[i_level](nag._list[i_level])
+
+        return nag
