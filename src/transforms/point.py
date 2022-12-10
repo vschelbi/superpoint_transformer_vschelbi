@@ -478,8 +478,10 @@ class ColorNormalize(ColorTransform):
             self, mean=[0.5136457, 0.49523646, 0.44921124],
             std=[0.18308958, 0.18415008, 0.19252081], x_idx=None):
         super().__init__(x_idx=x_idx)
-        self.mean = torch.tensor(mean).float().view(1, -1)
-        self.std = torch.tensor(std).float().view(1, -1)
+        self.mean = mean.float().view(1, -1) if isinstance(mean, torch.Tensor) \
+            else torch.tensor(mean).float().view(1, -1)
+        self.std = std.float().view(1, -1) if isinstance(std, torch.Tensor) \
+            else torch.tensor(std).float().view(1, -1)
         assert self.std.gt(0).all(), "std values must be >0"
 
     def _func(self, rgb):
