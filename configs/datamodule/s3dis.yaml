@@ -37,7 +37,7 @@ pre_transform:
         length: False
         surface: False
         volume: False
-        curvature: True
+        curvature: False
         k_min: 1
     - transform: DataTo
       params:
@@ -54,10 +54,10 @@ pre_transform:
         device: 'cpu'
     - transform: CutPursuitPartition
       params:
-        regularization: [0.04, 0.2, 0.8, 1.4]
-        spatial_weight: [1e-2, 0, 0, 0]
+        regularization: [0.07, 0.25, 0.75, 2.25]
+        spatial_weight: [5e-2, 5e-3, 5e-4, 5e-5]
         k_adjacency: 10
-        cutoff: [10, 100, 1000, 10000]
+        cutoff: [10, 80, 640, 5120]
         iterations: 15
         parallel: True
         verbose: True
@@ -94,11 +94,11 @@ on_device_train_transform:
         low: 0
         n_max: 32
         n_min: 16
-    - transform: DropoutSegments
-      params:
-        ratio: 0.2
-        by_size: False
-        by_class: False
+#    - transform: DropoutSegments
+#      params:
+#        ratio: 0.2
+#        by_size: False
+#        by_class: False
     - transform: JitterPosition
       params:
         sigma: 0.03
@@ -115,6 +115,12 @@ on_device_train_transform:
     - transform: RandomAxisFlip
       params:
         p: 0.5
+        p: 0.5
+    - transform: NAGColorAutoContrast
+      params:
+        level: all
+        p: 0.5
+        x_idx: 0
 
 # Should we actually sample at validation time ?
 on_device_val_transform:
