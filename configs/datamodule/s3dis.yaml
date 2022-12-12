@@ -17,8 +17,8 @@ pre_transform:
         device: 'cuda'
     - transform: KNN
       params:
-        k: 50
-        r_max: 3
+        k: 25
+        r_max: 2
         verbose: True
     - transform: DataTo
       params:
