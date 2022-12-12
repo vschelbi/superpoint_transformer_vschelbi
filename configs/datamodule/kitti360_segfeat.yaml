@@ -22,11 +22,11 @@ on_device_train_transform:
         low: 0
         n_max: 32
         n_min: 16
-    - transform: DropoutSegments
-      params:
-        ratio: 0.2
-        by_size: False
-        by_class: False
+#    - transform: DropoutSegments
+#      params:
+#        ratio: 0.2
+#        by_size: False
+#        by_class: False
     - transform: JitterPosition
       params:
         sigma: 0.03
@@ -46,3 +46,9 @@ on_device_train_transform:
     - transform: RandomAxisFlip
       params:
         p: 0.5
+        p: 0.5
+    - transform: NAGColorAutoContrast
+      params:
+        level: all
+        p: 0.5
+        x_idx: 0
