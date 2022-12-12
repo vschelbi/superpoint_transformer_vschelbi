@@ -18,7 +18,7 @@ class PointSegmentationModule(LightningModule):
     def __init__(
             self, net, criterion, optimizer, scheduler, num_classes,
             class_names=None, pointwise_loss=True, weighted_loss=True,
-            custom_init=True):
+            custom_init=True, transformer_lr_scale=1):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -232,19 +232,36 @@ class PointSegmentationModule(LightningModule):
         Examples:
             https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-optimizers
         """
-        optimizer = self.hparams.optimizer(params=self.parameters())
-        if self.hparams.scheduler is not None:
-            scheduler = self.hparams.scheduler(optimizer=optimizer)
-            reduce_on_plateau = isinstance(scheduler, ON_PLATEAU_SCHEDULERS)
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "monitor": "val/loss",
-                    "interval": "epoch",
-                    "frequency": 1,
-                    "reduce_on_plateau": reduce_on_plateau}}
-        return {"optimizer": optimizer}
+        # Differential learning rate for transformer blocks
+        t_name = 'transformer_blocks'
+        lr = self.hparams.optimizer.keywords['lr']
+        t_lr = lr * self.hparams.transformer_lr_scale
+        param_dicts = [
+            {
+                "params": [p for n, p in self.named_parameters()
+                           if t_name not in n and p.requires_grad]},
+            {
+                "params": [p for n, p in self.named_parameters()
+                           if t_name in n and p.requires_grad],
+                "lr": t_lr}]
+        optimizer = self.hparams.optimizer(params=param_dicts)
+
+        # Return the optimizer if no scheduler in the config
+        if self.hparams.scheduler is None:
+            return {"optimizer": optimizer}
+
+        # Build the scheduler, with special attention for plateau-like
+        # schedulers, which
+        scheduler = self.hparams.scheduler(optimizer=optimizer)
+        reduce_on_plateau = isinstance(scheduler, ON_PLATEAU_SCHEDULERS)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val/loss",
+                "interval": "epoch",
+                "frequency": 1,
+                "reduce_on_plateau": reduce_on_plateau}}
 
 
 if __name__ == "__main__":

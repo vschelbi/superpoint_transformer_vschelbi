@@ -76,14 +76,11 @@ class Stage(nn.Module):
 
         # Transformer blocks
         if num_blocks > 0:
-            # self.blocks = nn.Sequential(*(
-            #     TransformerBlock(dim, **transformer_kwargs)
-            #     for _ in range(num_blocks)))
-            self.blocks = nn.ModuleList(
+            self.transformer_blocks = nn.ModuleList(
                 TransformerBlock(dim, **transformer_kwargs)
                 for _ in range(num_blocks))
         else:
-            self.blocks = None
+            self.transformer_blocks = None
 
         # UnitSphereNorm converts global node coordinates to
         # segment-level coordinates expressed in a unit-sphere. The
@@ -101,8 +98,8 @@ class Stage(nn.Module):
     def out_dim(self):
         if self.out_mlp is not None:
             return self.out_mlp.out_dim
-        if self.blocks is not None:
-            return self.blocks[-1].dim
+        if self.transformer_blocks is not None:
+            return self.transformer_blocks[-1].dim
         if self.in_mlp is not None:
             return self.in_mlp.out_dim
         return self.dim
@@ -131,11 +128,11 @@ class Stage(nn.Module):
             x = self.in_mlp(x)
 
         # Transformer blocks
-        if self.blocks is not None:
-            for block in self.blocks:
+        if self.transformer_blocks is not None:
+            for block in self.transformer_blocks:
                 x, norm_index, edge_index = block(
                     x, norm_index, edge_index=edge_index)
-            # x = self.blocks(x, norm_index, edge_index=edge_index)
+            # x = self.transformer_blocks(x, norm_index, edge_index=edge_index)
 
         # MLP on output features to change channel size
         if self.out_mlp is not None:
