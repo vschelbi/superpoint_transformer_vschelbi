@@ -48,16 +48,17 @@ class BaseDataModule(LightningDataModule):
     _MINIDATASET_CLASS = None
 
     def __init__(
-            self, data_dir='', x32=True, y_to_csr=True, pre_transform=None,
-            train_transform=None, val_transform=None, test_transform=None,
+            self, data_dir='', pre_transform=None, train_transform=None,
+            val_transform=None, test_transform=None,
             on_device_train_transform=None, on_device_val_transform=None,
             on_device_test_transform=None, dataloader=None, mini=False,
-            trainval=False):
+            trainval=False, val_on_test=False, **kwargs):
         super().__init__()
 
         # This line allows to access init params with 'self.hparams'
         # attribute also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
+        self.kwargs = kwargs
 
         # Make sure `_DATASET_CLASS` and `_MINIDATASET_CLASS` have been
         # specified
@@ -96,6 +97,13 @@ class BaseDataModule(LightningDataModule):
         """
         return 'trainval' if self.hparams.trainval else 'train'
 
+    @property
+    def val_stage(self):
+        """Return either 'val' or 'test' depending on how
+        `self.hparams.val_on_test` is configured.
+        """
+        return 'test' if self.hparams.val_on_test else 'val'
+
     def prepare_data(self):
         """Download and heavy preprocessing of data should be triggered
         here.
@@ -106,20 +114,17 @@ class BaseDataModule(LightningDataModule):
         self.dataset_class(
             self.hparams.data_dir, stage=self.train_stage,
             transform=self.train_transform, pre_transform=self.pre_transform,
-            on_device_transform=self.on_device_train_transform,
-            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+            on_device_transform=self.on_device_train_transform, **self.kwargs)
 
         self.dataset_class(
-            self.hparams.data_dir, stage='val',
+            self.hparams.data_dir, stage=self.val_stage,
             transform=self.val_transform, pre_transform=self.pre_transform,
-            on_device_transform=self.on_device_val_transform,
-            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+            on_device_transform=self.on_device_val_transform, **self.kwargs)
 
         self.dataset_class(
             self.hparams.data_dir, stage='test',
             transform=self.test_transform, pre_transform=self.pre_transform,
-            on_device_transform=self.on_device_test_transform,
-            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+            on_device_transform=self.on_device_test_transform, **self.kwargs)
 
     def setup(self, stage=None):
         """Load data. Set variables: `self.train_dataset`,
@@ -132,20 +137,17 @@ class BaseDataModule(LightningDataModule):
         self.train_dataset = self.dataset_class(
             self.hparams.data_dir, stage=self.train_stage,
             transform=self.train_transform, pre_transform=self.pre_transform,
-            on_device_transform=self.on_device_train_transform,
-            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+            on_device_transform=self.on_device_train_transform, **self.kwargs)
 
         self.val_dataset = self.dataset_class(
-            self.hparams.data_dir, stage='val',
+            self.hparams.data_dir, stage=self.val_stage,
             transform=self.val_transform, pre_transform=self.pre_transform,
-            on_device_transform=self.on_device_val_transform,
-            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+            on_device_transform=self.on_device_val_transform, **self.kwargs)
 
         self.test_dataset = self.dataset_class(
             self.hparams.data_dir, stage='test',
             transform=self.test_transform, pre_transform=self.pre_transform,
-            on_device_transform=self.on_device_test_transform,
-            x32=self.hparams.x32, y_to_csr=self.hparams.y_to_csr)
+            on_device_transform=self.on_device_test_transform, **self.kwargs)
 
         self.predict_dataset = None
 

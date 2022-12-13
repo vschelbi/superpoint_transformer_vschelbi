@@ -36,10 +36,6 @@ class S3DISDataModule(BaseDataModule):
     _DATASET_CLASS = S3DIS
     _MINIDATASET_CLASS = MiniS3DIS
 
-    def __init__(self, *args, fold=5, **kwargs):
-        self.fold = fold
-        super().__init__(*args, **kwargs)
-
 
 if __name__ == "__main__":
     import hydra

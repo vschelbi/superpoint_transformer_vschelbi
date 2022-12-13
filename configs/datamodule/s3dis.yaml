@@ -5,6 +5,7 @@ _target_: src.datamodules.s3dis.S3DISDataModule
 
 fold: 5
 trainval: True
+val_on_test: True
 
 pre_transform:
 
