@@ -263,6 +263,17 @@ class PointSegmentationModule(LightningModule):
                 "frequency": 1,
                 "reduce_on_plateau": reduce_on_plateau}}
 
+    def load_state_dict(self, state_dict, strict=True):
+        # Little bit of acrobatics due to `criterion.weight`. This
+        # attribute, when present in the `state_dict`, causes
+        # `load_state_dict` to crash.
+        try:
+            super().load_state_dict(state_dict, strict=strict)
+        except:
+            class_weight = state_dict.pop('criterion.weight', None)
+            super().load_state_dict(state_dict, strict=strict)
+            self.criterion.weight = class_weight
+
 
 if __name__ == "__main__":
     import hydra

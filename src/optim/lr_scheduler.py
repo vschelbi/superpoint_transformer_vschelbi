@@ -58,6 +58,11 @@ class _WarmupLR(_LRScheduler):
         self.step()
 
     def __getattr__(self, name):
+        if name == '_scheduler':
+            if name in self.__dict__.keys():
+                return self._scheduler
+            else:
+                return None
         return getattr(self._scheduler, name)
 
     def state_dict(self):
