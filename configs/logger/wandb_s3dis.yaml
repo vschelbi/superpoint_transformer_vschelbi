@@ -1,0 +1,7 @@
+# https://wandb.ai
+
+defaults:
+  - wandb.yaml
+
+wandb:
+  project: "spt_s3dis"

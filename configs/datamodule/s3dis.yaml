@@ -4,6 +4,7 @@ defaults:
 _target_: src.datamodules.s3dis.S3DISDataModule
 
 fold: 5
+trainval: True
 
 pre_transform:
 

@@ -1,0 +1,8 @@
+# @package _global_
+
+# specify here default configuration
+# order of defaults determines the order in which configs override each other
+defaults:
+  - train.yaml
+  - datamodule: kitti360.yaml
+  - logger: wandb_kitti360.yaml # null for default, set logger here or use command line (e.g. `python train.py logger=tensorboard`)
