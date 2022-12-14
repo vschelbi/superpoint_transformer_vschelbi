@@ -276,8 +276,7 @@ class DropoutSegments(Transform):
     _OUT_TYPE = NAG
 
     def __init__(self, ratio=0.2, by_size=False, by_class=False):
-        assert isinstance(ratio, (float, list))
-        assert 0 <= ratio < 1
+        assert isinstance(ratio, list) and all(0 <= r < 1 for r in ratio) or (0 <= ratio < 1)
         self.ratio = ratio
         self.by_size = by_size
         self.by_class = by_class
