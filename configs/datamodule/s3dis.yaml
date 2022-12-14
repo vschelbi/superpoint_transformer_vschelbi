@@ -31,8 +31,7 @@ pre_transform:
     - transform: GroundElevation
       params:
         threshold: 1.5
-        scale: 3.0
-        sample: 0.1
+        scale: 4.0
     - transform: PointFeatures
       params:
         rgb: True

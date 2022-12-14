@@ -229,10 +229,9 @@ class GroundElevation(Transform):
         `sample < 1.`
     """
 
-    def __init__(self, threshold=1.5, scale=3.0, sample=None):
+    def __init__(self, threshold=1.5, scale=3.0):
         self.threshold = threshold
         self.scale = scale
-        self.sample = sample
 
     def _process(self, data):
         # Recover the point positions
@@ -243,7 +242,7 @@ class GroundElevation(Transform):
         idx_low = np.where(pos[:, 2] - pos[:, 2].min() < self.threshold)[0]
 
         # Search the ground plane using RANSAC
-        ransac = RANSACRegressor(random_state=0, min_samples=self.sample).fit(
+        ransac = RANSACRegressor(random_state=0, residual_threshold=1e-3).fit(
             pos[idx_low, :2], pos[idx_low, 2])
 
         # Compute the pointwise elevation as the distance to the plane

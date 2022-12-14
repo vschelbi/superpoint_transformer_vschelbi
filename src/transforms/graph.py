@@ -148,10 +148,8 @@ def _compute_cluster_features(
 
     # Add elevation if present in the points, raise an error if not
     # found
-    assert getattr(nag[0], 'elevation', None) is not None, \
-        "nag[0].elevation must be computed beforehand using " \
-        "`GroundElevation`"
-    data.elevation = segment_csr(nag[0], ptr_samples, reduce='mean')
+    if getattr(nag[0], 'elevation', None) is not None:
+        data.elevation = segment_csr(nag[0], ptr_samples, reduce='mean')
 
     # TODO: augment with Rep-SURF umbrella features ?
     # TODO: Random PointNet + PCA features ?
