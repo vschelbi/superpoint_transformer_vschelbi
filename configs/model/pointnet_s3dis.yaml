@@ -1,0 +1,8 @@
+defaults:
+  - pointnet.yaml
+
+num_classes: 13
+
+net:
+  _target_: src.models.components.pointnet.PointNet
+  point_mlp: [10, 32, 64, 128]
