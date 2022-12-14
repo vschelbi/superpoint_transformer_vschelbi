@@ -8,9 +8,9 @@ from src.data import NAG
 
 
 __all__ = [
-    'PointFeatures', 'JitterColor', 'JitterFeatures', 'ColorAutoContrast',
-    'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop', 'ColorNormalize',
-    'NAGColorNormalize']
+    'PointFeatures', 'GroundElevation', 'JitterColor', 'JitterFeatures',
+    'ColorAutoContrast', 'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop',
+    'ColorNormalize', 'NAGColorNormalize']
 
 
 class PointFeatures(Transform):
@@ -202,7 +202,7 @@ class PointFeatures(Transform):
             assert getattr(data, 'elevation', None) is not None, \
                 "Data.elevation must be computed beforehand using " \
                 "`GroundElevation`"
-            features.append(data.elevation)
+            features.append(data.elevation.view(-1, 1))
 
         # Save all features in the Data.x attribute
         data.x = torch.cat(features, dim=1).to(data.pos.device)
