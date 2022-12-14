@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from sklearn.linear_model import RANSACRegressor
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils.features import rgb2hsv, rgb2lab
 from src.transforms import Transform
@@ -56,6 +57,9 @@ class PointFeatures(Transform):
         Use local volume. Assumes ``Data.neighbor_index``.
     curvature: bool
         Use local curvature. Assumes ``Data.neighbor_index``.
+    elevation: bool
+        Use local elevation. Assumes ``Data.elevation`` has been
+        computed beforehand using `GroundElevation`.
     k_min: int
         Minimum number of neighbors to consider for geometric features
         computation. Points with less than k_min neighbors will receive
@@ -69,7 +73,7 @@ class PointFeatures(Transform):
             self, pos=False, radius=5, rgb=False, hsv=False, lab=False,
             density=False, linearity=False, planarity=False, scattering=False,
             verticality=False, normal=False, length=False, surface=False,
-            volume=False, curvature=False, k_min=5):
+            volume=False, curvature=False, elevation=False, k_min=5):
 
         self.pos = pos
         self.radius = radius
@@ -86,6 +90,7 @@ class PointFeatures(Transform):
         self.surface = surface
         self.volume = volume
         self.curvature = curvature
+        self.elevation = elevation
         self.k_min = k_min
 
     def _process(self, data):
@@ -192,8 +197,62 @@ class PointFeatures(Transform):
                 + [self.length, self.surface, self.volume, self.curvature])
             features.append(f[:, mask].to(data.pos.device))
 
+        # Add elevation to the features
+        if self.elevation:
+            assert getattr(data, 'elevation', None) is not None, \
+                "Data.elevation must be computed beforehand using " \
+                "`GroundElevation`"
+            features.append(data.elevation)
+
         # Save all features in the Data.x attribute
         data.x = torch.cat(features, dim=1).to(data.pos.device)
+
+        return data
+
+
+class GroundElevation(Transform):
+    """Compute pointwise elevation by approximating the ground as a
+    plane using RANSAC.
+
+    Parameters
+    ----------
+    :param threshold: float
+        Ground points will be searched within threshold of the lowest
+        point in the cloud. Adjust this if the lowest point is below the
+        ground or if you have large above-ground planar structures
+    :param scale: float
+        Scaling by which the computed elevation will be divided
+    :param sample: int (>= 1) or float ([0, 1])
+        Minimum number of points chosen randomly from original data.
+        Treated as an absolute number of samples for `sample >= 1`,
+        treated as a relative number `ceil(sample * X.shape[0])` for
+        `sample < 1.`
+    """
+
+    def __init__(self, threshold=1.5, scale=3.0, sample=None):
+        self.threshold = threshold
+        self.scale = scale
+        self.sample = sample
+
+    def _process(self, data):
+        # Recover the point positions
+        pos = data.pos.cpu().numpy()
+
+        # To avoid capturing high above-ground flat structures, we only
+        # keep points which are within `threshold` of the lowest point.
+        idx_low = np.where(pos[:, 2] - pos[:, 2].min() < self.threshold)[0]
+
+        # Search the ground plane using RANSAC
+        ransac = RANSACRegressor(random_state=0, min_samples=self.sample).fit(
+            pos[idx_low, :2], pos[idx_low, 2])
+
+        # Compute the pointwise elevation as the distance to the plane
+        # and scale it
+        h = pos[:, 2] - ransac.predict(pos[:, :2])
+        h = h / self.scale
+
+        # Save in Data attribute `elevation`
+        data.elevation = torch.from_numpy(h).to(data.device)
 
         return data
 

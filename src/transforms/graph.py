@@ -2,13 +2,13 @@ import torch
 import numpy as np
 import itertools
 from scipy.spatial import Delaunay
-from torch_scatter import scatter_mean, scatter_std, scatter_min
+from torch_scatter import scatter_mean, scatter_std, scatter_min, segment_csr
 import src
 from src.data import Data, NAG
 from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
-from src.utils import print_tensor_info, isolated_nodes, \
-    edge_to_superedge, tensor_idx
+from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
+    tensor_idx
 
 
 __all__ = [
@@ -145,6 +145,13 @@ def _compute_cluster_features(
     # As a way to "stabilize" the normals' orientation, we choose to
     # express them as oriented in the z+ half-space
     data.normal[data.normal[:, 2] < 0] *= -1
+
+    # Add elevation if present in the points, raise an error if not
+    # found
+    assert getattr(nag[0], 'elevation', None) is not None, \
+        "nag[0].elevation must be computed beforehand using " \
+        "`GroundElevation`"
+    data.elevation = segment_csr(nag[0], ptr_samples, reduce='mean')
 
     # TODO: augment with Rep-SURF umbrella features ?
     # TODO: Random PointNet + PCA features ?

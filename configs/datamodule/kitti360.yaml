@@ -20,6 +20,11 @@ pre_transform:
     - transform: DataTo
       params:
         device: 'cpu'
+    - transform: GroundElevation
+      params:
+        threshold: 5
+        scale: 10
+        sample: 0.1
     - transform: PointFeatures
       params:
         rgb: True
@@ -35,6 +40,7 @@ pre_transform:
         surface: False
         volume: False
         curvature: True
+        elevation: False
         k_min: 1
     - transform: DataTo
       params:
@@ -58,6 +64,9 @@ pre_transform:
         iterations: 15
         parallel: True
         verbose: True
+    - transform: AddKeyToX
+      params:
+        keys: ['elevation']
     - transform: NAGTo
       params:
         device: 'cuda'

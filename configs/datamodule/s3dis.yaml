@@ -9,6 +9,9 @@ val_on_test: True
 
 pre_transform:
 
+#    - transform: DataTo
+#      params:
+#        device: 'cuda'
     - transform: GridSampling3D
       params:
         size: 0.05
@@ -25,6 +28,11 @@ pre_transform:
     - transform: DataTo
       params:
         device: 'cpu'
+    - transform: GroundElevation
+      params:
+        threshold: 1.5
+        scale: 3.0
+        sample: 0.1
     - transform: PointFeatures
       params:
         rgb: True
@@ -40,6 +48,7 @@ pre_transform:
         surface: False
         volume: False
         curvature: False
+        elevation: False
         k_min: 1
     - transform: DataTo
       params:
@@ -78,6 +87,10 @@ pre_transform:
     - transform: NAGTo
       params:
         device: 'cpu'
+    - transform: NAGAddKeyToX  # elevation added to x only after CutPursuitPartition, because would be redundant with Z and not normalized
+      params:
+        level: 0
+        keys: ['elevation']
 
 train_transform:
     - transform: NAGRemoveKeys
