@@ -1,30 +1,15 @@
 defaults:
-  - default.yaml
+  - hpointnet.yaml
 
 net:
   _target_: src.models.components.hpointnet.HPointNet
   point_mlp: [96, 128, 128]
   down_mlp: [[129, 64, 64], [65, 64, 64], [65, 64, 64], [65, 64, 64]]
   up_mlp: [[128, 64, 64], [128, 64, 64], [128, 64, 64]]
-  point_drop: null
-  down_drop: null
-  up_drop: null
-  down_inject_pos: True
-  down_inject_x: True
-  up_inject_pos: True
-  up_inject_x: False
   point_pos_injection:
     _target_: src.nn.FourierInjection
     _partial_: True
   point_pos_injection_x_dim: 8
-  point_cat_diameter: False
   pos_injection:
     _target_: src.nn.FourierInjection
     _partial_: True
-  cat_diameter: False
-  pool: 'max'
-  unpool: 'index'
-  fusion: 'cat'
-  activation:
-    _target_: torch.nn.LeakyReLU
-    negative_slope: 0.01

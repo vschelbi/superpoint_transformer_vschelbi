@@ -4,7 +4,7 @@ defaults:
 net:
   _target_: src.models.components.hpointnet.HPointNet
   point_mlp: [11, 32, 64, 128]
-  down_mlp: [[132, 128, 128], [132, 128, 128], [132, 128, 128], [132, 128, 128]]
+  down_mlp: [[147, 128, 128], [147, 128, 128], [147, 128, 128], [147, 128, 128]]
   up_mlp: [[259, 128, 128], [259, 128, 128], [259, 256, 256]]
   point_drop: null
   down_drop: null

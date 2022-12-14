@@ -4,7 +4,7 @@ defaults:
 net:
   _target_: src.models.components.pointnet.PointNet
   point_mlp: [11, 32, 64, 128]
-  down_mlp: [129, 64, 32]
+  down_mlp: [131, 64, 32]
   point_drop: null
   down_drop: null
   pool: 'max'

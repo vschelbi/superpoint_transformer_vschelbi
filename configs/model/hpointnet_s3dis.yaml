@@ -1,4 +1,4 @@
 defaults:
-  - nest_l1.yaml
+  - hpointnet.yaml
 
 num_classes: 13
