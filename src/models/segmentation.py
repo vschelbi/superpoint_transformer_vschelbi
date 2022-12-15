@@ -4,9 +4,10 @@ from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from src.metrics import ConfusionMatrix
 from src.utils import loss_with_target_histogram, atomic_to_histogram, \
-    init_weights
+    init_weights, wandb_confusion_matrix
 from src.nn import Classifier
 from src.optim.lr_scheduler import ON_PLATEAU_SCHEDULERS
+from pytorch_lightning.loggers.wandb import WandbLogger
 
 
 log = logging.getLogger(__name__)
@@ -223,6 +224,13 @@ class PointSegmentationModule(LightningModule):
         for iou, seen, name in zip(*self.test_cm.iou(), self.class_names):
             if seen:
                 self.log(f"test/iou_{name}", iou, prog_bar=True)
+
+        # Log confusion matrix to wandb
+        if isinstance(self.logger, WandbLogger):
+            self.logger.experiment.log({
+                "test/cm": wandb_confusion_matrix(
+                    self.test_cm.confmat, class_names=self.class_names)})
+
         self.test_cm.reset()
 
     def configure_optimizers(self):
