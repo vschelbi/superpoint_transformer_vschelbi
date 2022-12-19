@@ -2,8 +2,8 @@ import torch
 from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
-from src.nn import PointStage, DownNFuseStage, UpNFuseStage, FastBatchNorm1d, \
-    CatFusion, CatInjection
+from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
+    FastBatchNorm1d, CatFusion, CatInjection
 
 
 __all__ = ['NeST']
@@ -21,6 +21,10 @@ class NeST(nn.Module):
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
             point_cat_diameter=False,
+
+            small=None,
+            small_point_mlp=None,
+            small_down_mlp=None,
 
             down_dim=None,
             down_in_mlp=None,
@@ -50,6 +54,19 @@ class NeST(nn.Module):
             up_inject_x=False,
             up_pos_injection_x_dim=None,
 
+            last_dim=None,
+            last_in_mlp=None,
+            last_out_mlp=None,
+            last_mlp_drop=None,
+            last_num_heads=1,
+            last_num_blocks=1,
+            last_ffn_ratio=4,
+            last_residual_drop=None,
+            last_attn_drop=None,
+            last_drop_path=None,
+            last_inject_pos=True,
+            last_pos_injection_x_dim=None,
+
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=FastBatchNorm1d,
             qkv_bias=True,
@@ -72,6 +89,7 @@ class NeST(nn.Module):
         self.down_inject_x = down_inject_x
         self.up_inject_pos = up_inject_pos
         self.up_inject_x = up_inject_x
+        self.last_inject_pos = last_inject_pos
         self.norm_mode = norm_mode
 
         # Convert input arguments to nested lists
@@ -89,7 +107,7 @@ class NeST(nn.Module):
             up_num_blocks, up_ffn_ratio, up_residual_drop, up_attn_drop,
             up_drop_path, up_pos_injection_x_dim)
 
-        # PointNet-like module operating on Level-0 data
+        # Module operating on Level-0 points in isolation
         self.point_stage = PointStage(
             point_mlp, mlp_activation=mlp_activation, mlp_norm=mlp_norm,
             mlp_drop=point_drop, pos_injection=point_pos_injection,
@@ -151,9 +169,55 @@ class NeST(nn.Module):
 
         assert bool(self.down_stages) != bool(self.up_stages) \
                or self.num_down_stages > self.num_up_stages, \
-            'The number of Up stages should be lower than the number of Down ' \
-            'stages. That is to say, we do not want to output Level-0 ' \
-            'features but at least Level-1.'
+            "The number of Up stages should be lower than the number of Down " \
+            "stages. That is to say, we do not want to output Level-0 " \
+            "features but at least Level-1."
+
+        # Optional pointNet-like module operating on Level-0 points in
+        # for points belonging to small L1 nodes
+        assert small is None or small > 0 and small_point_mlp is not None \
+               and small_down_mlp is not None, \
+            "If specified, `small` should be an integer larger than 0 and " \
+            "`small_point_mlp` and `small_down_mlp` should also be specified"
+
+        assert small is None or self.num_down_stages == self.num_up_stages + 1, \
+            "If `small` is set, the model should have of one more Down " \
+            "stages than Up stages (ie the output will be Level-1 features."
+
+        self.small = small
+
+        self.point_stage_small = PointStage(
+            small_point_mlp, mlp_activation=mlp_activation, mlp_norm=mlp_norm,
+            mlp_drop=point_drop, pos_injection=point_pos_injection,
+            pos_injection_x_dim=point_pos_injection_x_dim,
+            cat_diameter=point_cat_diameter) \
+            if small is not None else None
+
+        self.down_stage_small = DownNFuseStage(
+            small_down_mlp[-1], num_blocks=0, in_mlp=small_down_mlp,
+            mlp_activation=mlp_activation, mlp_norm=mlp_norm,
+            mlp_drop=down_mlp_drop[0], pool=pool, fusion='cat',
+            pos_injection=pos_injection, cat_diameter=cat_diameter,
+            pos_injection_x_dim=down_pos_injection_x_dim[0]) \
+            if small is not None else None
+
+        # Optional last transformer stage operating on Level-1 nodes.
+        # In particular, allows feature propagation between large and
+        # small nodes when `self.small` is not None
+        if last_dim is not None:
+            self.last_stage = Stage(
+                last_dim, num_blocks=last_num_blocks, in_mlp=last_in_mlp,
+                out_mlp=last_out_mlp, mlp_activation=mlp_activation,
+                mlp_norm=mlp_norm, mlp_drop=last_mlp_drop,
+                num_heads=last_num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                ffn_ratio=last_ffn_ratio, residual_drop=last_residual_drop,
+                attn_drop=last_attn_drop, drop_path=last_drop_path,
+                activation=activation, pre_ln=pre_ln, no_sa=no_sa,
+                no_ffn=no_ffn, pool=pool, fusion=fusion,
+                pos_injection=pos_injection, cat_diameter=cat_diameter,
+                pos_injection_x_dim=last_pos_injection_x_dim)
+        else:
+            self.last_stage = None
 
     @property
     def num_down_stages(self):
@@ -165,6 +229,8 @@ class NeST(nn.Module):
 
     @property
     def out_dim(self):
+        if self.last_stage is not None:
+            return self.last_stage.out_dim
         if self.up_stages is not None:
             return self.up_stages[-1].out_dim
         if self.down_stages is not None:
@@ -176,7 +242,41 @@ class NeST(nn.Module):
         assert nag.num_levels >= 2
         assert nag.num_levels > self.num_down_stages
 
-        # Encode level-0 data. NB: no node_size for the level-0 points
+        # Separate small L1 nodes from the rest of the NAG. Only
+        # large-enough nodes will be encoded using the UNet. Small nodes
+        # will be encoded separately, and merged before the `last_stage`
+        if self.small is not None:
+
+            # Separate the input NAG into two sub-NAGs: one holding the
+            # small L1 nodes and one carrying the large ones and their
+            # hierarchy
+            mask_small = self.small < nag[1].node_size
+            nag_full = nag
+            nag = nag_full.select(1, mask_small)
+            nag_small = nag_full.select(1, ~mask_small)
+
+            # Encode level-0 data for small L1 nodes
+            x_small, diameter_small = self.point_stage_small(
+                nag_small[0].x, nag_small[0].pos,
+                super_index=nag_small[0].super_index)
+
+            # Append the diameter to the level-1 features
+            i_level = 1
+            nag_small[i_level].x = self.feature_fusion(
+                nag_small[i_level].x, diameter_small)
+
+            # Forward on the down stage and the corresponding NAG
+            # level
+            x_small, diameter_small = self._forward_down_stage(
+                self.down_stage_small, nag_small, i_level, x_small)
+
+            # Append the diameter to the next level's features
+            if i_level < nag_small.num_levels - 1:
+                nag_small[i_level + 1].x = self.feature_fusion(
+                    nag_small[i_level + 1].x, diameter_small)
+
+        # Encode level-0 data
+        # NB: no node_size for the level-0 points
         x, diameter = self.point_stage(
             nag[0].x, nag[0].pos, super_index=nag[0].super_index)
 
@@ -188,34 +288,14 @@ class NeST(nn.Module):
         if self.down_stages is not None:
             for i_stage, stage in enumerate(self.down_stages):
 
-                # Convert stage index to NAG index
+                # Forward on the down stage and the corresponding NAG
+                # level
                 i_level = i_stage + 1
-                is_last_level = (i_level == nag.num_levels - 1)
-
-                # Recover segment-level attributes
-                x_handcrafted = nag[i_level].x if self.down_inject_x else None
-                pos = nag[i_level].pos if self.down_inject_pos else None
-                node_size = nag[i_level].node_size if self.down_inject_pos \
-                    else None
-                num_nodes = nag[i_level].num_nodes
-
-                # Recover indices for normalization, pooling, position
-                # normalization and horizontal attention
-                norm_index = nag[i_level].norm_index(mode=self.norm_mode)
-                pool_index = nag[i_level - 1].super_index
-                super_index = nag[i_level].super_index if not is_last_level \
-                    else None
-                edge_index = nag[i_level].edge_index
-
-                # Forward pass on the stage and store output x
-                x, diameter = stage(
-                    x_handcrafted, x, norm_index, pool_index, pos=pos,
-                    node_size=node_size, super_index=super_index,
-                    edge_index=edge_index, num_super=num_nodes)
+                x, diameter = self._forward_down_stage(stage, nag, i_level, x)
                 down_outputs.append(x)
 
                 # End here if we reached the last NAG level
-                if is_last_level:
+                if i_level == nag.num_levels - 1:
                     continue
 
                 # Append the diameter to the next level's features
@@ -226,34 +306,29 @@ class NeST(nn.Module):
         up_outputs = []
         if self.up_stages is not None:
             for i_stage, stage in enumerate(self.up_stages):
-
-                # Convert stage index to NAG index
                 i_level = self.num_down_stages - i_stage - 1
-
-                # Recover segment-level attributes
-                x_handcrafted = nag[i_level].x if self.up_inject_x else None
-                pos = nag[i_level].pos if self.up_inject_pos else None
-                node_size = nag[i_level].node_size if self.up_inject_pos \
-                    else None
-
-                # Append the handcrafted features to the x_skip. Has no
-                # effect if 'x_handcrafted' is None
                 x_skip = down_outputs[-(2 + i_stage)]
-                x_skip = self.feature_fusion(x_skip, x_handcrafted)
-
-                # Recover indices for normalization, unpooling, position
-                # normalization and horizontal attention
-                norm_index = nag[i_level].norm_index(mode=self.norm_mode)
-                unpool_index = nag[i_level].super_index
-                super_index = nag[i_level].super_index
-                edge_index = nag[i_level].edge_index
-
-                x, _ = stage(
-                    x_skip, x, norm_index, unpool_index, pos=pos,
-                    node_size=node_size, super_index=super_index,
-                    edge_index=edge_index)
-
+                x, _ = self._forward_up_stage(stage, nag, i_level, x, x_skip)
                 up_outputs.append(x)
+
+        # Fuse L1-level features back together, if need be
+        if self.small is not None:
+            nag = nag_full
+            nag[1].x[torch.where(mask_small)] = x
+            nag[1].x[torch.where(~mask_small)] = x_small
+            x = nag[1].x
+            up_outputs[-1] = x
+
+            #TODO: if the per-stage output is returned, need to define how to
+            # deal with small L1 nodes
+            if not return_down_outputs and not return_up_outputs:
+                raise NotImplementedError(
+                    "Returning per-stage output is not supported yet when "
+                    "`small` is specified")
+
+        # Last spatial propagation of features
+        if self.last_stage is not None:
+            x, _ = self._forward_last_stage(nag, x)
 
         # Different types of output signatures
         if not return_down_outputs and not return_up_outputs:
@@ -263,3 +338,79 @@ class NeST(nn.Module):
         if not return_up_outputs:
             return x, down_outputs
         return x, down_outputs, up_outputs
+
+    def _forward_down_stage(self, stage, nag, i_level, x):
+        # Convert stage index to NAG index
+        is_last_level = (i_level == nag.num_levels - 1)
+
+        # Recover segment-level attributes
+        x_handcrafted = nag[i_level].x if self.down_inject_x else None
+        pos = nag[i_level].pos if self.down_inject_pos else None
+        node_size = nag[i_level].node_size if self.down_inject_pos \
+            else None
+        num_nodes = nag[i_level].num_nodes
+
+        # Recover indices for normalization, pooling, position
+        # normalization and horizontal attention
+        norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+        pool_index = nag[i_level - 1].super_index
+        super_index = nag[i_level].super_index if not is_last_level \
+            else None
+        edge_index = nag[i_level].edge_index
+
+        # Forward pass on the stage and store output x
+        x_out, diameter = stage(
+            x_handcrafted, x, norm_index, pool_index,
+            pos=pos, node_size=node_size, super_index=super_index,
+            edge_index=edge_index, num_super=num_nodes)
+
+        return x_out, diameter
+
+    def _forward_up_stage(self, stage, nag, i_level, x, x_skip):
+        # Recover segment-level attributes
+        x_handcrafted = nag[i_level].x if self.up_inject_x else None
+        pos = nag[i_level].pos if self.up_inject_pos else None
+        node_size = nag[i_level].node_size if self.up_inject_pos \
+            else None
+
+        # Append the handcrafted features to the x_skip. Has no
+        # effect if 'x_handcrafted' is None
+        x_skip = self.feature_fusion(x_skip, x_handcrafted)
+
+        # Recover indices for normalization, unpooling, position
+        # normalization and horizontal attention
+        norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+        unpool_index = nag[i_level].super_index
+        super_index = nag[i_level].super_index
+        edge_index = nag[i_level].edge_index
+
+        x_out, diameter = stage(
+            x_skip, x, norm_index, unpool_index, pos=pos,
+            node_size=node_size, super_index=super_index,
+            edge_index=edge_index)
+
+        return x_out, diameter
+
+    def _forward_last_stage(self, nag, x):
+        # Convert stage index to NAG index
+        i_level = 1
+        is_last_level = (i_level == nag.num_levels - 1)
+
+        # Recover segment-level attributes
+        pos = nag[i_level].pos if self.last_inject_pos else None
+        node_size = nag[i_level].node_size if self.last_inject_pos \
+            else None
+
+        # Recover indices for normalization, pooling, position
+        # normalization and horizontal attention
+        norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+        super_index = nag[i_level].super_index if not is_last_level \
+            else None
+        edge_index = nag[i_level].edge_index
+
+        # Forward pass on the stage and store output x
+        x_out, diameter = self.last_stage(
+            x, norm_index, pos=pos, node_size=node_size,
+            super_index=super_index, edge_index=edge_index)
+
+        return x_out, diameter

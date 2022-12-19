@@ -3,10 +3,17 @@ defaults:
 
 net:
   _target_: src.models.components.pointnet.PointNet
+
   point_mlp: [11, 32, 64, 128]
-  down_mlp: [131, 64, 32]
   point_drop: null
+
+  small: null
+  small_point_mlp: null
+  small_down_mlp: null
+
+  down_mlp: [131, 64, 32]
   down_drop: null
+
   pool: 'max'
   activation:
     _target_: torch.nn.LeakyReLU

@@ -3,9 +3,8 @@ defaults:
 
 net:
   _target_: src.models.components.hpointnet.HPointNet
+
   point_mlp: [96, 128, 128]
-  down_mlp: [[129, 64, 64], [65, 64, 64], [65, 64, 64], [65, 64, 64]]
-  up_mlp: [[128, 64, 64], [128, 64, 64], [128, 64, 64]]
   point_pos_injection:
     _target_: src.nn.FourierInjection
     _partial_: True
@@ -13,3 +12,8 @@ net:
   pos_injection:
     _target_: src.nn.FourierInjection
     _partial_: True
+
+  down_mlp: [[129, 64, 64], [65, 64, 64], [65, 64, 64], [65, 64, 64]]
+
+  up_mlp: [[128, 64, 64], [128, 64, 64], [128, 64, 64]]
+
