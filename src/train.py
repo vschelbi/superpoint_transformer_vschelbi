@@ -1,11 +1,11 @@
 import pyrootutils
 
-root = pyrootutils.setup_root(
+root = str(pyrootutils.setup_root(
     search_from=__file__,
     indicator=[".git", "pyproject.toml"],
     pythonpath=True,
-    dotenv=True,
-)
+    dotenv=True))
+
 
 # ------------------------------------------------------------------------------------ #
 # `pyrootutils.setup_root(...)` is an optional line at the top of each entry file
@@ -32,6 +32,9 @@ root = pyrootutils.setup_root(
 #
 # https://github.com/ashleve/pyrootutils
 # ------------------------------------------------------------------------------------ #
+
+# Hack importing pandas here to bypass some conflicts with hydra
+import pandas as pd
 
 from typing import List, Optional, Tuple
 
@@ -116,7 +119,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
     return metric_dict, object_dict
 
 
-@hydra.main(version_base="1.2", config_path=root / "configs", config_name="train.yaml")
+@hydra.main(version_base="1.2", config_path=root + "/configs", config_name="train.yaml")
 def main(cfg: DictConfig) -> Optional[float]:
 
     # train the model
