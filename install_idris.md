@@ -56,7 +56,7 @@ Si installation avec compilation, etc., il est conseillé de réserver un noeud 
 ```sh
 srun --pty --nodes=1 --ntasks-per-node=1 --cpus-per-task=10 --hint=nomultithread --time=04:00:00 --partition=prepost --account $IDRPROJ@v100 bash
 
-export INSTALL_DIR=$SCRATCH/installs/ign  # à mettre à jour
+export INSTALL_DIR=$WORK/installs  # à mettre à jour
 mkdir $INSTALL_DIR
 ```
 
@@ -67,7 +67,7 @@ Pour faire le nettoyage :
 ```sh
 module load anaconda-py3/2022.05
 conda deactivate
-export INSTALL_DIR=$SCRATCH/installs/ign  # à mettre à jour
+export INSTALL_DIR=$WORK/installs  # à mettre à jour
 export PYTHONUSERBASE=$INSTALL_DIR/.local
 export CONDA_ENVS_PATH=$INSTALL_DIR/.conda
 conda remove -y --name pytorch1.13-ign --all
@@ -89,14 +89,14 @@ module load cmake/3.21.3 git/2.31.1
 eval "$(/gpfslocalsup/pub/anaconda-py3/2022.05/bin/conda shell.bash hook)"
 conda deactivate
 
-export INSTALL_DIR=$SCRATCH/installs/ign  # à mettre à jour
+export INSTALL_DIR=$WORK/installs  # à mettre à jour
 cd $INSTALL_DIR
 export PYTHONUSERBASE=$INSTALL_DIR/.local
 export CONDA_ENVS_PATH=$INSTALL_DIR/.conda
 export PATH=$PYTHONUSERBASE/bin:$PATH
 
-conda create -y -n pytorch1.13-ign python=3.10.8  
-conda activate pytorch1.13-ign
+conda create -y -n spt python=3.10.8  
+conda activate spt
 
 conda install -y astunparse numpy==1.23.3 ninja pyyaml setuptools cmake cffi typing_extensions future six requests dataclasses
 conda install -y -c conda-forge tqdm libsndfile pandas xarray hdf5 protobuf
@@ -333,12 +333,12 @@ ln -s $CONDA_PREFIX/lib/python$PYTHON/site-packages/numpy/core/include/numpy $CO
 
 cmake . -DPYTHON_LIBRARY=$CONDA_PREFIX/lib/libpython$PYTHON.so -DPYTHON_INCLUDE_DIR=$CONDA_PREFIX/include/python$PYTHON -DBOOST_INCLUDEDIR=$CONDA_PREFIX/include -DEIGEN3_INCLUDE_DIR=$CONDA_PREFIX/include/eigen3
 
--- Found PythonLibs: /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/pytorch1.13-ign/lib/libpython.so (found version "3.10.8") 
--- Found Boost: /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/pytorch1.13-ign/lib/cmake/Boost-1.80.0/BoostConfig.cmake (found suitable version "1.80.0", minimum required is "1.65.0") found components: graph 
--- Found Boost: /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/pytorch1.13-ign/lib/cmake/Boost-1.80.0/BoostConfig.cmake (found suitable version "1.80.0", minimum required is "1.67.0") found components: numpy310 
-Boost includes ARE /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/pytorch1.13-ign/include
-Boost LIBRARIES ARE /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/pytorch1.13-ign/lib
-PYTHON LIBRARIES ARE /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/pytorch1.13-ign/lib/libpython.so
+-- Found PythonLibs: /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/spt/lib/libpython.so (found version "3.10.8") 
+-- Found Boost: /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/spt/lib/cmake/Boost-1.80.0/BoostConfig.cmake (found suitable version "1.80.0", minimum required is "1.65.0") found components: graph 
+-- Found Boost: /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/spt/lib/cmake/Boost-1.80.0/BoostConfig.cmake (found suitable version "1.80.0", minimum required is "1.67.0") found components: numpy310 
+Boost includes ARE /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/spt/include
+Boost LIBRARIES ARE /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/spt/lib
+PYTHON LIBRARIES ARE /gpfsscratch/idris/sos/ssos021/installs/ign/.conda/spt/lib/libpython.so
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /gpfsscratch/idris/sos/ssos021/installs/ign/point_geometric_features/src
@@ -386,12 +386,12 @@ module load cmake/3.21.3 git/2.31.1
 eval "$(/gpfslocalsup/pub/anaconda-py3/2022.05/bin/conda shell.bash hook)"
 conda deactivate
 
-export INSTALL_DIR=$SCRATCH/installs/ign  # à mettre à jour
+export INSTALL_DIR=$WORK/installs  # à mettre à jour
 cd $INSTALL_DIR
 export PYTHONUSERBASE=$INSTALL_DIR/.local
 export CONDA_ENVS_PATH=$INSTALL_DIR/.conda
 export PATH=$PYTHONUSERBASE/bin:$PATH
-conda activate pytorch1.13-ign
+conda activate spt
 
 
 cd $INSTALL_DIR/point_geometric_features/
@@ -404,4 +404,30 @@ python example_tomography.py  # ok
 cd $INSTALL_DIR/parallel-cut-pursuit/python/
 python test.py # ok
 
+```
+
+## SPT sur un noeud GPU
+
+```sh
+ srun --pty --nodes=1 --ntasks-per-node=1 --gres=gpu:1 --cpus-per-task=10 --hint=nomultithread   --time=01:00:00 --qos=qos_gpu-dev --account $IDRPROJ@gpu bash
+
+module load cpuarch/amd
+
+module load cuda/11.2 nccl/2.9.6-1-cuda cudnn/8.1.1.33-cuda  
+module load gcc/8.4.1 openmpi/4.1.1-cuda intel-mkl/2020.4 magma/2.5.4-cuda  
+module load cmake/3.21.3 git/2.31.1
+
+eval "$(/gpfslocalsup/pub/anaconda-py3/2022.05/bin/conda shell.bash hook)"
+conda deactivate
+
+export INSTALL_DIR=$WORK/installs  # à mettre à jour
+export PYTHONUSERBASE=$INSTALL_DIR/.local
+export CONDA_ENVS_PATH=$INSTALL_DIR/.conda
+export PATH=$PYTHONUSERBASE/bin:$PATH
+conda activate spt
+
+cd $WORK/projects/superpoint_transformer
+
+# Commande principale
+HYDRA_FULL_ERROR=1 WANDB_MODE=dryrun python src/train.py trainer=gpu logger=wandb_s3dis datamodule=s3dis_graph model=pointnet_s3dis trainer.max_epochs=200 test=True +logger.wandb.name="pointnet jz"
 ```
