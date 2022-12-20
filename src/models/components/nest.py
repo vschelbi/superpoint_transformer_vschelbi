@@ -252,8 +252,8 @@ class NeST(nn.Module):
             # hierarchy
             mask_small = self.small < nag[1].node_size
             nag_full = nag
-            nag = nag_full.select(1, mask_small)
-            nag_small = nag_full.select(1, ~mask_small)
+            nag = nag_full.select(1, torch.where(mask_small)[0])
+            nag_small = nag_full.select(1, torch.where(~mask_small)[0])
 
             # Encode level-0 data for small L1 nodes
             x_small, diameter_small = self.point_stage_small(
@@ -314,14 +314,17 @@ class NeST(nn.Module):
         # Fuse L1-level features back together, if need be
         if self.small is not None:
             nag = nag_full
+            nag[1].x = torch.empty(
+                (nag[1].num_nodes, x.shape[1]), device=x.device)
             nag[1].x[torch.where(mask_small)] = x
             nag[1].x[torch.where(~mask_small)] = x_small
             x = nag[1].x
-            up_outputs[-1] = x
+            if len(up_outputs) > 0:
+                up_outputs[-1] = x
 
             #TODO: if the per-stage output is returned, need to define how to
             # deal with small L1 nodes
-            if not return_down_outputs and not return_up_outputs:
+            if return_down_outputs or return_up_outputs:
                 raise NotImplementedError(
                     "Returning per-stage output is not supported yet when "
                     "`small` is specified")

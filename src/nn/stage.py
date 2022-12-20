@@ -7,7 +7,7 @@ from src.nn.fusion import fusion_factory
 from src.nn.injection import *
 
 
-__all__ = ['Stage', 'DownStage', 'DownNFuseStage', 'UpNFuseStage', 'PointStage']
+__all__ = ['Stage', 'DownNFuseStage', 'UpNFuseStage', 'PointStage']
 
 
 class Stage(nn.Module):
@@ -139,38 +139,6 @@ class Stage(nn.Module):
             x = self.out_mlp(x)
 
         return x, diameter
-
-
-class DownStage(Stage):
-    """A Stage preceded by a pooling operator to aggregate node
-    features from level-i to level-i+1. A DownStage has the following
-    structure:
-
-        x -- Pool -- Stage -->
-    """
-
-    def __init__(self, *args, pool='max', **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Pooling operator
-        if pool == 'max':
-            self.pool = MaxPool()
-        elif pool == 'min':
-            self.pool = MinPool()
-        elif pool == 'mean':
-            self.pool = MeanPool()
-        elif pool == 'sum':
-            self.pool = SumPool()
-        else:
-            raise NotImplementedError(f'Unknown pool={pool} mode')
-
-    def forward(
-            self, x, norm_index, pool_index, pos=None, node_size=None,
-            super_index=None, edge_index=None, num_super=None):
-        x = self.pool(x, index=pool_index, dim_size=num_super)
-        return super().forward(
-            x, norm_index, pos=pos, node_size=node_size,
-            super_index=super_index, edge_index=edge_index)
 
 
 class DownNFuseStage(Stage):
