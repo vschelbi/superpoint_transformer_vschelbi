@@ -213,8 +213,8 @@ class NeST(nn.Module):
                 ffn_ratio=last_ffn_ratio, residual_drop=last_residual_drop,
                 attn_drop=last_attn_drop, drop_path=last_drop_path,
                 activation=activation, pre_ln=pre_ln, no_sa=no_sa,
-                no_ffn=no_ffn, pool=pool, fusion=fusion,
-                pos_injection=pos_injection, cat_diameter=cat_diameter,
+                no_ffn=no_ffn, pos_injection=pos_injection,
+                cat_diameter=cat_diameter,
                 pos_injection_x_dim=last_pos_injection_x_dim)
         else:
             self.last_stage = None
