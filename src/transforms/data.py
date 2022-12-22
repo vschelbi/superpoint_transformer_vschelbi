@@ -1,11 +1,12 @@
 import torch
 from src.data import Data, NAG
 from src.transforms import Transform
+from src.utils import tensor_idx
 
 
 __all__ = [
     'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeyToX',
-    'NAGAddKeyToX', 'NAGSelectByKey']
+    'NAGAddKeyToX', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns']
 
 
 class DataToNAG(Transform):
@@ -288,5 +289,75 @@ class NAGSelectByKey(Transform):
         # Remove the key if need be
         if self.delete_after:
             nag[self.level][self.key] = None
+
+        return nag
+
+
+class SelectColumns(Transform):
+    """Select columns of an attribute based on their indices.
+
+    :param key: str
+        The Data attribute whose columns should be selected
+    :param idx: int, Tensor or list
+        The indices of the edge features to keep. If None, this
+        transform will have no effect and edge features will be left
+        untouched
+    """
+
+    def __init__(self, key=None, idx=None):
+        assert key is not None, f"A Data key must be specified"
+        self.key = key
+        self.idx = tensor_idx(idx) if idx is not None else None
+
+    def _process(self, data):
+        if self.idx is None or getattr(data, self.key, None) is None:
+            return data
+        data[self.key] = data[self.key][:, self.idx.to(device=data.device)]
+        return data
+
+
+class NAGSelectColumns(Transform):
+    """Select columns of an attribute based on their indices.
+
+    :param level: int or str
+        Level at which to select attributes. Can be an int or a str. If
+        the latter, 'all' will apply on all levels, 'i+' will apply on
+        level-i and above, 'i-' will apply on level-i and below
+    :param key: str
+        The Data attribute whose columns should be selected
+    :param idx: int, Tensor or list
+        The indices of the edge features to keep. If None, this
+        transform will have no effect and edge features will be left
+        untouched
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, level='all', key=None, idx=None):
+        self.level = level
+        self.key = key
+        self.idx = idx
+
+    def _process(self, nag):
+
+        level_idx = [None] * nag.num_levels
+        if isinstance(self.level, int):
+            level_idx[self.level] = self.idx
+        elif self.level == 'all':
+            level_idx = [self.idx] * nag.num_levels
+        elif self.level[-1] == '+':
+            i = int(self.level[:-1])
+            level_idx[i:] = [self.idx] * (nag.num_levels - i)
+        elif self.level[-1] == '-':
+            i = int(self.level[:-1])
+            level_idx[:i] = [self.idx] * i
+        else:
+            raise ValueError(f'Unsupported level={self.level}')
+
+        transforms = [SelectColumns(key=self.key, idx=idx) for idx in level_idx]
+
+        for i_level in range(nag.num_levels):
+            nag._list[i_level] = transforms[i_level](nag._list[i_level])
 
         return nag

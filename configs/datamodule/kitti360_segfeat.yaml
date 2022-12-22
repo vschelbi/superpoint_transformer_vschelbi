@@ -10,9 +10,10 @@ train_transform:
       params:
         level: '1+'
         keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
-#    - transform: NAGSelectEdgeAttr
+#    - transform: NAGSelectColumns
 #      params:
 #        level: '1+'
+#        key: 'edge_attr'
 #        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 on_device_train_transform:

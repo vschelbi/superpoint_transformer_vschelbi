@@ -13,7 +13,7 @@ from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'EdgeFeatures', 'ConnectIsolated',
-    'NodeSize', 'JitterEdgeFeatures', 'SelectEdgeAttr', 'NAGSelectEdgeAttr']
+    'NodeSize', 'JitterEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
@@ -208,7 +208,7 @@ class EdgeFeatures(Transform):
     By default, a series of handcrafted edge attributes are computed and
     stored in the corresponding `Data.edge_attr`. However, if one only
     needs a subset of those at train time, one may make use of
-    `SelectEdgeAttr` and `NAGSelectEdgeAttr`.
+    `SelectColumns` and `NAGSelectColumns`.
 
     :param n_max_edge: int
         Maximum number of level-0 points to sample in each cluster to
@@ -588,68 +588,5 @@ class JitterEdgeFeatures(Transform):
             noise = torch.randn_like(
                 nag[i_level].edge_attr, device=device) * self.sigma
             nag[i_level].edge_attr += noise
-
-        return nag
-
-
-class SelectEdgeAttr(Transform):
-    """Select edge attributes from their indices.
-
-    :param idx: int, Tensor or list
-        The indices of the edge features to keep. If None, this
-        transform will have no effect and edge features will be left
-        untouched
-    """
-
-    def __init__(self, idx=None):
-        self.idx = tensor_idx(idx) if idx is not None else None
-
-    def _process(self, data):
-        if self.idx is None or getattr(data, 'edge_attr', None) is None:
-            return data
-        data.edge_attr = data.edge_attr[:, self.idx.to(device=data.device)]
-        return data
-
-
-class NAGSelectEdgeAttr(Transform):
-    """Select edge attributes from their indices.
-
-    :param level: int or str
-        Level at which to select attributes. Can be an int or a str. If
-        the latter, 'all' will apply on all levels, 'i+' will apply on
-        level-i and above, 'i-' will apply on level-i and below
-    :param idx: int, Tensor or list
-        The indices of the edge features to keep. If None, this
-        transform will have no effect and edge features will be left
-        untouched
-    """
-
-    _IN_TYPE = NAG
-    _OUT_TYPE = NAG
-
-    def __init__(self, level='all', idx=None):
-        self.level = level
-        self.idx = idx
-
-    def _process(self, nag):
-
-        level_idx = [None] * nag.num_levels
-        if isinstance(self.level, int):
-            level_idx[self.level] = self.idx
-        elif self.level == 'all':
-            level_idx = [self.idx] * nag.num_levels
-        elif self.level[-1] == '+':
-            i = int(self.level[:-1])
-            level_idx[i:] = [self.idx] * (nag.num_levels - i)
-        elif self.level[-1] == '-':
-            i = int(self.level[:-1])
-            level_idx[:i] = [self.idx] * i
-        else:
-            raise ValueError(f'Unsupported level={self.level}')
-
-        transforms = [SelectEdgeAttr(idx=idx) for idx in level_idx]
-
-        for i_level in range(nag.num_levels):
-            nag._list[i_level] = transforms[i_level](nag._list[i_level])
 
         return nag
