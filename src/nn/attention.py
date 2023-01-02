@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
+from src.nn import FFN
 
 
 __all__ = ['SelfAttentionBlock']
@@ -25,7 +26,8 @@ class SelfAttentionBlock(nn.Module):
 
     def __init__(
             self, dim, num_heads=1, in_dim=None, out_dim=None, qkv_bias=True,
-            qk_scale=None, attn_drop=None, drop=None):
+            qk_scale=None, attn_drop=None, drop=None, k_rpe=False, q_rpe=False,
+            c_rpe=False, v_rpe=False):
         super().__init__()
 
         assert dim % num_heads == 0, f"dim must be a multiple of num_heads"
@@ -35,6 +37,9 @@ class SelfAttentionBlock(nn.Module):
         self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+
+        self.k_rpe = FFN(3, out_dim=dim, activation=nn.LeakyReLU()) if k_rpe else None
+        self.q_rpe = FFN(3, out_dim=dim, activation=nn.LeakyReLU()) if q_rpe else None
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
         self.out_proj = nn.Linear(out_dim, dim) if out_dim is not None else None
@@ -47,14 +52,19 @@ class SelfAttentionBlock(nn.Module):
         # TODO: define relative positional encoding parameters and
         #  trunacted-normal initialize them (see Swin-T implementation)
 
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, pos=None, edge_attr=None):
         """
         :param x: Tensor of shape (N, C)
-            Features
+            Node features
         :param edge_index: LongTensor of shape (2, E)
             Source and target indices for the edges of the attention
             graph. Source indicates the querying element, while Target
             indicates the key elements
+        :param pos: FloatTensor or shape (N, D)
+            Node positions for relative position encoding
+        :param edge_attr: FloatTensor or shape (E, F)
+            Edge attributes for relative pose encoding
+        :return:
         """
         N = x.shape[0]
         E = edge_index.shape[1]
@@ -79,6 +89,20 @@ class SelfAttentionBlock(nn.Module):
         # Apply scaling on the queries
         q = q * self.qk_scale
 
+        # TODO: add the relative positional encodings to the
+        #  compatibilities here
+        #  - k_rpe, q_rpe, c_rpe, v_rpe
+        #  - pos difference, absolute distance, squared distance, centroid distance, edge distance, ...
+        #  - with/out edge attributes
+        #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
+        #  - scalar rpe, vector rpe (see Stratified Transformer)
+        if self.k_rpe is not None:
+            r_pos = pos[edge_index[0]] - pos[edge_index[1]]
+            k = k + self.k_rpe(r_pos).view(E, H, -1)
+        if self.q_rpe is not None:
+            r_pos = pos[edge_index[0]] - pos[edge_index[1]]
+            q = q + self.q_rpe(r_pos).view(E, H, -1)
+
         # Compute compatibility scores from the query-key products
         compat = torch.einsum('ehd, ehd -> eh', q, k)  # [E, H]
 
@@ -86,9 +110,6 @@ class SelfAttentionBlock(nn.Module):
         # TODO: need to scale the softmax based on the number of
         #  elements in each group ?
         attn = softmax(compat, index=s, dim=0, num_nodes=N)  # [E, H]
-
-        # TODO: add the relative positional encodings to the
-        #  compatibilities here
 
         # Optional attention dropout
         if self.attn_drop is not None:

@@ -42,18 +42,16 @@ def positional_encoding(pos, dim, f_min=1e-1, f_max=1e1):
 
     # Make sure M divides dim
     N, M = pos.shape
-    #assert dim % M == 0, \
-    #    "`dim` must be a multiple of the number of input spatial dimensions"
     D = dim // M
-    #assert D % 2 == 0, \
-    #    "`dim / M` must be a even number"
+    # assert dim % M == 0, "`dim` must be a multiple of the number of input spatial dimensions"
+    # assert D % 2 == 0, "`dim / M` must be a even number"
 
     # To avoid uncomfortable border effects with -1 and +1 coordinates
     # having the same (or very close) encodings, we convert [-1, 1]
     # coordinates to [-π/2, π/2] for safety
     pos = pos * torch.pi / 2
 
-    # Compute frequencies on a logarithmic of range from f_min to f_max
+    # Compute frequencies on a logarithmic range from f_min to f_max
     device = pos.device
     f_min = torch.tensor([f_min], device=device)
     f_max = torch.tensor([f_max], device=device)

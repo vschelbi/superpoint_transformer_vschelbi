@@ -3,11 +3,12 @@ import torch
 import torch.nn as nn
 from src.utils import positional_encoding
 from src.nn.fusion import fusion_factory
+from src.nn.mlp import FFN
 
 
 __all__ = [
-    'CatInjection', 'AdditiveInjection', 'FourierInjection',
-    'LearnableFourierInjection']
+    'CatInjection', 'AdditiveInjection', 'AdditiveMLPInjection',
+    'FourierInjection', 'LearnableFourierInjection']
 
 
 class BasePositionalInjection(nn.Module):
@@ -65,6 +66,19 @@ class AdditiveInjection(BasePositionalInjection):
 
     def _encode(self, pos):
         return pos
+
+
+class AdditiveMLPInjection(BasePositionalInjection):
+    def __init__(self, dim=None, **kwargs):
+        """Simple child class of BasePositionalInjection equivalent to
+        an MLP followed by AdditiveFusion.
+        """
+        super().__init__(dim=dim, x_dim=None, fusion='additive')
+
+        self.mlp = FFN(3, out_dim=self.dim, activation=nn.LeakyReLU())
+
+    def _encode(self, pos):
+        return self.mlp(pos)
 
 
 class FourierInjection(BasePositionalInjection):

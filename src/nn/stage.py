@@ -106,7 +106,7 @@ class Stage(nn.Module):
 
     def forward(
             self, x, norm_index, pos=None, node_size=None, super_index=None,
-            edge_index=None):
+            edge_index=None, edge_attr=None):
 
         # Append normalized coordinates to the node features
         if pos is not None:
@@ -131,7 +131,8 @@ class Stage(nn.Module):
         if self.transformer_blocks is not None:
             for block in self.transformer_blocks:
                 x, norm_index, edge_index = block(
-                    x, norm_index, edge_index=edge_index)
+                    x, norm_index, edge_index=edge_index, pos=pos,
+                    edge_attr=edge_attr)
             # x = self.transformer_blocks(x, norm_index, edge_index=edge_index)
 
         # MLP on output features to change channel size
@@ -172,11 +173,11 @@ class DownNFuseStage(Stage):
 
     def forward(
             self, x1, x2, norm_index, pool_index, pos=None, node_size=None,
-            super_index=None, edge_index=None, num_super=None):
+            super_index=None, edge_index=None, edge_attr=None, num_super=None):
         x = self.fusion(x1, self.pool(x2, index=pool_index, dim_size=num_super))
         return super().forward(
             x, norm_index, pos=pos, node_size=node_size,
-            super_index=super_index, edge_index=edge_index)
+            super_index=super_index, edge_index=edge_index, edge_attr=edge_attr)
 
 
 class UpNFuseStage(Stage):
@@ -206,11 +207,11 @@ class UpNFuseStage(Stage):
 
     def forward(
             self, x1, x2, norm_index, unpool_index, pos=None, node_size=None,
-            super_index=None, edge_index=None):
+            super_index=None, edge_index=None, edge_attr=None):
         x = self.fusion(x1, self.unpool(x2, unpool_index))
         return super().forward(
             x, norm_index, pos=pos, node_size=node_size,
-            super_index=super_index, edge_index=edge_index)
+            super_index=super_index, edge_index=edge_index, edge_attr=edge_attr)
 
 
 class PointStage(Stage):
@@ -253,6 +254,6 @@ class PointStage(Stage):
             mlp_drop=mlp_drop, pos_injection=pos_injection, 
             pos_injection_x_dim=pos_injection_x_dim, cat_diameter=cat_diameter)
 
-    def forward(self, x, pos, node_size=None, super_index=None):
+    def forward(self, x, pos, node_size=None, super_index=None, **kwargs):
         return super().forward(
             x, None, pos=pos, node_size=node_size, super_index=super_index)

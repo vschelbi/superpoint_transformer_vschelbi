@@ -360,12 +360,13 @@ class NeST(nn.Module):
         super_index = nag[i_level].super_index if not is_last_level \
             else None
         edge_index = nag[i_level].edge_index
+        edge_attr = nag[i_level].edge_attr
 
         # Forward pass on the stage and store output x
         x_out, diameter = stage(
             x_handcrafted, x, norm_index, pool_index,
             pos=pos, node_size=node_size, super_index=super_index,
-            edge_index=edge_index, num_super=num_nodes)
+            edge_index=edge_index, edge_attr=edge_attr, num_super=num_nodes)
 
         return x_out, diameter
 
@@ -386,11 +387,12 @@ class NeST(nn.Module):
         unpool_index = nag[i_level].super_index
         super_index = nag[i_level].super_index
         edge_index = nag[i_level].edge_index
+        edge_attr = nag[i_level].edge_attr
 
         x_out, diameter = stage(
             x_skip, x, norm_index, unpool_index, pos=pos,
             node_size=node_size, super_index=super_index,
-            edge_index=edge_index)
+            edge_index=edge_index, edge_attr=edge_attr)
 
         return x_out, diameter
 
@@ -410,10 +412,11 @@ class NeST(nn.Module):
         super_index = nag[i_level].super_index if not is_last_level \
             else None
         edge_index = nag[i_level].edge_index
+        edge_attr = nag[i_level].edge_attr
 
         # Forward pass on the stage and store output x
         x_out, diameter = self.last_stage(
             x, norm_index, pos=pos, node_size=node_size,
-            super_index=super_index, edge_index=edge_index)
+            super_index=super_index, edge_index=edge_index, edge_attr=edge_attr)
 
         return x_out, diameter
