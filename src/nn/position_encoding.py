@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from src.utils import positional_encoding
+from src.utils import fourier_position_encoder
 from src.nn.fusion import fusion_factory
 from src.nn.mlp import FFN
 
@@ -103,7 +103,7 @@ class FourierInjection(BasePositionalInjection):
         self.f_max = f_max
 
     def _encode(self, pos):
-        return positional_encoding(
+        return fourier_position_encoder(
             pos, self.dim, f_min=self.f_min, f_max=self.f_max)
 
 

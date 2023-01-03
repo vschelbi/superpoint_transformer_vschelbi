@@ -4,7 +4,7 @@ from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm
 from src.nn.pool import *
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
-from src.nn.injection import *
+from src.nn.position_encoding import *
 
 
 __all__ = ['Stage', 'DownNFuseStage', 'UpNFuseStage', 'PointStage']

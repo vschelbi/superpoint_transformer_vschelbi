@@ -1,10 +1,10 @@
 import torch
 
 
-__all__ = ['positional_encoding']
+__all__ = ['fourier_position_encoder']
 
 
-def positional_encoding(pos, dim, f_min=1e-1, f_max=1e1):
+def fourier_position_encoder(pos, dim, f_min=1e-1, f_max=1e1):
     """
     Heuristic: keeping ```f_min = 1 / f_max``` ensures that roughly 50%
     of the encoding dimensions are untouched and free to use. This is
