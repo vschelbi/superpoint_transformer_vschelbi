@@ -1,4 +1,4 @@
-from torch_scatter import scatter_max
+from torch_scatter import scatter
 from torch import nn
 from src.data import NAG
 from src.nn import MLP, FastBatchNorm1d
@@ -41,8 +41,9 @@ class NodeMLP(nn.Module):
 
         # If node level is 0, max-pool to produce level-1 features
         if self.level == 0:
-            return scatter_max(
-                x, nag[0].super_index, dim=0, dim_size=nag[1].num_nodes)
+            return scatter(
+                x, nag[0].super_index, dim=0, dim_size=nag[1].num_nodes,
+                reduce='max')
 
         # If node level is larger than 1, distribute parent features to
         # level-1 nodes
