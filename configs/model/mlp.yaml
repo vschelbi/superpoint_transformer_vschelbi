@@ -1,0 +1,7 @@
+defaults:
+  - default.yaml
+
+net:
+  _target_: src.models.components.mlp.NodeMLP
+  dims: [8, 32, 64, 128]
+  level: 0

@@ -1,0 +1,4 @@
+defaults:
+  - mlp.yaml
+
+num_classes: 13
