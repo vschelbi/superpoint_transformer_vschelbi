@@ -2,8 +2,7 @@ import torch
 from torch import nn
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
-from src.nn import FFN
-
+from src.nn.mlp import FFN, mlp
 
 __all__ = ['SelfAttentionBlock']
 
@@ -38,8 +37,11 @@ class SelfAttentionBlock(nn.Module):
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
 
-        self.k_rpe = FFN(3, out_dim=dim, activation=nn.LeakyReLU()) if k_rpe else None
-        self.q_rpe = FFN(3, out_dim=dim, activation=nn.LeakyReLU()) if q_rpe else None
+        self.k_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if k_rpe else None
+        self.q_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if q_rpe else None
+
+        # self.k_rpe = mlp([3 + 10, dim, dim], last_activation=False) if k_rpe else None
+        # self.q_rpe = mlp([3 + 10, dim, dim], last_activation=False) if q_rpe else None
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
         self.out_proj = nn.Linear(out_dim, dim) if out_dim is not None else None
@@ -82,9 +84,9 @@ class SelfAttentionBlock(nn.Module):
         # TODO: make sure edge_index is undirected ? has self-loops ?
         s = edge_index[0]  # [E]
         t = edge_index[1]  # [E]
-        q = qkv[s, 0]      # [E, H, C // H]
-        k = qkv[t, 1]      # [E, H, C // H]
-        v = qkv[t, 2]      # [E, H, C // H]
+        q = qkv[s, 0]  # [E, H, C // H]
+        k = qkv[t, 1]  # [E, H, C // H]
+        v = qkv[t, 2]  # [E, H, C // H]
 
         # Apply scaling on the queries
         q = q * self.qk_scale
@@ -97,10 +99,10 @@ class SelfAttentionBlock(nn.Module):
         #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
         #  - scalar rpe, vector rpe (see Stratified Transformer)
         if self.k_rpe is not None:
-            r_pos = pos[edge_index[0]] - pos[edge_index[1]]
+            r_pos = torch.cat((pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
             k = k + self.k_rpe(r_pos).view(E, H, -1)
         if self.q_rpe is not None:
-            r_pos = pos[edge_index[0]] - pos[edge_index[1]]
+            r_pos = torch.cat((pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
             q = q + self.q_rpe(r_pos).view(E, H, -1)
 
         # Compute compatibility scores from the query-key products
@@ -116,7 +118,7 @@ class SelfAttentionBlock(nn.Module):
             attn = self.attn_drop(attn)
 
         # Apply the attention on the values
-        x = (v * attn.unsqueeze(-1)).view(E, self.dim)    # [E, C]
+        x = (v * attn.unsqueeze(-1)).view(E, self.dim)  # [E, C]
         x = scatter_sum(x, s, dim=0, dim_size=N)  # [N, C]
 
         # Optional linear projection of features
