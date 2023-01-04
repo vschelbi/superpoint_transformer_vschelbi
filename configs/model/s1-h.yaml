@@ -20,7 +20,7 @@ net:
   down_in_mlp: [147, 128]
   down_out_mlp: null
   down_mlp_drop: null
-  down_num_heads: 2
+  down_num_heads: 16
   down_num_blocks: 3
   down_ffn_ratio: 1
   down_residual_drop: null
@@ -48,8 +48,8 @@ net:
   last_in_mlp: [131, 128]
   last_out_mlp: null
   last_mlp_drop: null
-  last_num_heads: 2
-  last_num_blocks: 3
+  last_num_heads: 1
+  last_num_blocks: 1
   last_ffn_ratio: 1
   last_residual_drop: null
   last_attn_drop: null

@@ -13,8 +13,8 @@ net:
   point_cat_diameter: False
 
   small: null
-  small_point_mlp: null
-  small_down_mlp: null
+  small_point_mlp: [11, 32, 64, 128]
+  small_down_mlp: [147, 256]
 
   down_mlp: [[147, 128, 128], [147, 128, 128], [147, 128, 128], [147, 128, 128]]
   down_drop: null

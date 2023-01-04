@@ -16,12 +16,12 @@ net:
   small_point_mlp: [11, 32, 64, 128]
   small_down_mlp: [147, 128]
 
-  down_dim: 128
-  down_in_mlp: [147, 128]
+  down_dim: [128, 128, 128, 128]
+  down_in_mlp: [[147, 128, 128], [147, 128, 128], [147, 128, 128], [147, 128, 128]]
   down_out_mlp: null
   down_mlp_drop: null
-  down_num_heads: 2
-  down_num_blocks: 3
+  down_num_heads: 1
+  down_num_blocks: 1
   down_ffn_ratio: 1
   down_residual_drop: null
   down_attn_drop: null
@@ -30,13 +30,13 @@ net:
   down_inject_x: True  # appends (16) = diameter (1) + handcrafted superpoint features (15)
   down_pos_injection_x_dim: null
 
-  up_dim: null
-  up_in_mlp: null
+  up_dim: [128, 128, 128]
+  up_in_mlp: [[259, 128, 128], [259, 128, 128], [259, 128, 128]]
   up_out_mlp: null
   up_mlp_drop: null
   up_num_heads: 1
   up_num_blocks: 1
-  up_ffn_ratio: 4
+  up_ffn_ratio: 1
   up_residual_drop: null
   up_attn_drop: null
   up_drop_path: null
@@ -48,7 +48,7 @@ net:
   last_in_mlp: [131, 128]
   last_out_mlp: null
   last_mlp_drop: null
-  last_num_heads: 2
+  last_num_heads: 1
   last_num_blocks: 3
   last_ffn_ratio: 1
   last_residual_drop: null
