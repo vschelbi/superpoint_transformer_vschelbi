@@ -1,4 +1,7 @@
+import torch
 import logging
+import pandas as pd
+from src.utils.geometry import rodrigues_rotation_matrix
 from src.datasets.s3dis_config import *
 from src.datasets.s3dis import read_s3dis_room, S3DIS
 
@@ -10,7 +13,7 @@ __all__ = ['S3DISRoom', 'MiniS3DISRoom']
 
 
 ########################################################################
-#                               S3DIS                               #
+#                              S3DIS Room                              #
 ########################################################################
 
 class S3DISRoom(S3DIS):
@@ -24,6 +27,9 @@ class S3DISRoom(S3DIS):
         Root directory where the dataset should be saved.
     fold : `int`
         Integer in [1, ..., 6] indicating the Test Area
+    align : `bool`
+        Whether the rooms should be canonically aligned, as described in
+        section 3.2 of the S3DIS paper
     stage : {'train', 'val', 'test', 'trainval'}, optional
     transform : `callable`, optional
         transform function operating on data.
@@ -38,8 +44,9 @@ class S3DISRoom(S3DIS):
         want to run in CPU-based DataLoaders
     """
 
-    _zip_name = ALIGNED_ZIP_NAME
-    _unzip_name = ALIGNED_UNZIP_NAME
+    def __init__(self, *args, align=True, **kwargs):
+        self.align = align
+        super().__init__(*args, **kwargs)
 
     @property
     def all_cloud_ids(self):
@@ -59,20 +66,40 @@ class S3DISRoom(S3DIS):
             'test': [
                 f'Area_{self.fold}/{r}' for r in ROOMS[f'Area_{self.fold}']]}
 
-    def read_single_raw_cloud(self, raw_cloud_path):
+    def read_single_raw_cloud(self, raw_cloud_path, instance=False):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
-        return read_s3dis_room(
-            raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=False,
+        data = read_s3dis_room(
+            raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=instance,
             is_val=True, verbose=False)
 
-    def id_to_relative_raw_path(self, id):
-        """Given a cloud id as stored in `self.cloud_ids`, return the
-        path (relative to `self.raw_dir`) of the corresponding raw
-        cloud.
-        """
-        return id
+        # Return the room in its real orientation, if not required to
+        # align along the canonical axes defined in the S3DIS paper (ie
+        # the room entrance door facing negative x)
+        if not self.align:
+            return data
+
+        # TODO: bbox alignment
+        if instance:
+            raise NotImplementedError(
+                "If you are using bbox for detection, need to implement bbox "
+                "alignment here first...")
+
+        # Recover the canonical rotation angle for the room at hand
+        area_dir = osp.dirname(raw_cloud_path)
+        area = osp.basename(osp.dirname(raw_cloud_path))
+        room_name = osp.basename(raw_cloud_path)
+        alignment_file = osp.join(area_dir, f'{area}_alignmentAngle.txt')
+        alignments = pd.read_csv(
+            alignment_file, sep=' ', header=None, skiprows=2).values
+        angle = alignments[np.where(alignments[:, 0] == room_name), 1]
+
+        # Rotate the room to its canonical orientation
+        R = rodrigues_rotation_matrix(torch.FloatTensor([0, 0, 1]), angle)
+        data.pos = data.pos @ R
+
+        return data
 
 
 ########################################################################

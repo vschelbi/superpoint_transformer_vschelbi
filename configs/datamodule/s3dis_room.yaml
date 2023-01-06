@@ -1,5 +1,5 @@
 defaults:
-  - default.yaml
+  - s3dis.yaml
 
 _target_: src.datamodules.s3dis.S3DISRoomDataModule
 
@@ -7,7 +7,7 @@ fold: 5
 trainval: True
 val_on_test: True
 
-pre_transform:
+pre_transform: ADD ROOM GLOBAL NORMALIZATION COORDINATES !!!!
 
 #    - transform: DataTo
 #      params:
@@ -87,11 +87,6 @@ pre_transform:
       params:
         device: 'cpu'
 
-train_transform:
-    - transform: NAGRemoveKeys
-      params:
-        level: '1+'
-        keys: ['x']
 
 val_transform: ${datamodule.train_transform}
 

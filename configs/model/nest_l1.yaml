@@ -4,7 +4,7 @@ defaults:
 net:
   _target_: src.models.components.nest.NeST
 
-  point_mlp: [11, 32, 64, 128]
+  point_mlp: [11, 64, 64, 128, 128]
   point_drop: null
   point_pos_injection:
     _target_: src.nn.CatInjection
@@ -12,12 +12,12 @@ net:
   point_pos_injection_x_dim: null
   point_cat_diameter: False
 
-  small: null
-  small_point_mlp: [11, 32, 64, 128]
-  small_down_mlp: [147, 128]
+  small: null # 40
+  small_point_mlp: [11, 64, 64]
+  small_down_mlp: [83, 64, 32]
 
-  down_dim: 128
-  down_in_mlp: [147, 128]
+  down_dim: 32
+  down_in_mlp: [147, 64, 32]
   down_out_mlp: null
   down_mlp_drop: null
   down_num_heads: 2

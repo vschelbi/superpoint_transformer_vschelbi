@@ -88,10 +88,19 @@ pre_transform:
         device: 'cpu'
 
 train_transform:
-    - transform: NAGRemoveKeys
+    - transform: NAGRemoveKeys  # remove any features already computed in CutPursuitPartition
       params:
         level: '1+'
-        keys: ['x']
+        keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
+    - transform: NAGAddKeyToX
+      params:
+        level: '1+'
+        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
+    - transform: NAGSelectColumns
+      params:
+        level: '1+'
+        key: 'edge_attr'
+        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 val_transform: ${datamodule.train_transform}
 
@@ -102,17 +111,20 @@ on_device_train_transform:
       params:
         high: 1
         low: 0
-        n_max: 32
-        n_min: 16
-#    - transform: DropoutSegments
-#      params:
-#        ratio: 0.2
-#        by_size: False
-#        by_class: False
+        n_min: 32
+        n_max: 128
+    - transform: DropoutSegments
+      params:
+        ratio: [0.4, 0, 0, 0]
+        by_size: False
+        by_class: False
     - transform: JitterPosition
       params:
         sigma: 0.03
     - transform: JitterFeatures
+      params:
+        sigma: 0.01
+    - transform: JitterEdgeFeatures
       params:
         sigma: 0.01
     - transform: RandomTiltAndRotate
@@ -137,7 +149,7 @@ on_device_val_transform:
       params:
         high: 1
         low: 0
-        n_max: 64
-        n_min: 16
+        n_min: 128
+        n_max: 256
 
 on_device_test_transform: ${datamodule.on_device_val_transform}
