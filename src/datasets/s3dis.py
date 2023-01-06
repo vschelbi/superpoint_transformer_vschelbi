@@ -163,7 +163,7 @@ def read_s3dis_room(
 ########################################################################
 
 class S3DIS(BaseDataset):
-    """S3DIS dataset.
+    """S3DIS dataset, for Area-wise prediction.
 
     Dataset website: http://buildingparser.stanford.edu/dataset.html
 
@@ -186,6 +186,11 @@ class S3DIS(BaseDataset):
         augmentations should be, as well as any Transform you do not
         want to run in CPU-based DataLoaders
     """
+
+    _download_url = DOWNLOAD_URL
+    _form_url = FORM_URL
+    _zip_name = ZIP_NAME
+    _unzip_name = UNZIP_NAME
 
     def __init__(self, *args, fold=5, **kwargs):
         self.fold = fold
@@ -226,26 +231,28 @@ class S3DIS(BaseDataset):
         """Download the S3DIS dataset.
         """
         # Download the whole dataset as a single zip file
-        if not osp.exists(osp.join(self.root, ZIP_NAME)):
+        if not osp.exists(osp.join(self.root, self._zip_name)):
             self.download_zip()
 
         # Unzip the file and rename it into the `root/raw/` directory. This
         # directory contains the raw Area folders from the zip
-        extract_zip(osp.join(self.root, ZIP_NAME), self.root)
+        extract_zip(osp.join(self.root, self._zip_name), self.root)
         shutil.rmtree(self.raw_dir)
-        os.rename(osp.join(self.root, UNZIP_NAME), self.raw_dir)
+        os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
 
     def download_zip(self):
         """Download the S3DIS dataset as a single zip file.
         """
         log.info(
-            f"Please, register yourself by filling up the form at {FORM_URL}")
+            f"Please, register yourself by filling up the form at "
+            f"{self._form_url}")
         log.info("***")
         log.info(
             "Press any key to continue, or CTRL-C to exit. By continuing, "
             "you confirm having filled up the form.")
         input("")
-        gdown.download(DOWNLOAD_URL, osp.join(self.root, ZIP_NAME), quiet=False)
+        gdown.download(
+            self._download_url, osp.join(self.root, self._zip_name), quiet=False)
 
     def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
@@ -259,7 +266,7 @@ class S3DIS(BaseDataset):
     def raw_file_structure(self):
         return f"""
     {self.root}/
-        └── {ZIP_NAME}
+        └── {self._zip_name}
         └── raw/
             └── Area_{{i_area:1>6}}/
                 └── ...
