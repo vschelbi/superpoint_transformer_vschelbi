@@ -429,5 +429,5 @@ conda activate spt
 cd $WORK/projects/superpoint_transformer
 
 # Commande principale
-HYDRA_FULL_ERROR=1 WANDB_MODE=dryrun python src/train.py trainer=gpu logger=wandb_s3dis datamodule=s3dis_graph model=pointnet_s3dis trainer.max_epochs=200 test=True +logger.wandb.name="pointnet jz"
+HYDRA_FULL_ERROR=1 WANDB_MODE=dryrun python src/train.py trainer=gpu logger=wandb_s3dis datamodule=s3dis model=pointnet_s3dis trainer.max_epochs=200 test=True +logger.wandb.name="pointnet jz"
 ```
