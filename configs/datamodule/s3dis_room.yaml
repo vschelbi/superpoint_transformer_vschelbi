@@ -1,20 +1,20 @@
 defaults:
   - s3dis.yaml
 
-_target_: src.datamodules.s3dis.S3DISRoomDataModule
+_target_: src.datamodules.s3dis_room.S3DISRoomDataModule
 
 fold: 5
 trainval: True
 val_on_test: True
 
-pre_transform: ADD ROOM GLOBAL NORMALIZATION COORDINATES !!!!
+pre_transform:
 
 #    - transform: DataTo
 #      params:
 #        device: 'cuda'
     - transform: GridSampling3D
       params:
-        size: 0.05
+        size: 0.03  # from SPG
         hist_key: 'y'
         hist_size: 14  # this is for S3DIS_NUM_CLASSES +1 for ignored
     - transform: DataTo
@@ -22,8 +22,8 @@ pre_transform: ADD ROOM GLOBAL NORMALIZATION COORDINATES !!!!
         device: 'cuda'
     - transform: KNN
       params:
-        k: 25
-        r_max: 2
+        k: 45  # from SPG
+        r_max: 1
         verbose: True
     - transform: DataTo
       params:
@@ -32,7 +32,7 @@ pre_transform: ADD ROOM GLOBAL NORMALIZATION COORDINATES !!!!
       params:
         threshold: 1.5
         scale: 4.0
-    - transform: RoomPosition
+    - transform: RoomPosition  # from SPG
       params:
         elevation: False
     - transform: PointFeatures
@@ -53,17 +53,13 @@ pre_transform: ADD ROOM GLOBAL NORMALIZATION COORDINATES !!!!
         elevation: True
         pos_room: False
         k_min: 1
-    - transform: NAGAddKeyToX
-      params:
-        level: '0'
-        keys: ['pos_room']
     - transform: DataTo
       params:
         device: 'cuda'
     - transform: AdjacencyGraph
       params:
-        k: 10
-        w: -1
+        k: 10  # from SPG
+        w: 1  # from SPG
     - transform: ConnectIsolated
       params:
         k: 1
@@ -72,16 +68,20 @@ pre_transform: ADD ROOM GLOBAL NORMALIZATION COORDINATES !!!!
         device: 'cpu'
     - transform: CutPursuitPartition
       params:
-        regularization: [0.07, 0.3, 0.9, 1.8]
-        spatial_weight: [5e-2, 5e-3, 5e-4, 5e-4]
+        regularization: [0.03, 0.07, 0.3, 0.9]  # level-1 from SPG
+        spatial_weight: [5e-2, 5e-2, 5e-3, 5e-4]
         k_adjacency: 10
-        cutoff: [10, 80, 640, 5120]
+        cutoff: [10, 10, 80, 640]
         iterations: 15
         parallel: True
         verbose: True
     - transform: NAGTo
       params:
         device: 'cuda'
+    - transform: NAGAddKeyToX
+      params:
+        level: 0
+        keys: ['pos_room']
     - transform: SegmentFeatures
       params:
         n_max_node: 32

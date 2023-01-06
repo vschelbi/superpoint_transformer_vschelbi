@@ -8,9 +8,9 @@ from src.data import NAG
 
 
 __all__ = [
-    'PointFeatures', 'GroundElevation', 'JitterColor', 'JitterFeatures',
-    'ColorAutoContrast', 'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop',
-    'ColorNormalize', 'NAGColorNormalize']
+    'PointFeatures', 'GroundElevation', 'RoomPosition', 'JitterColor',
+    'JitterFeatures', 'ColorAutoContrast', 'NAGColorAutoContrast', 'ColorDrop',
+    'NAGColorDrop', 'ColorNormalize', 'NAGColorNormalize']
 
 
 class PointFeatures(Transform):
@@ -300,14 +300,14 @@ class RoomPosition(Transform):
         # assumed to be already at z=0
         if self.elevation:
             assert getattr(data, 'elevation', None) is not None
-            pos[:, 2] = pos[:, 2] - data.elevation
+            pos[:, 2] -= data.elevation
 
         # Shift XY
-        pos[:, :2] = pos[:, :2] - pos[:, :2].min(dim=2).values.view(1, -1)
+        pos[:, :2] -= pos[:, :2].min(dim=0).values.view(1, -1)
 
         # Scale XYZ based on the maximum values. ie the highest point
         # will be considered as the ceiling
-        pos = pos / pos.max(dim=0).values.view(1, -1)
+        pos /= pos.max(dim=0).values.view(1, -1)
 
         # Save in Data attribute `pos_room`
         data.pos_room = pos

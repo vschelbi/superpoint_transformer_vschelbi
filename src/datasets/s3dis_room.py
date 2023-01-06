@@ -70,6 +70,7 @@ class S3DISRoom(S3DIS):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
+
         data = read_s3dis_room(
             raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=instance,
             is_val=True, verbose=False)
@@ -93,13 +94,31 @@ class S3DISRoom(S3DIS):
         alignment_file = osp.join(area_dir, f'{area}_alignmentAngle.txt')
         alignments = pd.read_csv(
             alignment_file, sep=' ', header=None, skiprows=2).values
-        angle = alignments[np.where(alignments[:, 0] == room_name), 1]
+        angle = float(alignments[np.where(alignments[:, 0] == room_name), 1])
 
         # Rotate the room to its canonical orientation
         R = rodrigues_rotation_matrix(torch.FloatTensor([0, 0, 1]), angle)
         data.pos = data.pos @ R
 
         return data
+
+    def processed_to_raw_path(self, processed_path):
+        """Given a processed cloud path from `self.processed_paths`,
+        return the absolute path to the corresponding raw cloud.
+
+        Overwrite this method if your raw data does not follow the
+        default structure.
+        """
+        # Extract useful information from <path>
+        stage, hash_dir, area_id, room_id = \
+            osp.splitext(processed_path)[0].split('/')[-4:]
+        cloud_id = osp.join(area_id, room_id)
+
+        # Read the raw cloud data
+        raw_ext = osp.splitext(self.raw_file_names_3d[0])[1]
+        raw_path = osp.join(self.raw_dir, cloud_id + raw_ext)
+
+        return raw_path
 
 
 ########################################################################
