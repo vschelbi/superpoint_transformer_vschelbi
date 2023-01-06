@@ -1,6 +1,7 @@
 _target_: src.models.segmentation.PointSegmentationModule
 
 num_classes: 15  # this is for KITTI360 num_classes
+sampling_loss: False
 pointwise_loss: True
 weighted_loss: True
 transformer_lr_scale: 1

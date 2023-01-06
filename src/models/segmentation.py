@@ -18,8 +18,8 @@ class PointSegmentationModule(LightningModule):
 
     def __init__(
             self, net, criterion, optimizer, scheduler, num_classes,
-            class_names=None, pointwise_loss=True, weighted_loss=True,
-            custom_init=True, transformer_lr_scale=1):
+            class_names=None, sampling_loss=False, pointwise_loss=True,
+            weighted_loss=True, custom_init=True, transformer_lr_scale=1):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -42,8 +42,6 @@ class PointSegmentationModule(LightningModule):
         # for unclassified/ignored points, which are given num_classes
         # labels
         self.criterion = criterion
-        self.pointwise_loss = pointwise_loss
-        self.weighted_loss = weighted_loss
 
         # Metric objects for calculating and averaging accuracy across
         # batches. We add `ignore_index=num_classes` to account for
@@ -92,7 +90,7 @@ class PointSegmentationModule(LightningModule):
 
         self.class_names = self.trainer.datamodule.train_dataset.class_names
 
-        if not self.weighted_loss:
+        if not self.hparams.weighted_loss:
             return
 
         if not hasattr(self.criterion, 'weight'):
@@ -115,13 +113,19 @@ class PointSegmentationModule(LightningModule):
         self.val_macc_best.reset()
 
     def step(self, nag):
-        # Recover level-0 segment indices and labels
-        idx = nag[0].super_index
-        y = nag[0].y
+        # Recover level-1 label histograms, either from the level-0
+        # sampled points (ie sampling will affect the loss and metrics)
+        # or directly from the precomputed level-1 label histograms (ie
+        # true annotations)
+        if self.hparams.sampling_loss:
+            idx = nag[0].super_index
+            y = nag[0].y
 
-        # Convert level-0 labels to segment-level histograms, while
-        # accounting for the extra class for unlabeled/ignored points
-        y_hist = atomic_to_histogram(y, idx, n_bins=self.num_classes + 1)
+            # Convert level-0 labels to segment-level histograms, while
+            # accounting for the extra class for unlabeled/ignored points
+            y_hist = atomic_to_histogram(y, idx, n_bins=self.num_classes + 1)
+        else:
+            y_hist = nag[1].y
 
         # Remove the last bin of the histogram, accounting for
         # unlabeled/ignored points
@@ -133,7 +137,7 @@ class PointSegmentationModule(LightningModule):
 
         # Compute the loss either in a point-wise or segment-wise
         # fashion
-        if self.pointwise_loss:
+        if self.hparams.pointwise_loss:
             loss = loss_with_target_histogram(self.criterion, logits, y_hist)
         else:
             loss = self.criterion(logits, y_hist.argmax(dim=1))
