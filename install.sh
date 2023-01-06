@@ -16,7 +16,7 @@ CUDA_SUPPORTED=(10.2)
 # Installation script for Anaconda3 environments
 echo "#############################################"
 echo "#                                           #" 
-echo "#           Deep View Aggregation           #"
+echo "#          Superpoint Transformer           #"
 echo "#                 Installer                 #"
 echo "#                                           #" 
 echo "#############################################"
