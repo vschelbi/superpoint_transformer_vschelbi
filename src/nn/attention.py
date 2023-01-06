@@ -37,6 +37,12 @@ class SelfAttentionBlock(nn.Module):
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
 
+        # TODO: define relative positional encoding parameters and
+        #  trunacted-normal initialize them (see Swin-T implementation)
+
+        # TODO: k/q/v RPE, pos/edge attr/both RPE, MLP/vector attention,
+        #  mlp on pos/learnable lookup table/FFN/learnable FFN...
+
         self.k_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if k_rpe else None
         self.q_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if q_rpe else None
 
@@ -50,9 +56,6 @@ class SelfAttentionBlock(nn.Module):
             if attn_drop is not None and attn_drop > 0 else None
         self.out_drop = nn.Dropout(drop) \
             if drop is not None and drop > 0 else None
-
-        # TODO: define relative positional encoding parameters and
-        #  trunacted-normal initialize them (see Swin-T implementation)
 
     def forward(self, x, edge_index, pos=None, edge_attr=None):
         """

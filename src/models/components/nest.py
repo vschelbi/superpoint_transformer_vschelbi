@@ -75,6 +75,10 @@ class NeST(nn.Module):
             pre_ln=True,
             no_sa=False,
             no_ffn=False,
+            k_rpe=False,
+            q_rpe=False,
+            c_rpe=False,
+            v_rpe=False,
 
             pos_injection=CatInjection,
             cat_diameter=False,
@@ -128,7 +132,8 @@ class NeST(nn.Module):
                     qk_scale=qk_scale, ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
-                    no_sa=no_sa, no_ffn=no_ffn, pool=pool, fusion=fusion,
+                    no_sa=no_sa, no_ffn=no_ffn, k_rpe=k_rpe, q_rpe=q_rpe,
+                    c_rpe=c_rpe, v_rpe=v_rpe, pool=pool, fusion=fusion,
                     pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
                     cat_diameter=cat_diameter)
@@ -153,7 +158,8 @@ class NeST(nn.Module):
                     qk_scale=qk_scale, ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
-                    no_sa=no_sa, no_ffn=no_ffn, unpool=unpool, fusion=fusion,
+                    no_sa=no_sa, no_ffn=no_ffn, unpool=unpool, q_rpe=q_rpe,
+                    c_rpe=c_rpe, v_rpe=v_rpe, pool=pool, fusion=fusion,
                     pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
@@ -213,8 +219,8 @@ class NeST(nn.Module):
                 ffn_ratio=last_ffn_ratio, residual_drop=last_residual_drop,
                 attn_drop=last_attn_drop, drop_path=last_drop_path,
                 activation=activation, pre_ln=pre_ln, no_sa=no_sa,
-                no_ffn=no_ffn, pos_injection=pos_injection,
-                cat_diameter=cat_diameter,
+                no_ffn=no_ffn, q_rpe=q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, pool=pool,
+                pos_injection=pos_injection, cat_diameter=cat_diameter,
                 pos_injection_x_dim=last_pos_injection_x_dim)
         else:
             self.last_stage = None

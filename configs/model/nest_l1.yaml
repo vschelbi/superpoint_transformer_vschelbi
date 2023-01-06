@@ -73,6 +73,10 @@ net:
   pre_ln: True
   no_sa: False
   no_ffn: False
+  k_rpe: False
+  q_rpe: False
+  c_rpe: False
+  v_rpe: False
 
   pos_injection:
 #    _target_: src.nn.FourierInjection
