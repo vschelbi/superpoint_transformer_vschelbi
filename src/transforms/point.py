@@ -60,6 +60,9 @@ class PointFeatures(Transform):
     elevation: bool
         Use local elevation. Assumes ``Data.elevation`` has been
         computed beforehand using `GroundElevation`.
+    pos_room: bool
+        Use room position. Assumes ``Data.pos_room`` has been
+        computed beforehand using `RoomPosition`.
     k_min: int
         Minimum number of neighbors to consider for geometric features
         computation. Points with less than k_min neighbors will receive
@@ -73,7 +76,8 @@ class PointFeatures(Transform):
             self, pos=False, radius=5, rgb=False, hsv=False, lab=False,
             density=False, linearity=False, planarity=False, scattering=False,
             verticality=False, normal=False, length=False, surface=False,
-            volume=False, curvature=False, elevation=False, k_min=5):
+            volume=False, curvature=False, elevation=False, pos_room=False,
+            k_min=5):
 
         self.pos = pos
         self.radius = radius
@@ -91,6 +95,7 @@ class PointFeatures(Transform):
         self.volume = volume
         self.curvature = curvature
         self.elevation = elevation
+        self.pos_room = pos_room
         self.k_min = k_min
 
     def _process(self, data):
@@ -204,6 +209,13 @@ class PointFeatures(Transform):
                 "`GroundElevation`"
             features.append(data.elevation.view(-1, 1))
 
+        # Add room position to the features
+        if self.pos_room:
+            assert getattr(data, 'pos_room', None) is not None, \
+                "Data.pos_room must be computed beforehand using " \
+                "`RoomPosition`"
+            features.append(data.pos_room.view(-1, 1))
+
         # Save all features in the Data.x attribute
         data.x = torch.cat(features, dim=1).to(data.pos.device)
 
@@ -252,6 +264,53 @@ class GroundElevation(Transform):
 
         # Save in Data attribute `elevation`
         data.elevation = torch.from_numpy(h).to(data.device)
+
+        return data
+
+
+class RoomPosition(Transform):
+    """Compute the pointwise normalized room coordinates, as defined
+    in the S3DIS paper section 3.2:
+    https://openaccess.thecvf.com/content_cvpr_2016/papers/Armeni_3D_Semantic_Parsing_CVPR_2016_paper.pdf
+
+    Results will be saved in the `pos_room` attribute.
+
+    NB: this is rather suited for indoor setting, with regular
+    dimensions and not so much for open outdoor clouds with unbounded
+    sizes.
+
+    Parameters
+    ----------
+    :param elevation: bool
+        Whether the `elevation` attribute should be used to position the
+        ground to z=0. If True, this assumes `GroundElevation` has been
+        called previously to produce the `elevation` attribute. If
+        False, it is assumed the ground/floor of the input cloud is
+        already positioned at z=0
+    """
+
+    def __init__(self, elevation=False):
+        self.elevation = elevation
+
+    def _process(self, data):
+        # Recover the point positions
+        pos = data.pos.clone()
+
+        # Shift ground to z=0, if required. Otherwise the ground is
+        # assumed to be already at z=0
+        if self.elevation:
+            assert getattr(data, 'elevation', None) is not None
+            pos[:, 2] = pos[:, 2] - data.elevation
+
+        # Shift XY
+        pos[:, :2] = pos[:, :2] - pos[:, :2].min(dim=2).values.view(1, -1)
+
+        # Scale XYZ based on the maximum values. ie the highest point
+        # will be considered as the ceiling
+        pos = pos / pos.max(dim=0).values.view(1, -1)
+
+        # Save in Data attribute `pos_room`
+        data.pos_room = pos
 
         return data
 

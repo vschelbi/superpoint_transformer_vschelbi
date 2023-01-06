@@ -144,6 +144,7 @@ on_device_train_transform:
         x_idx: 0
 
 # Should we actually sample at validation time ?
+# Should we do test-time augmentations ?
 on_device_val_transform:
     - transform: SampleSegments
       params:
