@@ -159,7 +159,7 @@ class NeST(nn.Module):
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
                     no_sa=no_sa, no_ffn=no_ffn, unpool=unpool, q_rpe=q_rpe,
-                    c_rpe=c_rpe, v_rpe=v_rpe, pool=pool, fusion=fusion,
+                    c_rpe=c_rpe, v_rpe=v_rpe, fusion=fusion,
                     pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
