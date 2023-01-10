@@ -81,9 +81,7 @@ class CutPursuitPartition(Transform):
         # Initialize the hierarchical partition parameters. In particular,
         # prepare the output as list of Data objects that will be stored in
         # a NAG structure
-        #TODO: REMOVE THIS ONCE PCP IS FIXED !!!
-        # num_threads = available_cpu_count() if self.parallel else 1
-        num_threads = 1
+        num_threads = available_cpu_count() if self.parallel else 1
         data.node_size = torch.ones(
             data.num_nodes, device=data.device, dtype=torch.long)  # level-0 points all have the same importance
         data_list = [data]
