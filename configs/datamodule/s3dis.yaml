@@ -22,6 +22,8 @@ spatial_weight: [5e-2, 5e-3, 5e-4, 5e-4]
 cutoff: [10, 80, 640, 5120]
 w_adjacency: -1
 dropout_segment_ratio: [0.4, 0, 0, 0]
+#select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # use the canonical room position
+select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
 
 pre_transform:
 
@@ -126,8 +128,7 @@ train_transform:
       params:
         level: 0
         key: 'x'
-#        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # use the canonical room position
-        idx: [0, 1, 2, 3, 4, 5, 6, 7]
+        idx: ${datamodule.select_feat_point}
 
 val_transform: ${datamodule.train_transform}
 

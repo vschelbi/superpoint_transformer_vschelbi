@@ -17,6 +17,8 @@ regularization: [0.04, 0.2, 0.8, 1.4]
 spatial_weight: [1e-2, 0, 0, 0]
 cutoff: [10, 100, 1000, 10000]
 w_adjacency: -1
+dropout_segment_ratio: [0.4, 0, 0, 0]
+select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
 
 pre_transform:
     - transform: DataTo
@@ -112,7 +114,7 @@ train_transform:
       params:
         level: 0
         key: 'x'
-        idx: [0, 1, 2, 3, 4, 5, 6, 7]
+        idx: ${datamodule.select_feat_point}
 
 val_transform: ${datamodule.train_transform}
 
@@ -125,11 +127,11 @@ on_device_train_transform:
         low: 0
         n_min: 16
         n_max: 32
-#    - transform: DropoutSegments
-#      params:
-#        ratio: [0.4, 0, 0, 0]
-#        by_size: False
-#        by_class: False
+    - transform: DropoutSegments
+      params:
+        ratio: ${datamodule.dropout_segment_ratio}
+        by_size: False
+        by_class: False
     - transform: JitterPosition
       params:
         sigma: 0.03
