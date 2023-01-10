@@ -4,7 +4,7 @@ defaults:
 net:
   _target_: src.models.components.nest.NeST
 
-  point_mlp: [11, 64, 64, 128, 128]
+  point_mlp: ${eval:'[${model._p_x}] + ${model._p}'}
   point_drop: null
   point_pos_injection:
     _target_: src.nn.CatInjection
@@ -12,12 +12,8 @@ net:
   point_pos_injection_x_dim: null
   point_cat_diameter: False
 
-  small: null # 40
-  small_point_mlp: [11, 64, 64]
-  small_down_mlp: [83, 64, 32]
-
-  down_dim: 32
-  down_in_mlp: [147, 64, 32]
+  down_dim: ${model._d}
+  down_in_mlp: ${eval:'[ [${model._d_x} + ${model._p}[-1]] + [${model._d}[0]] * ${model._d_r}, [${model._d_x} + ${model._d}[0]] + [${model._d}[1]] * ${model._d_r}, [${model._d_x} + ${model._d}[1]] + [${model._d}[2]] * ${model._d_r}, [${model._d_x} + ${model._d}[2]] + [${model._d}[3]] * ${model._d_r} ]'}
   down_out_mlp: null
   down_mlp_drop: null
   down_num_heads: 2
@@ -26,12 +22,12 @@ net:
   down_residual_drop: null
   down_attn_drop: null
   down_drop_path: null
-  down_inject_pos: True   # appends position features = (3) or more depending on pos_injection and point_pos_injection_x_dim
-  down_inject_x: True  # appends (16) = diameter (1) + handcrafted superpoint features (15)
+  down_inject_pos: True  # append segment position features (or more depending on pos_injection and point_pos_injection_x_dim)
+  down_inject_x: True  # append handcrafted segment features
   down_pos_injection_x_dim: null
 
-  up_dim: null
-  up_in_mlp: null
+  up_dim: ${model._u}
+  up_in_mlp: ${eval:'[ [${model._u_x} + ${model._d}[-1] + ${model._d}[-2]] + [${model._u}[0]] * ${model._u_r}, [${model._u_x} + ${model._u}[0] + ${model._d}[-3]] + [${model._u}[1]] * ${model._u_r}, [${model._u_x} + ${model._u}[1] + ${model._d}[-4]] + [${model._u}[2]] * ${model._u_r} ]'}
   up_out_mlp: null
   up_mlp_drop: null
   up_num_heads: 1
@@ -44,8 +40,12 @@ net:
   up_inject_x: False
   up_pos_injection_x_dim: null
 
+  small: null
+  small_point_mlp: null
+  small_down_mlp: null
+
   last_dim: null
-  last_in_mlp: [131, 128]
+  last_in_mlp: null
   last_out_mlp: null
   last_mlp_drop: null
   last_num_heads: 2
@@ -58,28 +58,25 @@ net:
   last_pos_injection_x_dim: null
 
   mlp_activation:
-#    _target_: torch.nn.GELU
     _target_: torch.nn.LeakyReLU
     negative_slope: 0.01
   mlp_norm:
     _target_: src.nn.FastBatchNorm1d
     _partial_: True
-  qkv_bias: True
-  qk_scale: null
   activation:
-#    _target_: torch.nn.GELU
     _target_: torch.nn.LeakyReLU
     negative_slope: 0.01
   pre_ln: True
   no_sa: False
   no_ffn: False
+  qkv_bias: True
+  qk_scale: null
   k_rpe: False
   q_rpe: False
   c_rpe: False
   v_rpe: False
 
   pos_injection:
-#    _target_: src.nn.FourierInjection
     _target_: src.nn.CatInjection
     _partial_: True
   cat_diameter: False

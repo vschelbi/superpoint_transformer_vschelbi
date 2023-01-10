@@ -40,11 +40,16 @@ from typing import List, Optional, Tuple
 
 import hydra
 import pytorch_lightning as pl
-from omegaconf import DictConfig
+from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning import Callback, LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.loggers import LightningLoggerBase
 
 from src import utils
+
+# Registering the "eval" resolver allows for advanced config
+# interpolation with arithmetic operations:
+# https://omegaconf.readthedocs.io/en/2.3_branch/how_to_guides.html
+OmegaConf.register_new_resolver("eval", eval)
 
 log = utils.get_pylogger(__name__)
 

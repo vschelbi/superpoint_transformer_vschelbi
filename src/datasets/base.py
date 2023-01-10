@@ -101,7 +101,7 @@ class BaseDataset(InMemoryDataset):
     def __init__(
             self, root, stage='train', transform=None, pre_transform=None,
             pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True,
-            val_mixed_in_train=False, test_mixed_in_val=False):
+            val_mixed_in_train=False, test_mixed_in_val=False, **kwargs):
 
         assert stage in ['train', 'val', 'trainval', 'test']
 

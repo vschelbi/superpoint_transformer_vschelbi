@@ -1,4 +1,0 @@
-defaults:
-  - pointnet.yaml
-
-num_classes: 13

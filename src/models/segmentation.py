@@ -19,7 +19,8 @@ class PointSegmentationModule(LightningModule):
     def __init__(
             self, net, criterion, optimizer, scheduler, num_classes,
             class_names=None, sampling_loss=False, pointwise_loss=True,
-            weighted_loss=True, custom_init=True, transformer_lr_scale=1):
+            weighted_loss=True, custom_init=True, transformer_lr_scale=1,
+            **kwargs):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -293,5 +294,5 @@ if __name__ == "__main__":
     import pyrootutils
 
     root = str(pyrootutils.setup_root(__file__, pythonpath=True))
-    cfg = omegaconf.OmegaConf.load(root + "/configs/model/pointnet.yaml")
+    cfg = omegaconf.OmegaConf.load(root + "/configs/model/s1.yaml")
     _ = hydra.utils.instantiate(cfg)

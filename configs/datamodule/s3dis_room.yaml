@@ -3,94 +3,36 @@ defaults:
 
 _target_: src.datamodules.s3dis_room.S3DISRoomDataModule
 
-fold: 5
-trainval: True
-val_on_test: True
+# These parameters are not actually used by the DataModule, but are used
+# here to facilitate model parameterization with config interpolation
+feat_point: 11
+feat_segment: 15
 
-pre_transform:
+# Based on SPG: https://arxiv.org/pdf/1711.09869.pdf
+voxel: 0.03
+knn: 45
+regularization: [0.03, 0.07, 0.3, 0.9]  # level-1 from SPG
+spatial_weight: [5e-2, 5e-2, 5e-3, 5e-4]
+cutoff: [10, 10, 80, 640]
+w_adjacency: 1
 
-#    - transform: DataTo
-#      params:
-#        device: 'cuda'
-    - transform: GridSampling3D
+train_transform:
+    - transform: NAGRemoveKeys  # remove any features already computed in CutPursuitPartition
       params:
-        size: 0.03  # from SPG
-        hist_key: 'y'
-        hist_size: 14  # this is for S3DIS_NUM_CLASSES +1 for ignored
-    - transform: DataTo
+        level: '1+'
+        keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
+    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
       params:
-        device: 'cuda'
-    - transform: KNN
+        level: '1+'
+        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
+    - transform: NAGSelectColumns
       params:
-        k: 45  # from SPG
-        r_max: 1
-        verbose: True
-    - transform: DataTo
-      params:
-        device: 'cpu'
-    - transform: GroundElevation
-      params:
-        threshold: 1.5
-        scale: 4.0
-    - transform: RoomPosition  # from SPG
-      params:
-        elevation: False
-    - transform: PointFeatures
-      params:
-        rgb: True
-        hsv: False
-        lab: False
-        density: False
-        linearity: True
-        planarity: True
-        scattering: True
-        verticality: True
-        normal: False
-        length: False
-        surface: False
-        volume: False
-        curvature: False
-        elevation: True
-        pos_room: False
-        k_min: 1
-    - transform: DataTo
-      params:
-        device: 'cuda'
-    - transform: AdjacencyGraph
-      params:
-        k: 10  # from SPG
-        w: 1  # from SPG
-    - transform: ConnectIsolated
-      params:
-        k: 1
-    - transform: DataTo
-      params:
-        device: 'cpu'
-    - transform: CutPursuitPartition
-      params:
-        regularization: [0.03, 0.07, 0.3, 0.9]  # level-1 from SPG
-        spatial_weight: [5e-2, 5e-2, 5e-3, 5e-4]
-        k_adjacency: 10
-        cutoff: [10, 10, 80, 640]
-        iterations: 15
-        parallel: True
-        verbose: True
-    - transform: NAGTo
-      params:
-        device: 'cuda'
-    - transform: NAGAddKeyToX
+        level: '1+'
+        key: 'edge_attr'
+        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    - transform: NAGSelectColumns  # adapt datamodule.feat_point if modified
       params:
         level: 0
-        keys: ['pos_room']
-    - transform: SegmentFeatures
-      params:
-        n_max_node: 32
-        n_min: 5
-    - transform: EdgeFeatures
-      params:
-        n_max_edge: 64
-        n_min: 5
-        max_dist: [3, 10, 30, 100]
-    - transform: NAGTo
-      params:
-        device: 'cpu'
+        key: 'x'
+        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # use the canonical room position
+#        idx: [0, 1, 2, 3, 4, 5, 6, 7]

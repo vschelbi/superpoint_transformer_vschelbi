@@ -1,4 +1,0 @@
-defaults:
-  - s1.yaml
-
-num_classes: 13

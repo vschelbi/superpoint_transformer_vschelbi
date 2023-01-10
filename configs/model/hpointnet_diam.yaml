@@ -1,8 +1,0 @@
-defaults:
-  - hpointnet.yaml
-
-net:
-  down_mlp: [[133, 64, 64], [69, 64, 64], [69, 64, 64], [69, 64, 64]]
-  up_mlp: [[131, 64, 64], [131, 64, 64], [131, 64, 64]]
-  point_cat_diameter: True
-  cat_diameter: True

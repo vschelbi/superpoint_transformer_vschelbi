@@ -7,6 +7,21 @@ fold: 5
 trainval: True
 val_on_test: True
 
+# These parameters are not actually used by the DataModule, but are used
+# here to facilitate model parameterization with config interpolation
+num_classes: 13
+feat_point: 8
+feat_segment: 15
+
+# Parameters declared here to facilitate tuning configs without copying
+# all the pre_transforms
+voxel: 0.05
+knn: 25
+regularization: [0.07, 0.3, 0.9, 1.8]
+spatial_weight: [5e-2, 5e-3, 5e-4, 5e-4]
+cutoff: [10, 80, 640, 5120]
+w_adjacency: -1
+
 pre_transform:
 
 #    - transform: DataTo
@@ -14,15 +29,15 @@ pre_transform:
 #        device: 'cuda'
     - transform: GridSampling3D
       params:
-        size: 0.05
+        size: ${datamodule.voxel}
         hist_key: 'y'
-        hist_size: 14  # this is for S3DIS_NUM_CLASSES +1 for ignored
+        hist_size: ${eval:'${datamodule.num_classes} + 1'}
     - transform: DataTo
       params:
         device: 'cuda'
     - transform: KNN
       params:
-        k: 25
+        k: ${datamodule.knn}
         r_max: 2
         verbose: True
     - transform: DataTo
@@ -48,6 +63,7 @@ pre_transform:
         volume: False
         curvature: False
         elevation: True
+        pos_room: False
         k_min: 1
     - transform: DataTo
       params:
@@ -55,7 +71,7 @@ pre_transform:
     - transform: AdjacencyGraph
       params:
         k: 10
-        w: -1
+        w: ${datamodule.w_adjacency}
     - transform: ConnectIsolated
       params:
         k: 1
@@ -64,16 +80,20 @@ pre_transform:
         device: 'cpu'
     - transform: CutPursuitPartition
       params:
-        regularization: [0.07, 0.3, 0.9, 1.8]
-        spatial_weight: [5e-2, 5e-3, 5e-4, 5e-4]
+        regularization: ${datamodule.regularization}
+        spatial_weight: ${datamodule.spatial_weight}
         k_adjacency: 10
-        cutoff: [10, 80, 640, 5120]
+        cutoff: ${datamodule.cutoff}
         iterations: 15
         parallel: True
         verbose: True
     - transform: NAGTo
       params:
         device: 'cuda'
+    - transform: NAGAddKeyToX  # save canonical room position 'pos_room' in x. This can be optionally discarded later on in train_transform
+      params:
+        level: 0
+        keys: ['pos_room']
     - transform: SegmentFeatures
       params:
         n_max_node: 32
@@ -92,7 +112,7 @@ train_transform:
       params:
         level: '1+'
         keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
-    - transform: NAGAddKeyToX
+    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
       params:
         level: '1+'
         keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
@@ -101,6 +121,12 @@ train_transform:
         level: '1+'
         key: 'edge_attr'
         idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    - transform: NAGSelectColumns  # adapt datamodule.feat_point if modified
+      params:
+        level: 0
+        key: 'x'
+#        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # use the canonical room position
+        idx: [0, 1, 2, 3, 4, 5, 6, 7]
 
 val_transform: ${datamodule.train_transform}
 

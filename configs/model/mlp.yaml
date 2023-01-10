@@ -1,7 +1,12 @@
 defaults:
   - default.yaml
 
+_p: [8, 32, 64, 128]
+_p_x: ${datamodule.feat_point}  # size of handcrafted level-0 node features (points)
+_d_x: null
+_u_x: null
+
 net:
   _target_: src.models.components.mlp.NodeMLP
-  dims: [8, 32, 64, 128]
+  dims: ${eval:'[${model._p_x}] + ${model._p}'}
   level: 0

@@ -1,4 +1,0 @@
-defaults:
-  - nest_l1.yaml
-
-num_classes: 13

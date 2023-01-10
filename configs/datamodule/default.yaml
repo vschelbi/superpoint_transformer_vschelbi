@@ -4,6 +4,20 @@ data_dir: ${paths.data_dir}
 x32: True
 y_to_csr: True
 
+# Number of classes must be specified to help instantiating the model.
+# Concretely, num_classes here will be passed to the DataModule and the
+# Dataset upon hydra.utils.instantiate. But it will likely be ignored by
+# those. Specifying num_classes in the data config actually allows the
+# model config to capture it and assign the proper model output size by
+# config interpolation
+num_classes: ???
+
+# Similar to num_classes, the size of handcrafted features for points
+# and segments should be specified here. This facilitates model
+# parameterization with config interpolation
+feat_point: ???
+feat_segment: ???
+
 pre_transform: null
 train_transform: null
 val_transform: null
