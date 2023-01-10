@@ -70,37 +70,9 @@ class S3DISRoom(S3DIS):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
-
-        data = read_s3dis_room(
+        return read_s3dis_room(
             raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=instance,
-            is_val=True, verbose=False)
-
-        # Return the room in its real orientation, if not required to
-        # align along the canonical axes defined in the S3DIS paper (ie
-        # the room entrance door facing negative x)
-        if not self.align:
-            return data
-
-        # TODO: bbox alignment
-        if instance:
-            raise NotImplementedError(
-                "If you are using bbox for detection, need to implement bbox "
-                "alignment here first...")
-
-        # Recover the canonical rotation angle for the room at hand
-        area_dir = osp.dirname(raw_cloud_path)
-        area = osp.basename(osp.dirname(raw_cloud_path))
-        room_name = osp.basename(raw_cloud_path)
-        alignment_file = osp.join(area_dir, f'{area}_alignmentAngle.txt')
-        alignments = pd.read_csv(
-            alignment_file, sep=' ', header=None, skiprows=2).values
-        angle = float(alignments[np.where(alignments[:, 0] == room_name), 1])
-
-        # Rotate the room to its canonical orientation
-        R = rodrigues_rotation_matrix(torch.FloatTensor([0, 0, 1]), angle)
-        data.pos = data.pos @ R
-
-        return data
+            xyz_room=True, align=self.align, is_val=True, verbose=False)
 
     def processed_to_raw_path(self, processed_path):
         """Given a processed cloud path from `self.processed_paths`,

@@ -9,7 +9,10 @@ from src.datasets import BaseDataset
 from src.data import Data, Batch
 from src.datasets.s3dis_config import *
 from torch_geometric.data import extract_zip
-from src.utils import available_cpu_count, starmap_with_kwargs
+from src.utils import available_cpu_count, starmap_with_kwargs, \
+    rodrigues_rotation_matrix
+from src.transforms import RoomPosition
+
 
 DIR = osp.dirname(osp.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -24,7 +27,7 @@ __all__ = ['S3DIS', 'MiniS3DIS']
 
 def read_s3dis_area(
         area_dir, xyz=True, rgb=True, semantic=True, instance=False,
-        is_val=True, verbose=False, processes=-1):
+        xyz_room=False, align=False, is_val=True, verbose=False, processes=-1):
     """Read all S3DIS object-wise annotations in a given Area directory.
     All room-wise data are accumulated into a single cloud.
 
@@ -38,6 +41,14 @@ def read_s3dis_area(
         Whether semantic labels should be saved in the output Data.y
     :param instance: bool
         Whether instance labels should be saved in the output Data.y
+    :param xyz_room: bool
+        Whether the canonical room coordinates should be saved in the
+        output Data.pos_room, as defined in the S3DIS paper section 3.2:
+        https://openaccess.thecvf.com/content_cvpr_2016/papers/Armeni_3D_Semantic_Parsing_CVPR_2016_paper.pdf
+    :param align: bool
+        Whether the room should be rotated to its canonical orientation,
+        as defined in the S3DIS paper section 3.2:
+        https://openaccess.thecvf.com/content_cvpr_2016/papers/Armeni_3D_Semantic_Parsing_CVPR_2016_paper.pdf
     :param is_val: bool
         Whether the output `Batch.is_val` should carry a boolean label
         indicating whether they belong to the Area validation split
@@ -58,7 +69,8 @@ def read_s3dis_area(
     args_iter = [[r] for r in room_directories]
     kwargs_iter = {
         'xyz': xyz, 'rgb': rgb, 'semantic': semantic, 'instance': instance,
-        'is_val': is_val, 'verbose': verbose}
+        'xyz_room': xyz_room, 'align': align, 'is_val': is_val,
+        'verbose': verbose}
     batch = Batch.from_data_list(starmap_with_kwargs(
         read_s3dis_room, args_iter, kwargs_iter, processes=processes))
 
@@ -73,7 +85,7 @@ def read_s3dis_area(
 
 def read_s3dis_room(
         room_dir, xyz=True, rgb=True, semantic=True, instance=False,
-        is_val=True, verbose=False):
+        xyz_room=False, align=False, is_val=True, verbose=False):
     """Read all S3DIS object-wise annotations in a given room directory.
 
     :param room_dir: str
@@ -87,6 +99,14 @@ def read_s3dis_room(
         Whether semantic labels should be saved in the output `Data.y`
     :param instance: bool
         Whether instance labels should be saved in the output `Data.y`
+    :param xyz_room: bool
+        Whether the canonical room coordinates should be saved in the
+        output Data.pos_room, as defined in the S3DIS paper section 3.2:
+        https://openaccess.thecvf.com/content_cvpr_2016/papers/Armeni_3D_Semantic_Parsing_CVPR_2016_paper.pdf
+    :param align: bool
+        Whether the room should be rotated to its canonical orientation,
+        as defined in the S3DIS paper section 3.2:
+        https://openaccess.thecvf.com/content_cvpr_2016/papers/Armeni_3D_Semantic_Parsing_CVPR_2016_paper.pdf
     :param is_val: bool
         Whether the output `Data.is_val` should carry a boolean label
         indicating whether they belong to their Area validation split
@@ -154,6 +174,44 @@ def read_s3dis_room(
     if is_val:
         data.is_val = torch.ones(data.num_nodes, dtype=torch.bool) * (
                 osp.basename(room_dir) in VALIDATION_ROOMS)
+
+    # Exit here if canonical orientations are not needed
+    if not xyz_room and not align:
+        return data
+
+    # TODO: bbox alignment
+    if instance:
+        raise NotImplementedError(
+            "If you are using bbox for detection, need to implement bbox "
+            "alignment here first...")
+
+    # Recover the canonical rotation angle for the room at hand. NB:
+    # this assumes the raw files are stored in the S3DIS structure:
+    #   raw/
+    #     └── Area_{{i_area: 1 > 6}}/
+    #       └── Area_{{i_area: 1 > 6}}_alignmentAngle.txt
+    #       └── {{room_dir}}
+    #       └── ...
+    area_dir = osp.dirname(room_dir)
+    area = osp.basename(osp.dirname(room_dir))
+    room_name = osp.basename(room_dir)
+    alignment_file = osp.join(area_dir, f'{area}_alignmentAngle.txt')
+    alignments = pd.read_csv(
+        alignment_file, sep=' ', header=None, skiprows=2).values
+    angle = float(alignments[np.where(alignments[:, 0] == room_name), 1])
+
+    # Matrix to rotate the room to its canonical orientation
+    R = rodrigues_rotation_matrix(torch.FloatTensor([0, 0, 1]), angle)
+
+    # Rotate the room
+    pos_bkp = data.pos
+    data.pos = data.pos @ R
+
+    # Save the required attributes
+    if xyz_room:
+        data = RoomPosition()(data)
+    if not align:
+        data.pos = pos_bkp
 
     return data
 
@@ -260,7 +318,7 @@ class S3DIS(BaseDataset):
         """
         return read_s3dis_area(
             raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=False,
-            is_val=True, verbose=False)
+            xyz_room=True, align=False, is_val=True, verbose=False)
 
     @property
     def raw_file_structure(self):
