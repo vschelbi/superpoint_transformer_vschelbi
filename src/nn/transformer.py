@@ -89,12 +89,15 @@ class TransformerBlock(nn.Module):
         # Keep track of x for the residual connection
         shortcut = x
 
-        # Self-Attention residual branch
-        if not self.no_sa and self.pre_ln:
+        # Self-Attention residual branch. Skip the SA block if no edges
+        # are provided
+        if self.no_sa or edge_index is None or edge_index.shape[1] == 0:
+            pass
+        elif self.pre_ln:
             x = self.sa_norm(x, norm_index)
             x = self.sa(x, edge_index, pos=pos, edge_attr=edge_attr)
             x = shortcut + self.drop_path(x)
-        if not self.no_sa and not self.pre_ln:
+        else:
             x = self.sa(x, edge_index, pos=pos, edge_attr=edge_attr)
             x = self.drop_path(x)
             x = self.sa_norm(shortcut + x, norm_index)

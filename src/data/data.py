@@ -629,6 +629,27 @@ class Batch(PyGBatch):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
+            # Little trick to prevent Batch.from_data_list from crashing
+            # when some Data objects have edges while others don't
+            has = [
+                i for i, d in enumerate(data_list) if d.edge_index is not None]
+            has_not = [
+                i for i, d in enumerate(data_list) if d.edge_index is None]
+
+            if len(has) > 0 and len(has_not) > 0:
+                device = data_list[0].device
+                edge_index = torch.empty((2, 0), device=device).long()
+
+                if data_list[has[0]].edge_attr is not None:
+                    dim = data_list[has[0]].edge_attr.shape[1]
+                    edge_attr = torch.empty((0, dim), device=device).long()
+                else:
+                    edge_attr = None
+
+                for i in has_not:
+                    data_list[i].edge_index = edge_index
+                    data_list[i].edge_attr = edge_attr
+
             # PyG way of batching does not recognize some local classes such
             # as Cluster and CSRData, so it will accumulate them in lists
             batch = super().from_data_list(
