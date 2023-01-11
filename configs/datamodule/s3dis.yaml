@@ -7,6 +7,9 @@ fold: 5
 trainval: True
 val_on_test: True
 
+dataloader:
+    batch_size: 4
+
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 13
@@ -27,17 +30,14 @@ select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
 
 pre_transform:
 
-#    - transform: DataTo
-#      params:
-#        device: 'cuda'
-    - transform: GridSampling3D
+    - transform: DataTo
+      params:
+        device: 'cuda'
+    - transform: GridSampling3D  # might OOM on CUDA if voxel and GPU memory too small
       params:
         size: ${datamodule.voxel}
         hist_key: 'y'
         hist_size: ${eval:'${datamodule.num_classes} + 1'}
-    - transform: DataTo
-      params:
-        device: 'cuda'
     - transform: KNN
       params:
         k: ${datamodule.knn}

@@ -3,6 +3,9 @@ defaults:
 
 _target_: src.datamodules.s3dis_room.S3DISRoomDataModule
 
+dataloader:
+    batch_size: 8
+
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 feat_point: 11

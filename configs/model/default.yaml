@@ -28,7 +28,7 @@ criterion:
 # Parameters declared here to facilitate tuning configs. Those are only
 # used here for config interpolation but will/should actually fall in
 # the ignored kwargs of the PointSegmentationModule
-_p: [64, 128]
+_p: [64, 64, 128, 128]
 _d: [64, 128, 256, 512]
 _u: [256, 128, 64]
 _d_r: 2  # number of repeated dim layers in the encoder MLPs
