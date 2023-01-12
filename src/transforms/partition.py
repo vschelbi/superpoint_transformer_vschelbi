@@ -45,6 +45,7 @@ class CutPursuitPartition(Transform):
 
     _IN_TYPE = Data
     _OUT_TYPE = NAG
+    _MAX_NUM_EGDES = 4294967295
 
     def __init__(
             self, regularization=5e-2, spatial_weight=1, cutoff=10,
@@ -113,6 +114,14 @@ class CutPursuitPartition(Transform):
             # Exit if the graph contains only one node
             if d1.num_nodes < 2:
                 break
+
+            # User warning if the number of edges exceeds uint32 limits
+            if d1.edge_index.shape[1] > self._MAX_NUM_EGDES and self.verbose:
+                print(
+                    f"WARNING: number of edges {d1.edge_index.shape[1]} "
+                    f"exceeds the uint32 limit {self._MAX_NUM_EGDES}. Please"
+                    f"update the cut-pursuit source code to accept a larger "
+                    f"data type for `index_t`.")
 
             # Convert edges to forward-star (or CSR) representation
             source_csr, target, reindex = edge_list_to_forward_star(

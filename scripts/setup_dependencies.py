@@ -106,6 +106,32 @@ if not osp.exists("bin"):
 # Remove previously compiled lib
 purge("bin/", name)
 
+# Local modification to use uint32 instead of uint16 for components
+# indexing. Simply put, this allows partitions of up to 4294967295
+# components instead of 65535
+filepath = osp.join('cpython', name + '.cpp')
+assert osp.isfile(filepath)
+
+with open(filepath, 'r') as f:
+    lines = f.readlines()
+
+for i_line, line in enumerate(lines):
+    if 'typedef int16_t comp_t' in line:
+        lines[i_line] = '    // typedef int16_t comp_t;\n'
+        lines[i_line + 1] = '    // #define NPY_COMP NPY_INT16\n'
+    if 'typedef uint16_t comp_t' in line:
+        lines[i_line] = '    // typedef uint16_t comp_t;\n'
+        lines[i_line + 1] = '    // #define NPY_COMP NPY_UINT16\n'
+    if 'typedef int32_t comp_t' in line:
+        lines[i_line] = '    typedef int32_t comp_t;\n'
+        lines[i_line + 1] = '    #define NPY_COMP NPY_INT32\n'
+    if 'typedef uint32_t comp_t' in line:
+        lines[i_line] = '    typedef uint32_t comp_t;\n'
+        lines[i_line + 1] = '    #define NPY_COMP NPY_UINT32\n'
+
+with open(filepath, 'w') as f:
+    f.writelines(lines)
+
 # Compilation
 mod = Extension(
     name,
