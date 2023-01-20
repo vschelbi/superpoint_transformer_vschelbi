@@ -2,13 +2,14 @@ import torch
 import numpy as np
 import itertools
 from scipy.spatial import Delaunay
-from torch_scatter import scatter_mean, scatter_std, scatter_min, segment_csr
+from torch_scatter import scatter, scatter_mean, scatter_std, scatter_min, \
+    segment_csr
 import src
 from src.data import Data, NAG
 from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    tensor_idx
+    tensor_idx, knn_1
 
 
 __all__ = [
@@ -107,7 +108,7 @@ def _compute_cluster_features(
     num_nodes = data.num_nodes
     device = nag.device
 
-    # Compute how many level-0 points each i_level cluster contains
+    # Compute how many level-0 points each level cluster contains
     sub_size = nag.get_sub_size(i_level, low=0)
 
     # Sample points among the clusters. These will be used to compute
@@ -161,9 +162,7 @@ def _compute_cluster_features(
     # This step requires having access to the whole NAG, since we need
     # to convert level-0 point indices into their corresponding level-i
     # superpoint indices
-    super_index = nag[0].super_index
-    for i in range(1, i_level):
-        super_index = nag[i].super_index[super_index]
+    super_index = nag.get_super_index(i_level)
 
     # To debug sampling
     if src.is_debug_enabled():
@@ -178,7 +177,7 @@ def _compute_cluster_features(
         super_index_samples = torch.repeat_interleave(
             torch.arange(num_nodes), end - start)
         print('\n\n' + '*' * 50)
-        print(f'        cluster graph for i_level={i_level}')
+        print(f'        cluster graph for level={i_level}')
         print('*' * 50 + '\n')
         print(f'nag: {nag}')
         print(f'data: {data}')
@@ -243,14 +242,14 @@ class EdgeFeatures(Transform):
             max_dist = [max_dist] * (nag.num_levels - 1)
 
         for i_level, md in zip(range(1, nag.num_levels), max_dist):
-            nag = _compute_edge_features(
+            nag = _compute_horizontal_graph_by_delaunay(
                 i_level, nag, n_max_edge=self.n_max_edge, n_min=self.n_min,
                 max_dist=md)
 
         return nag
 
 
-def _compute_edge_features(
+def _compute_horizontal_graph_by_delaunay(
         i_level, nag, n_max_edge=64, n_min=5, max_dist=-1):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster graph on level 0"
@@ -267,6 +266,13 @@ def _compute_edge_features(
     num_nodes = data.num_nodes
     device = nag.device
 
+    # Exit in case the i_level graph contains only one node
+    if num_nodes < 2:
+        data.edge_index = None
+        data.edge_attr = None
+        nag._list[i_level] = data
+        return nag
+
     # To guide the sampling for superedges, we want to sample among
     # points whose neighbors in the level-0 adjacency graph belong to
     # a different cluster in the i_level graph. To this end, we first
@@ -274,16 +280,7 @@ def _compute_edge_features(
     # This step requires having access to the whole NAG, since we need
     # to convert level-0 point indices into their corresponding level-i
     # superpoint indices
-    super_index = nag[0].super_index
-    for i in range(1, i_level):
-        super_index = nag[i].super_index[super_index]
-
-    # Exit in case the i_level graph contains only one node
-    if num_nodes < 2:
-        data.edge_index = None
-        data.edge_attr = None
-        nag._list[i_level] = data
-        return nag
+    super_index = nag.get_super_index(i_level)
 
     # Once we know the i_level cluster each level-0 point belongs to,
     # we can search for level-0 edges between i_level clusters. These
@@ -437,7 +434,7 @@ def _compute_edge_features(
     # We can now use torch_scatter operations to compute superedge
     # features
     se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).to(device)
-    se_direction = se_direction / torch.linalg.norm(se_direction, dim=0)
+    se_direction = se_direction / torch.linalg.norm(se_direction, dim=1)
     se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
     se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].to(device)
     se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
@@ -451,8 +448,8 @@ def _compute_edge_features(
 
     # These do not seem useful: all edges are ~0. Would be more useful
     # with the 1st PCA component of the edge points...
-    # se_angle_source = (se_direction * se_normal_source).sum(dim=1).abs()
-    # se_angle_target = (se_direction * se_normal_target).sum(dim=1).abs()
+    se_angle_source = (se_direction * se_normal_source).sum(dim=1).abs()
+    se_angle_target = (se_direction * se_normal_target).sum(dim=1).abs()
 
     se_log_length_ratio = data.log_length[se[0]] - data.log_length[se[1]]
     se_log_surface_ratio = data.log_surface[se[0]] - data.log_surface[se[1]]
@@ -491,8 +488,8 @@ def _compute_edge_features(
         torch.cat((se_std_dist, se_std_dist)),
         torch.cat((se_centroid_dist, se_centroid_dist)),
         torch.cat((se_normal_angle, se_normal_angle)),
-        # torch.cat((se_angle_source, se_angle_target)),
-        # torch.cat((se_angle_target, se_angle_source)),
+        torch.cat((se_angle_source, se_angle_target)),
+        torch.cat((se_angle_target, se_angle_source)),
         torch.cat((se_log_length_ratio, -se_log_length_ratio)),
         torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),
         torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),
@@ -504,6 +501,102 @@ def _compute_edge_features(
     data.edge_attr = se_feat
 
     # Restore the i_level Data object, if need be
+    nag._list[i_level] = data
+
+    return nag
+
+
+def _compute_horizontal_graph_by_radius(nag, k_max=100, gap=0, undirected=True):
+    assert isinstance(nag, NAG)
+    if not isinstance(k_max, list):
+        k_max = [k_max] * (nag.num_levels - 2)
+    if not isinstance(gap, list):
+        gap = [gap] * (nag.num_levels - 2)
+
+    for i_level, k, g in zip(range(1, nag.num_levels), k_max, gap):
+        nag = _compute_horizontal_graph_by_radius_for_single_level(
+            nag, i_level, k_max=k, gap=g, undirected=undirected)
+
+    return nag
+
+
+def _compute_horizontal_graph_by_radius_for_single_level(
+        nag, i_level, k_max=100, gap=0, undirected=True):
+    assert isinstance(nag, NAG)
+    assert i_level > 0, "Cannot compute cluster graph on level 0"
+    assert nag[0].num_nodes < np.iinfo(np.uint32).max, \
+        "Too many nodes for `uint32` indices"
+    assert nag[0].num_edges < np.iinfo(np.uint32).max, \
+        "Too many edges for `uint32` indices"
+
+    # Recover the i_level Data object we will be working on
+    data = nag[i_level]
+    num_nodes = data.num_nodes
+    device = nag.device
+
+    # Remove any already-existing horizontal graph
+    data.edge_index = None
+    data.edge_attr = None
+
+    # Exit in case the i_level graph contains only one node
+    if num_nodes < 2:
+        nag._list[i_level] = data
+        return nag
+
+    # Compute the super_index for level-0 points wrt the target level
+    super_index = nag.get_super_index(i_level)
+
+    # Roughly estimate the diameter of each segment
+    bbox_low = scatter(nag[0].pos, super_index, dim=0, reduce='min')
+    bbox_high = scatter(nag[0].pos, super_index, dim=0, reduce='max')
+    # diam = ((bbox_high - bbox_low)**2).sum(dim=1).sqrt()
+    diam = (bbox_high - bbox_low).max(dim=1).values
+
+    # Conservative heuristic for the global search radius: we search the
+    # segments whose centroids are separated by the largest segment
+    # diameter plus the input gap. This approximates the true operation
+    # we would like to perform (but which is too costly): searching, for
+    # each segment, the segments with at least one point within gap.
+    # Obviously, the r_search may produce more neighbors than needed and
+    # some subsequent pruning will be needed
+    r_search = diam.max().item() + gap
+    neighbors, distances = knn_1(data.pos, k_max, r_max=r_search)
+
+    # Build the corresponding edge_index
+    source = torch.arange(
+        data.num_points, device=device).repeat_interleave(k_max)
+    edge_index = torch.vstack((source, neighbors.flatten()))
+    distances = distances.flatten()
+
+    # Trim edges based on the actual segment radii and not the
+    # overly-conservative maximum radius used for the search
+    r_segment = diam / 2
+    r_max_edge = r_segment[edge_index].sum(dim=0) + gap
+    in_gap_range = distances <= r_max_edge
+    edge_index = edge_index[:, in_gap_range]
+    distances = distances[in_gap_range]
+
+    # Trim edges where points are missing (ie -1 neighbor indices)
+    missing_point_edge = edge_index[1] == -1
+    edge_index = edge_index[:, ~missing_point_edge]
+    distances = distances[~missing_point_edge]
+
+    # Save the graph in the Data object
+    data.edge_index = edge_index
+    data.edge_attr = distances
+
+    # Search for nodes which received no edges and connect them to their
+    # nearest neighbor
+    data.connect_isolated(k=1)
+
+    # Make the graph directed with only i<j nodes. This is temporary,
+    # to alleviate edge features computation
+    # TODO: restore undirected edges after feature computation !!!
+    #  bidirectional edges (make sure i,j and j,i)
+    if undirected:
+        data.clean_graph()
+
+    # Store the updated Data object in the NAG
     nag._list[i_level] = data
 
     return nag

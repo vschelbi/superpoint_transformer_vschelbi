@@ -357,8 +357,9 @@ class Data(PyGData):
         self.num_nodes indicating which are absent from self.edge_index.
         Will raise an error if self.has_edges is False.
         """
-        assert self.has_edges
-        return isolated_nodes(self.edge_index, num_nodes=self.num_nodes)
+        edge_index = self.edge_index if self.has_edges \
+            else torch.zeros(2, 0, dtype=torch.long, device=self.device)
+        return isolated_nodes(edge_index, num_nodes=self.num_nodes)
 
     def connect_isolated(self, k=1):
         """Search for nodes with no edges in the graph and connect them
@@ -369,8 +370,11 @@ class Data(PyGData):
 
         Returns self updated with the newly-created edges.
         """
-        assert self.has_edges
         assert self.pos is not None
+
+        # Make sure there is no edge_attr if there is no edge_index
+        if not self.has_edges:
+            self.edge_attr = None
 
         # Search for isolated nodes and exit if no node is isolated
         is_isolated = self.is_isolated()
@@ -388,44 +392,47 @@ class Data(PyGData):
         distances = distances[:, 1:]
         neighbors = neighbors[:, 1:]
 
-        # If the edges have attributes, we also create attributes for
-        # the new edges. There is no trivial way of doing so, the
-        # heuristic here simply attempts to linearly regress the edge
-        # weights based on the corresponding node distances
-        if self.edge_attr is not None:
-
-            # Get existing edges attributes and associated distance
-            w = self.edge_attr
-            s = self.edge_index[0]
-            t = self.edge_index[1]
-            d = torch.linalg.norm(self.pos[s] - self.pos[t], dim=1)
-            d_1 = torch.vstack((d, torch.ones_like(d))).T
-
-            # Least square on d_1.x = w  (ie d.a + b = w)
-            # NB: CUDA may crash trying to solve this simple system, in
-            # which case we will fallback to CPU. Not ideal though
-            try:
-                a, b = torch.linalg.lstsq(d_1, w).solution
-            except:
-                if src.is_debug_enabled():
-                    print(
-                        '\nWarning: torch.linalg.lstsq failed, trying again '
-                        'on CPU')
-                a, b = torch.linalg.lstsq(d_1.cpu(), w.cpu()).solution
-                a = a.to(self.device)
-                b = b.to(self.device)
-
-            # Heuristic: linear approximation of w by d
-            edge_attr_new = distances.flatten() * a + b
-
-            # Append to existing self.edge_attr
-            self.edge_attr = torch.cat((self.edge_attr, edge_attr_new))
-
         # Add new edges between the nodes
         source = is_out.repeat_interleave(k)
         target = neighbors.flatten()
         edge_index_new = torch.vstack((source, target))
-        self.edge_index = torch.cat((self.edge_index, edge_index_new), dim=1)
+        edge_index_old = self.edge_index
+        self.edge_index = torch.cat((edge_index_old, edge_index_new), dim=1)
+
+        # Exit here if there are no edge attributes
+        if self.edge_attr is None:
+            return self
+
+        # If the edges have attributes, we also create attributes for
+        # the new edges. There is no trivial way of doing so, the
+        # heuristic here simply attempts to linearly regress the edge
+        # weights based on the corresponding node distances.
+        # First, get existing edges attributes and associated distance
+        w = self.edge_attr
+        s = edge_index_old[0]
+        t = edge_index_old[1]
+        d = torch.linalg.norm(self.pos[s] - self.pos[t], dim=1)
+        d_1 = torch.vstack((d, torch.ones_like(d))).T
+
+        # Least square on d_1.x = w  (ie d.a + b = w)
+        # NB: CUDA may crash trying to solve this simple system, in
+        # which case we will fallback to CPU. Not ideal though
+        try:
+            a, b = torch.linalg.lstsq(d_1, w).solution
+        except:
+            if src.is_debug_enabled():
+                print(
+                    '\nWarning: torch.linalg.lstsq failed, trying again '
+                    'on CPU')
+            a, b = torch.linalg.lstsq(d_1.cpu(), w.cpu()).solution
+            a = a.to(self.device)
+            b = b.to(self.device)
+
+        # Heuristic: linear approximation of w by d
+        edge_attr_new = distances.flatten() * a + b
+
+        # Append to existing self.edge_attr
+        self.edge_attr = torch.cat((self.edge_attr, edge_attr_new))
 
         return self
 

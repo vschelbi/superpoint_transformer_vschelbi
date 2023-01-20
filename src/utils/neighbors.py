@@ -22,9 +22,11 @@ def knn_1(
 
     # Data initialization
     device = xyz.device
+    xyz_query = xyz.view(1, -1, 3)
+    xyz_search = xyz.view(1, -1, 3)
     if not xyz.is_cuda:
-        xyz_query = xyz.view(1, -1, 3).cuda()
-        xyz_search = xyz.view(1, -1, 3).cuda()
+        xyz_query = xyz_query.cuda()
+        xyz_search = xyz_search.cuda()
 
     # KNN on GPU. Actual neighbor search now
     k_search = k if self_is_neighbor else k + 1

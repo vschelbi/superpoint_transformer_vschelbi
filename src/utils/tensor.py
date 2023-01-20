@@ -78,7 +78,7 @@ def is_permutation(a: torch.LongTensor):
     """Checks whether a 1D tensor of indices is a permutation."""
     assert a.dim() == 1, "Only supports 1D tensors"
     assert not a.is_floating_point(), "Float tensors are not supported"
-    return a.sort().values.equal(torch.arange(a.numel()))
+    return a.sort().values.equal(torch.arange(a.numel(), device=a.device))
 
 
 def arange_interleave(width, start=None):

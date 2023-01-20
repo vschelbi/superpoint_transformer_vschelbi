@@ -47,7 +47,5 @@ class NodeMLP(nn.Module):
 
         # If node level is larger than 1, distribute parent features to
         # level-1 nodes
-        super_index = nag[1].super_index
-        for i in range(2, self.level):
-            super_index = nag[i].super_index[super_index]
+        super_index = nag.get_super_index(self.level, low=1)
         return x[super_index]

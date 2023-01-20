@@ -31,12 +31,12 @@ class NAG:
             yield self[i]
 
     def get_sub_size(self, high, low=0):
-        """Compute the number of points of level 'low' contained in each
-        superpoint of level 'high'.
+        """Compute the number of points of level 'low' contained in
+        each superpoint of level 'high'.
 
         Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
-        (ie level-0 points are themselves clusters of '-1' level absent
-        from the NAG object).
+        (ie level-0 points are themselves clusters of '-1' level
+        absent from the NAG object).
         """
         assert -1 <= low < high < self.num_levels
         assert 0 <= low or self[0].is_super
@@ -48,6 +48,28 @@ class NAG:
         for i in range(low + 1, high):
             sub_size = scatter_sum(sub_size, self[i].super_index, dim=0)
         return sub_size
+
+    def get_super_index(self, high, low=0):
+        """Compute the super_index linking the points at level 'low'
+        with superpoints at level 'high'.
+
+        Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
+        and 'high=self.num_levels + 1' is accepted when the last level
+        has a 'super_index' attribute.
+        """
+        assert -1 <= low < high <= self.num_levels
+        assert 0 <= low or self[0].is_super
+        assert high < self.num_levels or self._list[-1].is_sub
+
+        low = -1 if low < 0 else low
+
+        super_index = self[0].sub.to_super_index() if low < 0 \
+            else self[low].super_index
+
+        for i in range(low + 1, high):
+            super_index = self[i].super_index[super_index]
+
+        return super_index
 
     @property
     def num_levels(self):
@@ -406,12 +428,7 @@ class NAG:
         # indices of level 'low' elements
         num_points_low = sub_size.sum()
         point_index = torch.arange(num_points_low, device=self.device)
-        if low < 0:
-            super_index = self[0].sub.to_super_index()
-        else:
-            super_index = self[low].super_index
-        for i_level in range(low + 1, high):
-            super_index = self[i_level].super_index[super_index]
+        super_index = self.get_super_index(high, low=low)
 
         # If a mask is provided, only keep the corresponding points.
         # This also requires updating the `sub_size` and `n_samples`
