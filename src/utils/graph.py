@@ -7,6 +7,7 @@ from src.utils.geometry import base_vectors_3d
 from src.utils.sparse import sizes_to_pointers, sparse_sort, \
     sparse_sort_along_direction
 from src.utils.scatter import scatter_pca, scatter_nearest_neighbor
+from src.utils.edge import edge_wise_points
 
 
 __all__ = [
@@ -78,8 +79,9 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
 
 
 def subedges(
-        points, index, edge_index, k_ratio=0.1, k_min=10, cycles=2,
-        pca_on_cpu=False, margin=0.1):
+        points, index, edge_index, k_ratio=0.2, k_min=20, cycles=2,
+        pca_on_cpu=False, margin=0.2, halfspace_filter=True, bbox_filter=True,
+        target_pc_flip=True, source_pc_sort=False):
     # Sort edges in lexicographic order and remove duplicates
     edge_index = coalesce(edge_index)
 
@@ -141,17 +143,18 @@ def subedges(
     # between two segments) are searched along the nearest-neighbors
     # (ie anchor points) direction, this operation aims at dealing with
     # edges located in concave regions of the segment boundaries
-    in_S_halfspace = torch.where(S_points[:, 0] <= 0)[0]
-    S_points = S_points[in_S_halfspace]
-    S_points_idx = S_points_idx[in_S_halfspace]
-    S_uid = S_uid[in_S_halfspace]
-    del in_S_halfspace
+    if halfspace_filter:
+        in_S_halfspace = torch.where(S_points[:, 0] <= margin)[0]
+        S_points = S_points[in_S_halfspace]
+        S_points_idx = S_points_idx[in_S_halfspace]
+        S_uid = S_uid[in_S_halfspace]
+        del in_S_halfspace
 
-    in_T_halfspace = torch.where(T_points[:, 0] >= 0)[0]
-    T_points = T_points[in_T_halfspace]
-    T_points_idx = T_points_idx[in_T_halfspace]
-    T_uid = T_uid[in_T_halfspace]
-    del in_T_halfspace
+        in_T_halfspace = torch.where(T_points[:, 0] >= -margin)[0]
+        T_points = T_points[in_T_halfspace]
+        T_points_idx = T_points_idx[in_T_halfspace]
+        T_uid = T_uid[in_T_halfspace]
+        del in_T_halfspace
 
     # Compute the bbox intersection in the 2nd and 3rd coordinates
     # plane. This is a proxy for computing the intersection of the
@@ -159,30 +162,31 @@ def subedges(
     # plane. This operation prevents subedge points from lying too far
     # from the source segment's projection on the target segment along
     # the anchor direction (and conversely)
-    s_min, _ = scatter_min(S_points[:, 1:], S_uid, dim=0)
-    s_max, _ = scatter_max(S_points[:, 1:], S_uid, dim=0)
-    t_min, _ = scatter_min(T_points[:, 1:], T_uid, dim=0)
-    t_max, _ = scatter_max(T_points[:, 1:], T_uid, dim=0)
-    st_min = torch.max(s_min, t_min).clamp(max=-margin)
-    st_max = torch.min(s_max, t_max).clamp(min=margin)
-    del s_min, s_max, t_min, t_max
+    if bbox_filter:
+        s_min, _ = scatter_min(S_points[:, 1:], S_uid, dim=0)
+        s_max, _ = scatter_max(S_points[:, 1:], S_uid, dim=0)
+        t_min, _ = scatter_min(T_points[:, 1:], T_uid, dim=0)
+        t_max, _ = scatter_max(T_points[:, 1:], T_uid, dim=0)
+        st_min = torch.max(s_min, t_min).clamp(max=-margin)
+        st_max = torch.min(s_max, t_max).clamp(min=margin)
+        del s_min, s_max, t_min, t_max
 
-    # Local helper to select points inside the bbox intersection
-    def select_in_bbox(source=True):
-        if source:
-            X_points, X_points_idx, X_uid = S_points, S_points_idx, S_uid
-        else:
-            X_points, X_points_idx, X_uid = T_points, T_points_idx, T_uid
-        
-        in_bbox = torch.where(
-            (X_points[:, 1:] >= st_min[X_uid]).all(dim=1)
-            & (X_points[:, 1:] <= st_max[X_uid]).all(dim=1))[0]
+        # Local helper to select points inside the bbox intersection
+        def select_in_bbox(source=True):
+            if source:
+                X_points, X_points_idx, X_uid = S_points, S_points_idx, S_uid
+            else:
+                X_points, X_points_idx, X_uid = T_points, T_points_idx, T_uid
 
-        return X_points[in_bbox], X_points_idx[in_bbox], X_uid[in_bbox]
+            in_bbox = torch.where(
+                (X_points[:, 1:] >= st_min[X_uid]).all(dim=1)
+                & (X_points[:, 1:] <= st_max[X_uid]).all(dim=1))[0]
 
-    # Select points inside the bbox intersection
-    S_points, S_points_idx, S_uid = select_in_bbox(source=True)
-    T_points, T_points_idx, T_uid = select_in_bbox(source=False)
+            return X_points[in_bbox], X_points_idx[in_bbox], X_uid[in_bbox]
+
+        # Select points inside the bbox intersection
+        S_points, S_points_idx, S_uid = select_in_bbox(source=True)
+        T_points, T_points_idx, T_uid = select_in_bbox(source=False)
 
     # Sort points along the edge direction, the first point being the
     # anchor point and subsequent points farther and farther away from
@@ -240,13 +244,16 @@ def subedges(
     # Flip the target first component direction when needed. This is to
     # limit subedge crossings. This is motivated by the desire to mimick
     # Delaunay's visibility-based edges
-    T_proj = (T_points * t_v.repeat_interleave(st_k, dim=0)).sum(dim=1)
-    s_mean = scatter_mean(S_points, S_uid, dim=0)
-    t_min = T_points[scatter_min(T_proj, T_uid, dim=0)[1]]
-    st_u = t_min - s_mean
-    st_u /= torch.linalg.norm(st_u, dim=1)
-    to_flip = torch.where((s_v * t_v).sum(dim=1) <= (s_v * st_u).sum(dim=1))[0]
-    t_v[to_flip] *= -1
+    if target_pc_flip and not source_pc_sort:
+        T_proj = (T_points * t_v.repeat_interleave(st_k, dim=0)).sum(dim=1)
+        s_mean = scatter_mean(S_points, S_uid, dim=0)
+        t_min = T_points[scatter_min(T_proj, T_uid, dim=0)[1]]
+        st_u = t_min - s_mean
+        st_u /= torch.linalg.norm(st_u, dim=1).view(-1, 1)
+        to_flip = torch.where((s_v * t_v).sum(dim=1) <= (s_v * st_u).sum(dim=1))[0]
+        t_v[to_flip] *= -1
+    elif source_pc_sort:
+        t_v = s_v
 
     # Local helper to sort points along their first component
     def sort_by_first_component(source=True):

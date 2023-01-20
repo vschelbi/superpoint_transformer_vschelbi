@@ -141,7 +141,7 @@ def identity_PCA(x, dim=3, normalize=False):
 
 
 def visualize_3d(
-        input, figsize=800, width=None, height=None, class_names=None,
+        input, figsize=1000, width=None, height=None, class_names=None,
         class_colors=None, voxel=-1, max_points=50000, point_size=3,
         centroid_size=None, error_color=None, centroids=False, v_edge=False,
         h_edge=False, h_edge_attr=False, gap=None, select=None, alpha=0.1,
