@@ -4,10 +4,10 @@ from .tensor import *
 from .cpu import *
 from .features import *
 from .geometry import *
-from .graph import *
 from .io import *
 from .neighbors import *
 from .sparse import *
+from .edge import *
 from .pylogger import get_pylogger
 from .rich_utils import enforce_tags, print_config_tree
 from .utils import *
@@ -21,3 +21,4 @@ from .time import *
 from .multiprocessing import *
 from .wandb import *
 from .parameter import *
+from .graph import *

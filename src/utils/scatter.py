@@ -1,8 +1,7 @@
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_min
 from itertools import combinations_with_replacement
-from src.utils import indices_to_pointers, arange_interleave, \
-    edge_index_to_uid, edge_wise_points
+from src.utils.edge import edge_wise_points
 
 
 __all__ = ['scatter_mean_weighted', 'scatter_pca', 'scatter_nearest_neighbor']
@@ -63,10 +62,6 @@ def scatter_pca(x, idx, on_cpu=False):
     cov[:, ij[:, 0], ij[:, 1]] = upper_triangle
 
     # Eigendecompostion
-    # TODO: this is surprisingly slow on GPU, so better run on CPU. For
-    #  critical GPU-based applications, this synchronization might be
-    #  problematic, in which case a faster GPU implementation would be
-    #  neeed
     if on_cpu:
         device = cov.device
         cov = cov.cpu()
