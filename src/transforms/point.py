@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from sklearn.linear_model import RANSACRegressor
 import src.partition.utils.libpoint_utils as point_utils
-from src.utils.features import rgb2hsv, rgb2lab
+from src.utils import rgb2hsv, rgb2lab, sizes_to_pointers
 from src.transforms import Transform
 from src.data import NAG
 
@@ -175,7 +175,7 @@ class PointFeatures(Transform):
             if (n_missing > 0).any():
                 sizes = k - n_missing
                 nn = nn[nn >= 0]
-                nn_ptr = torch.cat((torch.zeros(1), sizes.cumsum(dim=0).cpu()))
+                nn_ptr = sizes_to_pointers(sizes.cpu())
             else:
                 nn = nn.flatten().cpu()
                 nn_ptr = torch.arange(xyz.shape[0] + 1) * k

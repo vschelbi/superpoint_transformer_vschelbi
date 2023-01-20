@@ -4,8 +4,8 @@ from torch_scatter import scatter_mean
 
 
 __all__ = [
-    'indices_to_pointers', 'dense_to_csr', 'csr_to_dense', 'sparse_sort',
-    'sparse_sort_along_direction']
+    'indices_to_pointers', 'sizes_to_pointers', 'dense_to_csr', 'csr_to_dense',
+    'sparse_sort', 'sparse_sort_along_direction']
 
 
 def indices_to_pointers(indices: torch.LongTensor):
@@ -27,6 +27,16 @@ def indices_to_pointers(indices: torch.LongTensor):
         torch.LongTensor([indices.shape[0]]).to(device)])
 
     return pointers, order
+
+
+def sizes_to_pointers(sizes: torch.LongTensor):
+    """Convert a tensor of sizes into the corresponding pointers. This
+    is a trivial but often-required operation.
+    """
+    assert sizes.dim() == 1
+    assert sizes.dtype == torch.long
+    zero = torch.zeros(1, device=sizes.device, dtype=torch.long)
+    return torch.cat((zero, sizes)).cumsum(dim=0)
 
 
 def dense_to_csr(a):

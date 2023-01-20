@@ -5,7 +5,7 @@ from typing import List
 import src
 from src.data import Data, Batch
 from src.utils import tensor_idx, has_duplicates, \
-    arange_interleave, fast_randperm
+    arange_interleave, fast_randperm, sizes_to_pointers
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter_sum
 
@@ -466,8 +466,7 @@ class NAG:
         # point_index. Note this could easily be expressed with a for
         # loop, but we need to use a vectorized formulation to ensure
         # reasonable processing time
-        zero = torch.zeros(1, device=self.device).long()
-        offset = torch.cat((zero, sub_size[:-1])).cumsum(dim=0)
+        offset = sizes_to_pointers(sub_size[:-1])
         idx_samples = point_index[arange_interleave(n_samples, start=offset)]
 
         # Return here if sampling pointers are not required
@@ -475,7 +474,7 @@ class NAG:
             return idx_samples
 
         # Compute the pointers
-        ptr_samples = torch.cat([zero, n_samples.cumsum(dim=0)])
+        ptr_samples = sizes_to_pointers(n_samples)
 
         return idx_samples, ptr_samples.contiguous()
 

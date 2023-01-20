@@ -1,8 +1,8 @@
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_min
 from itertools import combinations_with_replacement
-from src.utils import indices_to_pointers, arange_interleave
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from src.utils import indices_to_pointers, arange_interleave, \
+    edge_index_to_uid, edge_wise_points
 
 
 __all__ = ['scatter_mean_weighted', 'scatter_pca', 'scatter_nearest_neighbor']
@@ -107,13 +107,6 @@ def scatter_nearest_neighbor(points, index, edge_index, cycles=2):
         cycle accounts for searching the nearest neighbor, in A, of the
         nearest neighbor of X in set B
     """
-    assert points.dim() == 2
-    assert index.dim() == 1
-    assert points.shape[0] == index.shape[0]
-    assert edge_index.dim() == 2
-    assert edge_index.shape[0] == 2
-    assert edge_index.max() <= index.max()
-
     # We define the segments in the first row of edge_index as 'source'
     # segments, while the elements of the second row are 'target'
     # segments. The corresponding variables are prepended with 's_' and
@@ -121,14 +114,12 @@ def scatter_nearest_neighbor(points, index, edge_index, cycles=2):
     s_idx = edge_index[0]
     t_idx = edge_index[1]
 
-    # Compute consecutive unique identifiers for the edges. These
-    # will be needed for scatter operations and so on
-    uid = s_idx * (max(s_idx.max(), t_idx.max()) + 1) + t_idx
-    uid = consecutive_cluster(uid)[0]
-
-    # Compute the pointers and ordering to express the segments and the
-    # points they hold in CSR format
-    pointers, order = indices_to_pointers(index)
+    # Expand the edge variables to point-edge values. That is, the
+    # concatenation of all the source --or target-- points for each
+    # edge. The corresponding variables are prepended with 'S_' and 'T_'
+    # for clarity
+    (S_points, S_points_idx, S_uid), (T_points, T_points_idx, T_uid) = \
+        edge_wise_points(points, index, edge_index)
 
     # Initialize the candidate points as the centroid of each segment
     segment_centroid = scatter_mean(points, index, dim=0)
@@ -138,38 +129,16 @@ def scatter_nearest_neighbor(points, index, edge_index, cycles=2):
     s_candidate_idx = -torch.ones_like(s_idx)
     t_candidate_idx = -torch.ones_like(s_idx)
 
-    # Expand the edge variables to point-edge values. That is, the
-    # concatenation of all the source -or target- points for each edge.
-    # The corresponding variables are prepended with 'S_' and 'T_' for
-    # clarity
-    def expand(source=True):
-        x_idx = s_idx if source else t_idx
-        size = segment_size[x_idx]
-        start = pointers[:-1][x_idx]
-        X_points_idx = order[arange_interleave(size, start=start)]
-        X_points = points[X_points_idx]
-        X_uid = uid.repeat_interleave(size, dim=0)
-        return X_points, X_points_idx, X_uid
-
-    S_points, S_points_idx, S_uid = expand(source=True)
-    T_points, T_points_idx, T_uid = expand(source=False)
-
-    # Step operation will update the source -target, respectively-
-    # candidate based on the current target -source, respectively-
+    # Step operation will update the source --target, respectively--
+    # candidate based on the current target --source, respectively--
     # candidate
     def step(source=True):
         if source:
-            x_idx = s_idx
-            y_candidate = t_candidate
-            X_points = S_points
-            X_points_idx = S_points_idx
-            X_uid = S_uid
+             x_idx, y_candidate, X_points, X_points_idx, X_uid = \
+                 s_idx, t_candidate, S_points, S_points_idx, S_uid
         else:
-            x_idx = t_idx
-            y_candidate = s_candidate
-            X_points = T_points
-            X_points_idx = T_points_idx
-            X_uid = T_uid
+            x_idx, y_candidate, X_points, X_points_idx, X_uid = \
+                t_idx, s_candidate, T_points, T_points_idx, T_uid
 
         # Expand the other segments' candidates to point-edge values
         size = segment_size[x_idx]
@@ -177,7 +146,7 @@ def scatter_nearest_neighbor(points, index, edge_index, cycles=2):
 
         # Compute the distance between the points and the other segment's
         # candidate and update the segment's candidate as the point with
-        # smallest distance to the candidate
+        # the smallest distance to the candidate
         X_dist = torch.linalg.norm(X_points - Y_candidate, dim=1)
 
         # Update the candidate as the point with the smallest distance

@@ -2,8 +2,8 @@ import copy
 import torch
 import numpy as np
 import src
-from src.utils import tensor_idx, is_sorted, \
-    indices_to_pointers
+from src.utils import tensor_idx, is_sorted, indices_to_pointers, \
+    sizes_to_pointers
 
 
 __all__ = ['CSRData', 'CSRBatch']
@@ -314,9 +314,8 @@ class CSRBatch(CSRData):
 
     @property
     def batch_pointers(self):
-        return torch.cumsum(
-            torch.cat((torch.LongTensor([0]), self.__sizes__)), dim=0) \
-            if self.__sizes__ is not None else None
+        return sizes_to_pointers(self.__sizes__) if self.__sizes__ is not None \
+            else None
 
     @property
     def batch_items_sizes(self):
