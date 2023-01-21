@@ -712,7 +712,7 @@ def _horizontal_edge_features(data, points, se_point_index, se_id):
     # We can now use torch_scatter operations to compute superedge
     # features
     se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).to(device)
-    se_direction = se_direction / torch.linalg.norm(se_direction, dim=1)
+    se_direction /= torch.linalg.norm(se_direction, dim=1).view(-1, 1)
     se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
     se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].to(device)
     se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
