@@ -101,11 +101,23 @@ pre_transform:
       params:
         n_max_node: 32
         n_min: 5
-    - transform: EdgeFeatures
+#    - transform: DelaunayHorizontalGraph
+#      params:
+#        n_max_edge: 64
+#        n_min: 5
+#        max_dist: [3, 10, 30, 100]
+    - transform: RadiusHorizontalGraph
       params:
-        n_max_edge: 64
-        n_min: 5
-        max_dist: [3, 10, 30, 100]
+        k_max: 100
+        gap: [0, 0.3, 1, 3]
+        k_ratio: 0.2
+        k_min: 20
+        cycles: 3
+        margin: 0.2
+        halfspace_filter: True
+        bbox_filter: True
+        target_pc_flip: True
+        source_pc_sort: False
     - transform: NAGTo
       params:
         device: 'cpu'

@@ -21,24 +21,3 @@ w_adjacency: 1
 dropout_segment_ratio: 0.3
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # use the canonical room position
 #select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
-
-train_transform:
-    - transform: NAGRemoveKeys  # remove any features already computed in CutPursuitPartition
-      params:
-        level: '1+'
-        keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
-    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
-      params:
-        level: '1+'
-        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
-    - transform: NAGSelectColumns
-      params:
-        level: '1+'
-        key: 'edge_attr'
-        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    - transform: NAGSelectColumns  # adapt datamodule.feat_point if modified
-      params:
-        level: 0
-        key: 'x'
-        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # use the canonical room position
-#        idx: [0, 1, 2, 3, 4, 5, 6, 7]

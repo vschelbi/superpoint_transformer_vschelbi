@@ -340,111 +340,101 @@ class DropoutSegments(Transform):
         return nag
 
 
-# class SampleGraph(Transform):
-#     """Randomly pick segments from `i_level`, along with their `k_hops`
-#     neighbors. This can be thought as a spherical sampling in the graph
-#     of i_level.
-#
-#     This operation relies on `NAG.select()` to maintain index
-#     consistency across the NAG levels.
-#
-#     Note: we do not directly sample level-0 points, see `SampleSegments`
-#     for that. For speed consideration, it is recommended to use
-#     `SampleSegments` first before `SampleGraph`, to minimize the
-#     number of level-0 points to manipulate.
-#
-#     :param i_level: int
-#         Partition level we want to pick from. By default, `i_level=-1`
-#         will sample the highest level of the input NAG
-#     :param k_sample: int
-#         Number of sub-graphs/segments to pick
-#     :param k_hops: int
-#         Number of hops ruling the neighborhood size selected around the
-#         sampled nodes/segments
-#     :param by_size: bool
-#         If True, the segment size will affect the chances of being
-#         selected out. The larger the segment, the greater its chances
-#         to be picked
-#     :param by_class: bool
-#         If True, the classes will affect the chances of being
-#         dropped out. The scarcer the segment class, the greater
-#         its chances to be selected
-#     """
-#
-#     _IN_TYPE = NAG
-#     _OUT_TYPE = NAG
-#
-#     def __init__(self, i_level=-1, k_sample=1, k_hops=2, by_size=False, by_class=False):
-#         self.i_level = i_level
-#         self.k_sample = k_sample
-#         self.k_hops = k_hops
-#         self.by_size = by_size
-#         self.by_class = by_class
-#
-#     def _process(self, nag):
-#         # Initialization
-#         i_level = self.i_level if 0 <= self.i_level < nag.num_levels \
-#             else nag.num_levels - 1
-#         k_sample = self.k_sample if self.k_sample < nag[i_level].num_nodes else 1
-#
-#         #TODO
-#         # - create weights for each node (careful weight ordering)
-#         # - randomly pick nodes indices (using the weights)
-#         # - find the k-hop neighbors indices (careful to keep BIDIRECTIONAL EDGES)
-#         # - NAG.select based on idinces (careful index order matters ? use boolean mask instead ?)
-#
-#         k_hop_subgraph(
-#
-#         # Drop some nodes from each NAG level. Note that we start
-#         # dropping from the highest to the lowest level, to accelerate
-#         # training
-#         device = nag.device
-#         for i_level in range(nag.num_levels - 1, 0, -1):
-#
-#             # Negative max_ratios prevent dropout
-#             if ratio[i_level - 1] <= 0:
-#                 continue
-#
-#             # Prepare sampling
-#             num_nodes = nag[i_level].num_nodes
-#             num_keep = num_nodes - int(num_nodes * ratio[i_level - 1])
-#
-#             # Initialize all segments with the same weights
-#             weights = torch.ones(num_nodes, device=device)
-#
-#             # Compute per-segment weights solely based on the segment
-#             # size. This is biased towards preserving large segments in
-#             # the sampling
-#             if self.by_size:
-#                 node_size = nag.get_sub_size(i_level, low=0)
-#                 size_weights = node_size ** 0.333
-#                 size_weights /= size_weights.sum()
-#                 weights += size_weights
-#
-#             # Compute per-class weights based on class frequencies in
-#             # the current NAG and give a weight to each segment
-#             # based on the rarest class it contains. This is biased
-#             # towards sampling rare classes
-#             if self.by_class and nag[i_level].y is not None:
-#                 counts = nag[i_level].y.sum(dim=0).sqrt()
-#                 scores = 1 / (counts + 1)
-#                 scores /= scores.sum()
-#                 mask = nag[i_level].y.gt(0)
-#                 class_weights = (mask * scores.view(1, -1)).max(dim=1).values
-#                 class_weights /= class_weights.sum()
-#                 weights += class_weights.squeeze()
-#
-#             # Normalize the weights again, in case size or class weights
-#             # were added
-#             weights /= weights.sum()
-#
-#             # Generate sampling indices
-#             idx = torch.multinomial(weights, num_keep, replacement=False)
-#
-#             # Select the nodes and update the NAG structure accordingly
-#             nag = nag.select(i_level, idx)
-#
-#         return nag
+class SampleGraph(Transform):
+    """Randomly pick segments from `i_level`, along with their `k_hops`
+    neighbors. This can be thought as a spherical sampling in the graph
+    of i_level.
+
+    This operation relies on `NAG.select()` to maintain index
+    consistency across the NAG levels.
+
+    Note: we do not directly sample level-0 points, see `SampleSegments`
+    for that. For speed consideration, it is recommended to use
+    `SampleSegments` first before `SampleGraph`, to minimize the
+    number of level-0 points to manipulate.
+
+    :param i_level: int
+        Partition level we want to pick from. By default, `i_level=-1`
+        will sample the highest level of the input NAG
+    :param k_sample: int
+        Number of sub-graphs/segments to pick
+    :param k_hops: int
+        Number of hops ruling the neighborhood size selected around the
+        sampled nodes/segments
+    :param by_size: bool
+        If True, the segment size will affect the chances of being
+        selected out. The larger the segment, the greater its chances
+        to be picked
+    :param by_class: bool
+        If True, the classes will affect the chances of being
+        dropped out. The scarcer the segment class, the greater
+        its chances to be selected
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(
+            self, i_level=-1, k_sample=1, k_hops=2, by_size=False,
+            by_class=False):
+        self.i_level = i_level
+        self.k_sample = k_sample
+        self.k_hops = k_hops
+        self.by_size = by_size
+        self.by_class = by_class
+
+    def _process(self, nag):
+        device = nag.device
+
+        # Initialization
+        i_level = self.i_level if 0 <= self.i_level < nag.num_levels \
+            else nag.num_levels - 1
+        k_sample = self.k_sample if self.k_sample < nag[i_level].num_nodes else 1
+
+        #TODO
+        # - create weights for each node (careful weight ordering)
+        # - randomly pick nodes indices (using the weights)
+        # - find the k-hop neighbors indices (careful to keep BIDIRECTIONAL EDGES)
+
+        # Initialize all segments with the same weights
+        weights = torch.ones(nag[i_level].num_nodes, device=device)
+
+        # Compute per-segment weights solely based on the segment
+        # size. This is biased towards preserving large segments in
+        # the sampling
+        if self.by_size:
+            node_size = nag.get_sub_size(i_level, low=0)
+            size_weights = node_size ** 0.333
+            size_weights /= size_weights.sum()
+            weights += size_weights
+
+        # Compute per-class weights based on class frequencies in
+        # the current NAG and give a weight to each segment
+        # based on the rarest class it contains. This is biased
+        # towards sampling rare classes
+        if self.by_class and nag[i_level].y is not None:
+            counts = nag[i_level].y.sum(dim=0).sqrt()
+            scores = 1 / (counts + 1)
+            scores /= scores.sum()
+            mask = nag[i_level].y.gt(0)
+            class_weights = (mask * scores.view(1, -1)).max(dim=1).values
+            class_weights /= class_weights.sum()
+            weights += class_weights.squeeze()
+
+        # Normalize the weights again, in case size or class weights
+        # were added
+        weights /= weights.sum()
+
+        # Generate sampling indices
+        idx = torch.multinomial(weights, k_sample, replacement=False)
+
+        # Search the k-hop neighbors of the sampled nodes
+        idx = k_hop_subgraph(idx, self.k_hops, nag[i_level].edge_index)[0]
+
+        # Select the nodes and update the NAG structure accordingly
+        nag = nag.select(i_level, idx)
+
+        return nag
 
 
 class SampleSegments(Transform):

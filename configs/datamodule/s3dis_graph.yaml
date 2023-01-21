@@ -1,0 +1,68 @@
+defaults:
+  - s3dis.yaml
+
+dataloader:
+    batch_size: 2
+
+# These parameters are not actually used by the DataModule, but are used
+# here to facilitate model parameterization with config interpolation
+feat_point: 8
+feat_segment: 15
+
+# Based on SPG: https://arxiv.org/pdf/1711.09869.pdf
+voxel: 0.03
+knn: 45
+regularization: [0.03, 0.1, 0.3, 0.9]  # level-1 from SPG
+spatial_weight: [5e-2, 5e-2, 5e-3, 5e-4]
+cutoff: [10, 10, 80, 640]
+w_adjacency: 1
+sample_graph_dropout_segment_i_level: 2
+sample_graph_dropout_segment_k_sample: 4
+sample_graph_dropout_segment_k_hops: 3
+dropout_segment_ratio: 0.3
+#select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # use the canonical room position
+select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
+
+on_device_train_transform:
+    - transform: SampleSegments
+      params:
+        high: 1
+        low: 0
+        n_min: 32
+        n_max: 128
+    - transform: SampleGraph
+      params:
+        i_level: ${datamodule.sample_graph_dropout_segment_i_level}
+        k_sample: ${datamodule.sample_graph_dropout_segment_k_sample}
+        k_hops: ${datamodule.sample_graph_dropout_segment_k_hops}
+        by_size: False
+        by_class: False
+    - transform: DropoutSegments
+      params:
+        ratio: ${datamodule.dropout_segment_ratio}
+        by_size: False
+        by_class: False
+    - transform: JitterPosition
+      params:
+        sigma: 0.03
+    - transform: JitterFeatures
+      params:
+        sigma: 0.01
+    - transform: JitterEdgeFeatures
+      params:
+        sigma: 0.01
+    - transform: RandomTiltAndRotate
+      params:
+        phi: 0.1
+        theta: 180
+    - transform: RandomAnisotropicScale
+      params:
+        delta: 0.2
+    - transform: RandomAxisFlip
+      params:
+        p: 0.5
+    - transform: NAGColorAutoContrast
+      params:
+        level: all
+        p: 0.5
+        x_idx: 0

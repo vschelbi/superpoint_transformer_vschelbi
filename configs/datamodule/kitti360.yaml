@@ -17,6 +17,9 @@ regularization: [0.04, 0.2, 0.8, 1.4]
 spatial_weight: [1e-2, 0, 0, 0]
 cutoff: [10, 100, 1000, 10000]
 w_adjacency: -1
+sample_graph_dropout_segment_i_level: 2
+sample_graph_dropout_segment_k_sample: 4
+sample_graph_dropout_segment_k_hops: 3
 dropout_segment_ratio: [0.4, 0, 0, 0]
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
 
@@ -87,11 +90,23 @@ pre_transform:
       params:
         n_max_node: 32
         n_min: 5
-    - transform: EdgeFeatures
+#    - transform: DelaunayHorizontalGraph
+#      params:
+#        n_max_edge: 64
+#        n_min: 5
+#        max_dist: [5, 10, 100, 100]
+    - transform: RadiusHorizontalGraph
       params:
-        n_max_edge: 64
-        n_min: 5
-        max_dist: [5, 10, 100, 100]
+        k_max: 100
+        gap: [0, 1, 5, 10]
+        k_ratio: 0.2
+        k_min: 20
+        cycles: 3
+        margin: 0.2
+        halfspace_filter: True
+        bbox_filter: True
+        target_pc_flip: True
+        source_pc_sort: False
     - transform: NAGTo
       params:
         device: 'cpu'
@@ -127,6 +142,13 @@ on_device_train_transform:
         low: 0
         n_min: 16
         n_max: 32
+    - transform: SampleGraph
+      params:
+        i_level: ${datamodule.sample_graph_dropout_segment_i_level}
+        k_sample: ${datamodule.sample_graph_dropout_segment_k_sample}
+        k_hops: ${datamodule.sample_graph_dropout_segment_k_hops}
+        by_size: False
+        by_class: False
     - transform: DropoutSegments
       params:
         ratio: ${datamodule.dropout_segment_ratio}
