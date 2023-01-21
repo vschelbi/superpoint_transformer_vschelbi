@@ -82,6 +82,42 @@ def subedges(
         points, index, edge_index, k_ratio=0.2, k_min=20, cycles=2,
         pca_on_cpu=False, margin=0.2, halfspace_filter=True, bbox_filter=True,
         target_pc_flip=True, source_pc_sort=False):
+    """Compute the subedges making up each edge between segments. These
+    are needed for superedge features computation. This approach relies
+    on heuristics to avoid the Delaunay triangulation or any other O(N²)
+    operation.
+
+    :param points:
+        Level-0 points
+    :param index:
+        Index of the segment each point belongs to
+    :param edge_index:
+        Edges of the graph between segments
+    :param k_ratio:
+        Maximum ratio of a segment's points than can be used in a
+        superedge's subedges
+    :param k_min:
+        Minimum of subedges per superedge
+    :param cycles:
+        Number of iterations for nearest neighbor search between
+        segments
+    :param pca_on_cpu:
+        Whether PCA should be computed on CPU if need be. Should be kept
+        as False
+    :param margin:
+        Tolerance margin used for selecting subedges points and
+        excluding segment points from potential subedge candidates
+    :param halfspace_filter:
+        Whether the halfspace filtering should be applied
+    :param bbox_filter:
+        Whether the bounding box filtering should be applied
+    :param target_pc_flip:
+        Whether the subedge point pairs should be carefully ordered
+    :param source_pc_sort:
+        Whether the source and target subedge point pairs should be
+        ordered along the same vector
+    :return:
+    """
     # Sort edges in lexicographic order and remove duplicates
     edge_index = coalesce(edge_index)
 

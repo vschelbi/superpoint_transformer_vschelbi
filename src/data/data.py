@@ -416,7 +416,7 @@ class Data(PyGData):
 
         # Least square on d_1.x = w  (ie d.a + b = w)
         # NB: CUDA may crash trying to solve this simple system, in
-        # which case we will fallback to CPU. Not ideal though
+        # which case we will fall back to CPU. Not ideal though
         try:
             a, b = torch.linalg.lstsq(d_1, w).solution
         except:

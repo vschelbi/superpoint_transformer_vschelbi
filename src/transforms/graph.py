@@ -9,12 +9,12 @@ from src.data import Data, NAG
 from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    tensor_idx, knn_1
+    subedges, knn_1
 
 
 __all__ = [
-    'AdjacencyGraph', 'SegmentFeatures', 'EdgeFeatures', 'ConnectIsolated',
-    'NodeSize', 'JitterEdgeFeatures']
+    'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
+    'ConnectIsolated', 'NodeSize', 'JitterEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
@@ -199,10 +199,19 @@ def _compute_cluster_features(
     return nag
 
 
-class EdgeFeatures(Transform):
+class DelaunayHorizontalGraph(Transform):
     """Compute horizontal edges for all NAG levels except its first
     (ie the 0-level). These are the edges connecting the segments at
     each level, equipped with handcrafted edge features.
+
+    This approach relies on the dual graph of the Delaunay triangulation
+    of the point cloud. To reduce computation, each segment is susampled
+    based on its size. This sampling still has downsides and the
+    triangulation remains fairly long for large clouds, due to its O(N²)
+    complexity. Besides, the horizontal graph induced by the
+    triangulation is a visibility-based graph, meaning neighboring
+    segments may not be connected if a large enough segment separates
+    them. A faster alternative is `RadiusHorizontalGraph`.
 
     By default, a series of handcrafted edge attributes are computed and
     stored in the corresponding `Data.edge_attr`. However, if one only
@@ -242,14 +251,14 @@ class EdgeFeatures(Transform):
             max_dist = [max_dist] * (nag.num_levels - 1)
 
         for i_level, md in zip(range(1, nag.num_levels), max_dist):
-            nag = _compute_horizontal_graph_by_delaunay(
+            nag = _horizontal_graph_by_delaunay(
                 i_level, nag, n_max_edge=self.n_max_edge, n_min=self.n_min,
                 max_dist=md)
 
         return nag
 
 
-def _compute_horizontal_graph_by_delaunay(
+def _horizontal_graph_by_delaunay(
         i_level, nag, n_max_edge=64, n_min=5, max_dist=-1):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster graph on level 0"
@@ -344,12 +353,6 @@ def _compute_horizontal_graph_by_delaunay(
     pos = nag[0].pos[idx_samples]
     tri = Delaunay(pos.cpu().numpy())
 
-    # TODO: alternative to Delaunay: search all clusters with at least 1
-    #  point within R of 1 point of the cluster:
-    #  - dumb: radius search on segment centroids
-    #  - better: search intersection between self bbox+R and all bboxes
-    #    (can this be vectorized ?) -> https://math.stackexchange.com/questions/2651710/simplest-way-to-determine-if-two-3d-boxes-intersect
-
     # Concatenate all edges of the triangulation
     pairs = torch.tensor(
         list(itertools.combinations(range(4), 2)), device=device,
@@ -421,84 +424,12 @@ def _compute_horizontal_graph_by_delaunay(
 
         del dist
 
-    # Direction are the pointwise source->target vectors, based on which
-    # we will compute superedge descriptors
-    direction = nag[0].pos[edges_point[1]] - nag[0].pos[edges_point[0]]
-
-    # To stabilize the distance-based features' distribution, we use the
-    # sqrt of the metric distance. This assumes coordinates are in meter
-    # and that we are mostly interested in the range [1, 100]. Might
-    # want to change this if your dataset is different
-    dist_sqrt = torch.linalg.norm(direction, dim=1).sqrt() / 10
-
-    # We can now use torch_scatter operations to compute superedge
-    # features
-    se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).to(device)
-    se_direction = se_direction / torch.linalg.norm(se_direction, dim=1)
-    se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
-    se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].to(device)
-    se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
-
-    se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
-    se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1).sqrt() / 10
-
-    se_normal_source = data.normal[se[0]]
-    se_normal_target = data.normal[se[1]]
-    se_normal_angle = (se_normal_source * se_normal_target).sum(dim=1).abs()
-
-    # These do not seem useful: all edges are ~0. Would be more useful
-    # with the 1st PCA component of the edge points...
-    se_angle_source = (se_direction * se_normal_source).sum(dim=1).abs()
-    se_angle_target = (se_direction * se_normal_target).sum(dim=1).abs()
-
-    se_log_length_ratio = data.log_length[se[0]] - data.log_length[se[1]]
-    se_log_surface_ratio = data.log_surface[se[0]] - data.log_surface[se[1]]
-    se_log_volume_ratio = data.log_volume[se[0]] - data.log_volume[se[1]]
-    se_log_size_ratio = data.log_size[se[0]] - data.log_size[se[1]]
-
-    se_is_artificial = is_isolated[se[0]] | is_isolated[se[1]]
-
-    # TODO: other superedge ideas to better describe how 2 clusters
-    #  relate and the geometry of their border (S=source, T=target):
-    #  - matrix that transforms unary_vector_source into
-    #   unary_vector_target ? Should express, differences in pose, size
-    #   and shape as it requires rotation, translation and scaling. Poses
-    #   questions regarding the canonical base, PCA orientation ±π
-    #  - current SE direction is not the axis/plane of the edge but
-    #   rather its normal... build it with PCA and for points sampled in
-    #    each side ? careful with single-point edges...
-    #  - avg distance S/T points in border to centroid S/T (how far
-    #    is the border from the cluster center)
-    #  - angle of mean S->T direction wrt S/T principal components (is
-    #    the border along the long of short side of objects ?)
-    #  - PCA of points in S/T cloud (is it linear border or surfacic
-    #    border ?)
-    #  - mean dist of S->T along S/T normal (offset along the objects
-    #    normals, eg offsets between steps)
-
-    # TODO: if scatter operations are bottleneck, use scatter_csr
-
-    # The superedges we have created so far are oriented. We need to
-    # create the edges and corresponding features for the Target->Source
-    # direction now
-    se = torch.cat((se, se.flip(0)), dim=1)
-    se_feat = torch.vstack([
-        torch.cat((se_dist, se_dist)),
-        torch.cat((se_min_dist, se_min_dist)),
-        torch.cat((se_std_dist, se_std_dist)),
-        torch.cat((se_centroid_dist, se_centroid_dist)),
-        torch.cat((se_normal_angle, se_normal_angle)),
-        torch.cat((se_angle_source, se_angle_target)),
-        torch.cat((se_angle_target, se_angle_source)),
-        torch.cat((se_log_length_ratio, -se_log_length_ratio)),
-        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),
-        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),
-        torch.cat((se_log_size_ratio, -se_log_size_ratio)),
-        torch.cat((se_is_artificial, se_is_artificial))]).T
-
-    # Save superedges and superedge features in the Data object
+    # Prepare data attributes before computing edge features
     data.edge_index = se
-    data.edge_attr = se_feat
+    data.is_artificial = is_isolated
+
+    # Compute edge features
+    data = _horizontal_edge_features(data, nag[0].pos, edges_point, se_id)
 
     # Restore the i_level Data object, if need be
     nag._list[i_level] = data
@@ -506,7 +437,132 @@ def _compute_horizontal_graph_by_delaunay(
     return nag
 
 
-def _compute_horizontal_graph_by_radius(nag, k_max=100, gap=0, undirected=True):
+class RadiusHorizontalGraph(Transform):
+    """Compute horizontal edges for all NAG levels except its first
+    (ie the 0-level). These are the edges connecting the segments at
+    each level, equipped with handcrafted edge features.
+
+    This approach relies on a fast heuristics to search neighboring
+    segments as well as to identify level-0 points making up the
+    'subedges' between the segments.
+
+    By default, a series of handcrafted edge attributes are computed and
+    stored in the corresponding `Data.edge_attr`. However, if one only
+    needs a subset of those at train time, one may make use of
+    `SelectColumns` and `NAGSelectColumns`.
+
+    :param k_max: int, List(int)
+        Maximum number of neighbors per segment
+    :param gap: float, List(float)
+        Two segments A and B are considered neighbors if there is a in A
+        and b in B such that dist(a, b) < gap
+    :param k_ratio:
+        Maximum ratio of a segment's points than can be used in a
+        superedge's subedges
+    :param k_min:
+        Minimum of subedges per superedge
+    :param cycles:
+        Number of iterations for nearest neighbor search between
+        segments
+    :param margin:
+        Tolerance margin used for selecting subedges points and
+        excluding segment points from potential subedge candidates
+    :param halfspace_filter:
+        Whether the halfspace filtering should be applied
+    :param bbox_filter:
+        Whether the bounding box filtering should be applied
+    :param target_pc_flip:
+        Whether the subedge point pairs should be carefully ordered
+    :param source_pc_sort:
+        Whether the source and target subedge point pairs should be
+        ordered along the same vector
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(
+            self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=2,
+            margin=0.2, halfspace_filter=True, bbox_filter=True,
+            target_pc_flip=True, source_pc_sort=False):
+        self.k_max = k_max
+        self.gap = gap
+        self.k_ratio = k_ratio
+        self.k_min = k_min
+        self.cycles = cycles
+        self.margin = margin
+        self.halfspace_filter = halfspace_filter
+        self.bbox_filter = bbox_filter
+        self.target_pc_flip = target_pc_flip
+        self.source_pc_sort = source_pc_sort
+
+    def _process(self, nag):
+        # Compute the horizontal graph, without edge features
+        nag = _horizontal_graph_by_radius(
+            nag, k_max=self.k_max, gap=self.gap, clean_graph=True)
+
+        k_ratio = self.k_ratio if isinstance(self.k_ratio, list) \
+            else [self.k_ratio] * (nag.num_levels - 1)
+        k_min = self.k_min if isinstance(self.k_min, list) \
+            else [self.k_min] * (nag.num_levels - 1)
+        cycles = self.cycles if isinstance(self.cycles, list) \
+            else [self.cycles] * (nag.num_levels - 1)
+        margin = self.margin if isinstance(self.margin, list) \
+            else [self.margin] * (nag.num_levels - 1)
+
+        # Compute the edge features, level by level
+        for i_level, kr, km, cy, mg in zip(
+                range(1, nag.num_levels), k_ratio, k_min, cycles, margin):
+            nag = self._process_edge_features_for_single_level(
+                nag, i_level, kr, km, cy, mg)
+
+        return nag
+
+    def _process_edge_features_for_single_level(
+            self, nag, i_level, k_ratio, k_min, cycles, margin):
+        # Compute 'subedges', ie edges between level-0 points making up
+        # the edges between the segments. These will be used for edge
+        # features computation
+        edge_index, se_point_index, se_id = subedges(
+            nag[0].pos, nag.get_super_index(i_level), nag[i_level].edge_index,
+            k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=False,
+            margin=margin, halfspace_filter=self.halfspace_filter,
+            bbox_filter=self.bbox_filter, target_pc_flip=self.target_pc_flip,
+            source_pc_sort=self.source_pc_sort)
+
+        # Prepare for edge feature computation
+        data = nag[i_level]
+        data.edge_index = edge_index
+
+        # Edge feature computation
+        data = _horizontal_edge_features(
+            data, nag[0].pos, se_point_index, se_id)
+
+        # Restore the i_level Data object
+        nag._list[i_level] = data
+
+        return nag
+
+
+def _horizontal_graph_by_radius(nag, k_max=100, gap=0, clean_graph=True):
+    """Search neighboring segments with points distant from `gap`or
+    less.
+
+    :param nag: NAG
+        Hierarchical structure
+    :param k_max: int, List(int)
+        Maximum number of neighbors per segment
+    :param gap: float, List(float)
+        Two segments A and B are considered neighbors if there is a in A
+        and b in B such that dist(a, b) < gap
+    :param clean_graph: bool
+        Whether the returned horizontal graph should be cleaned. If
+        True, Data.clean_graph() will be called and all edges will be
+        expressed with source_index < target_index, self-loops and
+        redundant edges will be removed. This may be necessary to
+        alleviate memory consumption before computing edge features
+    :return:
+    """
     assert isinstance(nag, NAG)
     if not isinstance(k_max, list):
         k_max = [k_max] * (nag.num_levels - 2)
@@ -514,14 +570,23 @@ def _compute_horizontal_graph_by_radius(nag, k_max=100, gap=0, undirected=True):
         gap = [gap] * (nag.num_levels - 2)
 
     for i_level, k, g in zip(range(1, nag.num_levels), k_max, gap):
-        nag = _compute_horizontal_graph_by_radius_for_single_level(
-            nag, i_level, k_max=k, gap=g, undirected=undirected)
+        nag = _horizontal_graph_by_radius_for_single_level(
+            nag, i_level, k_max=k, gap=g, clean_graph=clean_graph)
 
     return nag
 
 
-def _compute_horizontal_graph_by_radius_for_single_level(
-        nag, i_level, k_max=100, gap=0, undirected=True):
+def _horizontal_graph_by_radius_for_single_level(
+        nag, i_level, k_max=100, gap=0, clean_graph=True):
+    """
+
+    :param nag:
+    :param i_level:
+    :param k_max:
+    :param gap:
+    :param clean_graph:
+    :return:
+    """
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster graph on level 0"
     assert nag[0].num_nodes < np.iinfo(np.uint32).max, \
@@ -591,15 +656,128 @@ def _compute_horizontal_graph_by_radius_for_single_level(
 
     # Make the graph directed with only i<j nodes. This is temporary,
     # to alleviate edge features computation
-    # TODO: restore undirected edges after feature computation !!!
-    #  bidirectional edges (make sure i,j and j,i)
-    if undirected:
+    if clean_graph:
         data.clean_graph()
 
     # Store the updated Data object in the NAG
     nag._list[i_level] = data
 
     return nag
+
+
+def _horizontal_edge_features(data, points, se_point_index, se_id):
+    """Compute the features for horizontal edges, given the edge graph
+    and the level-0 'subedges' making up each edge.
+
+    :param data:
+    :param points:
+    :param se_point_index:
+    :param se_id:
+    :return:
+    """
+    # TODO: other superedge ideas to better describe how 2 clusters
+    #  relate and the geometry of their border (S=source, T=target):
+    #  - matrix that transforms unary_vector_source into
+    #   unary_vector_target ? Should express, differences in pose, size
+    #   and shape as it requires rotation, translation and scaling. Poses
+    #   questions regarding the canonical base, PCA orientation ±π
+    #  - current SE direction is not the axis/plane of the edge but
+    #   rather its normal... build it with PCA and for points sampled in
+    #    each side ? careful with single-point edges...
+    #  - avg distance S/T points in border to centroid S/T (how far
+    #    is the border from the cluster center)
+    #  - angle of mean S->T direction wrt S/T principal components (is
+    #    the border along the long of short side of objects ?)
+    #  - PCA of points in S/T cloud (is it linear border or surfacic
+    #    border ?)
+    #  - mean dist of S->T along S/T normal (offset along the objects
+    #    normals, eg offsets between steps)
+
+    device = data.device
+
+    # Recover the edges between the segments
+    se = data.edge_index
+
+    # Direction are the pointwise source->target vectors, based on which
+    # we will compute superedge descriptors
+    direction = points[se_point_index[1]] - points[se_point_index[0]]
+
+    # To stabilize the distance-based features' distribution, we use the
+    # sqrt of the metric distance. This assumes coordinates are in meter
+    # and that we are mostly interested in the range [1, 100]. Might
+    # want to change this if your dataset is different
+    dist_sqrt = torch.linalg.norm(direction, dim=1).sqrt() / 10
+
+    # We can now use torch_scatter operations to compute superedge
+    # features
+    se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).to(device)
+    se_direction = se_direction / torch.linalg.norm(se_direction, dim=1)
+    se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
+    se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].to(device)
+    se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
+
+    se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
+    se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1).sqrt() / 10
+
+    if getattr(data, 'normal', None) is not None:
+        se_normal_source = data.normal[se[0]]
+        se_normal_target = data.normal[se[1]]
+        se_normal_angle = (se_normal_source * se_normal_target).sum(dim=1).abs()
+        se_angle_source = (se_direction * se_normal_source).sum(dim=1).abs()
+        se_angle_target = (se_direction * se_normal_target).sum(dim=1).abs()
+    else:
+        se_normal_angle = torch.zeros_like(se_dist)
+        se_angle_source = torch.zeros_like(se_dist)
+        se_angle_target = torch.zeros_like(se_dist)
+
+    if getattr(data, 'log_length', None) is not None:
+        se_log_length_ratio = data.log_length[se[0]] - data.log_length[se[1]]
+    else:
+        se_log_length_ratio = torch.zeros_like(se_dist)
+
+    if getattr(data, 'log_surface', None) is not None:
+        se_log_surface_ratio = data.log_surface[se[0]] - data.log_surface[se[1]]
+    else:
+        se_log_surface_ratio = torch.zeros_like(se_dist)
+
+    if getattr(data, 'log_volume', None) is not None:
+        se_log_volume_ratio = data.log_volume[se[0]] - data.log_volume[se[1]]
+    else:
+        se_log_volume_ratio = torch.zeros_like(se_dist)
+
+    if getattr(data, 'log_size', None) is not None:
+        se_log_size_ratio = data.log_size[se[0]] - data.log_size[se[1]]
+    else:
+        se_log_size_ratio = torch.zeros_like(se_dist)
+
+    if getattr(data, 'is_artificial', None) is not None:
+        se_is_artificial = data.is_artificial[se[0]] | data.is_artificial[se[1]]
+    else:
+        se_is_artificial = torch.zeros_like(se_dist)
+
+    # The superedges we have created so far are oriented. We need to
+    # create the edges and corresponding features for the Target->Source
+    # direction now
+    se = torch.cat((se, se.flip(0)), dim=1)
+    se_feat = torch.vstack([
+        torch.cat((se_dist, se_dist)),
+        torch.cat((se_min_dist, se_min_dist)),
+        torch.cat((se_std_dist, se_std_dist)),
+        torch.cat((se_centroid_dist, se_centroid_dist)),
+        torch.cat((se_normal_angle, se_normal_angle)),
+        torch.cat((se_angle_source, se_angle_target)),
+        torch.cat((se_angle_target, se_angle_source)),
+        torch.cat((se_log_length_ratio, -se_log_length_ratio)),
+        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),
+        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),
+        torch.cat((se_log_size_ratio, -se_log_size_ratio)),
+        torch.cat((se_is_artificial, se_is_artificial))]).T
+
+    # Save superedges and superedge features in the Data object
+    data.edge_index = se
+    data.edge_attr = se_feat
+
+    return data
 
 
 class ConnectIsolated(Transform):
