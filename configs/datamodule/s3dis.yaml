@@ -114,6 +114,7 @@ pre_transform:
         k_min: 20
         cycles: 3
         margin: 0.2
+        chunk_size: [1e6, 1e5, 1e4, 1e3]
         halfspace_filter: True
         bbox_filter: True
         target_pc_flip: True

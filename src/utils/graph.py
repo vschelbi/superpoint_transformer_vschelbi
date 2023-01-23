@@ -138,7 +138,7 @@ def subedges(
     if chunk_size is not None and chunk_size > 0:
 
         # Recursive call on smaller edge_index chunks
-        num_chunks = math.ceil(edge_index.shape[1] / chunk_size)
+        num_chunks = math.ceil(edge_index.shape[1] / int(chunk_size))
         out_list = []
         for i_chunk in range(num_chunks):
             start = i_chunk * chunk_size
