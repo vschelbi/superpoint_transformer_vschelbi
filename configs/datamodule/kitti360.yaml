@@ -97,7 +97,7 @@ pre_transform:
 #        max_dist: [5, 10, 100, 100]
     - transform: RadiusHorizontalGraph
       params:
-        k_max: 100
+        k_max: 50
         gap: [0, 1, 5, 10]
         k_ratio: 0.2
         k_min: 20
