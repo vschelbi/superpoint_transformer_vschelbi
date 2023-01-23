@@ -468,6 +468,10 @@ class RadiusHorizontalGraph(Transform):
     :param margin:
         Tolerance margin used for selecting subedges points and
         excluding segment points from potential subedge candidates
+    :param chunk_size:
+        If provided, the edges will be processed into chunks of size
+        `chunk_size` when computing the subedges. This allows mitigating
+        memory use
     :param halfspace_filter:
         Whether the halfspace filtering should be applied
     :param bbox_filter:
@@ -481,17 +485,19 @@ class RadiusHorizontalGraph(Transform):
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    _NO_REPR = ['chunk_size']
 
     def __init__(
             self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=2,
-            margin=0.2, halfspace_filter=True, bbox_filter=True,
-            target_pc_flip=True, source_pc_sort=False):
+            margin=0.2, chunk_size=None, halfspace_filter=True,
+            bbox_filter=True, target_pc_flip=True, source_pc_sort=False):
         self.k_max = k_max
         self.gap = gap
         self.k_ratio = k_ratio
         self.k_min = k_min
         self.cycles = cycles
         self.margin = margin
+        self.chunk_size = chunk_size
         self.halfspace_filter = halfspace_filter
         self.bbox_filter = bbox_filter
         self.target_pc_flip = target_pc_flip
@@ -510,17 +516,20 @@ class RadiusHorizontalGraph(Transform):
             else [self.cycles] * (nag.num_levels - 1)
         margin = self.margin if isinstance(self.margin, list) \
             else [self.margin] * (nag.num_levels - 1)
+        chunk_size = self.chunk_size if isinstance(self.chunk_size, list) \
+            else [self.chunk_size] * (nag.num_levels - 1)
 
         # Compute the edge features, level by level
-        for i_level, kr, km, cy, mg in zip(
-                range(1, nag.num_levels), k_ratio, k_min, cycles, margin):
+        for i_level, kr, km, cy, mg, cs in zip(
+                range(1, nag.num_levels), k_ratio, k_min, cycles, margin,
+                chunk_size):
             nag = self._process_edge_features_for_single_level(
-                nag, i_level, kr, km, cy, mg)
+                nag, i_level, kr, km, cy, mg, cs)
 
         return nag
 
     def _process_edge_features_for_single_level(
-            self, nag, i_level, k_ratio, k_min, cycles, margin):
+            self, nag, i_level, k_ratio, k_min, cycles, margin, chunk_size):
         # Compute 'subedges', ie edges between level-0 points making up
         # the edges between the segments. These will be used for edge
         # features computation. NB: this operation simplifies the
@@ -532,7 +541,7 @@ class RadiusHorizontalGraph(Transform):
             k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=False,
             margin=margin, halfspace_filter=self.halfspace_filter,
             bbox_filter=self.bbox_filter, target_pc_flip=self.target_pc_flip,
-            source_pc_sort=self.source_pc_sort)
+            source_pc_sort=self.source_pc_sort, chunk_size=chunk_size)
 
         # Prepare for edge feature computation
         data = nag[i_level]

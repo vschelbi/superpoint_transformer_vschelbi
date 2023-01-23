@@ -11,6 +11,7 @@ class Transform(BaseTransform):
 
     _IN_TYPE = Data
     _OUT_TYPE = Data
+    _NO_REPR = []
 
     def _process(self, x: _IN_TYPE):
         raise NotImplementedError
@@ -21,6 +22,10 @@ class Transform(BaseTransform):
             return [self.__call__(e) for e in x]
         return self._process(x)
 
+    @property
+    def _repr_dict(self):
+        return {k: v for k, v in self.__dict__.items() if k not in self._NO_REPR}
+
     def __repr__(self):
-        attr_repr = ', '.join([f'{k}={v}' for k, v in self.__dict__.items()])
+        attr_repr = ', '.join([f'{k}={v}' for k, v in self._repr_dict.items()])
         return f'{self.__class__.__name__}({attr_repr})'

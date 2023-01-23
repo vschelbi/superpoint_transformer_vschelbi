@@ -46,6 +46,7 @@ class CutPursuitPartition(Transform):
     _IN_TYPE = Data
     _OUT_TYPE = NAG
     _MAX_NUM_EGDES = 4294967295
+    _NO_REPR = ['verbose', 'parallel']
 
     def __init__(
             self, regularization=5e-2, spatial_weight=1, cutoff=10,

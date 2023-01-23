@@ -40,6 +40,8 @@ class RemoveKeys(Transform):
         not within the input Data keys
     """
 
+    _NO_REPR = ['strict']
+
     def __init__(self, keys=[], strict=False):
         self.keys = keys
         self.strict = strict
@@ -70,6 +72,7 @@ class NAGRemoveKeys(Transform):
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    _NO_REPR = ['strict']
 
     def __init__(self, level='all', keys=[], strict=False):
         assert isinstance(level, (int, str))
@@ -111,6 +114,8 @@ class AddKeyToX(Transform):
     :param delete_after: bool, optional
         Whether the Data attributes should be removed once added to x
     """
+
+    _NO_REPR = ['strict']
 
     def __init__(self, keys=None, strict=True, delete_after=True):
         self.keys = keys
@@ -184,6 +189,7 @@ class NAGAddKeyToX(Transform):
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    _NO_REPR = ['strict']
 
     def __init__(self, level='all', keys=None, strict=True, delete_after=True):
         self.level = level
@@ -240,6 +246,7 @@ class NAGSelectByKey(Transform):
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    _NO_REPR = ['strict']
 
     def __init__(
             self, key=None, level=0, negation=False, strict=True,

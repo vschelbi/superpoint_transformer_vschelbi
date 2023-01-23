@@ -1,4 +1,5 @@
 import torch
+import math
 from torch_scatter import scatter_min, scatter_max, scatter_mean
 from torch_geometric.utils import coalesce
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
@@ -81,7 +82,7 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
 def subedges(
         points, index, edge_index, k_ratio=0.2, k_min=20, cycles=2,
         pca_on_cpu=False, margin=0.2, halfspace_filter=True, bbox_filter=True,
-        target_pc_flip=True, source_pc_sort=False):
+        target_pc_flip=True, source_pc_sort=False, chunk_size=None):
     """Compute the subedges making up each edge between segments. These
     are needed for superedge features computation. This approach relies
     on heuristics to avoid the Delaunay triangulation or any other O(N²)
@@ -122,10 +123,42 @@ def subedges(
     :param source_pc_sort:
         Whether the source and target subedge point pairs should be
         ordered along the same vector
+    :param chunk_size: int
+        If provided, edge_index will be processed into chunks of size
+        `chunk_size`. This allows mitigating the amount of memory used
+        at once when computing the subedges
     :return:
     """
     # Sort edges in lexicographic order and remove duplicates
     edge_index = coalesce(edge_index)
+
+    # Recursive call in case chunk is specified. Chunk allows limiting
+    # the number of edges processed at once. This might alleviate
+    # memory use
+    if chunk_size is not None and chunk_size > 0:
+
+        # Recursive call on smaller edge_index chunks
+        num_chunks = math.ceil(edge_index.shape[1] / chunk_size)
+        out_list = []
+        for i_chunk in range(num_chunks):
+            start = i_chunk * chunk_size
+            end = (i_chunk + 1) * chunk_size
+            out_list.append(subedges(
+                points, index, edge_index[:, start:end], k_ratio=k_ratio,
+                k_min=k_min, cycles=cycles, pca_on_cpu=pca_on_cpu,
+                margin=margin, halfspace_filter=halfspace_filter,
+                bbox_filter=bbox_filter, target_pc_flip=target_pc_flip,
+                source_pc_sort=source_pc_sort, chunk_size=None))
+
+        # Combine outputs
+        device = points.device
+        edge_index = torch.cat([elt[0] for elt in out_list], dim=1)
+        ST_pairs = torch.cat([elt[1] for elt in out_list], dim=1)
+        size = torch.tensor([o[0].shape[1] for o in out_list], device=device)
+        offset = sizes_to_pointers(size[:-1])
+        ST_uid = torch.cat([elt[2] + o for elt, o in zip(out_list, offset)])
+
+        return edge_index, ST_pairs, ST_uid
 
     # Compute the nearest neighbors between superedge segments. This
     # pair of points will be crucial in finding the other level-0

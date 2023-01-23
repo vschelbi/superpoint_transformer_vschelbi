@@ -31,6 +31,8 @@ class KNN(Transform):
     :param verbose: bool
     """
 
+    _NO_REPR = ['verbose']
+
     def __init__(
             self, k=50, r_max=1, oversample=False, self_is_neighbor=False,
             verbose=False):
