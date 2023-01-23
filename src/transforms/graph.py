@@ -457,28 +457,29 @@ class RadiusHorizontalGraph(Transform):
     :param gap: float, List(float)
         Two segments A and B are considered neighbors if there is a in A
         and b in B such that dist(a, b) < gap
-    :param k_ratio:
+    :param k_ratio: float
         Maximum ratio of a segment's points than can be used in a
         superedge's subedges
-    :param k_min:
+    :param k_min: int
         Minimum of subedges per superedge
-    :param cycles:
+    :param cycles: int
         Number of iterations for nearest neighbor search between
         segments
-    :param margin:
+    :param margin: float
         Tolerance margin used for selecting subedges points and
         excluding segment points from potential subedge candidates
-    :param chunk_size:
-        If provided, the edges will be processed into chunks of size
-        `chunk_size` when computing the subedges. This allows mitigating
-        memory use
-    :param halfspace_filter:
+    :param chunk_size: int, float
+        Allows mitigating memory use when computing the subedges. If
+        `chunk_size > 1`, `edge_index` will be processed into chunks of
+        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
+        divided into parts of `edge_index.shape[1] * chunk_size` or less
+    :param halfspace_filter: bool
         Whether the halfspace filtering should be applied
-    :param bbox_filter:
+    :param bbox_filter: bool
         Whether the bounding box filtering should be applied
-    :param target_pc_flip:
+    :param target_pc_flip: bool
         Whether the subedge point pairs should be carefully ordered
-    :param source_pc_sort:
+    :param source_pc_sort: bool
         Whether the source and target subedge point pairs should be
         ordered along the same vector
     """

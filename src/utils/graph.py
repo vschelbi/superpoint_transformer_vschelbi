@@ -123,10 +123,11 @@ def subedges(
     :param source_pc_sort:
         Whether the source and target subedge point pairs should be
         ordered along the same vector
-    :param chunk_size: int
-        If provided, edge_index will be processed into chunks of size
-        `chunk_size`. This allows mitigating the amount of memory used
-        at once when computing the subedges
+    :param chunk_size: int, float
+        Allows mitigating memory use when computing the subedges. If
+        `chunk_size > 1`, `edge_index` will be processed into chunks of
+        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
+        divided into parts of `edge_index.shape[1] * chunk_size` or less
     :return:
     """
     # Sort edges in lexicographic order and remove duplicates
@@ -138,7 +139,9 @@ def subedges(
     if chunk_size is not None and chunk_size > 0:
 
         # Recursive call on smaller edge_index chunks
-        num_chunks = math.ceil(edge_index.shape[1] / int(chunk_size))
+        chunk_size = int(chunk_size) if chunk_size > 1 \
+            else math.ceil(edge_index.shape[1] * chunk_size)
+        num_chunks = math.ceil(edge_index.shape[1] / chunk_size)
         out_list = []
         for i_chunk in range(num_chunks):
             start = i_chunk * chunk_size
