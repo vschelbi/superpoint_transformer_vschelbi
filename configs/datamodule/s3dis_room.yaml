@@ -14,7 +14,7 @@ feat_segment: 15
 # Based on SPG: https://arxiv.org/pdf/1711.09869.pdf
 voxel: 0.03
 knn: 45
-regularization: [0.03, 0.07, 0.3, 0.9]  # level-1 from SPG
+regularization: [0.03, 0.1, 0.3, 0.9]  # level-1 from SPG
 spatial_weight: [5e-2, 5e-2, 5e-3, 5e-4]
 cutoff: [10, 10, 80, 640]
 w_adjacency: 1
