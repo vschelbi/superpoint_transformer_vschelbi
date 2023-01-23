@@ -80,18 +80,24 @@ class BaseDataset(InMemoryDataset):
         'on_after_batch_transfer' hook. This is where GPU-based
         augmentations should be, as well as any Transform you do not
         want to run in CPU-based DataLoaders
-    val_mixed_in_train: bool
+    val_mixed_in_train: bool, optional
         whether the 'val' stage data is saved in the same clouds as the
         'train' stage. This may happen when the stage splits are
         performed inside the clouds. In this case, an
         `on_device_transform` will be automatically created to separate
         stage-specific data upon reading
-    test_mixed_in_val: bool
+    test_mixed_in_val: bool, optional
         whether the 'test' stage data is saved in the same clouds as the
         'val' stage. This may happen when the stage splits are
         performed inside the clouds. In this case, an
         `on_device_transform` will be automatically created to separate
         stage-specific data upon reading
+    custom_hash: str, optional
+        A user-chosen hash to be used for the dataset data directory.
+        This will bypass the default behavior where the pre_transforms
+        are used to generate a hash. It can be used, for instance, when
+        one wants to instantiate a dataset with already-processed data,
+        without knowing the exact config that was used to generate it
     """
     _LEVEL0_SAVE_KEYS = [
         'pos', 'x', 'rgb', 'y', 'node_size', 'super_index', 'is_val']
@@ -101,7 +107,8 @@ class BaseDataset(InMemoryDataset):
     def __init__(
             self, root, stage='train', transform=None, pre_transform=None,
             pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True,
-            val_mixed_in_train=False, test_mixed_in_val=False, **kwargs):
+            val_mixed_in_train=False, test_mixed_in_val=False,
+            custom_hash=None, **kwargs):
 
         assert stage in ['train', 'val', 'trainval', 'test']
 
@@ -114,6 +121,7 @@ class BaseDataset(InMemoryDataset):
         self.on_device_transform = on_device_transform
         self.val_mixed_in_train = val_mixed_in_train
         self.test_mixed_in_val = test_mixed_in_val
+        self.custom_hash = custom_hash
 
         # Sanity check on the cloud ids. Ensures cloud ids are unique
         # across all stages, unless `val_mixed_in_train` or
@@ -248,6 +256,8 @@ class BaseDataset(InMemoryDataset):
         """Produce a unique but stable hash based on the dataset's
         `pre_transform` attributes (as exposed by `_repr`).
         """
+        if self.custom_hash is not None:
+            return self.custom_hash
         if self.pre_transform is None:
             return 'no_pre_transform'
         return hashlib.md5(_repr(self.pre_transform).encode()).hexdigest()

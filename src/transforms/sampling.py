@@ -391,11 +391,6 @@ class SampleGraph(Transform):
             else nag.num_levels - 1
         k_sample = self.k_sample if self.k_sample < nag[i_level].num_nodes else 1
 
-        #TODO
-        # - create weights for each node (careful weight ordering)
-        # - randomly pick nodes indices (using the weights)
-        # - find the k-hop neighbors indices (careful to keep BIDIRECTIONAL EDGES)
-
         # Initialize all segments with the same weights
         weights = torch.ones(nag[i_level].num_nodes, device=device)
 
@@ -430,6 +425,9 @@ class SampleGraph(Transform):
 
         # Search the k-hop neighbors of the sampled nodes
         idx = k_hop_subgraph(idx, self.k_hops, nag[i_level].edge_index)[0]
+
+        #TODO: drop segments beyond a certain threshold to keep the sampled
+        # graph size relatively constant ?
 
         # Select the nodes and update the NAG structure accordingly
         nag = nag.select(i_level, idx)
