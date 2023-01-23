@@ -523,7 +523,10 @@ class RadiusHorizontalGraph(Transform):
             self, nag, i_level, k_ratio, k_min, cycles, margin):
         # Compute 'subedges', ie edges between level-0 points making up
         # the edges between the segments. These will be used for edge
-        # features computation
+        # features computation. NB: this operation simplifies the
+        # edge_index graph into a graph with only i<j edges. To restore
+        # the bidirectional edges, we will need to reconstruct the j<i
+        # edges later on (done in `_horizontal_edge_features`)
         edge_index, se_point_index, se_id = subedges(
             nag[0].pos, nag.get_super_index(i_level), nag[i_level].edge_index,
             k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=False,
@@ -535,7 +538,8 @@ class RadiusHorizontalGraph(Transform):
         data = nag[i_level]
         data.edge_index = edge_index
 
-        # Edge feature computation
+        # Edge feature computation. NB: takes i<j edges as input and
+        # builds features for both i<j and j>i edges
         data = _horizontal_edge_features(
             data, nag[0].pos, se_point_index, se_id)
 

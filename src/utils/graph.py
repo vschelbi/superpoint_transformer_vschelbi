@@ -87,6 +87,12 @@ def subedges(
     on heuristics to avoid the Delaunay triangulation or any other O(N²)
     operation.
 
+    NB: the input edges will be coalesced in the first place and the
+    returned edge_index will reflect this change. This is because
+    subedge computation rely on costly operations. To save compute and
+    memory, we only build subedges for i<j edges, assuming the j<i edges
+    have the same subedges.
+
     :param points:
         Level-0 points
     :param index:
@@ -121,17 +127,6 @@ def subedges(
     # Sort edges in lexicographic order and remove duplicates
     edge_index = coalesce(edge_index)
 
-    # Recover the number of points in source and target segments. 's_'
-    # and 't_' indicate we are dealing with edge-wise values
-    s_size, t_size = index.bincount()[edge_index]
-
-    # Expand the points to point-edge values. That is, the concatenation
-    # of all the source --or target-- points for each edge. The
-    # corresponding variables are prepended with 'S_' and 'T_' for
-    # clarity
-    (S_points, S_points_idx, S_uid), (T_points, T_points_idx, T_uid) = \
-        edge_wise_points(points, index, edge_index)
-
     # Compute the nearest neighbors between superedge segments. This
     # pair of points will be crucial in finding the other level-0
     # points making up the superedge
@@ -143,6 +138,17 @@ def subedges(
     s_anchor = points[edge_anchor_idx[0]]
     t_anchor = points[edge_anchor_idx[1]]
     anchor_base = base_vectors_3d(t_anchor - s_anchor)
+
+    # Recover the number of points in source and target segments. 's_'
+    # and 't_' indicate we are dealing with edge-wise values
+    s_size, t_size = index.bincount()[edge_index]
+
+    # Expand the points to point-edge values. That is, the concatenation
+    # of all the source --or target-- points for each edge. The
+    # corresponding variables are prepended with 'S_' and 'T_' for
+    # clarity
+    (S_points, S_points_idx, S_uid), (T_points, T_points_idx, T_uid) = \
+        edge_wise_points(points, index, edge_index)
 
     # Local helper function to convert absolute points coordinates to
     # their local edge coordinate system. This system is defined as
