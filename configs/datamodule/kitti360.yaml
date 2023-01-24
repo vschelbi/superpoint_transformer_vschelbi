@@ -6,7 +6,7 @@ _target_: src.datamodules.kitti360.KITTI360DataModule
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 15
-feat_point: 8
+feat_point: ${eval:'len(${datamodule.select_feat_point})'}
 feat_segment: 15
 
 # Parameters declared here to facilitate tuning configs without copying
@@ -17,11 +17,12 @@ regularization: [0.04, 0.2, 0.8, 1.4]
 spatial_weight: [1e-2, 0, 0, 0]
 cutoff: [10, 100, 1000, 10000]
 w_adjacency: -1
-sample_graph_dropout_segment_i_level: 2
-sample_graph_dropout_segment_k_sample: 4
-sample_graph_dropout_segment_k_hops: 3
+sample_graph_i_level: 3
+sample_graph_k_sample: 4
+sample_graph_k_hops: 3
 dropout_segment_ratio: [0.4, 0, 0, 0]
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
+select_feat_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 pre_transform:
     - transform: DataTo
@@ -125,7 +126,7 @@ train_transform:
       params:
         level: '1+'
         key: 'edge_attr'
-        idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        idx: ${datamodule.select_feat_edge}
     - transform: NAGSelectColumns  # adapt datamodule.feat_point if modified
       params:
         level: 0
@@ -145,9 +146,9 @@ on_device_train_transform:
         n_max: 32
     - transform: SampleGraph
       params:
-        i_level: ${datamodule.sample_graph_dropout_segment_i_level}
-        k_sample: ${datamodule.sample_graph_dropout_segment_k_sample}
-        k_hops: ${datamodule.sample_graph_dropout_segment_k_hops}
+        i_level: ${datamodule.sample_graph_i_level}
+        k_sample: ${datamodule.sample_graph_k_sample}
+        k_hops: ${datamodule.sample_graph_k_hops}
         by_size: False
         by_class: False
     - transform: DropoutSegments
