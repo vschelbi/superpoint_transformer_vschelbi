@@ -645,8 +645,11 @@ def _horizontal_graph_by_radius_for_single_level(
     # Build the corresponding edge_index
     source = torch.arange(
         data.num_points, device=device).repeat_interleave(k_max)
-    edge_index = torch.vstack((source, neighbors.flatten()))
-    distances = distances.flatten()
+    target = neighbors.flatten()
+    mask = torch.where(target == -1)[0]
+    edge_index = torch.vstack((source[mask], target[mask]))
+    distances = distances.flatten()[mask]
+    del mask
 
     # Trim edges based on the actual segment radii and not the
     # overly-conservative maximum radius used for the search
