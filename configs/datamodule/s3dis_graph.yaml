@@ -2,7 +2,7 @@ defaults:
   - s3dis.yaml
 
 dataloader:
-    batch_size: 2
+    batch_size: 1
 
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
