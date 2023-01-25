@@ -141,7 +141,8 @@ echo "________________ Cut-Pursuit _______________"
 echo
 
 # Clone parallel-cut-pursuit and grid-graph repos
-git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/partition/parallel_cut_pursuit
+#git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/partition/parallel_cut_pursuit
+git clone -b improve_merge https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/partition/parallel_cut_pursuit
 git clone https://gitlab.com/1a7r0ch3/grid-graph.git src/partition/grid_graph
 
 # Compile the projects

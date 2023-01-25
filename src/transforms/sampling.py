@@ -394,6 +394,10 @@ class SampleGraph(Transform):
             else nag.num_levels - 1
         k_sample = self.k_sample if self.k_sample < nag[i_level].num_nodes else 1
 
+        # Skip if level has not graph
+        if not nag[i_level].has_edges:
+            return nag
+
         # Initialize all segments with the same weights
         weights = torch.ones(nag[i_level].num_nodes, device=device)
 
