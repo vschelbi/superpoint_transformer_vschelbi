@@ -1,3 +1,4 @@
+import torch
 import logging
 from pytorch_lightning import LightningDataModule
 from src.transforms import instantiate_transforms
@@ -209,6 +210,7 @@ class BaseDataModule(LightningDataModule):
         """Things to do when loading checkpoint."""
         pass
 
+    @torch.no_grad()
     def on_after_batch_transfer(self, nag_list, dataloader_idx):
         """Intended to call on-device operations. Typically,
         NAGBatch.from_nag_list and some Transforms like SampleSegments
