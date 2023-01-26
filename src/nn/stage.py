@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm
+from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm, FFN
 from src.nn.pool import *
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
@@ -47,7 +47,9 @@ class Stage(nn.Module):
             self, dim, num_blocks=1, in_mlp=None, out_mlp=None,
             mlp_activation=nn.LeakyReLU(), mlp_norm=FastBatchNorm1d,
             mlp_drop=None, pos_injection=CatInjection, pos_injection_x_dim=None,
-            cat_diameter=False, **transformer_kwargs):
+            cat_diameter=False, k_rpe=False, q_rpe=False, num_heads=1,
+            blocks_share_rpe=False, heads_share_rpe=False,
+            **transformer_kwargs):
 
         super().__init__()
 
@@ -76,8 +78,20 @@ class Stage(nn.Module):
 
         # Transformer blocks
         if num_blocks > 0:
+
+            # Build the RPE encoder here if shared across all stages
+            if k_rpe is True and blocks_share_rpe and heads_share_rpe:
+                k_rpe = FFN(3 + 10, out_dim=dim // num_heads, activation=nn.LeakyReLU())
+                q_rpe = FFN(3 + 10, out_dim=dim // num_heads, activation=nn.LeakyReLU())
+            elif k_rpe is True and blocks_share_rpe:
+                k_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU())
+                q_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU())
+            else:
+                block_k_rpe = [k_rpe] * num_blocks
+                block_q_rpe = [q_rpe] * num_blocks
+
             self.transformer_blocks = nn.ModuleList(
-                TransformerBlock(dim, **transformer_kwargs)
+                TransformerBlock(dim, heads_share_rpe=heads_share_rpe, **transformer_kwargs)
                 for _ in range(num_blocks))
         else:
             self.transformer_blocks = None

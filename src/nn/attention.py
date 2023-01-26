@@ -2,9 +2,12 @@ import torch
 from torch import nn
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
-from src.nn.mlp import FFN, mlp
+from src.nn.mlp import FFN
 
 __all__ = ['SelfAttentionBlock']
+
+
+def rpe_encoders()
 
 
 class SelfAttentionBlock(nn.Module):
@@ -48,6 +51,12 @@ class SelfAttentionBlock(nn.Module):
 
         # self.k_rpe = mlp([3 + 10, dim, dim], last_activation=False) if k_rpe else None
         # self.q_rpe = mlp([3 + 10, dim, dim], last_activation=False) if q_rpe else None
+
+        if c_rpe:
+            raise NotImplementedError
+
+        if v_rpe:
+            raise NotImplementedError
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
         self.out_proj = nn.Linear(out_dim, dim) if out_dim is not None else None
