@@ -1,6 +1,7 @@
 import torch
 from torch import nn
-from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm, FFN
+from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm, \
+    RPEFFN
 from src.nn.pool import *
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
@@ -44,17 +45,17 @@ class Stage(nn.Module):
     """
 
     def __init__(
-            self, dim, num_blocks=1, in_mlp=None, out_mlp=None,
+            self, dim, num_blocks=1, num_heads=1, in_mlp=None, out_mlp=None,
             mlp_activation=nn.LeakyReLU(), mlp_norm=FastBatchNorm1d,
             mlp_drop=None, pos_injection=CatInjection, pos_injection_x_dim=None,
-            cat_diameter=False, k_rpe=False, q_rpe=False, num_heads=1,
-            blocks_share_rpe=False, heads_share_rpe=False,
-            **transformer_kwargs):
+            cat_diameter=False, qk_dim=8, k_rpe=False, q_rpe=False,
+            blocks_share_rpe=False, heads_share_rpe=False, **transformer_kwargs):
 
         super().__init__()
 
         self.dim = dim
         self.num_blocks = num_blocks
+        self.num_heads = num_heads
 
         # MLP to change input channel size
         if in_mlp is not None:
@@ -79,20 +80,20 @@ class Stage(nn.Module):
         # Transformer blocks
         if num_blocks > 0:
 
-            # Build the RPE encoder here if shared across all stages
-            if k_rpe is True and blocks_share_rpe and heads_share_rpe:
-                k_rpe = FFN(3 + 10, out_dim=dim // num_heads, activation=nn.LeakyReLU())
-                q_rpe = FFN(3 + 10, out_dim=dim // num_heads, activation=nn.LeakyReLU())
-            elif k_rpe is True and blocks_share_rpe:
-                k_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU())
-                q_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU())
-            else:
-                block_k_rpe = [k_rpe] * num_blocks
-                block_q_rpe = [q_rpe] * num_blocks
+            # Build the RPE encoders here if shared across all blocks
+            blocks_k_rpe = _build_shared_rpe_encoders(
+                k_rpe, num_blocks, num_heads, 13, qk_dim, blocks_share_rpe,
+                heads_share_rpe)
+
+            blocks_q_rpe = _build_shared_rpe_encoders(
+                q_rpe, num_blocks, num_heads, 13, qk_dim, blocks_share_rpe,
+                heads_share_rpe)
 
             self.transformer_blocks = nn.ModuleList(
-                TransformerBlock(dim, heads_share_rpe=heads_share_rpe, **transformer_kwargs)
-                for _ in range(num_blocks))
+                TransformerBlock(
+                    dim, qk_dim=qk_dim, k_rpe=block_k_rpe, q_rpe=block_q_rpe,
+                    heads_share_rpe=heads_share_rpe, **transformer_kwargs)
+                for block_k_rpe, block_q_rpe in zip(blocks_k_rpe, blocks_q_rpe))
         else:
             self.transformer_blocks = None
 
@@ -154,6 +155,33 @@ class Stage(nn.Module):
             x = self.out_mlp(x)
 
         return x, diameter
+
+
+def _build_shared_rpe_encoders(
+        rpe, num_blocks, num_heads, in_dim, out_dim, blocks_share, heads_share):
+    """Local helper to build RPE encoders for Stage. The main goal is to
+    make shared encoders construction easier.
+
+    Note that setting blocks_share=True will make all blocks use the
+    same RPE encoder. It is possible to set blocks_share=True and
+    heads_share=False to allow heads of different blocks of the Stage to
+    share their RPE encoders while allowing heads of the same block to
+    rely on different RPE encoders.
+    """
+    if not isinstance(rpe, bool):
+        assert blocks_share, \
+            "If anything else but a boolean is passed for the RPE encoder, " \
+            "this value will be passed to all blocks and blocks_share should " \
+            "be set to True."
+        return [rpe] * num_blocks
+
+    if not heads_share:
+        out_dim = out_dim * num_heads
+
+    if blocks_share and rpe:
+        return [RPEFFN(in_dim, out_dim=out_dim)] * num_blocks
+
+    return [rpe] * num_blocks
 
 
 class DownNFuseStage(Stage):

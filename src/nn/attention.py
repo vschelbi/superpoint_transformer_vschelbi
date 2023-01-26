@@ -2,12 +2,9 @@ import torch
 from torch import nn
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
-from src.nn.mlp import FFN
+from src.nn.mlp import RPEFFN
 
 __all__ = ['SelfAttentionBlock']
-
-
-def rpe_encoders()
 
 
 class SelfAttentionBlock(nn.Module):
@@ -28,15 +25,17 @@ class SelfAttentionBlock(nn.Module):
 
     def __init__(
             self, dim, num_heads=1, in_dim=None, out_dim=None, qkv_bias=True,
-            qk_scale=None, attn_drop=None, drop=None, k_rpe=False, q_rpe=False,
-            c_rpe=False, v_rpe=False):
+            qk_dim=8, qk_scale=None, attn_drop=None, drop=None, k_rpe=False,
+            q_rpe=False, c_rpe=False, v_rpe=False, heads_share_rpe=False):
         super().__init__()
 
         assert dim % num_heads == 0, f"dim must be a multiple of num_heads"
 
         self.dim = dim
         self.num_heads = num_heads
+        self.qk_dim = qk_dim
         self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
+        self.heads_share_rpe = heads_share_rpe
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
 
@@ -46,11 +45,19 @@ class SelfAttentionBlock(nn.Module):
         # TODO: k/q/v RPE, pos/edge attr/both RPE, MLP/vector attention,
         #  mlp on pos/learnable lookup table/FFN/learnable FFN...
 
-        self.k_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if k_rpe else None
-        self.q_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if q_rpe else None
+        # Build the RPE encoders, with the option of sharing weights
+        # across all heads
+        rpe_dim = qk_dim if heads_share_rpe else qk_dim * num_heads
 
-        # self.k_rpe = mlp([3 + 10, dim, dim], last_activation=False) if k_rpe else None
-        # self.q_rpe = mlp([3 + 10, dim, dim], last_activation=False) if q_rpe else None
+        if not isinstance(k_rpe, bool):
+            self.k_rpe = k_rpe
+        else:
+            self.k_rpe = RPEFFN(13, out_dim=rpe_dim) if k_rpe else None
+
+        if not isinstance(q_rpe, bool):
+            self.q_rpe = q_rpe
+        else:
+            self.q_rpe = RPEFFN(13, out_dim=rpe_dim) if q_rpe else None
 
         if c_rpe:
             raise NotImplementedError
@@ -111,11 +118,26 @@ class SelfAttentionBlock(nn.Module):
         #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
         #  - scalar rpe, vector rpe (see Stratified Transformer)
         if self.k_rpe is not None:
-            r_pos = torch.cat((pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
-            k = k + self.k_rpe(r_pos).view(E, H, -1)
+            r_pos = torch.cat(
+                (pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
+            rpe = self.k_rpe(r_pos)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            k = k + rpe.view(E, H, -1)
+
         if self.q_rpe is not None:
-            r_pos = torch.cat((pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
-            q = q + self.q_rpe(r_pos).view(E, H, -1)
+            r_pos = torch.cat(
+                (pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
+            rpe = self.q_rpe(r_pos)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            q = q + rpe.view(E, H, -1)
 
         # Compute compatibility scores from the query-key products
         compat = torch.einsum('ehd, ehd -> eh', q, k)  # [E, H]

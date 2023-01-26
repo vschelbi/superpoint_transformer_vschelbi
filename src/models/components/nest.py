@@ -3,8 +3,7 @@ from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
-    FastBatchNorm1d, CatFusion, CatInjection, FFN
-
+    FastBatchNorm1d, CatFusion, CatInjection, RPEFFN
 
 __all__ = ['NeST']
 
@@ -132,38 +131,27 @@ class NeST(nn.Module):
         # Transformer encoder (down) Stages operating on Level-i data
         if len(down_dim) > 0:
 
-            # Build the RPE encoder here if shared across all stages
-            if stages_share_rpe:
-                raise NotImplementedError
-            else:
-                down_k_rpe = [k_rpe] * len(down_dim)
-                down_q_rpe = [q_rpe] * len(down_dim)
-
+            # Build the RPE encoders here if shared across all stages
             down_k_rpe = _build_shared_rpe_encoders(
-                down_num_heads, down_num_blocks, no_rpe=k_rpe, in_dim=13,
-                out_dim=qk_dim, stages_share=stages_share_rpe,
-                blocks_share=blocks_share_rpe, heads_share=heads_share_rpe)
+                k_rpe, len(down_dim), 13, qk_dim, stages_share_rpe)
 
             down_q_rpe = _build_shared_rpe_encoders(
-                down_num_heads, down_num_blocks, no_rpe=k_rpe, in_dim=13,
-                out_dim=qk_dim, stages_share=stages_share_rpe,
-                blocks_share=blocks_share_rpe, heads_share=heads_share_rpe)
+                q_rpe, len(down_dim), 13, qk_dim, stages_share_rpe)
 
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
                     dim, num_blocks=num_blocks, in_mlp=in_mlp, out_mlp=out_mlp,
                     mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-                    mlp_drop=mlp_drop, num_heads=num_heads, qkv_bias=qkv_bias,
-                    qk_scale=qk_scale, ffn_ratio=ffn_ratio,
+                    mlp_drop=mlp_drop, num_heads=num_heads, qk_dim=qk_dim,
+                    qkv_bias=qkv_bias, qk_scale=qk_scale, ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
                     no_sa=no_sa, no_ffn=no_ffn, k_rpe=stage_k_rpe,
                     q_rpe=stage_q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, pool=pool,
                     fusion=fusion, pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
-                    cat_diameter=cat_diameter,
-                    blocks_share_rpe=blocks_share_rpe,
-                    heads_share_rpe=heads_share_rpe)
+                    cat_diameter=cat_diameter, blocks_share=blocks_share_rpe,
+                    heads_share=heads_share_rpe)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path,
                     stage_k_rpe, stage_q_rpe, pos_injection_x_dim
@@ -179,26 +167,25 @@ class NeST(nn.Module):
         if len(up_dim) > 0:
 
             # Build the RPE encoder here if shared across all stages
-            if stages_share_rpe:
-                raise NotImplementedError
-            else:
-                up_k_rpe = [k_rpe] * len(up_dim)
-                up_q_rpe = [q_rpe] * len(up_dim)
+            up_k_rpe = _build_shared_rpe_encoders(
+                k_rpe, len(up_dim), 13, qk_dim, stages_share_rpe)
+
+            up_q_rpe = _build_shared_rpe_encoders(
+                q_rpe, len(up_dim), 13, qk_dim, stages_share_rpe)
 
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
                     dim, num_blocks=num_blocks, in_mlp=in_mlp, out_mlp=out_mlp,
                     mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-                    mlp_drop=mlp_drop, num_heads=num_heads, qkv_bias=qkv_bias,
-                    qk_scale=qk_scale, ffn_ratio=ffn_ratio,
+                    mlp_drop=mlp_drop, num_heads=num_heads, qk_dim=qk_dim,
+                    qkv_bias=qkv_bias, qk_scale=qk_scale, ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop, attn_drop=attn_drop,
                     drop_path=drop_path, activation=activation, pre_ln=pre_ln,
                     no_sa=no_sa, no_ffn=no_ffn, k_rpe=stage_k_rpe,
                     q_rpe=stage_q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, unpool=unpool,
                     fusion=fusion, pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
-                    blocks_share_rpe=blocks_share_rpe,
-                    heads_share_rpe=heads_share_rpe)
+                    blocks_share=blocks_share_rpe, heads_share=heads_share_rpe)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path,
                     stage_k_rpe, stage_q_rpe, pos_injection_x_dim
@@ -248,16 +235,27 @@ class NeST(nn.Module):
         # In particular, allows feature propagation between large and
         # small nodes when `self.small` is not None
         if last_dim is not None:
+
+            # Build the RPE encoder here if shared across all stages
+            last_k_rpe = _build_shared_rpe_encoders(
+                k_rpe, 1, 13, qk_dim, stages_share_rpe)[0]
+
+            last_q_rpe = _build_shared_rpe_encoders(
+                q_rpe, 1, 13, qk_dim, stages_share_rpe)[0]
+
             self.last_stage = Stage(
                 last_dim, num_blocks=last_num_blocks, in_mlp=last_in_mlp,
                 out_mlp=last_out_mlp, mlp_activation=mlp_activation,
                 mlp_norm=mlp_norm, mlp_drop=last_mlp_drop,
-                num_heads=last_num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                ffn_ratio=last_ffn_ratio, residual_drop=last_residual_drop,
+                num_heads=last_num_heads, qk_dim=qk_dim, qkv_bias=qkv_bias,
+                qk_scale=qk_scale, ffn_ratio=last_ffn_ratio,
+                residual_drop=last_residual_drop,
                 attn_drop=last_attn_drop, drop_path=last_drop_path,
                 activation=activation, pre_ln=pre_ln, no_sa=no_sa,
-                no_ffn=no_ffn, q_rpe=q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, pool=pool,
-                pos_injection=pos_injection, cat_diameter=cat_diameter,
+                no_ffn=no_ffn, k_rpe=last_k_rpe, q_rpe=last_q_rpe, c_rpe=c_rpe,
+                v_rpe=v_rpe, pool=pool, pos_injection=pos_injection,
+                cat_diameter=cat_diameter, blocks_share=blocks_share_rpe,
+                heads_share=heads_share_rpe,
                 pos_injection_x_dim=last_pos_injection_x_dim)
         else:
             self.last_stage = None
@@ -365,7 +363,7 @@ class NeST(nn.Module):
             if len(up_outputs) > 0:
                 up_outputs[-1] = x
 
-            #TODO: if the per-stage output is returned, need to define how to
+            # TODO: if the per-stage output is returned, need to define how to
             # deal with small L1 nodes
             if return_down_outputs or return_up_outputs:
                 raise NotImplementedError(
@@ -466,40 +464,24 @@ class NeST(nn.Module):
 
 
 def _build_shared_rpe_encoders(
-        num_heads_list, num_blocks_list, no_rpe=False, in_dim=13, out_dim=8,
-        stages_share=False, blocks_share=False, heads_share=False):
+        rpe, num_stages, in_dim, out_dim, stages_share):
     """Local helper to build RPE encoders for NEST. The main goal is to
     make shared encoders construction easier.
+
+    Note that setting stages_share=True will make all stages, blocks and
+    heads use the same RPE encoder.
     """
-    assert len(num_heads_list) == len(num_blocks_list) > 0
-    num_stages = len(num_heads_list)
-
-    if no_rpe:
-        return [[False] * num_blocks for num_blocks in num_blocks_list]
-
-    # If heads share the same RPE encoder, we pretend as if there was
-    # only 1 head here
-    if heads_share:
-        num_heads_list = [1] * num_stages
-
-    # Compute the output dimension of the RPE encoders
-    out_dim = [out_dim * num_heads for num_heads in num_heads_list]
+    if not isinstance(rpe, bool):
+        assert stages_share, \
+            "If anything else but a boolean is passed for the RPE encoder, " \
+            "this value will be passed to all Stages and stages_share should " \
+            "be set to True."
+        return [rpe] * num_stages
 
     # If all stages share the same RPE encoder, all blocks and all heads
     # too. We copy the same module instance to be shared across all
     # stages and blocks
-    if stages_share:
-        module = FFN(in_dim, out_dim=out_dim[0], activation=nn.LeakyReLU())
-        return [[module] * num_blocks for num_blocks in num_blocks_list]
+    if stages_share and rpe:
+        return [RPEFFN(in_dim, out_dim=out_dim)] * num_stages
 
-    # Share RPE encoding across the same-stage blocks
-    if blocks_share:
-        return [
-            [FFN(in_dim, out_dim=dim, activation=nn.LeakyReLU())] * num_blocks
-            for dim, num_blocks in zip(out_dim, num_blocks_list)]
-
-    return [
-        [
-            FFN(in_dim, out_dim=dim, activation=nn.LeakyReLU())
-            for _ in range(num_blocks)]
-        for dim, num_blocks in zip(out_dim, num_blocks_list)]
+    return [rpe] * num_stages
