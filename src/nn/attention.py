@@ -37,7 +37,7 @@ class SelfAttentionBlock(nn.Module):
         self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
         self.heads_share_rpe = heads_share_rpe
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, dim + qk_dim * 2 * num_heads, bias=qkv_bias)
 
         # TODO: define relative positional encoding parameters and
         #  trunacted-normal initialize them (see Swin-T implementation)
@@ -90,22 +90,38 @@ class SelfAttentionBlock(nn.Module):
         N = x.shape[0]
         E = edge_index.shape[1]
         H = self.num_heads
+        D = self.qk_dim
 
         # Optional linear projection of features
         if self.in_proj is not None:
             x = self.in_proj(x)
 
         # Compute queries, keys and values
-        qkv = self.qkv(x).view(N, 3, self.num_heads, self.dim // self.num_heads)
+        # qkv = self.qkv(x).view(N, 3, self.num_heads, self.dim // self.num_heads)
+        qkv = self.qkv(x)
 
-        # Separate and expand queries, keys, values and indices to edge
-        # shape
+        # # Separate and expand queries, keys, values and indices to edge
+        # # shape
+        # # TODO: make sure edge_index is undirected ? has self-loops ?
+        # s = edge_index[0]  # [E]
+        # t = edge_index[1]  # [E]
+        # q = qkv[s, 0]  # [E, H, C // H]
+        # k = qkv[t, 1]  # [E, H, C // H]
+        # v = qkv[t, 2]  # [E, H, C // H]
+
+        # Separate queries, keys, values
+        DH = D * H
+        q = qkv[:, :DH].view(E, H, D)        # [N, H, D]
+        k = qkv[:, DH:2 * DH].view(E, H, D)  # [N, H, D]
+        v = qkv[:, 2 * DH:].view(E, H, -1)   # [N, H, C // H]
+
+        # Expand queries, keys and values to edges
         # TODO: make sure edge_index is undirected ? has self-loops ?
         s = edge_index[0]  # [E]
         t = edge_index[1]  # [E]
-        q = qkv[s, 0]  # [E, H, C // H]
-        k = qkv[t, 1]  # [E, H, C // H]
-        v = qkv[t, 2]  # [E, H, C // H]
+        q = q[s]  # [E, H, D]
+        k = k[t]  # [E, H, D]
+        v = v[t]  # [E, H, C // H]
 
         # Apply scaling on the queries
         q = q * self.qk_scale
