@@ -91,8 +91,9 @@ class Stage(nn.Module):
 
             self.transformer_blocks = nn.ModuleList(
                 TransformerBlock(
-                    dim, qk_dim=qk_dim, k_rpe=block_k_rpe, q_rpe=block_q_rpe,
-                    heads_share_rpe=heads_share_rpe, **transformer_kwargs)
+                    dim, num_heads=num_heads, qk_dim=qk_dim, k_rpe=block_k_rpe,
+                    q_rpe=block_q_rpe, heads_share_rpe=heads_share_rpe,
+                    **transformer_kwargs)
                 for block_k_rpe, block_q_rpe in zip(blocks_k_rpe, blocks_q_rpe))
         else:
             self.transformer_blocks = None

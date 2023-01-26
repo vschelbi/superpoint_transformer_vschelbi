@@ -150,8 +150,8 @@ class NeST(nn.Module):
                     q_rpe=stage_q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, pool=pool,
                     fusion=fusion, pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
-                    cat_diameter=cat_diameter, blocks_share=blocks_share_rpe,
-                    heads_share=heads_share_rpe)
+                    cat_diameter=cat_diameter, blocks_share_rpe=blocks_share_rpe,
+                    heads_share_rpe=heads_share_rpe)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path,
                     stage_k_rpe, stage_q_rpe, pos_injection_x_dim
@@ -185,7 +185,8 @@ class NeST(nn.Module):
                     q_rpe=stage_q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, unpool=unpool,
                     fusion=fusion, pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
-                    blocks_share=blocks_share_rpe, heads_share=heads_share_rpe)
+                    blocks_share_rpe=blocks_share_rpe,
+                    heads_share_rpe=heads_share_rpe)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path,
                     stage_k_rpe, stage_q_rpe, pos_injection_x_dim
@@ -254,8 +255,8 @@ class NeST(nn.Module):
                 activation=activation, pre_ln=pre_ln, no_sa=no_sa,
                 no_ffn=no_ffn, k_rpe=last_k_rpe, q_rpe=last_q_rpe, c_rpe=c_rpe,
                 v_rpe=v_rpe, pool=pool, pos_injection=pos_injection,
-                cat_diameter=cat_diameter, blocks_share=blocks_share_rpe,
-                heads_share=heads_share_rpe,
+                cat_diameter=cat_diameter, blocks_share_rpe=blocks_share_rpe,
+                heads_share_rpe=heads_share_rpe,
                 pos_injection_x_dim=last_pos_injection_x_dim)
         else:
             self.last_stage = None

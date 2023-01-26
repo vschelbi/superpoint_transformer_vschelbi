@@ -37,7 +37,7 @@ class SelfAttentionBlock(nn.Module):
         self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
         self.heads_share_rpe = heads_share_rpe
 
-        self.qkv = nn.Linear(dim, dim + qk_dim * 2 * num_heads, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, qk_dim * 2 * num_heads + dim, bias=qkv_bias)
 
         # TODO: define relative positional encoding parameters and
         #  trunacted-normal initialize them (see Swin-T implementation)
@@ -111,9 +111,9 @@ class SelfAttentionBlock(nn.Module):
 
         # Separate queries, keys, values
         DH = D * H
-        q = qkv[:, :DH].view(E, H, D)        # [N, H, D]
-        k = qkv[:, DH:2 * DH].view(E, H, D)  # [N, H, D]
-        v = qkv[:, 2 * DH:].view(E, H, -1)   # [N, H, C // H]
+        q = qkv[:, :DH].view(N, H, D)        # [N, H, D]
+        k = qkv[:, DH:2 * DH].view(N, H, D)  # [N, H, D]
+        v = qkv[:, 2 * DH:].view(N, H, -1)   # [N, H, C // H]
 
         # Expand queries, keys and values to edges
         # TODO: make sure edge_index is undirected ? has self-loops ?
