@@ -408,8 +408,14 @@ python test.py # ok
 
 ## SPT sur un noeud GPU
 
+Old command for GPU dev
+
 ```sh
- srun --pty --nodes=1 --ntasks-per-node=1 --gres=gpu:1 --cpus-per-task=10 --hint=nomultithread   --time=01:00:00 --qos=qos_gpu-dev --account $IDRPROJ@gpu bash
+srun --pty --nodes=1 --ntasks-per-node=1 --gres=gpu:1 --cpus-per-task=10 --hint=nomultithread   --time=01:00:00 --qos=qos_gpu-dev --account $IDRPROJ@gpu bash
+```
+
+```sh
+srun --pty --nodes=1 --ntasks-per-node=1 --gres=gpu:1 -C v100-32g --cpus-per-task=10 --hint=nomultithread  --time=04:00:00 bash
 
 module load cpuarch/amd
 
