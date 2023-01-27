@@ -429,8 +429,13 @@ def _horizontal_graph_by_delaunay(
     data.edge_index = se
     data.is_artificial = is_isolated
 
-    # Compute edge features
-    data = _horizontal_edge_features(data, nag[0].pos, edges_point, se_id)
+    # Edge feature computation. NB: takes i<j edges as input and
+    # builds features for i<j edges only, to alleviate memory and
+    # compute impact of horizontal edges. Features for all i<j and
+    # i>j edges can be computed later using
+    # `_on_the_fly_horizontal_edge_features()`
+    data = _minimalistic_horizontal_edge_features(
+        data, nag[0].pos, edges_point, se_id)
 
     # Restore the i_level Data object, if need be
     nag._list[i_level] = data
@@ -549,8 +554,11 @@ class RadiusHorizontalGraph(Transform):
         data.edge_index = edge_index
 
         # Edge feature computation. NB: takes i<j edges as input and
-        # builds features for both i<j and j>i edges
-        data = _horizontal_edge_features(
+        # builds features for i<j edges only, to alleviate memory and
+        # compute impact of horizontal edges. Features for all i<j and
+        # i>j edges can be computed later using
+        # `_on_the_fly_horizontal_edge_features()`
+        data = _minimalistic_horizontal_edge_features(
             data, nag[0].pos, se_point_index, se_id)
 
         # Restore the i_level Data object
@@ -681,7 +689,7 @@ def _horizontal_graph_by_radius_for_single_level(
     return nag
 
 
-def _horizontal_edge_features(data, points, se_point_index, se_id):
+def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     """Compute the features for horizontal edges, given the edge graph
     and the level-0 'subedges' making up each edge.
 
@@ -713,6 +721,11 @@ def _horizontal_edge_features(data, points, se_point_index, se_id):
 
     # Recover the edges between the segments
     se = data.edge_index
+
+    assert (se[0] < se[1]).all(), \
+        "Expects only i->j edges with i<j, so as to alleviate compute and " \
+        "memory impact of horizontal edges. j->i edge features can easily " \
+        "be reconstructed later on with `_on_the_fly_horizontal_edge_features`"
 
     # Direction are the pointwise source->target vectors, based on which
     # we will compute superedge descriptors
@@ -794,6 +807,53 @@ def _horizontal_edge_features(data, points, se_point_index, se_id):
     data.edge_attr = se_feat
 
     return data
+
+
+class OnTheFlyEdgeFeatures(Transform):
+    """Compute edge features "on-the-fly" for all i->j and j->i
+    horizontal edges of the NAG levels except its first (ie the
+    0-level).
+
+    Expects only i->j edges with i<j as input, along with some
+    edge-specific attributes that cannot be recovered from the
+    corresponding source and target node attributes.
+
+    Optionally adds some edge features that can be recovered from the
+    source and target node attributes.
+
+    Builds the j->i edges and corresponding features based on their i->j
+    counterparts.
+
+    Equips the output NAG with all i->j and j->i nodes and corresponding
+    features.
+
+    Note: this transform is intended to be called after all sampling
+    transforms, to mitigate compute and memory impact of horizontal
+    edges.
+
+    :param n_max_node: int
+        Maximum number of level-0 points to sample in each cluster to
+        when building node features
+    :param n_min: int
+        Minimum number of level-0 points to sample in each cluster,
+        unless it contains fewer points
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, n_max_node=32, n_min=5):
+        self.n_max_node = n_max_node
+        self.n_min = n_min
+
+    def _process(self, nag):
+        for i_level in range(1, nag.num_levels):
+            nag = _on_the_fly_horizontal_edge_features(
+                i_level, nag, n_max_node=self.n_max_node, n_min=self.n_min)
+        return nag
+
+
+def _on_the_fly_horizontal_edge_features(data, points, se_point_index, se_id)
 
 
 class ConnectIsolated(Transform):
