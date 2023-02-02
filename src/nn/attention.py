@@ -43,11 +43,11 @@ class SelfAttentionBlock(nn.Module):
         # TODO: k/q/v RPE, pos/edge attr/both RPE, MLP/vector attention,
         #  mlp on pos/learnable lookup table/FFN/learnable FFN...
 
-        self.k_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if k_rpe else None
-        self.q_rpe = FFN(3 + 10, out_dim=dim, activation=nn.LeakyReLU()) if q_rpe else None
+        self.k_rpe = FFN(14, out_dim=dim, activation=nn.LeakyReLU()) if k_rpe else None
+        self.q_rpe = FFN(14, out_dim=dim, activation=nn.LeakyReLU()) if q_rpe else None
 
-        # self.k_rpe = mlp([3 + 10, dim, dim], last_activation=False) if k_rpe else None
-        # self.q_rpe = mlp([3 + 10, dim, dim], last_activation=False) if q_rpe else None
+        # self.k_rpe = mlp([14, dim, dim], last_activation=False) if k_rpe else None
+        # self.q_rpe = mlp([14, dim, dim], last_activation=False) if q_rpe else None
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
         self.out_proj = nn.Linear(out_dim, dim) if out_dim is not None else None
@@ -102,11 +102,9 @@ class SelfAttentionBlock(nn.Module):
         #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
         #  - scalar rpe, vector rpe (see Stratified Transformer)
         if self.k_rpe is not None:
-            r_pos = torch.cat((pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
-            k = k + self.k_rpe(r_pos).view(E, H, -1)
+            k = k + self.k_rpe(edge_attr).view(E, H, -1)
         if self.q_rpe is not None:
-            r_pos = torch.cat((pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
-            q = q + self.q_rpe(r_pos).view(E, H, -1)
+            q = q + self.q_rpe(edge_attr).view(E, H, -1)
 
         # Compute compatibility scores from the query-key products
         compat = torch.einsum('ehd, ehd -> eh', q, k)  # [E, H]

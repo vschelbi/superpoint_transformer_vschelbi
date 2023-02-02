@@ -42,6 +42,20 @@ on_device_train_transform:
         ratio: ${datamodule.dropout_segment_ratio}
         by_size: False
         by_class: False
+    - transform: OnTheFlyEdgeFeatures
+      params:
+        mean_dist: True
+        min_dist: True
+        std_dist: True
+        angle_source: True
+        angle_target: True
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
     - transform: JitterPosition
       params:
         sigma: 0.03
