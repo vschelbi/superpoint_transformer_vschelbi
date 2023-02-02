@@ -13,8 +13,8 @@ from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
-    'RadiusHorizontalGraph', 'ConnectIsolated', 'NodeSize',
-    'JitterEdgeFeatures']
+    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'ConnectIsolated',
+    'NodeSize', 'JitterEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
@@ -508,11 +508,7 @@ class RadiusHorizontalGraph(Transform):
         self.source_pc_sort = source_pc_sort
 
     def _process(self, nag):
-        # Compute the horizontal graph, without edge features
-        nag = _horizontal_graph_by_radius(
-            nag, k_max=self.k_max, gap=self.gap, clean_graph=True,
-            cycles=self.cycles, chunk_size=self.chunk_size)
-
+        # Convert parameters to list for each NAG level, if need be
         k_ratio = self.k_ratio if isinstance(self.k_ratio, list) \
             else [self.k_ratio] * (nag.num_levels - 1)
         k_min = self.k_min if isinstance(self.k_min, list) \
@@ -523,6 +519,11 @@ class RadiusHorizontalGraph(Transform):
             else [self.margin] * (nag.num_levels - 1)
         chunk_size = self.chunk_size if isinstance(self.chunk_size, list) \
             else [self.chunk_size] * (nag.num_levels - 1)
+
+        # Compute the horizontal graph, without edge features
+        nag = _horizontal_graph_by_radius(
+            nag, k_max=self.k_max, gap=self.gap, clean_graph=True,
+            cycles=cycles, chunk_size=chunk_size)
 
         # Compute the edge features, level by level
         for i_level, kr, km, cy, mg, cs in zip(
@@ -543,7 +544,7 @@ class RadiusHorizontalGraph(Transform):
         # edges later on (done in `_horizontal_edge_features`)
         edge_index, se_point_index, se_id = subedges(
             nag[0].pos, nag.get_super_index(i_level), nag[i_level].edge_index,
-            k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=False,
+            k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=True,
             margin=margin, halfspace_filter=self.halfspace_filter,
             bbox_filter=self.bbox_filter, target_pc_flip=self.target_pc_flip,
             source_pc_sort=self.source_pc_sort, chunk_size=chunk_size)
@@ -597,14 +598,19 @@ def _horizontal_graph_by_radius(
     """
     assert isinstance(nag, NAG)
     if not isinstance(k_max, list):
-        k_max = [k_max] * (nag.num_levels - 2)
+        k_max = [k_max] * (nag.num_levels - 1)
     if not isinstance(gap, list):
-        gap = [gap] * (nag.num_levels - 2)
+        gap = [gap] * (nag.num_levels - 1)
+    if not isinstance(cycles, list):
+        cycles = [cycles] * (nag.num_levels - 1)
+    if not isinstance(chunk_size, list):
+        chunk_size = [chunk_size] * (nag.num_levels - 1)
 
-    for i_level, k, g in zip(range(1, nag.num_levels), k_max, gap):
+    for i_level, k, g, cy, cs in zip(
+            range(1, nag.num_levels), k_max, gap, cycles, chunk_size):
         nag = _horizontal_graph_by_radius_for_single_level(
             nag, i_level, k_max=k, gap=g, clean_graph=clean_graph,
-            cycles=cycles, chunk_size=chunk_size)
+            cycles=cy, chunk_size=cs)
 
     return nag
 
@@ -740,7 +746,6 @@ def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source
     # direction now
-    se = torch.cat((se, se.flip(0)), dim=1)
     se_feat = torch.vstack([
         se_mean_dist, se_min_dist, se_std_dist, se_angle_s, se_angle_t]).T
 
@@ -927,20 +932,20 @@ def _on_the_fly_horizontal_edge_features(
     # oriented with i<j. We need to create the edges and corresponding
     # features for the Target->Source direction now
     se = torch.cat((se, se.flip(0)), dim=1)
-    se_feat = torch.vstack([                                         # 14 TOTAL
-        torch.cat((se_mean_dist, se_mean_dist)),                     # 1
-        torch.cat((se_min_dist, se_min_dist)),                       # 1
-        torch.cat((se_std_dist, se_std_dist)),                       # 1
-        torch.cat((se_angle_s, se_angle_t)),                         # 1
-        torch.cat((se_angle_t, se_angle_s)),                         # 1
+    se_feat = torch.vstack([                                           # 14 TOT
+        torch.cat((se_mean_dist, se_mean_dist)),                       # 1
+        torch.cat((se_min_dist, se_min_dist)),                         # 1
+        torch.cat((se_std_dist, se_std_dist)),                         # 1
+        torch.cat((se_angle_s, se_angle_t)),                           # 1
+        torch.cat((se_angle_t, se_angle_s)),                           # 1
 
-        torch.cat((se_centroid_direction, -se_centroid_direction)),  # 3
-        torch.cat((se_centroid_dist, se_centroid_dist)),             # 1
-        torch.cat((se_normal_angle, se_normal_angle)),               # 1
-        torch.cat((se_log_length_ratio, -se_log_length_ratio)),      # 1
-        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),    # 1
-        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),      # 1
-        torch.cat((se_log_size_ratio, -se_log_size_ratio))]).T       # 1
+        torch.cat((se_centroid_direction, -se_centroid_direction)).T,  # 3
+        torch.cat((se_centroid_dist, se_centroid_dist)),               # 1
+        torch.cat((se_normal_angle, se_normal_angle)),                 # 1
+        torch.cat((se_log_length_ratio, -se_log_length_ratio)),        # 1
+        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),      # 1
+        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),        # 1
+        torch.cat((se_log_size_ratio, -se_log_size_ratio))]).T         # 1
 
     # Only keep the required edge attributes
     mask = torch.tensor([

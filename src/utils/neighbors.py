@@ -371,6 +371,8 @@ def cluster_radius_nn(
     # here to find those points runs in O(E) with E the number of
     # edges, which is O(N) with N the number of points. This is a
     # workaround for the actual anchor points search, which is O(N²)
+    # TODO: scatter_nearest_neighbor is the bottleneck of cluster_nn_radius(),
+    #  we could accelerate things by randomly sampling in the clusters
     anchors = scatter_nearest_neighbor(
         x_points, idx, edge_index, cycles=cycles, chunk_size=chunk_size)[1]
     d_nn = torch.linalg.norm(x_points[anchors[0]] - x_points[anchors[1]], dim=1)

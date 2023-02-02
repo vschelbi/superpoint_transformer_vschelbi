@@ -82,7 +82,7 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
 
 def subedges(
         points, index, edge_index, k_ratio=0.2, k_min=20, cycles=3,
-        pca_on_cpu=False, margin=0.2, halfspace_filter=True, bbox_filter=True,
+        pca_on_cpu=True, margin=0.2, halfspace_filter=True, bbox_filter=True,
         target_pc_flip=True, source_pc_sort=False, chunk_size=None):
     """Compute the subedges making up each edge between segments. These
     are needed for superedge features computation. This approach relies
@@ -111,7 +111,7 @@ def subedges(
         segments
     :param pca_on_cpu:
         Whether PCA should be computed on CPU if need be. Should be kept
-        as False
+        as True
     :param margin:
         Tolerance margin used for selecting subedges points and
         excluding segment points from potential subedge candidates
@@ -307,6 +307,8 @@ def subedges(
     # Local helper to compute, for each edge, the first eigen vector of
     # the selected subedge points for the source --target,
     # respectively-- segment
+    # TODO: scatter_pca is the bottleneck of subedges(), we could
+    #  accelerate things by randomly sampling in the clusters
     def first_component(source=True):
         if source:
             X_points, X_uid = S_points, S_uid

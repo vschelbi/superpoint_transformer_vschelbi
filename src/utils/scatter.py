@@ -32,7 +32,7 @@ def scatter_mean_weighted(x, idx, w, dim_size=None):
     return mean_segment
 
 
-def scatter_pca(x, idx, on_cpu=False):
+def scatter_pca(x, idx, on_cpu=True):
     """Scatter implementation for PCA.
 
     Returns aigenvalues and eigenvectors for each group in idx.
@@ -181,6 +181,7 @@ def scatter_nearest_neighbor(
 
         # Update the candidate as the point with the smallest distance
         # for each edge
+        # TODO: this is the bottleneck of scatter_nearest_neighbor
         _, X_argmin = scatter_min(X_dist, X_uid)
         x_candidate_idx = X_points_idx[X_argmin]
         x_candidate = points[x_candidate_idx]
