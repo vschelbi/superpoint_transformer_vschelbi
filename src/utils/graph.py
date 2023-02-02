@@ -1,7 +1,7 @@
 import torch
 import math
 from torch_scatter import scatter_min, scatter_max, scatter_mean
-from torch_geometric.utils import coalesce
+from torch_geometric.utils import coalesce, remove_self_loops
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils.tensor import arange_interleave
 from src.utils.geometry import base_vectors_3d
@@ -12,7 +12,8 @@ from src.utils.edge import edge_wise_points
 
 
 __all__ = [
-    'is_pyg_edge_format', 'isolated_nodes', 'edge_to_superedge', 'subedges']
+    'is_pyg_edge_format', 'isolated_nodes', 'edge_to_superedge', 'subedges',
+    'clean_graph']
 
 
 def is_pyg_edge_format(edge_index):
@@ -356,3 +357,29 @@ def subedges(
     ST_uid = S_uid
 
     return edge_index, ST_pairs, ST_uid
+
+
+def clean_graph(edge_index, edge_attr=None):
+    """Remove self loops, redundant edges and undirected edges. This
+    considers (i, j) and (j, i) edges to be the same. Returned edges
+    edges are expressed with i<j by default and duplicates are
+    discarded.
+    """
+    # Search for undirected edges, ie edges with (i,j) and (j,i)
+    # both present in edge_index. Flip (j,i) into (i,j) to make them
+    # redundant
+    s_larger_t = edge_index[0] > edge_index[1]
+    edge_index[:, s_larger_t] = edge_index[:, s_larger_t].flip(0)
+
+    # Sort edges by row and remove duplicates
+    if edge_attr is None:
+        edge_index = coalesce(edge_index)
+    else:
+        edge_index, edge_attr = coalesce(
+            edge_index, edge_attr=edge_attr, reduce='mean')
+
+    # Remove self loops
+    edge_index, edge_attr = remove_self_loops(
+        edge_index, edge_attr=edge_attr)
+
+    return edge_index, edge_attr
