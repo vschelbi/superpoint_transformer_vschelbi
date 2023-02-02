@@ -493,7 +493,7 @@ class RadiusHorizontalGraph(Transform):
     _NO_REPR = ['chunk_size']
 
     def __init__(
-            self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=2,
+            self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=3,
             margin=0.2, chunk_size=100000, halfspace_filter=True,
             bbox_filter=True, target_pc_flip=True, source_pc_sort=False):
         self.k_max = k_max
@@ -512,7 +512,7 @@ class RadiusHorizontalGraph(Transform):
         # Compute the horizontal graph, without edge features
         nag = _horizontal_graph_by_radius(
             nag, k_max=self.k_max, gap=self.gap, clean_graph=True,
-            chunk_size=self.chunk_size)
+            cycles=self.cycles, chunk_size=self.chunk_size)
 
         k_ratio = self.k_ratio if isinstance(self.k_ratio, list) \
             else [self.k_ratio] * (nag.num_levels - 1)
@@ -568,7 +568,7 @@ class RadiusHorizontalGraph(Transform):
 
 
 def _horizontal_graph_by_radius(
-        nag, k_max=100, gap=0, clean_graph=True, chunk_size=None):
+        nag, k_max=100, gap=0, clean_graph=True, cycles=3, chunk_size=None):
     """Search neighboring segments with points distant from `gap`or
     less.
 
@@ -585,6 +585,10 @@ def _horizontal_graph_by_radius(
         expressed with source_index < target_index, self-loops and
         redundant edges will be removed. This may be necessary to
         alleviate memory consumption before computing edge features
+    :param cycles int
+        Number of iterations. Starting from a point X in set A, one
+        cycle accounts for searching the nearest neighbor, in A, of the
+        nearest neighbor of X in set B
     :param chunk_size: int, float
         Allows mitigating memory use when computing the subedges. If
         `chunk_size > 1`, `edge_index` will be processed into chunks of
@@ -601,13 +605,14 @@ def _horizontal_graph_by_radius(
     for i_level, k, g in zip(range(1, nag.num_levels), k_max, gap):
         nag = _horizontal_graph_by_radius_for_single_level(
             nag, i_level, k_max=k, gap=g, clean_graph=clean_graph,
-            chunk_size=chunk_size)
+            cycles=cycles, chunk_size=chunk_size)
 
     return nag
 
 
 def _horizontal_graph_by_radius_for_single_level(
-        nag, i_level, k_max=100, gap=0, clean_graph=True, chunk_size=100000):
+        nag, i_level, k_max=100, gap=0, clean_graph=True, cycles=3,
+        chunk_size=100000):
     """
 
     :param nag:
@@ -615,6 +620,8 @@ def _horizontal_graph_by_radius_for_single_level(
     :param k_max:
     :param gap:
     :param clean_graph:
+    :param cycles:
+    :param chunk_size:
     :return:
     """
     assert isinstance(nag, NAG)
@@ -643,7 +650,7 @@ def _horizontal_graph_by_radius_for_single_level(
     # Search neighboring clusters
     edge_index, distances = cluster_radius_nn(
         nag[0].pos, super_index, k_max=k_max, gap=gap, clean=True,
-        chunk_size=chunk_size)
+        cycles=cycles, chunk_size=chunk_size)
 
     # Save the graph in the Data object
     data.edge_index = edge_index

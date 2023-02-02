@@ -88,7 +88,7 @@ def scatter_pca(x, idx, on_cpu=False):
 
 
 def scatter_nearest_neighbor(
-        points, index, edge_index, cycles=2, chunk_size=None):
+        points, index, edge_index, cycles=3, chunk_size=None):
     """For each pair of segments indicated in edge_index, find the 2
     closest points between the two segments.
 

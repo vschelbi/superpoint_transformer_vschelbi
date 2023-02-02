@@ -272,7 +272,8 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
 
 
 def cluster_radius_nn(
-        x_points, idx, k_max=100, gap=0, clean=True, chunk_size=100000):
+        x_points, idx, k_max=100, gap=0, clean=True, cycles=3,
+        chunk_size=100000):
     """Compute the radius neighbors of clusters. Two clusters are
     considered neighbors if 2 of their points are distant of `gap` of
     less.
@@ -291,6 +292,10 @@ def cluster_radius_nn(
         `clean_graph`. This will express all edges (i, j) so that with
         i<j, remove duplicates and self-loops. This may save compute
         and memory
+    :param cycles int
+        Number of iterations. Starting from a point X in set A, one
+        cycle accounts for searching the nearest neighbor, in A, of the
+        nearest neighbor of X in set B
     :param chunk_size: int, float
         Allows mitigating memory use when computing the neighbors. If
         `chunk_size > 1`, `edge_index` will be processed into chunks of
@@ -338,6 +343,7 @@ def cluster_radius_nn(
     #  `scatter_nearest_neighbor`
     r_segment = diam / 2
     r_max_edge = r_segment[edge_index].sum(dim=0) + 1.732 * gap
+    # r_max_edge = r_segment[edge_index].sum(dim=0) + 5 * gap
     in_gap_range = distances <= r_max_edge
     edge_index = edge_index[:, in_gap_range]
     distances = distances[in_gap_range]
@@ -366,7 +372,7 @@ def cluster_radius_nn(
     # edges, which is O(N) with N the number of points. This is a
     # workaround for the actual anchor points search, which is O(N²)
     anchors = scatter_nearest_neighbor(
-        x_points, idx, edge_index, cycles=2, chunk_size=chunk_size)[1]
+        x_points, idx, edge_index, cycles=cycles, chunk_size=chunk_size)[1]
     d_nn = torch.linalg.norm(x_points[anchors[0]] - x_points[anchors[1]], dim=1)
 
     # Trim edges wrt the anchor points distance
