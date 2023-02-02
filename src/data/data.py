@@ -435,12 +435,12 @@ class Data(PyGData):
 
         return self
 
-    def clean_graph(self):
+    def clean_graph(self, reduce='mean'):
         """Remove self loops, redundant edges and undirected edges."""
         assert self.has_edges
 
         edge_index, edge_attr = clean_graph(
-            self.edge_index, edge_attr=self.edge_attr)
+            self.edge_index, edge_attr=self.edge_attr, reduce=reduce)
 
         self.edge_index = edge_index
         self.edge_attr = edge_attr

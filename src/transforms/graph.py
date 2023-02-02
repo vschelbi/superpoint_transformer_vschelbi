@@ -4,11 +4,11 @@ import itertools
 from scipy.spatial import Delaunay
 from torch_scatter import scatter_mean, scatter_std, scatter_min, segment_csr
 import src
-from src.data import Data, NAG
+from src.data import NAG
 from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    subedges, cluster_radius_nn
+    subedges, clean_graph, cluster_radius_nn
 
 
 __all__ = [
@@ -365,14 +365,14 @@ def _horizontal_graph_by_delaunay(
     # Remove duplicate edges. For now, (i,j) and (j,i) are considered
     # to be duplicates. We remove duplicate point-wise graph edges at
     # this point to mitigate memory use. The symmetric edges and edge
-    # features will be created at the very end. To remove duplicates,
-    # we leverage the Data.clean_graph() method
-    edges_point = Data(edge_index=edges_point).clean_graph().edge_index
+    # features will be created at the very end
+    edges_point, _ = clean_graph(edges_point)
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. Select only
     # inter-cluster edges and compute the corresponding source and
-    # target point and cluster indices.
+    # target point and cluster indices. This will only return superedges
+    # se (i, j) with i<j
     se, se_id, edges_point, _ = edge_to_superedge(edges_point, super_index)
 
     # Remove edges whose distance is too large. We pay articular
@@ -428,11 +428,10 @@ def _horizontal_graph_by_delaunay(
     data.edge_index = se
     data.is_artificial = is_isolated
 
-    # Edge feature computation. NB: takes i<j edges as input and
-    # builds features for i<j edges only, to alleviate memory and
-    # compute impact of horizontal edges. Features for all i<j and
-    # i>j edges can be computed later using
-    # `_on_the_fly_horizontal_edge_features()`
+    # Edge feature computation. NB: takes i<j edges as input and builds
+    # features for i<j edges only, to alleviate memory and compute
+    # impact of horizontal edges. Features for all i<j and i>j edges can
+    # be computed later using `_on_the_fly_horizontal_edge_features()`
     data = _minimalistic_horizontal_edge_features(
         data, nag[0].pos, edges_point, se_id)
 
@@ -581,7 +580,7 @@ def _horizontal_graph_by_radius(
         and b in B such that dist(a, b) < gap
     :param clean_graph: bool
         Whether the returned horizontal graph should be cleaned. If
-        True, Data.clean_graph() will be called and all edges will be
+        True, clean_graph() will be called and all edges will be
         expressed with source_index < target_index, self-loops and
         redundant edges will be removed. This may be necessary to
         alleviate memory consumption before computing edge features
@@ -647,9 +646,11 @@ def _horizontal_graph_by_radius_for_single_level(
     # Compute the super_index for level-0 points wrt the target level
     super_index = nag.get_super_index(i_level)
 
-    # Search neighboring clusters
+    # Search neighboring clusters. If clean_graph is True, the output
+    # (i, j) edges are expressed such that i<j and without duplicates.
+    # This alleviates compute and memory use
     edge_index, distances = cluster_radius_nn(
-        nag[0].pos, super_index, k_max=k_max, gap=gap, clean=True,
+        nag[0].pos, super_index, k_max=k_max, gap=gap, clean=clean_graph,
         cycles=cycles, chunk_size=chunk_size)
 
     # Save the graph in the Data object
@@ -663,7 +664,7 @@ def _horizontal_graph_by_radius_for_single_level(
     # Make the graph directed with only i<j nodes. This is temporary,
     # to alleviate edge features computation
     if clean_graph:
-        data.clean_graph()
+        data.clean_graph(reduce='min')
 
     # Store the updated Data object in the NAG
     nag._list[i_level] = data

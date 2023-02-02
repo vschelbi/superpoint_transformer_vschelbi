@@ -359,7 +359,7 @@ def subedges(
     return edge_index, ST_pairs, ST_uid
 
 
-def clean_graph(edge_index, edge_attr=None):
+def clean_graph(edge_index, edge_attr=None, reduce='mean'):
     """Remove self loops, redundant edges and undirected edges. This
     considers (i, j) and (j, i) edges to be the same. Returned edges
     edges are expressed with i<j by default and duplicates are
@@ -376,7 +376,7 @@ def clean_graph(edge_index, edge_attr=None):
         edge_index = coalesce(edge_index)
     else:
         edge_index, edge_attr = coalesce(
-            edge_index, edge_attr=edge_attr, reduce='mean')
+            edge_index, edge_attr=edge_attr, reduce=reduce)
 
     # Remove self loops
     edge_index, edge_attr = remove_self_loops(

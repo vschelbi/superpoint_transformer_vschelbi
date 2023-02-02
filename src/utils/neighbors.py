@@ -359,11 +359,12 @@ def cluster_radius_nn(
     # alleviate compute and memory cost
     if clean:
         from src.utils import clean_graph
-        edge_index, distances = clean_graph(edge_index, edge_attr=distances)
+        edge_index, distances = clean_graph(
+            edge_index, edge_attr=distances, reduce='min')
     # Coalesce edges to remove duplicates
     else:
         edge_index, distances = coalesce(
-            edge_index, edge_attr=distances, reduce='mean')
+            edge_index, edge_attr=distances, reduce='min')
 
     # For each cluster pair in edge_index, compute (approximately) the
     # two closest points (coined "anchors" here). The heuristic used
