@@ -343,7 +343,6 @@ def cluster_radius_nn(
     #  `scatter_nearest_neighbor`
     r_segment = diam / 2
     r_max_edge = r_segment[edge_index].sum(dim=0) + 1.732 * gap
-    # r_max_edge = r_segment[edge_index].sum(dim=0) + 5 * gap
     in_gap_range = distances <= r_max_edge
     edge_index = edge_index[:, in_gap_range]
     distances = distances[in_gap_range]
