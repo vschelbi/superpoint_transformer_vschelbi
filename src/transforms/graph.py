@@ -2,14 +2,13 @@ import torch
 import numpy as np
 import itertools
 from scipy.spatial import Delaunay
-from torch_scatter import scatter, scatter_mean, scatter_std, scatter_min, \
-    segment_csr
+from torch_scatter import scatter_mean, scatter_std, scatter_min, segment_csr
 import src
 from src.data import Data, NAG
 from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    subedges, knn_1
+    subedges, cluster_radius_nn
 
 
 __all__ = [
@@ -474,10 +473,10 @@ class RadiusHorizontalGraph(Transform):
         Tolerance margin used for selecting subedges points and
         excluding segment points from potential subedge candidates
     :param chunk_size: int, float
-        Allows mitigating memory use when computing the subedges. If
-        `chunk_size > 1`, `edge_index` will be processed into chunks of
-        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
-        divided into parts of `edge_index.shape[1] * chunk_size` or less
+        Allows mitigating memory use. If `chunk_size > 1`,
+        `edge_index` will be processed into chunks of `chunk_size`. If
+        `0 < chunk_size < 1`, then `edge_index` will be divided into
+        parts of `edge_index.shape[1] * chunk_size` or less
     :param halfspace_filter: bool
         Whether the halfspace filtering should be applied
     :param bbox_filter: bool
@@ -495,7 +494,7 @@ class RadiusHorizontalGraph(Transform):
 
     def __init__(
             self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=2,
-            margin=0.2, chunk_size=None, halfspace_filter=True,
+            margin=0.2, chunk_size=100000, halfspace_filter=True,
             bbox_filter=True, target_pc_flip=True, source_pc_sort=False):
         self.k_max = k_max
         self.gap = gap
@@ -512,7 +511,8 @@ class RadiusHorizontalGraph(Transform):
     def _process(self, nag):
         # Compute the horizontal graph, without edge features
         nag = _horizontal_graph_by_radius(
-            nag, k_max=self.k_max, gap=self.gap, clean_graph=True)
+            nag, k_max=self.k_max, gap=self.gap, clean_graph=True,
+            chunk_size=self.chunk_size)
 
         k_ratio = self.k_ratio if isinstance(self.k_ratio, list) \
             else [self.k_ratio] * (nag.num_levels - 1)
@@ -567,7 +567,8 @@ class RadiusHorizontalGraph(Transform):
         return nag
 
 
-def _horizontal_graph_by_radius(nag, k_max=100, gap=0, clean_graph=True):
+def _horizontal_graph_by_radius(
+        nag, k_max=100, gap=0, clean_graph=True, chunk_size=None):
     """Search neighboring segments with points distant from `gap`or
     less.
 
@@ -584,6 +585,11 @@ def _horizontal_graph_by_radius(nag, k_max=100, gap=0, clean_graph=True):
         expressed with source_index < target_index, self-loops and
         redundant edges will be removed. This may be necessary to
         alleviate memory consumption before computing edge features
+    :param chunk_size: int, float
+        Allows mitigating memory use when computing the subedges. If
+        `chunk_size > 1`, `edge_index` will be processed into chunks of
+        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
+        divided into parts of `edge_index.shape[1] * chunk_size` or less
     :return:
     """
     assert isinstance(nag, NAG)
@@ -594,13 +600,14 @@ def _horizontal_graph_by_radius(nag, k_max=100, gap=0, clean_graph=True):
 
     for i_level, k, g in zip(range(1, nag.num_levels), k_max, gap):
         nag = _horizontal_graph_by_radius_for_single_level(
-            nag, i_level, k_max=k, gap=g, clean_graph=clean_graph)
+            nag, i_level, k_max=k, gap=g, clean_graph=clean_graph,
+            chunk_size=chunk_size)
 
     return nag
 
 
 def _horizontal_graph_by_radius_for_single_level(
-        nag, i_level, k_max=100, gap=0, clean_graph=True):
+        nag, i_level, k_max=100, gap=0, clean_graph=True, chunk_size=100000):
     """
 
     :param nag:
@@ -620,7 +627,6 @@ def _horizontal_graph_by_radius_for_single_level(
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
     num_nodes = data.num_nodes
-    device = nag.device
 
     # Remove any already-existing horizontal graph
     data.edge_index = None
@@ -634,41 +640,10 @@ def _horizontal_graph_by_radius_for_single_level(
     # Compute the super_index for level-0 points wrt the target level
     super_index = nag.get_super_index(i_level)
 
-    # Roughly estimate the diameter of each segment
-    bbox_low = scatter(nag[0].pos, super_index, dim=0, reduce='min')
-    bbox_high = scatter(nag[0].pos, super_index, dim=0, reduce='max')
-    # diam = ((bbox_high - bbox_low)**2).sum(dim=1).sqrt()
-    diam = (bbox_high - bbox_low).max(dim=1).values
-
-    # Conservative heuristic for the global search radius: we search the
-    # segments whose centroids are separated by the largest segment
-    # diameter plus the input gap. This approximates the true operation
-    # we would like to perform (but which is too costly): searching, for
-    # each segment, the segments with at least one point within gap.
-    # Obviously, the r_search may produce more neighbors than needed and
-    # some subsequent pruning will be needed
-    r_search = diam.max().item() + gap
-    neighbors, distances = knn_1(data.pos, k_max, r_max=r_search)
-
-    # Build the corresponding edge_index
-    source = torch.arange(
-        data.num_points, device=device).repeat_interleave(k_max)
-    target = neighbors.flatten()
-    edge_index = torch.vstack((source, target))
-    distances = distances.flatten()
-
-    # Trim edges based on the actual segment radii and not the
-    # overly-conservative maximum radius used for the search
-    r_segment = diam / 2
-    r_max_edge = r_segment[edge_index].sum(dim=0) + gap
-    in_gap_range = distances <= r_max_edge
-    edge_index = edge_index[:, in_gap_range]
-    distances = distances[in_gap_range]
-
-    # Trim edges where points are missing (ie -1 neighbor indices)
-    missing_point_edge = edge_index[1] == -1
-    edge_index = edge_index[:, ~missing_point_edge]
-    distances = distances[~missing_point_edge]
+    # Search neighboring clusters
+    edge_index, distances = cluster_radius_nn(
+        nag[0].pos, super_index, k_max=k_max, gap=gap, clean=True,
+        chunk_size=chunk_size)
 
     # Save the graph in the Data object
     data.edge_index = edge_index
@@ -853,7 +828,9 @@ class OnTheFlyEdgeFeatures(Transform):
         return nag
 
 
-def _on_the_fly_horizontal_edge_features(data, points, se_point_index, se_id)
+def _on_the_fly_horizontal_edge_features(data, points, se_point_index, se_id):
+    #TODO ....................................................................................................
+    return
 
 
 class ConnectIsolated(Transform):

@@ -1,7 +1,9 @@
+import math
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_min
 from itertools import combinations_with_replacement
 from src.utils.edge import edge_wise_points
+from torch_geometric.utils import coalesce
 
 
 __all__ = ['scatter_mean_weighted', 'scatter_pca', 'scatter_nearest_neighbor']
@@ -85,7 +87,8 @@ def scatter_pca(x, idx, on_cpu=False):
     return eval, evec
 
 
-def scatter_nearest_neighbor(points, index, edge_index, cycles=2):
+def scatter_nearest_neighbor(
+        points, index, edge_index, cycles=2, chunk_size=None):
     """For each pair of segments indicated in edge_index, find the 2
     closest points between the two segments.
 
@@ -101,7 +104,39 @@ def scatter_nearest_neighbor(points, index, edge_index, cycles=2):
         Number of iterations. Starting from a point X in set A, one
         cycle accounts for searching the nearest neighbor, in A, of the
         nearest neighbor of X in set B
+    :param chunk_size: int, float
+        Allows mitigating memory use when computing the neighbors. If
+        `chunk_size > 1`, `edge_index` will be processed into chunks of
+        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
+        divided into parts of `edge_index.shape[1] * chunk_size` or less
     """
+    assert edge_index.shape == coalesce(edge_index).shape, \
+        "Does not support duplicate edges, please coalesce the edges" \
+        " before calling this function"
+
+    # Recursive call in case chunk is specified. Chunk allows limiting
+    # the number of edges processed at once. This might alleviate
+    # memory use
+    if chunk_size is not None and chunk_size > 0:
+
+        # Recursive call on smaller edge_index chunks
+        chunk_size = int(chunk_size) if chunk_size > 1 \
+            else math.ceil(edge_index.shape[1] * chunk_size)
+        num_chunks = math.ceil(edge_index.shape[1] / chunk_size)
+        out_list = []
+        for i_chunk in range(num_chunks):
+            start = i_chunk * chunk_size
+            end = (i_chunk + 1) * chunk_size
+            out_list.append(scatter_nearest_neighbor(
+                points, index, edge_index[:, start:end], cycles=cycles,
+                chunk_size=None))
+
+        # Combine outputs
+        candidate = torch.cat([elt[0] for elt in out_list], dim=0)
+        candidate_idx = torch.cat([elt[1] for elt in out_list], dim=1)
+
+        return candidate, candidate_idx
+
     # We define the segments in the first row of edge_index as 'source'
     # segments, while the elements of the second row are 'target'
     # segments. The corresponding variables are prepended with 's_' and
