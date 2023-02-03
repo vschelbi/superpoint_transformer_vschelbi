@@ -5,7 +5,7 @@ from torch_geometric.utils import k_hop_subgraph
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from src.utils import fast_randperm
+from src.utils import fast_randperm, sparse_sample
 from src.transforms import Transform
 from src.data import NAG
 from src.utils.metrics import atomic_to_histogram
@@ -13,7 +13,7 @@ from src.utils.metrics import atomic_to_histogram
 
 __all__ = [
     'Shuffle', 'SaveOriginalPosId', 'GridSampling3D', 'SampleSegments',
-    'SampleGraph', 'DropoutSegments']
+    'SampleGraph', 'DropoutSegments', 'SampleEdges']
 
 
 class Shuffle(Transform):
@@ -389,10 +389,16 @@ class SampleGraph(Transform):
     def _process(self, nag):
         device = nag.device
 
+        # Skip if i_level is None. This little trick may be useful to
+        # turn this transform in Identity
+        if self.i_level is None:
+            return nag
+
         # Initialization
         i_level = self.i_level if 0 <= self.i_level < nag.num_levels \
             else nag.num_levels - 1
-        k_sample = self.k_sample if self.k_sample < nag[i_level].num_nodes else 1
+        k_sample = self.k_sample if self.k_sample < nag[i_level].num_nodes \
+            else 1
 
         # Skip if level has not graph
         if not nag[i_level].has_edges:
@@ -494,3 +500,82 @@ class SampleSegments(Transform):
             high=self.high, low=self.low, n_max=self.n_max, n_min=self.n_min,
             return_pointers=False)
         return nag.select(self.low, idx)
+
+
+class SampleEdges(Transform):
+    """Sample edges based on which source node they belong to.
+
+    The sampling operation is run without replacement and each source
+    segment has at least `n_min` and at most `n_max` edges, within the
+    limits allowed by its actual number of edges.
+
+    :param level: int or str
+        Level at which to sample edges. Can be an int or a str. If the
+        latter, 'all' will apply on all levels, 'i+' will apply on
+        level-i and above, 'i-' will apply on level-i and below
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, level='1+', n_min=16, n_max=32):
+        assert isinstance(level, (int, str))
+        assert isinstance(n_min, int)
+        assert isinstance(n_max, int)
+        self.level = level
+        self.n_min = n_min
+        self.n_max = n_max
+
+    def _process(self, nag):
+
+        # If 'level' is an int, we only need to process a single level
+        if isinstance(self.level, int):
+            nag._list[self.level] = self._process_single_level(
+                nag[self.level], self.n_min, self.n_max)
+            return nag
+
+        # If 'level' covers multiple levels, iteratively process levels
+        level_n_min = [-1] * nag.num_levels
+        level_n_max = [-1] * nag.num_levels
+
+        if isinstance(self.level, int):
+            level_n_min[self.level] = self.n_min
+            level_n_max[self.level] = self.n_max
+        elif self.level == 'all':
+            level_n_min = [self.n_min] * nag.num_levels
+            level_n_max = [self.n_max] * nag.num_levels
+        elif self.level[-1] == '+':
+            i = int(self.level[:-1])
+            level_n_min[i:] = [self.n_min] * (nag.num_levels - i)
+            level_n_max[i:] = [self.n_max] * (nag.num_levels - i)
+        elif self.level[-1] == '-':
+            i = int(self.level[:-1])
+            level_n_min[:i] = [self.n_min] * i
+            level_n_max[:i] = [self.n_max] * i
+        else:
+            raise ValueError(f'Unsupported level={self.level}')
+
+        for i_level, (n_min, n_max) in enumerate(zip(level_n_min, level_n_max)):
+            nag._list[i_level] = self._process_single_level(
+                nag[i_level], n_min, n_max)
+
+        return nag
+
+    @staticmethod
+    def _process_single_level(data, n_min, n_max):
+        # Skip process if n_min or n_max is negative or if in put Data
+        # has not edges
+        if n_min < 0 or n_max < 0 or not data.has_edges:
+            return data
+
+        # Compute a sampling for the edges, based on the source node
+        # they belong to
+        idx = sparse_sample(
+            data.edge_index[0], n_max=n_max, n_min=n_min, return_pointers=False)
+
+        # Select edges and their attributes, if relevant
+        data.edge_index = data.edge_index[:, idx]
+        if getattr(data, 'edge_attr', None) is not None:
+            data.edge_attr = data.edge_attr[idx]
+
+        return data
