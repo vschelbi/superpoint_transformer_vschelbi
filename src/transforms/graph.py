@@ -730,9 +730,9 @@ def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     dist = torch.linalg.norm(direction, dim=1)
 
     # Compute mean, min and std subedge distance
-    se_mean_dist = scatter_mean(dist, se_id, dim=0).sqrt() / 10
-    se_min_dist = scatter_min(dist, se_id, dim=0)[0].sqrt() / 10
-    se_std_dist = scatter_std(dist, se_id, dim=0).sqrt() / 10
+    se_mean_dist = scatter_mean(dist, se_id, dim=0).sqrt()
+    se_min_dist = scatter_min(dist, se_id, dim=0)[0].sqrt()
+    se_std_dist = scatter_std(dist, se_id, dim=0).sqrt()
 
     # Compute the mean subedge direction
     se_direction = scatter_mean(direction, se_id, dim=0)
@@ -906,7 +906,7 @@ def _on_the_fly_horizontal_edge_features(
     se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
     se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1)
     se_centroid_direction /= se_centroid_dist.view(-1, 1)
-    se_centroid_dist = se_centroid_dist.sqrt() / 10
+    se_centroid_dist = se_centroid_dist.sqrt()
 
     # Compute some edge features based on segment attributes
     if normal_angle and getattr(data, 'normal', None) is not None:
