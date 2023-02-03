@@ -24,9 +24,21 @@ class SelfAttentionBlock(nn.Module):
     """
 
     def __init__(
-            self, dim, num_heads=1, in_dim=None, out_dim=None, qkv_bias=True,
-            qk_dim=8, qk_scale=None, attn_drop=None, drop=None, k_rpe=False,
-            q_rpe=False, c_rpe=False, v_rpe=False, heads_share_rpe=False):
+            self,
+            dim,
+            num_heads=1,
+            in_dim=None,
+            out_dim=None,
+            qkv_bias=True,
+            qk_dim=8,
+            qk_scale=None,
+            attn_drop=None,
+            drop=None,
+            k_rpe=False,
+            q_rpe=False,
+            c_rpe=False,
+            v_rpe=False,
+            heads_share_rpe=False):
         super().__init__()
 
         assert dim % num_heads == 0, f"dim must be a multiple of num_heads"
@@ -102,7 +114,6 @@ class SelfAttentionBlock(nn.Module):
 
         # # Separate and expand queries, keys, values and indices to edge
         # # shape
-        # # TODO: make sure edge_index is undirected ? has self-loops ?
         # s = edge_index[0]  # [E]
         # t = edge_index[1]  # [E]
         # q = qkv[s, 0]  # [E, H, C // H]
@@ -116,7 +127,6 @@ class SelfAttentionBlock(nn.Module):
         v = qkv[:, 2 * DH:].view(N, H, -1)   # [N, H, C // H]
 
         # Expand queries, keys and values to edges
-        # TODO: make sure edge_index is undirected ? has self-loops ?
         s = edge_index[0]  # [E]
         t = edge_index[1]  # [E]
         q = q[s]  # [E, H, D]

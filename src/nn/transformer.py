@@ -25,10 +25,24 @@ class TransformerBlock(nn.Module):
     """
 
     def __init__(
-            self, dim, num_heads=1, qkv_bias=True, qk_dim=8, qk_scale=None,
-            ffn_ratio=4, residual_drop=None, attn_drop=None, drop_path=None,
-            activation=nn.GELU(), pre_ln=True, no_sa=False, no_ffn=False,
-            k_rpe=False, q_rpe=False, c_rpe=False, v_rpe=False,
+            self,
+            dim,
+            num_heads=1,
+            qkv_bias=True,
+            qk_dim=8,
+            qk_scale=None,
+            ffn_ratio=4,
+            residual_drop=None,
+            attn_drop=None,
+            drop_path=None,
+            activation=nn.GELU(),
+            pre_ln=True,
+            no_sa=False,
+            no_ffn=False,
+            k_rpe=False,
+            q_rpe=False,
+            c_rpe=False,
+            v_rpe=False,
             heads_share_rpe=False):
         super().__init__()
 
@@ -40,10 +54,19 @@ class TransformerBlock(nn.Module):
         if not no_sa:
             self.sa_norm = LayerNorm(dim)
             self.sa = SelfAttentionBlock(
-                dim, num_heads=num_heads, in_dim=None, out_dim=dim,
-                qkv_bias=qkv_bias, qk_dim=qk_dim, qk_scale=qk_scale,
-                attn_drop=attn_drop, drop=residual_drop, k_rpe=k_rpe,
-                q_rpe=q_rpe, c_rpe=c_rpe, v_rpe=v_rpe,
+                dim,
+                num_heads=num_heads,
+                in_dim=None,
+                out_dim=dim,
+                qkv_bias=qkv_bias,
+                qk_dim=qk_dim,
+                qk_scale=qk_scale,
+                attn_drop=attn_drop,
+                drop=residual_drop,
+                k_rpe=k_rpe,
+                q_rpe=q_rpe,
+                c_rpe=c_rpe,
+                v_rpe=v_rpe,
                 heads_share_rpe=heads_share_rpe)
 
         # Feed-Forward Network residual branch

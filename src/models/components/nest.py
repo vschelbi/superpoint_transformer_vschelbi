@@ -103,24 +103,63 @@ class NeST(nn.Module):
         self.heads_share_rpe = heads_share_rpe
 
         # Convert input arguments to nested lists
-        (down_dim, down_in_mlp, down_out_mlp, down_mlp_drop, down_num_heads,
-         down_num_blocks, down_ffn_ratio, down_residual_drop, down_attn_drop,
-         down_drop_path, down_pos_injection_x_dim) = listify_with_reference(
-            down_dim, down_in_mlp, down_out_mlp, down_mlp_drop, down_num_heads,
-            down_num_blocks, down_ffn_ratio, down_residual_drop, down_attn_drop,
-            down_drop_path, down_pos_injection_x_dim)
+        (
+            down_dim,
+             down_in_mlp,
+             down_out_mlp,
+             down_mlp_drop,
+             down_num_heads,
+             down_num_blocks,
+             down_ffn_ratio,
+             down_residual_drop,
+             down_attn_drop,
+             down_drop_path,
+             down_pos_injection_x_dim
+        ) = listify_with_reference(
+            down_dim,
+            down_in_mlp,
+            down_out_mlp,
+            down_mlp_drop,
+            down_num_heads,
+            down_num_blocks,
+            down_ffn_ratio,
+            down_residual_drop,
+            down_attn_drop,
+            down_drop_path,
+            down_pos_injection_x_dim)
 
-        (up_dim, up_in_mlp, up_out_mlp, up_mlp_drop, up_num_heads,
-         up_num_blocks, up_ffn_ratio, up_residual_drop, up_attn_drop,
-         up_drop_path, up_pos_injection_x_dim) = listify_with_reference(
-            up_dim, up_in_mlp, up_out_mlp, up_mlp_drop, up_num_heads,
-            up_num_blocks, up_ffn_ratio, up_residual_drop, up_attn_drop,
-            up_drop_path, up_pos_injection_x_dim)
+        (
+            up_dim,
+            up_in_mlp,
+            up_out_mlp,
+            up_mlp_drop,
+            up_num_heads,
+            up_num_blocks,
+            up_ffn_ratio,
+            up_residual_drop,
+            up_attn_drop,
+            up_drop_path,
+            up_pos_injection_x_dim
+        ) = listify_with_reference(
+            up_dim,
+            up_in_mlp,
+            up_out_mlp,
+            up_mlp_drop,
+            up_num_heads,
+            up_num_blocks,
+            up_ffn_ratio,
+            up_residual_drop,
+            up_attn_drop,
+            up_drop_path,
+            up_pos_injection_x_dim)
 
         # Module operating on Level-0 points in isolation
         self.point_stage = PointStage(
-            point_mlp, mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-            mlp_drop=point_drop, pos_injection=point_pos_injection,
+            point_mlp,
+            mlp_activation=mlp_activation,
+            mlp_norm=mlp_norm,
+            mlp_drop=point_drop,
+            pos_injection=point_pos_injection,
             pos_injection_x_dim=point_pos_injection_x_dim,
             cat_diameter=point_cat_diameter)
 
@@ -140,17 +179,34 @@ class NeST(nn.Module):
 
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
-                    dim, num_blocks=num_blocks, in_mlp=in_mlp, out_mlp=out_mlp,
-                    mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-                    mlp_drop=mlp_drop, num_heads=num_heads, qk_dim=qk_dim,
-                    qkv_bias=qkv_bias, qk_scale=qk_scale, ffn_ratio=ffn_ratio,
-                    residual_drop=residual_drop, attn_drop=attn_drop,
-                    drop_path=drop_path, activation=activation, pre_ln=pre_ln,
-                    no_sa=no_sa, no_ffn=no_ffn, k_rpe=stage_k_rpe,
-                    q_rpe=stage_q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, pool=pool,
-                    fusion=fusion, pos_injection=pos_injection,
+                    dim, num_blocks=num_blocks,
+                    in_mlp=in_mlp,
+                    out_mlp=out_mlp,
+                    mlp_activation=mlp_activation,
+                    mlp_norm=mlp_norm,
+                    mlp_drop=mlp_drop,
+                    num_heads=num_heads,
+                    qk_dim=qk_dim,
+                    qkv_bias=qkv_bias,
+                    qk_scale=qk_scale,
+                    ffn_ratio=ffn_ratio,
+                    residual_drop=residual_drop,
+                    attn_drop=attn_drop,
+                    drop_path=drop_path,
+                    activation=activation,
+                    pre_ln=pre_ln,
+                    no_sa=no_sa,
+                    no_ffn=no_ffn,
+                    k_rpe=stage_k_rpe,
+                    q_rpe=stage_q_rpe,
+                    c_rpe=c_rpe,
+                    v_rpe=v_rpe,
+                    pool=pool,
+                    fusion=fusion,
+                    pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
-                    cat_diameter=cat_diameter, blocks_share_rpe=blocks_share_rpe,
+                    cat_diameter=cat_diameter,
+                    blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path,
@@ -175,15 +231,31 @@ class NeST(nn.Module):
 
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
-                    dim, num_blocks=num_blocks, in_mlp=in_mlp, out_mlp=out_mlp,
-                    mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-                    mlp_drop=mlp_drop, num_heads=num_heads, qk_dim=qk_dim,
-                    qkv_bias=qkv_bias, qk_scale=qk_scale, ffn_ratio=ffn_ratio,
-                    residual_drop=residual_drop, attn_drop=attn_drop,
-                    drop_path=drop_path, activation=activation, pre_ln=pre_ln,
-                    no_sa=no_sa, no_ffn=no_ffn, k_rpe=stage_k_rpe,
-                    q_rpe=stage_q_rpe, c_rpe=c_rpe, v_rpe=v_rpe, unpool=unpool,
-                    fusion=fusion, pos_injection=pos_injection,
+                    dim, num_blocks=num_blocks,
+                    in_mlp=in_mlp,
+                    out_mlp=out_mlp,
+                    mlp_activation=mlp_activation,
+                    mlp_norm=mlp_norm,
+                    mlp_drop=mlp_drop,
+                    num_heads=num_heads,
+                    qk_dim=qk_dim,
+                    qkv_bias=qkv_bias,
+                    qk_scale=qk_scale,
+                    ffn_ratio=ffn_ratio,
+                    residual_drop=residual_drop,
+                    attn_drop=attn_drop,
+                    drop_path=drop_path,
+                    activation=activation,
+                    pre_ln=pre_ln,
+                    no_sa=no_sa,
+                    no_ffn=no_ffn,
+                    k_rpe=stage_k_rpe,
+                    q_rpe=stage_q_rpe,
+                    c_rpe=c_rpe,
+                    v_rpe=v_rpe,
+                    unpool=unpool,
+                    fusion=fusion,
+                    pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
@@ -218,17 +290,26 @@ class NeST(nn.Module):
         self.small = small
 
         self.point_stage_small = PointStage(
-            small_point_mlp, mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-            mlp_drop=point_drop, pos_injection=point_pos_injection,
+            small_point_mlp,
+            mlp_activation=mlp_activation,
+            mlp_norm=mlp_norm,
+            mlp_drop=point_drop,
+            pos_injection=point_pos_injection,
             pos_injection_x_dim=point_pos_injection_x_dim,
             cat_diameter=point_cat_diameter) \
             if small is not None else None
 
         self.down_stage_small = DownNFuseStage(
-            small_down_mlp[-1], num_blocks=0, in_mlp=small_down_mlp,
-            mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-            mlp_drop=down_mlp_drop[0], pool=pool, fusion='cat',
-            pos_injection=pos_injection, cat_diameter=cat_diameter,
+            small_down_mlp[-1],
+            num_blocks=0,
+            in_mlp=small_down_mlp,
+            mlp_activation=mlp_activation,
+            mlp_norm=mlp_norm,
+            mlp_drop=down_mlp_drop[0],
+            pool=pool,
+            fusion='cat',
+            pos_injection=pos_injection,
+            cat_diameter=cat_diameter,
             pos_injection_x_dim=down_pos_injection_x_dim[0]) \
             if small is not None else None
 
@@ -245,17 +326,32 @@ class NeST(nn.Module):
                 q_rpe, 1, 13, qk_dim, stages_share_rpe)[0]
 
             self.last_stage = Stage(
-                last_dim, num_blocks=last_num_blocks, in_mlp=last_in_mlp,
-                out_mlp=last_out_mlp, mlp_activation=mlp_activation,
-                mlp_norm=mlp_norm, mlp_drop=last_mlp_drop,
-                num_heads=last_num_heads, qk_dim=qk_dim, qkv_bias=qkv_bias,
-                qk_scale=qk_scale, ffn_ratio=last_ffn_ratio,
+                last_dim,
+                num_blocks=last_num_blocks,
+                in_mlp=last_in_mlp,
+                out_mlp=last_out_mlp,
+                mlp_activation=mlp_activation,
+                mlp_norm=mlp_norm,
+                mlp_drop=last_mlp_drop,
+                num_heads=last_num_heads,
+                qk_dim=qk_dim,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                ffn_ratio=last_ffn_ratio,
                 residual_drop=last_residual_drop,
-                attn_drop=last_attn_drop, drop_path=last_drop_path,
-                activation=activation, pre_ln=pre_ln, no_sa=no_sa,
-                no_ffn=no_ffn, k_rpe=last_k_rpe, q_rpe=last_q_rpe, c_rpe=c_rpe,
-                v_rpe=v_rpe, pool=pool, pos_injection=pos_injection,
-                cat_diameter=cat_diameter, blocks_share_rpe=blocks_share_rpe,
+                attn_drop=last_attn_drop,
+                drop_path=last_drop_path,
+                activation=activation,
+                pre_ln=pre_ln,
+                no_sa=no_sa,
+                no_ffn=no_ffn,
+                k_rpe=last_k_rpe,
+                q_rpe=last_q_rpe,
+                c_rpe=c_rpe,
+                v_rpe=v_rpe,
+                pos_injection=pos_injection,
+                cat_diameter=cat_diameter,
+                blocks_share_rpe=blocks_share_rpe,
                 heads_share_rpe=heads_share_rpe,
                 pos_injection_x_dim=last_pos_injection_x_dim)
         else:
@@ -406,9 +502,16 @@ class NeST(nn.Module):
 
         # Forward pass on the stage and store output x
         x_out, diameter = stage(
-            x_handcrafted, x, norm_index, pool_index,
-            pos=pos, node_size=node_size, super_index=super_index,
-            edge_index=edge_index, edge_attr=edge_attr, num_super=num_nodes)
+            x_handcrafted,
+            x,
+            norm_index,
+            pool_index,
+            pos=pos,
+            node_size=node_size,
+            super_index=super_index,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            num_super=num_nodes)
 
         return x_out, diameter
 
@@ -432,9 +535,15 @@ class NeST(nn.Module):
         edge_attr = nag[i_level].edge_attr
 
         x_out, diameter = stage(
-            x_skip, x, norm_index, unpool_index, pos=pos,
-            node_size=node_size, super_index=super_index,
-            edge_index=edge_index, edge_attr=edge_attr)
+            x_skip,
+            x,
+            norm_index,
+            unpool_index,
+            pos=pos,
+            node_size=node_size,
+            super_index=super_index,
+            edge_index=edge_index,
+            edge_attr=edge_attr)
 
         return x_out, diameter
 
@@ -458,8 +567,13 @@ class NeST(nn.Module):
 
         # Forward pass on the stage and store output x
         x_out, diameter = self.last_stage(
-            x, norm_index, pos=pos, node_size=node_size,
-            super_index=super_index, edge_index=edge_index, edge_attr=edge_attr)
+            x,
+            norm_index,
+            pos=pos,
+            node_size=node_size,
+            super_index=super_index,
+            edge_index=edge_index,
+            edge_attr=edge_attr)
 
         return x_out, diameter
 

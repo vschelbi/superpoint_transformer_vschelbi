@@ -46,7 +46,7 @@ net:
   pre_ln: True
   no_sa: False
   no_ffn: False
-  qk_dim: 8
+  qk_dim: 4
   qkv_bias: True
   qk_scale: null
   k_rpe: False
