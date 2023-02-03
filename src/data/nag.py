@@ -209,7 +209,7 @@ class NAG:
 
         return nag
 
-    def save(self, path, x32=True, y_to_csr=True):
+    def save(self, path, x32=True, y_to_csr=True, x16_edge=True):
         """Save NAG to HDF5 file.
 
         :param path:
@@ -218,12 +218,14 @@ class NAG:
         :param y_to_csr: bool
             Convert 'y' to CSR format before saving. Only applies if
             'y' is a 2D histogram
+        :param x16_edge: bool
+            Convert edge_attr to 16-bit before saving.
         :return:
         """
         with h5py.File(path, 'w') as f:
             for i_level, data in enumerate(self):
                 g = f.create_group(f'partition_{i_level}')
-                data.save(g, x32=x32, y_to_csr=y_to_csr)
+                data.save(g, x32=x32, y_to_csr=y_to_csr, x16_edge=x16_edge)
 
     @staticmethod
     def load(

@@ -123,19 +123,31 @@ def print_tensor_info(a, name):
     print(msg)
 
 
-def numpyfy(a, x32=False):
+def numpyfy(a, x32=False, x16=False):
     """Convert torch.Tensor to numpy while respecting some constraints
     on output dtype.
     """
     if not isinstance(a, torch.Tensor):
         return a
 
-    if x32 and a.dtype == torch.double:
-        a = a.float()
-    elif x32 and a.dtype == torch.long:
-        assert a.abs().max() < torch.iinfo(torch.int).max, \
-            "Can't convert int64 tensor to int32, largest value is to high"
-        a = a.int()
+    if x16:
+        if a.dtype in [torch.float, torch.double]:
+            a = a.half()
+        elif a.dtype in [torch.int, torch.long]:
+            assert a.abs().max() < torch.iinfo(torch.int16).max, \
+                f"Can't convert {a.dtype} tensor to int16, largest value is " \
+                f"too high"
+            a = a.short()
+
+    elif x32:
+        if a.dtype == torch.double:
+            a = a.float()
+        elif a.dtype == torch.long:
+            assert a.abs().max() < torch.iinfo(torch.int).max, \
+                f"Can't convert {a.dtype} tensor to int32, largest value is " \
+                f"too high"
+            a = a.int()
+
     return a.cpu().numpy()
 
 

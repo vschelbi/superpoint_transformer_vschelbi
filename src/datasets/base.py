@@ -107,7 +107,7 @@ class BaseDataset(InMemoryDataset):
     def __init__(
             self, root, stage='train', transform=None, pre_transform=None,
             pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True,
-            val_mixed_in_train=False, test_mixed_in_val=False,
+            x16_edge=True, val_mixed_in_train=False, test_mixed_in_val=False,
             custom_hash=None, **kwargs):
 
         assert stage in ['train', 'val', 'trainval', 'test']
@@ -118,6 +118,7 @@ class BaseDataset(InMemoryDataset):
         self._stage = stage
         self.x32 = x32
         self.y_to_csr = y_to_csr
+        self.x16_edge = x16_edge
         self.on_device_transform = on_device_transform
         self.val_mixed_in_train = val_mixed_in_train
         self.test_mixed_in_val = test_mixed_in_val
@@ -409,7 +410,9 @@ class BaseDataset(InMemoryDataset):
         #  that they contain no '-1' empty neighborhoods, because if
         #  you load them for batching, the pyg reindexing mechanism will
         #  break indices will not index update
-        nag.save(cloud_path, x32=self.x32, y_to_csr=self.y_to_csr)
+        nag.save(
+            cloud_path, x32=self.x32, y_to_csr=self.y_to_csr,
+            x16_edge=self.x16_edge)
         del nag
 
     def read_single_raw_cloud(self, raw_cloud_path):

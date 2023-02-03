@@ -475,7 +475,7 @@ class Data(PyGData):
                 return False
         return True
 
-    def save(self, f, x32=True, y_to_csr=True):
+    def save(self, f, x32=True, y_to_csr=True, x16_edge=True):
         """Save Data to HDF5 file.
 
         :param f: h5 file path of h5py.File or h5py.Group
@@ -484,11 +484,13 @@ class Data(PyGData):
         :param y_to_csr: bool
             Convert 'y' to CSR format before saving. Only applies if
             'y' is a 2D histogram
+        :param x16_edge: bool
+            Convert edge_attr to 16-bit before saving.
         :return:
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'w') as file:
-                self.save(file, x32=x32, y_to_csr=y_to_csr)
+                self.save(file, x32=x32, y_to_csr=y_to_csr, x16_edge=x16_edge)
             return
 
         assert isinstance(f, (h5py.File, h5py.Group))
@@ -502,6 +504,8 @@ class Data(PyGData):
                 val.save(sg, x32=x32)
             elif k == 'rgb' and val.is_floating_point():
                 save_tensor((val * 255).byte(), f, k, x32=x32)
+            elif k == 'edge_attr':
+                save_tensor(val, f, k, x32=x32, x16=x16_edge)
             elif isinstance(val, torch.Tensor):
                 save_tensor(val, f, k, x32=x32)
             else:

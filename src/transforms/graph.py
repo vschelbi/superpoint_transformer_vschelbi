@@ -765,6 +765,10 @@ class OnTheFlyEdgeFeatures(Transform):
     edge-specific attributes that cannot be recovered from the
     corresponding source and target node attributes.
 
+    Accepts input edge_attr to be float16, to alleviate memory use and
+    accelerate data loading and transforms. Output edge_attr will,
+    however, be in float32.
+
     Optionally adds some edge features that can be recovered from the
     source and target node attributes.
 
@@ -889,11 +893,14 @@ def _on_the_fly_horizontal_edge_features(
     #   - se_std_dist: std subedge distance
     #   - se_angle_s: angle between source normal and mean subedge
     #   - se_angle_t: angle between target normal and mean subedge
-    se_mean_dist = data.edge_attr[:, 0]
-    se_min_dist = data.edge_attr[:, 1]
-    se_std_dist = data.edge_attr[:, 2]
-    se_angle_s = data.edge_attr[:, 3]
-    se_angle_t = data.edge_attr[:, 4]
+    # Precomputed edge features might be expressed in float16, so we
+    # convert them to float32 here
+    se_feat_precomputed = data.edge_attr.float()
+    se_mean_dist = se_feat_precomputed[:, 0]
+    se_min_dist = se_feat_precomputed[:, 1]
+    se_std_dist = se_feat_precomputed[:, 2]
+    se_angle_s = se_feat_precomputed[:, 3]
+    se_angle_t = se_feat_precomputed[:, 4]
 
     # Compute the distance and direction between the segments' centroids
     se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
