@@ -4,8 +4,7 @@ from time import time
 from typing import List
 import src
 from src.data import Data, Batch
-from src.utils import tensor_idx, has_duplicates, \
-    arange_interleave, fast_randperm, sizes_to_pointers
+from src.utils import tensor_idx, has_duplicates, sparse_sample
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from torch_scatter import scatter_sum
 
@@ -397,88 +396,10 @@ class NAG:
             indices. These indicate which of the output `low`-level
             sampling indices belong to which `high`-level segment
         """
-        assert 0 <= n_min <= n_max
-
-        # Get the number of elements of level 'low' contained in each
-        # element of level 'high'
-        sub_size = self.get_sub_size(high, low=low)
-
-        # Compute the number of points that will be sampled from each
-        # cluster, based on a heuristic
-        if n_max > 0:
-            # k * tanh(x / k) is bounded by k, is ~x for x~0 and starts
-            # saturating at x~k
-            n_samples = (n_max * torch.tanh(sub_size / n_max)).floor().long()
-        else:
-            # Fallback to sqrt sampling
-            n_samples = sub_size.sqrt().round().long()
-
-        # Make sure each cluster is sampled at least 'low' times and not
-        # sampled more than its size (we sample without replacements).
-        # If a cluster has less than 'n_min' elements, it will be
-        # entirely sampled (no randomness for sampling this cluster),
-        # which is why we apply clamp min and clamp max successively
-        n_samples = n_samples.clamp(min=n_min).clamp(max=sub_size)
-
-        # Sanity check
-        if src.is_debug_enabled():
-            assert n_samples.le(sub_size).all(), \
-                "Cannot sample more than the cluster sizes."
-
-        # Compute the level 'high' indices of the cluster each element
-        # of level 'low' belongs to, while maintaining corresponding
-        # indices of level 'low' elements
-        num_points_low = sub_size.sum()
-        point_index = torch.arange(num_points_low, device=self.device)
         super_index = self.get_super_index(high, low=low)
-
-        # If a mask is provided, only keep the corresponding points.
-        # This also requires updating the `sub_size` and `n_samples`
-        from src.utils import print_tensor_info
-        mask = tensor_idx(mask, device=self.device)
-        if mask.shape[0] > 0:
-            point_index = point_index[mask]
-            super_index = super_index[mask]
-            sub_size = scatter_sum(
-                torch.ones_like(super_index), super_index, dim=0,
-                dim_size=self.num_points[high])
-            n_samples = n_samples.clamp(max=sub_size)
-
-        # Sanity check
-        if src.is_debug_enabled():
-            assert n_samples.le(sub_size).all(), \
-                "Cannot sample more than the cluster sizes."
-
-        # TODO: IMPORTANT the randperm-sort approach here is a huge
-        #  BOTTLENECK for the sampling operation on CPU. Can we do any
-        #  better ?
-
-        # Shuffle the order of points
-        perm = fast_randperm(point_index.shape[0], device=self.device)
-        super_index = super_index[perm]
-        point_index = point_index[perm]
-
-        # Sort by super_index. Combined with the previous shuffling,
-        # this ensures the randomness in the points selected from each
-        # cluster
-        super_index, order = super_index.sort()
-        point_index = point_index[order]
-
-        # Build the indices of the points we will sample from
-        # point_index. Note this could easily be expressed with a for
-        # loop, but we need to use a vectorized formulation to ensure
-        # reasonable processing time
-        offset = sizes_to_pointers(sub_size[:-1])
-        idx_samples = point_index[arange_interleave(n_samples, start=offset)]
-
-        # Return here if sampling pointers are not required
-        if not return_pointers:
-            return idx_samples
-
-        # Compute the pointers
-        ptr_samples = sizes_to_pointers(n_samples)
-
-        return idx_samples, ptr_samples.contiguous()
+        return sparse_sample(
+            super_index, n_max=n_max, n_min=n_min, mask=mask,
+            return_pointers=return_pointers)
 
     def __repr__(self):
         info = [

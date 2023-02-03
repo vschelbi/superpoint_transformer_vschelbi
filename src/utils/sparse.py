@@ -1,11 +1,13 @@
 import torch
-from src.utils.tensor import is_dense, is_sorted, fast_repeat
+import src
+from src.utils.tensor import is_dense, is_sorted, fast_repeat, tensor_idx, \
+    arange_interleave, fast_randperm
 from torch_scatter import scatter_mean
 
 
 __all__ = [
     'indices_to_pointers', 'sizes_to_pointers', 'dense_to_csr', 'csr_to_dense',
-    'sparse_sort', 'sparse_sort_along_direction']
+    'sparse_sort', 'sparse_sort_along_direction', 'sparse_sample']
 
 
 def indices_to_pointers(indices: torch.LongTensor):
@@ -126,3 +128,107 @@ def sparse_sort_along_direction(src, index, direction, descending=False):
     _, perm = sparse_sort(projection, index, descending=descending)
 
     return src[perm], perm
+
+
+def sparse_sample(idx, n_max=32, n_min=1, mask=None, return_pointers=False):
+    """Compute indices to sample elements in a set of size `idx.shape`,
+    based on which segment they belong to in `idx`.
+
+    The sampling operation is run without replacement and each
+    segment is sampled at least `n_min` and at most `n_max` times,
+    within the limits allowed by its actual size.
+
+    Optionally, a `mask` can be passed to filter out some elements.
+
+    :param idx: LongTensor of size N
+        Segment indices for each of the N elements
+    :param n_max: int
+        Maximum number of elements to sample in each segment
+    :param n_min: int
+        Minimum number of elements to sample in each segment, within the
+        limits of its size (ie no oversampling)
+    :param mask: list, np.ndarray, torch.Tensor
+        Indicates a subset of elements to consider. This allows ignoring
+        some segments
+    :param return_pointers: bool
+        Whether pointers should be returned along with sampling
+        indices. These indicate which sampled element belongs to which
+        segment
+    """
+    assert 0 <= n_min <= n_max
+
+    # Initialization
+    device = idx.device
+    size = idx.bincount()
+    num_elements = size.sum()
+    num_segments = idx.max() + 1
+
+    # Compute the number of elements that will be sampled from each
+    # segment, based on a heuristic
+    if n_max > 0:
+        # k * tanh(x / k) is bounded by k, is ~x for x~0 and starts
+        # saturating at x~k
+        n_samples = (n_max * torch.tanh(size / n_max)).floor().long()
+    else:
+        # Fallback to sqrt sampling
+        n_samples = size.sqrt().round().long()
+
+    # Make sure each segment is sampled at least 'n_min' times and not
+    # sampled more than its size (we sample without replacements).
+    # If a segment has less than 'n_min' elements, it will be
+    # entirely sampled (no randomness for sampling this segment),
+    # which is why we successively apply clamp min and clamp max
+    n_samples = n_samples.clamp(min=n_min).clamp(max=size)
+
+    # Sanity check
+    if src.is_debug_enabled():
+        assert n_samples.le(size).all(), \
+            "Cannot sample more than the segment sizes."
+
+    # Prepare the sampled elements indices
+    sample_idx = torch.arange(num_elements, device=device)
+
+    # If a mask is provided, only keep the corresponding elements.
+    # This also requires updating the `size` and `n_samples`
+    mask = tensor_idx(mask, device=device)
+    if mask.shape[0] > 0:
+        sample_idx = sample_idx[mask]
+        idx = idx[mask]
+        size = idx.bincount(minlength=num_segments)
+        n_samples = n_samples.clamp(max=size)
+
+    # Sanity check
+    if src.is_debug_enabled():
+        assert n_samples.le(size).all(), \
+            "Cannot sample more than the segment sizes."
+
+    # TODO: IMPORTANT the randperm-sort approach here is a huge
+    #  BOTTLENECK for the sampling operation on CPU. Can we do any
+    #  better ?
+
+    # Shuffle the order of elements to introduce randomness
+    perm = fast_randperm(sample_idx.shape[0], device=device)
+    idx = idx[perm]
+    sample_idx = sample_idx[perm]
+
+    # Sort by idx. Combined with the previous shuffling,
+    # this ensures the randomness in the elements selected from each
+    # segment
+    idx, order = idx.sort()
+    sample_idx = sample_idx[order]
+
+    # Build the indices of the elements we will sample from
+    # sample_idx. Note this could easily be expressed with a for
+    # loop, but we need to use a vectorized formulation to ensure
+    # reasonable processing time
+    offset = sizes_to_pointers(size[:-1])
+    idx_samples = sample_idx[arange_interleave(n_samples, start=offset)]
+
+    # Return here if sampling pointers are not required
+    if not return_pointers:
+        return idx_samples
+
+    # Compute the pointers
+    ptr_samples = sizes_to_pointers(n_samples)
+
+    return idx_samples, ptr_samples.contiguous()
