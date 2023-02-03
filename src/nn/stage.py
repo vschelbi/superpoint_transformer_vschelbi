@@ -1,6 +1,7 @@
 import torch
 from torch import nn
-from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm
+from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm, \
+    RPEFFN
 from src.nn.pool import *
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
@@ -44,21 +45,39 @@ class Stage(nn.Module):
     """
 
     def __init__(
-            self, dim, num_blocks=1, in_mlp=None, out_mlp=None,
-            mlp_activation=nn.LeakyReLU(), mlp_norm=FastBatchNorm1d,
-            mlp_drop=None, pos_injection=CatInjection, pos_injection_x_dim=None,
-            cat_diameter=False, **transformer_kwargs):
+            self,
+            dim,
+            num_blocks=1,
+            num_heads=1,
+            in_mlp=None,
+            out_mlp=None,
+            mlp_activation=nn.LeakyReLU(),
+            mlp_norm=FastBatchNorm1d,
+            mlp_drop=None,
+            pos_injection=CatInjection,
+            pos_injection_x_dim=None,
+            cat_diameter=False,
+            qk_dim=8,
+            k_rpe=False,
+            q_rpe=False,
+            blocks_share_rpe=False,
+            heads_share_rpe=False,
+            **transformer_kwargs):
 
         super().__init__()
 
         self.dim = dim
         self.num_blocks = num_blocks
+        self.num_heads = num_heads
 
         # MLP to change input channel size
         if in_mlp is not None:
             assert in_mlp[-1] == dim
             self.in_mlp = MLP(
-                in_mlp, activation=mlp_activation, norm=mlp_norm, momentum=0.1,
+                in_mlp,
+                activation=mlp_activation,
+                norm=mlp_norm,
+                momentum=0.1,
                 drop=mlp_drop)
             in_dim = in_mlp[0]
         else:
@@ -69,16 +88,36 @@ class Stage(nn.Module):
         if out_mlp is not None:
             assert out_mlp[0] == dim
             self.out_mlp = MLP(
-                out_mlp, activation=mlp_activation, norm=mlp_norm, momentum=0.1,
+                out_mlp,
+                activation=mlp_activation,
+                norm=mlp_norm,
+                momentum=0.1,
                 drop=mlp_drop)
         else:
             self.out_mlp = None
 
         # Transformer blocks
         if num_blocks > 0:
+
+            # Build the RPE encoders here if shared across all blocks
+            blocks_k_rpe = _build_shared_rpe_encoders(
+                k_rpe, num_blocks, num_heads, 13, qk_dim, blocks_share_rpe,
+                heads_share_rpe)
+
+            blocks_q_rpe = _build_shared_rpe_encoders(
+                q_rpe, num_blocks, num_heads, 13, qk_dim, blocks_share_rpe,
+                heads_share_rpe)
+
             self.transformer_blocks = nn.ModuleList(
-                TransformerBlock(dim, **transformer_kwargs)
-                for _ in range(num_blocks))
+                TransformerBlock(
+                    dim,
+                    num_heads=num_heads,
+                    qk_dim=qk_dim,
+                    k_rpe=block_k_rpe,
+                    q_rpe=block_q_rpe,
+                    heads_share_rpe=heads_share_rpe,
+                    **transformer_kwargs)
+                for block_k_rpe, block_q_rpe in zip(blocks_k_rpe, blocks_q_rpe))
         else:
             self.transformer_blocks = None
 
@@ -105,8 +144,14 @@ class Stage(nn.Module):
         return self.dim
 
     def forward(
-            self, x, norm_index, pos=None, node_size=None, super_index=None,
-            edge_index=None, edge_attr=None):
+            self,
+            x,
+            norm_index,
+            pos=None,
+            node_size=None,
+            super_index=None,
+            edge_index=None,
+            edge_attr=None):
 
         # Append normalized coordinates to the node features
         if pos is not None:
@@ -131,7 +176,10 @@ class Stage(nn.Module):
         if self.transformer_blocks is not None:
             for block in self.transformer_blocks:
                 x, norm_index, edge_index = block(
-                    x, norm_index, edge_index=edge_index, pos=pos,
+                    x,
+                    norm_index,
+                    edge_index=edge_index,
+                    pos=pos,
                     edge_attr=edge_attr)
             # x = self.transformer_blocks(x, norm_index, edge_index=edge_index)
 
@@ -140,6 +188,33 @@ class Stage(nn.Module):
             x = self.out_mlp(x)
 
         return x, diameter
+
+
+def _build_shared_rpe_encoders(
+        rpe, num_blocks, num_heads, in_dim, out_dim, blocks_share, heads_share):
+    """Local helper to build RPE encoders for Stage. The main goal is to
+    make shared encoders construction easier.
+
+    Note that setting blocks_share=True will make all blocks use the
+    same RPE encoder. It is possible to set blocks_share=True and
+    heads_share=False to allow heads of different blocks of the Stage to
+    share their RPE encoders while allowing heads of the same block to
+    rely on different RPE encoders.
+    """
+    if not isinstance(rpe, bool):
+        assert blocks_share, \
+            "If anything else but a boolean is passed for the RPE encoder, " \
+            "this value will be passed to all blocks and blocks_share should " \
+            "be set to True."
+        return [rpe] * num_blocks
+
+    if not heads_share:
+        out_dim = out_dim * num_heads
+
+    if blocks_share and rpe:
+        return [RPEFFN(in_dim, out_dim=out_dim)] * num_blocks
+
+    return [rpe] * num_blocks
 
 
 class DownNFuseStage(Stage):
@@ -172,12 +247,26 @@ class DownNFuseStage(Stage):
         self.fusion = fusion_factory(fusion)
 
     def forward(
-            self, x1, x2, norm_index, pool_index, pos=None, node_size=None,
-            super_index=None, edge_index=None, edge_attr=None, num_super=None):
+            self,
+            x1,
+            x2,
+            norm_index,
+            pool_index,
+            pos=None,
+            node_size=None,
+            super_index=None,
+            edge_index=None,
+            edge_attr=None,
+            num_super=None):
         x = self.fusion(x1, self.pool(x2, index=pool_index, dim_size=num_super))
         return super().forward(
-            x, norm_index, pos=pos, node_size=node_size,
-            super_index=super_index, edge_index=edge_index, edge_attr=edge_attr)
+            x,
+            norm_index,
+            pos=pos,
+            node_size=node_size,
+            super_index=super_index,
+            edge_index=edge_index,
+            edge_attr=edge_attr)
 
 
 class UpNFuseStage(Stage):
@@ -206,12 +295,25 @@ class UpNFuseStage(Stage):
         self.fusion = fusion_factory(fusion)
 
     def forward(
-            self, x1, x2, norm_index, unpool_index, pos=None, node_size=None,
-            super_index=None, edge_index=None, edge_attr=None):
+            self,
+            x1,
+            x2,
+            norm_index,
+            unpool_index,
+            pos=None,
+            node_size=None,
+            super_index=None,
+            edge_index=None,
+            edge_attr=None):
         x = self.fusion(x1, self.unpool(x2, unpool_index))
         return super().forward(
-            x, norm_index, pos=pos, node_size=node_size,
-            super_index=super_index, edge_index=edge_index, edge_attr=edge_attr)
+            x,
+            norm_index,
+            pos=pos,
+            node_size=node_size,
+            super_index=super_index,
+            edge_index=edge_index,
+            edge_attr=edge_attr)
 
 
 class PointStage(Stage):
@@ -241,19 +343,34 @@ class PointStage(Stage):
     """
 
     def __init__(
-            self, in_mlp, mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d, mlp_drop=None, pos_injection=CatInjection,
-            pos_injection_x_dim=None, cat_diameter=False):
+            self,
+            in_mlp,
+            mlp_activation=nn.LeakyReLU(),
+            mlp_norm=FastBatchNorm1d,
+            mlp_drop=None,
+            pos_injection=CatInjection,
+            pos_injection_x_dim=None,
+            cat_diameter=False):
 
         assert len(in_mlp) > 1, \
             'in_mlp should be a list of channels of length >= 2'
 
         super().__init__(
-            in_mlp[-1], num_blocks=0, in_mlp=in_mlp, out_mlp=None,
-            mlp_activation=mlp_activation, mlp_norm=mlp_norm,
-            mlp_drop=mlp_drop, pos_injection=pos_injection, 
-            pos_injection_x_dim=pos_injection_x_dim, cat_diameter=cat_diameter)
+            in_mlp[-1],
+            num_blocks=0,
+            in_mlp=in_mlp,
+            out_mlp=None,
+            mlp_activation=mlp_activation,
+            mlp_norm=mlp_norm,
+            mlp_drop=mlp_drop,
+            pos_injection=pos_injection,
+            pos_injection_x_dim=pos_injection_x_dim,
+            cat_diameter=cat_diameter)
 
     def forward(self, x, pos, node_size=None, super_index=None, **kwargs):
         return super().forward(
-            x, None, pos=pos, node_size=node_size, super_index=super_index)
+            x,
+            None,
+            pos=pos,
+            node_size=node_size,
+            super_index=super_index)
