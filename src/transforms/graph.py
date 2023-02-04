@@ -74,7 +74,7 @@ class SegmentFeatures(Transform):
     remember to move them to the `x` attribute using `AddKeyToX` and
     `NAGAddKeyToX`.
 
-    :param n_max_node: int
+    :param n_max: int
         Maximum number of level-0 points to sample in each cluster to
         when building node features
     :param n_min: int
@@ -85,19 +85,19 @@ class SegmentFeatures(Transform):
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, n_max_node=32, n_min=5):
-        self.n_max_node = n_max_node
+    def __init__(self, n_max=32, n_min=5):
+        self.n_max = n_max
         self.n_min = n_min
 
     def _process(self, nag):
         for i_level in range(1, nag.num_levels):
             nag = _compute_cluster_features(
-                i_level, nag, n_max_node=self.n_max_node, n_min=self.n_min)
+                i_level, nag, n_max=self.n_max, n_min=self.n_min)
         return nag
 
 
 def _compute_cluster_features(
-        i_level, nag, n_max_node=32, n_min=5):
+        i_level, nag, n_max=32, n_min=5):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster features on level-0"
     assert nag[0].num_nodes < np.iinfo(np.uint32).max, \
@@ -114,7 +114,7 @@ def _compute_cluster_features(
     # Sample points among the clusters. These will be used to compute
     # cluster geometric features
     idx_samples, ptr_samples = nag.get_sampling(
-        high=i_level, low=0, n_max=n_max_node, n_min=n_min,
+        high=i_level, low=0, n_max=n_max, n_min=n_min,
         return_pointers=True)
 
     # Compute cluster geometric features
