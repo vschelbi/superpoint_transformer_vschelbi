@@ -2,20 +2,19 @@ import torch
 import numpy as np
 import itertools
 from scipy.spatial import Delaunay
-from torch_scatter import scatter, scatter_mean, scatter_std, scatter_min, \
-    segment_csr
+from torch_scatter import scatter_mean, scatter_std, scatter_min, segment_csr
 import src
-from src.data import Data, NAG
+from src.data import NAG
 from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    subedges, knn_1
+    subedges, clean_graph, cluster_radius_nn
 
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
-    'RadiusHorizontalGraph', 'ConnectIsolated', 'NodeSize',
-    'JitterEdgeFeatures']
+    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'ConnectIsolated',
+    'NodeSize', 'JitterEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
@@ -366,14 +365,14 @@ def _horizontal_graph_by_delaunay(
     # Remove duplicate edges. For now, (i,j) and (j,i) are considered
     # to be duplicates. We remove duplicate point-wise graph edges at
     # this point to mitigate memory use. The symmetric edges and edge
-    # features will be created at the very end. To remove duplicates,
-    # we leverage the Data.clean_graph() method
-    edges_point = Data(edge_index=edges_point).clean_graph().edge_index
+    # features will be created at the very end
+    edges_point, _ = clean_graph(edges_point)
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. Select only
     # inter-cluster edges and compute the corresponding source and
-    # target point and cluster indices.
+    # target point and cluster indices. This will only return superedges
+    # se (i, j) with i<j
     se, se_id, edges_point, _ = edge_to_superedge(edges_point, super_index)
 
     # Remove edges whose distance is too large. We pay articular
@@ -429,8 +428,12 @@ def _horizontal_graph_by_delaunay(
     data.edge_index = se
     data.is_artificial = is_isolated
 
-    # Compute edge features
-    data = _horizontal_edge_features(data, nag[0].pos, edges_point, se_id)
+    # Edge feature computation. NB: takes i<j edges as input and builds
+    # features for i<j edges only, to alleviate memory and compute
+    # impact of horizontal edges. Features for all i<j and i>j edges can
+    # be computed later using `_on_the_fly_horizontal_edge_features()`
+    data = _minimalistic_horizontal_edge_features(
+        data, nag[0].pos, edges_point, se_id)
 
     # Restore the i_level Data object, if need be
     nag._list[i_level] = data
@@ -469,10 +472,10 @@ class RadiusHorizontalGraph(Transform):
         Tolerance margin used for selecting subedges points and
         excluding segment points from potential subedge candidates
     :param chunk_size: int, float
-        Allows mitigating memory use when computing the subedges. If
-        `chunk_size > 1`, `edge_index` will be processed into chunks of
-        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
-        divided into parts of `edge_index.shape[1] * chunk_size` or less
+        Allows mitigating memory use. If `chunk_size > 1`,
+        `edge_index` will be processed into chunks of `chunk_size`. If
+        `0 < chunk_size < 1`, then `edge_index` will be divided into
+        parts of `edge_index.shape[1] * chunk_size` or less
     :param halfspace_filter: bool
         Whether the halfspace filtering should be applied
     :param bbox_filter: bool
@@ -489,8 +492,8 @@ class RadiusHorizontalGraph(Transform):
     _NO_REPR = ['chunk_size']
 
     def __init__(
-            self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=2,
-            margin=0.2, chunk_size=None, halfspace_filter=True,
+            self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=3,
+            margin=0.2, chunk_size=100000, halfspace_filter=True,
             bbox_filter=True, target_pc_flip=True, source_pc_sort=False):
         self.k_max = k_max
         self.gap = gap
@@ -505,10 +508,7 @@ class RadiusHorizontalGraph(Transform):
         self.source_pc_sort = source_pc_sort
 
     def _process(self, nag):
-        # Compute the horizontal graph, without edge features
-        nag = _horizontal_graph_by_radius(
-            nag, k_max=self.k_max, gap=self.gap, clean_graph=True)
-
+        # Convert parameters to list for each NAG level, if need be
         k_ratio = self.k_ratio if isinstance(self.k_ratio, list) \
             else [self.k_ratio] * (nag.num_levels - 1)
         k_min = self.k_min if isinstance(self.k_min, list) \
@@ -519,6 +519,11 @@ class RadiusHorizontalGraph(Transform):
             else [self.margin] * (nag.num_levels - 1)
         chunk_size = self.chunk_size if isinstance(self.chunk_size, list) \
             else [self.chunk_size] * (nag.num_levels - 1)
+
+        # Compute the horizontal graph, without edge features
+        nag = _horizontal_graph_by_radius(
+            nag, k_max=self.k_max, gap=self.gap, clean_graph=True,
+            cycles=cycles, chunk_size=chunk_size)
 
         # Compute the edge features, level by level
         for i_level, kr, km, cy, mg, cs in zip(
@@ -539,7 +544,7 @@ class RadiusHorizontalGraph(Transform):
         # edges later on (done in `_horizontal_edge_features`)
         edge_index, se_point_index, se_id = subedges(
             nag[0].pos, nag.get_super_index(i_level), nag[i_level].edge_index,
-            k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=False,
+            k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=True,
             margin=margin, halfspace_filter=self.halfspace_filter,
             bbox_filter=self.bbox_filter, target_pc_flip=self.target_pc_flip,
             source_pc_sort=self.source_pc_sort, chunk_size=chunk_size)
@@ -549,8 +554,11 @@ class RadiusHorizontalGraph(Transform):
         data.edge_index = edge_index
 
         # Edge feature computation. NB: takes i<j edges as input and
-        # builds features for both i<j and j>i edges
-        data = _horizontal_edge_features(
+        # builds features for i<j edges only, to alleviate memory and
+        # compute impact of horizontal edges. Features for all i<j and
+        # i>j edges can be computed later using
+        # `_on_the_fly_horizontal_edge_features()`
+        data = _minimalistic_horizontal_edge_features(
             data, nag[0].pos, se_point_index, se_id)
 
         # Restore the i_level Data object
@@ -559,7 +567,8 @@ class RadiusHorizontalGraph(Transform):
         return nag
 
 
-def _horizontal_graph_by_radius(nag, k_max=100, gap=0, clean_graph=True):
+def _horizontal_graph_by_radius(
+        nag, k_max=100, gap=0, clean_graph=True, cycles=3, chunk_size=None):
     """Search neighboring segments with points distant from `gap`or
     less.
 
@@ -572,27 +581,43 @@ def _horizontal_graph_by_radius(nag, k_max=100, gap=0, clean_graph=True):
         and b in B such that dist(a, b) < gap
     :param clean_graph: bool
         Whether the returned horizontal graph should be cleaned. If
-        True, Data.clean_graph() will be called and all edges will be
+        True, clean_graph() will be called and all edges will be
         expressed with source_index < target_index, self-loops and
         redundant edges will be removed. This may be necessary to
         alleviate memory consumption before computing edge features
+    :param cycles int
+        Number of iterations. Starting from a point X in set A, one
+        cycle accounts for searching the nearest neighbor, in A, of the
+        nearest neighbor of X in set B
+    :param chunk_size: int, float
+        Allows mitigating memory use when computing the subedges. If
+        `chunk_size > 1`, `edge_index` will be processed into chunks of
+        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
+        divided into parts of `edge_index.shape[1] * chunk_size` or less
     :return:
     """
     assert isinstance(nag, NAG)
     if not isinstance(k_max, list):
-        k_max = [k_max] * (nag.num_levels - 2)
+        k_max = [k_max] * (nag.num_levels - 1)
     if not isinstance(gap, list):
-        gap = [gap] * (nag.num_levels - 2)
+        gap = [gap] * (nag.num_levels - 1)
+    if not isinstance(cycles, list):
+        cycles = [cycles] * (nag.num_levels - 1)
+    if not isinstance(chunk_size, list):
+        chunk_size = [chunk_size] * (nag.num_levels - 1)
 
-    for i_level, k, g in zip(range(1, nag.num_levels), k_max, gap):
+    for i_level, k, g, cy, cs in zip(
+            range(1, nag.num_levels), k_max, gap, cycles, chunk_size):
         nag = _horizontal_graph_by_radius_for_single_level(
-            nag, i_level, k_max=k, gap=g, clean_graph=clean_graph)
+            nag, i_level, k_max=k, gap=g, clean_graph=clean_graph,
+            cycles=cy, chunk_size=cs)
 
     return nag
 
 
 def _horizontal_graph_by_radius_for_single_level(
-        nag, i_level, k_max=100, gap=0, clean_graph=True):
+        nag, i_level, k_max=100, gap=0, clean_graph=True, cycles=3,
+        chunk_size=100000):
     """
 
     :param nag:
@@ -600,6 +625,8 @@ def _horizontal_graph_by_radius_for_single_level(
     :param k_max:
     :param gap:
     :param clean_graph:
+    :param cycles:
+    :param chunk_size:
     :return:
     """
     assert isinstance(nag, NAG)
@@ -612,7 +639,6 @@ def _horizontal_graph_by_radius_for_single_level(
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
     num_nodes = data.num_nodes
-    device = nag.device
 
     # Remove any already-existing horizontal graph
     data.edge_index = None
@@ -626,41 +652,12 @@ def _horizontal_graph_by_radius_for_single_level(
     # Compute the super_index for level-0 points wrt the target level
     super_index = nag.get_super_index(i_level)
 
-    # Roughly estimate the diameter of each segment
-    bbox_low = scatter(nag[0].pos, super_index, dim=0, reduce='min')
-    bbox_high = scatter(nag[0].pos, super_index, dim=0, reduce='max')
-    # diam = ((bbox_high - bbox_low)**2).sum(dim=1).sqrt()
-    diam = (bbox_high - bbox_low).max(dim=1).values
-
-    # Conservative heuristic for the global search radius: we search the
-    # segments whose centroids are separated by the largest segment
-    # diameter plus the input gap. This approximates the true operation
-    # we would like to perform (but which is too costly): searching, for
-    # each segment, the segments with at least one point within gap.
-    # Obviously, the r_search may produce more neighbors than needed and
-    # some subsequent pruning will be needed
-    r_search = diam.max().item() + gap
-    neighbors, distances = knn_1(data.pos, k_max, r_max=r_search)
-
-    # Build the corresponding edge_index
-    source = torch.arange(
-        data.num_points, device=device).repeat_interleave(k_max)
-    target = neighbors.flatten()
-    edge_index = torch.vstack((source, target))
-    distances = distances.flatten()
-
-    # Trim edges based on the actual segment radii and not the
-    # overly-conservative maximum radius used for the search
-    r_segment = diam / 2
-    r_max_edge = r_segment[edge_index].sum(dim=0) + gap
-    in_gap_range = distances <= r_max_edge
-    edge_index = edge_index[:, in_gap_range]
-    distances = distances[in_gap_range]
-
-    # Trim edges where points are missing (ie -1 neighbor indices)
-    missing_point_edge = edge_index[1] == -1
-    edge_index = edge_index[:, ~missing_point_edge]
-    distances = distances[~missing_point_edge]
+    # Search neighboring clusters. If clean_graph is True, the output
+    # (i, j) edges are expressed such that i<j and without duplicates.
+    # This alleviates compute and memory use
+    edge_index, distances = cluster_radius_nn(
+        nag[0].pos, super_index, k_max=k_max, gap=gap, clean=clean_graph,
+        cycles=cycles, chunk_size=chunk_size)
 
     # Save the graph in the Data object
     data.edge_index = edge_index
@@ -673,7 +670,7 @@ def _horizontal_graph_by_radius_for_single_level(
     # Make the graph directed with only i<j nodes. This is temporary,
     # to alleviate edge features computation
     if clean_graph:
-        data.clean_graph()
+        data.clean_graph(reduce='min')
 
     # Store the updated Data object in the NAG
     nag._list[i_level] = data
@@ -681,7 +678,7 @@ def _horizontal_graph_by_radius_for_single_level(
     return nag
 
 
-def _horizontal_edge_features(data, points, se_point_index, se_id):
+def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     """Compute the features for horizontal edges, given the edge graph
     and the level-0 'subedges' making up each edge.
 
@@ -709,10 +706,18 @@ def _horizontal_edge_features(data, points, se_point_index, se_id):
     #  - mean dist of S->T along S/T normal (offset along the objects
     #    normals, eg offsets between steps)
 
-    device = data.device
-
     # Recover the edges between the segments
     se = data.edge_index
+
+    assert (se[0] < se[1]).all(), \
+        "Expects only i->j edges with i<j, so as to alleviate compute and " \
+        "memory impact of horizontal edges. j->i edge features can easily " \
+        "be reconstructed later with `_on_the_fly_horizontal_edge_features`. " \
+        "Consider using `src.utils.clean_graph()` before computing the features"
+    assert getattr(data, 'normal', None) is not None, \
+        "Expects input Data object to have a 'normal' attribute, holding the " \
+        "segment normal vectors. See `src.utils.scatter_pca` to efficiently " \
+        "compute PCA on segments"
 
     # Direction are the pointwise source->target vectors, based on which
     # we will compute superedge descriptors
@@ -722,72 +727,239 @@ def _horizontal_edge_features(data, points, se_point_index, se_id):
     # sqrt of the metric distance. This assumes coordinates are in meter
     # and that we are mostly interested in the range [1, 100]. Might
     # want to change this if your dataset is different
-    dist_sqrt = torch.linalg.norm(direction, dim=1).sqrt() / 10
+    dist = torch.linalg.norm(direction, dim=1)
 
-    # We can now use torch_scatter operations to compute superedge
-    # features
-    se_direction = scatter_mean(direction.cuda(), se_id.cuda(), dim=0).to(device)
+    # Compute mean, min and std subedge distance
+    se_mean_dist = scatter_mean(dist, se_id, dim=0).sqrt()
+    se_min_dist = scatter_min(dist, se_id, dim=0)[0].sqrt()
+    se_std_dist = scatter_std(dist, se_id, dim=0).sqrt()
+
+    # Compute the mean subedge direction
+    se_direction = scatter_mean(direction, se_id, dim=0)
     se_direction /= torch.linalg.norm(se_direction, dim=1).view(-1, 1)
-    se_dist = scatter_mean(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
-    se_min_dist = scatter_min(dist_sqrt.cuda(), se_id.cuda(), dim=0)[0].to(device)
-    se_std_dist = scatter_std(dist_sqrt.cuda(), se_id.cuda(), dim=0).to(device)
 
-    se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
-    se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1).sqrt() / 10
-
-    if getattr(data, 'normal', None) is not None:
-        se_normal_source = data.normal[se[0]]
-        se_normal_target = data.normal[se[1]]
-        se_normal_angle = (se_normal_source * se_normal_target).sum(dim=1).abs()
-        se_angle_source = (se_direction * se_normal_source).sum(dim=1).abs()
-        se_angle_target = (se_direction * se_normal_target).sum(dim=1).abs()
-    else:
-        se_normal_angle = torch.zeros_like(se_dist)
-        se_angle_source = torch.zeros_like(se_dist)
-        se_angle_target = torch.zeros_like(se_dist)
-
-    if getattr(data, 'log_length', None) is not None:
-        se_log_length_ratio = data.log_length[se[0]] - data.log_length[se[1]]
-    else:
-        se_log_length_ratio = torch.zeros_like(se_dist)
-
-    if getattr(data, 'log_surface', None) is not None:
-        se_log_surface_ratio = data.log_surface[se[0]] - data.log_surface[se[1]]
-    else:
-        se_log_surface_ratio = torch.zeros_like(se_dist)
-
-    if getattr(data, 'log_volume', None) is not None:
-        se_log_volume_ratio = data.log_volume[se[0]] - data.log_volume[se[1]]
-    else:
-        se_log_volume_ratio = torch.zeros_like(se_dist)
-
-    if getattr(data, 'log_size', None) is not None:
-        se_log_size_ratio = data.log_size[se[0]] - data.log_size[se[1]]
-    else:
-        se_log_size_ratio = torch.zeros_like(se_dist)
-
-    if getattr(data, 'is_artificial', None) is not None:
-        se_is_artificial = data.is_artificial[se[0]] | data.is_artificial[se[1]]
-    else:
-        se_is_artificial = torch.zeros_like(se_dist)
+    # Compute the angle between the mean edge direction and the segment
+    # normals
+    se_angle_s = (se_direction * data.normal[se[0]]).sum(dim=1).abs()
+    se_angle_t = (se_direction * data.normal[se[1]]).sum(dim=1).abs()
 
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source
     # direction now
-    se = torch.cat((se, se.flip(0)), dim=1)
     se_feat = torch.vstack([
-        torch.cat((se_dist, se_dist)),
-        torch.cat((se_min_dist, se_min_dist)),
-        torch.cat((se_std_dist, se_std_dist)),
-        torch.cat((se_centroid_dist, se_centroid_dist)),
-        torch.cat((se_normal_angle, se_normal_angle)),
-        torch.cat((se_angle_source, se_angle_target)),
-        torch.cat((se_angle_target, se_angle_source)),
-        torch.cat((se_log_length_ratio, -se_log_length_ratio)),
-        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),
-        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),
-        torch.cat((se_log_size_ratio, -se_log_size_ratio)),
-        torch.cat((se_is_artificial, se_is_artificial))]).T
+        se_mean_dist, se_min_dist, se_std_dist, se_angle_s, se_angle_t]).T
+
+    # Save superedges and superedge features in the Data object
+    data.edge_index = se
+    data.edge_attr = se_feat
+
+    return data
+
+
+class OnTheFlyEdgeFeatures(Transform):
+    """Compute edge features "on-the-fly" for all i->j and j->i
+    horizontal edges of the NAG levels except its first (ie the
+    0-level).
+
+    Expects only i->j edges with i<j as input, along with some
+    edge-specific attributes that cannot be recovered from the
+    corresponding source and target node attributes.
+
+    Accepts input edge_attr to be float16, to alleviate memory use and
+    accelerate data loading and transforms. Output edge_attr will,
+    however, be in float32.
+
+    Optionally adds some edge features that can be recovered from the
+    source and target node attributes.
+
+    Builds the j->i edges and corresponding features based on their i->j
+    counterparts.
+
+    Equips the output NAG with all i->j and j->i nodes and corresponding
+    features.
+
+    Note: this transform is intended to be called after all sampling
+    transforms, to mitigate compute and memory impact of horizontal
+    edges. Besides, it expects the input `Data.edge_attr` to hold 5
+    features precomputed with `_minimalistic_horizontal_edge_features`.
+
+    :param mean_dist:
+    :param min_dist:
+    :param std_dist:
+    :param angle_source:
+    :param angle_target:
+    :param centroid_direction:
+    :param centroid_dist:
+    :param normal_angle:
+    :param log_length:
+    :param log_surface:
+    :param log_volume:
+    :param log_size:
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(
+            self, mean_dist=True, min_dist=True, std_dist=True,
+            angle_source=True, angle_target=True, centroid_direction=True,
+            centroid_dist=True, normal_angle=True, log_length=True,
+            log_surface=True, log_volume=True, log_size=True):
+        self.mean_dist = mean_dist
+        self.min_dist = min_dist
+        self.std_dist = std_dist
+        self.angle_source = angle_source
+        self.angle_target = angle_target
+        self.centroid_direction = centroid_direction
+        self.centroid_dist = centroid_dist
+        self.normal_angle = normal_angle
+        self.log_length = log_length
+        self.log_surface = log_surface
+        self.log_volume = log_volume
+        self.log_size = log_size
+
+    def _process(self, nag):
+        for i_level in range(1, nag.num_levels):
+            nag._list[i_level] = _on_the_fly_horizontal_edge_features(
+                nag[i_level],
+                mean_dist=self.mean_dist,
+                min_dist=self.min_dist,
+                std_dist=self.std_dist,
+                angle_source=self.angle_source,
+                angle_target=self.angle_target,
+                centroid_direction=self.centroid_direction,
+                centroid_dist=self.centroid_dist,
+                normal_angle=self.normal_angle,
+                log_length=self.log_length,
+                log_surface=self.log_surface,
+                log_volume=self.log_volume,
+                log_size=self.log_size)
+        return nag
+
+
+def _on_the_fly_horizontal_edge_features(
+        data, mean_dist=True, min_dist=True, std_dist=True, angle_source=True,
+        angle_target=True, centroid_direction=True, centroid_dist=True,
+        normal_angle=True, log_length=True, log_surface=True, log_volume=True,
+        log_size=True):
+    """Compute all edges and edge features for a horizontal graph, given
+    the graph of (i, j) edges with i<j and some precomputed edge
+    attributes. For each edge, this will build additional edge features
+    from the node attributes, as well as the symmetric i>j edges and
+    corresponding features.
+
+    :param data:
+    :param mean_dist:
+    :param min_dist:
+    :param std_dist:
+    :param angle_source:
+    :param angle_target:
+    :param centroid_direction:
+    :param centroid_dist:
+    :param normal_angle:
+    :param log_length:
+    :param log_surface:
+    :param log_volume:
+    :param log_size:
+    :return:
+    """
+
+    # Recover the edges between the segments
+    se = data.edge_index
+
+    assert (se[0] < se[1]).all(), \
+        "Expects only i->j edges with i<j"
+    assert not normal_angle or getattr(data, 'normal', None) is not None, \
+        "Expects input Data to have a 'normal' attribute"
+    assert not log_length or getattr(data, 'log_length', None) is not None, \
+        "Expects input Data to have a 'log_length' attribute"
+    assert not log_surface or getattr(data, 'log_surface', None) is not None, \
+        "Expects input Data to have a 'log_surface' attribute"
+    assert not log_volume or getattr(data, 'log_volume', None) is not None, \
+        "Expects input Data to have a 'log_volume' attribute"
+    assert not log_size or getattr(data, 'log_size', None) is not None, \
+        "Expects input Data to have a 'log_size' attribute"
+    assert getattr(data, 'edge_attr', None) is not None \
+           and data.edge_attr.shape[1] == 5, \
+        "Expects input Data 'edge_attr' to hold a Ex5 tensor of edge features" \
+        " precomputed using `_minimalistic_horizontal_edge_features`: " \
+        "se_mean_dist, se_min_dist, se_std_dist, se_angle_s, se_angle_t"
+
+    # Recover already-existing features from the Data.edge_attr.
+    # IMPORTANT: these are assumed to have been generated using
+    # `_minimalistic_horizontal_edge_features` and to be the following:
+    #   - se_mean_dist: mean subedge distance
+    #   - se_min_dist: min subedge distance
+    #   - se_std_dist: std subedge distance
+    #   - se_angle_s: angle between source normal and mean subedge
+    #   - se_angle_t: angle between target normal and mean subedge
+    # Precomputed edge features might be expressed in float16, so we
+    # convert them to float32 here
+    se_feat_precomputed = data.edge_attr.float()
+    se_mean_dist = se_feat_precomputed[:, 0]
+    se_min_dist = se_feat_precomputed[:, 1]
+    se_std_dist = se_feat_precomputed[:, 2]
+    se_angle_s = se_feat_precomputed[:, 3]
+    se_angle_t = se_feat_precomputed[:, 4]
+
+    # Compute the distance and direction between the segments' centroids
+    se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
+    se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1)
+    se_centroid_direction /= se_centroid_dist.view(-1, 1)
+    se_centroid_dist = se_centroid_dist.sqrt()
+
+    # Compute some edge features based on segment attributes
+    if normal_angle and getattr(data, 'normal', None) is not None:
+        normal = data.normal
+        se_normal_angle = (normal[se[0]] * normal[se[1]]).sum(dim=1).abs()
+    else:
+        se_normal_angle = torch.zeros_like(se_centroid_dist)
+
+    if log_length and getattr(data, 'log_length', None) is not None:
+        se_log_length_ratio = data.log_length[se[0]] - data.log_length[se[1]]
+    else:
+        se_log_length_ratio = torch.zeros_like(se_centroid_dist)
+
+    if log_surface and getattr(data, 'log_surface', None) is not None:
+        se_log_surface_ratio = data.log_surface[se[0]] - data.log_surface[se[1]]
+    else:
+        se_log_surface_ratio = torch.zeros_like(se_centroid_dist)
+
+    if log_volume and getattr(data, 'log_volume', None) is not None:
+        se_log_volume_ratio = data.log_volume[se[0]] - data.log_volume[se[1]]
+    else:
+        se_log_volume_ratio = torch.zeros_like(se_centroid_dist)
+
+    if log_size and getattr(data, 'log_size', None) is not None:
+        se_log_size_ratio = data.log_size[se[0]] - data.log_size[se[1]]
+    else:
+        se_log_size_ratio = torch.zeros_like(se_centroid_dist)
+
+    # The superedges we have created so far are only oriented i->j
+    # oriented with i<j. We need to create the edges and corresponding
+    # features for the Target->Source direction now
+    se = torch.cat((se, se.flip(0)), dim=1)
+    se_feat = torch.vstack([                                           # 14 TOT
+        torch.cat((se_mean_dist, se_mean_dist)),                       # 1
+        torch.cat((se_min_dist, se_min_dist)),                         # 1
+        torch.cat((se_std_dist, se_std_dist)),                         # 1
+        torch.cat((se_angle_s, se_angle_t)),                           # 1
+        torch.cat((se_angle_t, se_angle_s)),                           # 1
+
+        torch.cat((se_centroid_direction, -se_centroid_direction)).T,  # 3
+        torch.cat((se_centroid_dist, se_centroid_dist)),               # 1
+        torch.cat((se_normal_angle, se_normal_angle)),                 # 1
+        torch.cat((se_log_length_ratio, -se_log_length_ratio)),        # 1
+        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),      # 1
+        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),        # 1
+        torch.cat((se_log_size_ratio, -se_log_size_ratio))]).T         # 1
+
+    # Only keep the required edge attributes
+    mask = torch.tensor([
+        mean_dist, min_dist, std_dist, angle_source, angle_target,
+        *[centroid_direction] * 3, centroid_dist, normal_angle, log_length,
+        log_surface, log_volume, log_size], device=data.device)
+    se_feat = se_feat[:, mask]
 
     # Save superedges and superedge features in the Data object
     data.edge_index = se

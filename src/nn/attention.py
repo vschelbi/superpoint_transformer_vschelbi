@@ -64,12 +64,12 @@ class SelfAttentionBlock(nn.Module):
         if not isinstance(k_rpe, bool):
             self.k_rpe = k_rpe
         else:
-            self.k_rpe = RPEFFN(13, out_dim=rpe_dim) if k_rpe else None
+            self.k_rpe = RPEFFN(14, out_dim=rpe_dim) if k_rpe else None
 
         if not isinstance(q_rpe, bool):
             self.q_rpe = q_rpe
         else:
-            self.q_rpe = RPEFFN(13, out_dim=rpe_dim) if q_rpe else None
+            self.q_rpe = RPEFFN(14, out_dim=rpe_dim) if q_rpe else None
 
         if c_rpe:
             raise NotImplementedError
@@ -144,9 +144,7 @@ class SelfAttentionBlock(nn.Module):
         #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
         #  - scalar rpe, vector rpe (see Stratified Transformer)
         if self.k_rpe is not None:
-            r_pos = torch.cat(
-                (pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
-            rpe = self.k_rpe(r_pos)
+            rpe = self.k_rpe(edge_attr)
 
             # Expand RPE to all heads if heads share the RPE encoder
             if self.heads_share_rpe:
@@ -155,9 +153,7 @@ class SelfAttentionBlock(nn.Module):
             k = k + rpe.view(E, H, -1)
 
         if self.q_rpe is not None:
-            r_pos = torch.cat(
-                (pos[edge_index[0]] - pos[edge_index[1]], edge_attr), dim=1)
-            rpe = self.q_rpe(r_pos)
+            rpe = self.q_rpe(edge_attr)
 
             # Expand RPE to all heads if heads share the RPE encoder
             if self.heads_share_rpe:

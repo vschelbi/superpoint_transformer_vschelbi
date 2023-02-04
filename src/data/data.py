@@ -8,12 +8,11 @@ from time import time
 from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from torch_geometric.utils import coalesce, remove_self_loops
 import src
 from src.data.cluster import Cluster, ClusterBatch
 from src.utils import tensor_idx, is_dense, has_duplicates, \
     isolated_nodes, knn_2, save_tensor, load_tensor, save_dense_to_csr, \
-    load_csr_to_dense
+    load_csr_to_dense, clean_graph
 
 
 __all__ = ['Data', 'Batch']
@@ -436,32 +435,13 @@ class Data(PyGData):
 
         return self
 
-    def clean_graph(self):
+    def clean_graph(self, reduce='mean'):
         """Remove self loops, redundant edges and undirected edges."""
         assert self.has_edges
 
-        # Recover self edges and edge attributes
-        edge_index = self.edge_index
-        edge_attr = self.edge_attr if self.edge_attr is not None else None
+        edge_index, edge_attr = clean_graph(
+            self.edge_index, edge_attr=self.edge_attr, reduce=reduce)
 
-        # Search for undirected edges, ie edges with (i,j) and (j,i)
-        # both present in edge_index. Flip (j,i) into (i,j) to make them
-        # redundant
-        s_larger_t = edge_index[0] > edge_index[1]
-        edge_index[:, s_larger_t] = edge_index[:, s_larger_t].flip(0)
-
-        # Sort edges by row and remove duplicates
-        if edge_attr is None:
-            edge_index = coalesce(edge_index)
-        else:
-            edge_index, edge_attr = coalesce(
-                edge_index, edge_attr=edge_attr, reduce='mean')
-
-        # Remove self loops
-        edge_index, edge_attr = remove_self_loops(
-            edge_index, edge_attr=edge_attr)
-
-        # Save new graph in self attributes
         self.edge_index = edge_index
         self.edge_attr = edge_attr
 
@@ -495,7 +475,7 @@ class Data(PyGData):
                 return False
         return True
 
-    def save(self, f, x32=True, y_to_csr=True):
+    def save(self, f, x32=True, y_to_csr=True, x16_edge=True):
         """Save Data to HDF5 file.
 
         :param f: h5 file path of h5py.File or h5py.Group
@@ -504,11 +484,13 @@ class Data(PyGData):
         :param y_to_csr: bool
             Convert 'y' to CSR format before saving. Only applies if
             'y' is a 2D histogram
+        :param x16_edge: bool
+            Convert edge_attr to 16-bit before saving.
         :return:
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'w') as file:
-                self.save(file, x32=x32, y_to_csr=y_to_csr)
+                self.save(file, x32=x32, y_to_csr=y_to_csr, x16_edge=x16_edge)
             return
 
         assert isinstance(f, (h5py.File, h5py.Group))
@@ -522,6 +504,8 @@ class Data(PyGData):
                 val.save(sg, x32=x32)
             elif k == 'rgb' and val.is_floating_point():
                 save_tensor((val * 255).byte(), f, k, x32=x32)
+            elif k == 'edge_attr':
+                save_tensor(val, f, k, x32=x32, x16=x16_edge)
             elif isinstance(val, torch.Tensor):
                 save_tensor(val, f, k, x32=x32)
             else:

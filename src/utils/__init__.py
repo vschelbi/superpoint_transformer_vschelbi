@@ -22,3 +22,4 @@ from .multiprocessing import *
 from .wandb import *
 from .parameter import *
 from .graph import *
+from .color import *

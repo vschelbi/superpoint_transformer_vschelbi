@@ -1,7 +1,7 @@
 import torch
 import math
 from torch_scatter import scatter_min, scatter_max, scatter_mean
-from torch_geometric.utils import coalesce
+from torch_geometric.utils import coalesce, remove_self_loops
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils.tensor import arange_interleave
 from src.utils.geometry import base_vectors_3d
@@ -12,7 +12,8 @@ from src.utils.edge import edge_wise_points
 
 
 __all__ = [
-    'is_pyg_edge_format', 'isolated_nodes', 'edge_to_superedge', 'subedges']
+    'is_pyg_edge_format', 'isolated_nodes', 'edge_to_superedge', 'subedges',
+    'clean_graph']
 
 
 def is_pyg_edge_format(edge_index):
@@ -80,8 +81,8 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
 
 
 def subedges(
-        points, index, edge_index, k_ratio=0.2, k_min=20, cycles=2,
-        pca_on_cpu=False, margin=0.2, halfspace_filter=True, bbox_filter=True,
+        points, index, edge_index, k_ratio=0.2, k_min=20, cycles=3,
+        pca_on_cpu=True, margin=0.2, halfspace_filter=True, bbox_filter=True,
         target_pc_flip=True, source_pc_sort=False, chunk_size=None):
     """Compute the subedges making up each edge between segments. These
     are needed for superedge features computation. This approach relies
@@ -110,7 +111,7 @@ def subedges(
         segments
     :param pca_on_cpu:
         Whether PCA should be computed on CPU if need be. Should be kept
-        as False
+        as True
     :param margin:
         Tolerance margin used for selecting subedges points and
         excluding segment points from potential subedge candidates
@@ -306,6 +307,8 @@ def subedges(
     # Local helper to compute, for each edge, the first eigen vector of
     # the selected subedge points for the source --target,
     # respectively-- segment
+    # TODO: scatter_pca is the bottleneck of subedges(), we could
+    #  accelerate things by randomly sampling in the clusters
     def first_component(source=True):
         if source:
             X_points, X_uid = S_points, S_uid
@@ -356,3 +359,29 @@ def subedges(
     ST_uid = S_uid
 
     return edge_index, ST_pairs, ST_uid
+
+
+def clean_graph(edge_index, edge_attr=None, reduce='mean'):
+    """Remove self loops, redundant edges and undirected edges. This
+    considers (i, j) and (j, i) edges to be the same. Returned edges
+    edges are expressed with i<j by default and duplicates are
+    discarded.
+    """
+    # Search for undirected edges, ie edges with (i,j) and (j,i)
+    # both present in edge_index. Flip (j,i) into (i,j) to make them
+    # redundant
+    s_larger_t = edge_index[0] > edge_index[1]
+    edge_index[:, s_larger_t] = edge_index[:, s_larger_t].flip(0)
+
+    # Sort edges by row and remove duplicates
+    if edge_attr is None:
+        edge_index = coalesce(edge_index)
+    else:
+        edge_index, edge_attr = coalesce(
+            edge_index, edge_attr=edge_attr, reduce=reduce)
+
+    # Remove self loops
+    edge_index, edge_attr = remove_self_loops(
+        edge_index, edge_attr=edge_attr)
+
+    return edge_index, edge_attr

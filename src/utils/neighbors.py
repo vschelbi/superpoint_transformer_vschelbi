@@ -1,11 +1,14 @@
 import torch
 import src
 from src.partition.FRNN import frnn
+from torch_scatter import scatter
+from torch_geometric.utils import coalesce
+from src.utils.scatter import scatter_nearest_neighbor
 
 
 __all__ = [
     'knn_1', 'knn_2', 'inliers_split', 'outliers_split',
-    'inliers_outliers_splits']
+    'inliers_outliers_splits', 'cluster_radius_nn']
 
 
 def knn_1(
@@ -266,3 +269,117 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
     distances[idx_partial] = distances_partial
 
     return neighbors, distances
+
+
+def cluster_radius_nn(
+        x_points, idx, k_max=100, gap=0, clean=True, cycles=3,
+        chunk_size=100000):
+    """Compute the radius neighbors of clusters. Two clusters are
+    considered neighbors if 2 of their points are distant of `gap` of
+    less.
+
+    The underlying strategy searches the cluster centroids within a
+    certain radius, based each cluster's radius and the chosen `gap`.
+    This approach is a proxy to avoid the actual computation of all
+    pointwise distances.
+
+    :param x_points:
+    :param idx:
+    :param k_max:
+    :param gap:
+    :param clean bool
+        If True, the output `edge_index` will be cleaned with
+        `clean_graph`. This will express all edges (i, j) so that with
+        i<j, remove duplicates and self-loops. This may save compute
+        and memory
+    :param cycles int
+        Number of iterations. Starting from a point X in set A, one
+        cycle accounts for searching the nearest neighbor, in A, of the
+        nearest neighbor of X in set B
+    :param chunk_size: int, float
+        Allows mitigating memory use when computing the neighbors. If
+        `chunk_size > 1`, `edge_index` will be processed into chunks of
+        `chunk_size`. If `0 < chunk_size < 1`, then `edge_index` will be
+        divided into parts of `edge_index.shape[1] * chunk_size` or less
+    :return:
+    """
+    device = x_points.device
+
+    # Roughly estimate the diameter and center of each segment. Note we
+    # do not use the centroid (center of mass) but rather the center of
+    # the bounding box
+    bbox_low = scatter(x_points, idx, dim=0, reduce='min')
+    bbox_high = scatter(x_points, idx, dim=0, reduce='max')
+    diam = (bbox_high - bbox_low).max(dim=1).values
+    center = (bbox_high + bbox_low) / 2
+
+    # Conservative heuristic for the global search radius: we search the
+    # segments whose centroids are separated by the largest segment
+    # diameter plus the input gap. This approximates the true operation
+    # we would like to perform (but which is too costly): searching, for
+    # each segment, the segments with at least one point within gap.
+    # Obviously, the r_search may produce more neighbors than needed and
+    # some subsequent pruning will be needed
+    r_search = diam.max().item() + gap
+    neighbors, distances = knn_1(center, k_max, r_max=r_search)
+
+    # Build the corresponding edge_index
+    num_clusters = idx.max() + 1
+    source = torch.arange(num_clusters, device=device).repeat_interleave(k_max)
+    target = neighbors.flatten()
+    edge_index = torch.vstack((source, target))
+    distances = distances.flatten()
+
+    # Trim edges based on the actual segment radii and not the
+    # overly-conservative maximum radius used for the search. For this
+    # step, we use a gap of `sqrt(3) * gap` to account for some edge
+    # case where two 3D boxes touch each other by their corners. This
+    # avoids removing neighbors too aggressively before the next step
+    # TODO: for some reason, this trimming does not remove as many
+    #  neighbors as I'd thought, so I need to call
+    #  `scatter_nearest_neighbor` afterwards. There must be something
+    #  wrong in the `r_max_edge` or the `distances` here. Solving this
+    #  is no priority but could maybe avoid the call to
+    #  `scatter_nearest_neighbor`
+    r_segment = diam / 2
+    r_max_edge = r_segment[edge_index].sum(dim=0) + 1.732 * gap
+    in_gap_range = distances <= r_max_edge
+    edge_index = edge_index[:, in_gap_range]
+    distances = distances[in_gap_range]
+
+    # Trim edges where points are missing (ie -1 neighbor indices)
+    missing_point_edge = edge_index[1] == -1
+    edge_index = edge_index[:, ~missing_point_edge]
+    distances = distances[~missing_point_edge]
+
+    # Express all edges (i, j) such that i<j, remove duplicates and
+    # self-loops. This is required before computing the actual nearest
+    # points between all cluster pairs. Since this operation is so
+    # costly, we first built on a coarse neighborhood edge_index to
+    # alleviate compute and memory cost
+    if clean:
+        from src.utils import clean_graph
+        edge_index, distances = clean_graph(
+            edge_index, edge_attr=distances, reduce='min')
+    # Coalesce edges to remove duplicates
+    else:
+        edge_index, distances = coalesce(
+            edge_index, edge_attr=distances, reduce='min')
+
+    # For each cluster pair in edge_index, compute (approximately) the
+    # two closest points (coined "anchors" here). The heuristic used
+    # here to find those points runs in O(E) with E the number of
+    # edges, which is O(N) with N the number of points. This is a
+    # workaround for the actual anchor points search, which is O(N²)
+    # TODO: scatter_nearest_neighbor is the bottleneck of cluster_nn_radius(),
+    #  we could accelerate things by randomly sampling in the clusters
+    anchors = scatter_nearest_neighbor(
+        x_points, idx, edge_index, cycles=cycles, chunk_size=chunk_size)[1]
+    d_nn = torch.linalg.norm(x_points[anchors[0]] - x_points[anchors[1]], dim=1)
+
+    # Trim edges wrt the anchor points distance
+    in_gap_range = d_nn <= gap
+    edge_index = edge_index[:, in_gap_range]
+    distances = d_nn[in_gap_range]
+
+    return edge_index, distances

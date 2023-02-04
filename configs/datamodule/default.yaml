@@ -3,6 +3,7 @@ _target_: null
 data_dir: ${paths.data_dir}
 x32: True
 y_to_csr: True
+x16_edge: True
 
 # Number of classes must be specified to help instantiating the model.
 # Concretely, num_classes here will be passed to the DataModule and the

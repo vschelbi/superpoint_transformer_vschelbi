@@ -51,7 +51,7 @@ def host_data_root():
     return DATA_ROOT
 
 
-def save_tensor(x, f, key, x32=True):
+def save_tensor(x, f, key, x32=True, x16=False):
     """Save torch.Tensor to HDF5 file.
 
     :param x: 2D torch.Tensor
@@ -60,16 +60,18 @@ def save_tensor(x, f, key, x32=True):
         h5py.Dataset key under which to save the tensor
     :param x32: bool
         Convert 64-bit data to 32-bit before saving.
+    :param x16: bool
+        Convert 64-bit and 32-bit data to 16-bit before saving.
     :return:
     """
     if not isinstance(f, (h5py.File, h5py.Group)):
         with h5py.File(f, 'w') as file:
-            save_tensor(x, file, key, x32=x32)
+            save_tensor(x, file, key, x32=x32, x16=x16)
         return
 
     assert isinstance(x, torch.Tensor)
 
-    d = numpyfy(x, x32=x32)
+    d = numpyfy(x, x32=x32, x16=x16)
     f.create_dataset(key, data=d, dtype=d.dtype)
 
 
@@ -101,9 +103,9 @@ def load_tensor(f, key=None, idx=None):
     else:
         x = torch.from_numpy(f[:])[idx]
 
-    # By default, convert int32 to int64, might cause issues for
-    # tensor indexing otherwise
-    if x is not None and x.dtype == torch.int32:
+    # By default, convert int16 and int32 to int64, might cause issues
+    # for tensor indexing otherwise
+    if x is not None and x.dtype in [torch.int16, torch.int32]:
         x = x.long()
 
     return x
