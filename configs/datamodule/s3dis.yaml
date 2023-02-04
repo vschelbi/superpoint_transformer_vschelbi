@@ -101,7 +101,7 @@ pre_transform:
         keys: ['pos_room']
     - transform: SegmentFeatures
       params:
-        n_max_node: 32
+        n_max: 32
         n_min: 5
 #    - transform: DelaunayHorizontalGraph
 #      params:

@@ -89,7 +89,7 @@ pre_transform:
         device: 'cuda'
     - transform: SegmentFeatures
       params:
-        n_max_node: 32
+        n_max: 32
         n_min: 5
 #    - transform: DelaunayHorizontalGraph
 #      params:
