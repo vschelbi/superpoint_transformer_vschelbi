@@ -520,8 +520,8 @@ class SampleEdges(Transform):
 
     def __init__(self, level='1+', n_min=16, n_max=32):
         assert isinstance(level, (int, str))
-        assert isinstance(n_min, int)
-        assert isinstance(n_max, int)
+        assert isinstance(n_min, (int, list))
+        assert isinstance(n_max, (int, list))
         self.level = level
         self.n_min = n_min
         self.n_max = n_max
@@ -538,20 +538,23 @@ class SampleEdges(Transform):
         level_n_min = [-1] * nag.num_levels
         level_n_max = [-1] * nag.num_levels
 
-        if isinstance(self.level, int):
-            level_n_min[self.level] = self.n_min
-            level_n_max[self.level] = self.n_max
-        elif self.level == 'all':
-            level_n_min = [self.n_min] * nag.num_levels
-            level_n_max = [self.n_max] * nag.num_levels
+        if self.level == 'all':
+            level_n_min = self.n_min if isinstance(self.n_min, list) \
+                else [self.n_min] * nag.num_levels
+            level_n_max = self.n_max if isinstance(self.n_max, list) \
+                else [self.n_max] * nag.num_levels
         elif self.level[-1] == '+':
             i = int(self.level[:-1])
-            level_n_min[i:] = [self.n_min] * (nag.num_levels - i)
-            level_n_max[i:] = [self.n_max] * (nag.num_levels - i)
+            level_n_min[i:] = self.n_min if isinstance(self.n_min, list) \
+                else [self.n_min] * (nag.num_levels - i)
+            level_n_max[i:] = self.n_max if isinstance(self.n_max, list) \
+                else [self.n_max] * (nag.num_levels - i)
         elif self.level[-1] == '-':
             i = int(self.level[:-1])
-            level_n_min[:i] = [self.n_min] * i
-            level_n_max[:i] = [self.n_max] * i
+            level_n_min[:i] = self.n_min if isinstance(self.n_min, list) \
+                else [self.n_min] * i
+            level_n_max[:i] = self.n_max if isinstance(self.n_max, list) \
+                else [self.n_max] * i
         else:
             raise ValueError(f'Unsupported level={self.level}')
 
