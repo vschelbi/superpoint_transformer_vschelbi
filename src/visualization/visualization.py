@@ -4,7 +4,7 @@ import os.path as osp
 import plotly.graph_objects as go
 from src.data import Data, NAG, Cluster
 from src.transforms import GridSampling3D, SaveOriginalPosId
-from src.utils.tensor import fast_randperm
+from src.utils import fast_randperm, to_trimmed
 from torch_scatter import scatter_mean
 from src.utils.color import *
 
@@ -472,15 +472,14 @@ def visualize_3d(
 
         # Recover the superedge source and target positions
         se = input[i_level + 1].edge_index
+        se_attr = input[i_level + 1].edge_attr
 
-        # Drawn superedges are assumed to be undirected here, so we
-        # consider (i, j) and (j, i) to be duplicates. By construction,
-        # we assume all superedges are represented in both directions in
-        # a NAG (this assumption does not hold for drawing any type of
-        # directed graph, obviously). Due to this, we can easily remove
-        # duplicate superedges by only keeping egdes such that i < j
-        edge_mask = se[0] < se[1]
-        se = se[:, edge_mask]
+        # Since we can only draw one edge direction (they would overlap
+        # otherwise), we can trim the graph to only keep one direction
+        # for each undirected edge pair. However, this requires picking
+        # one direction for the edge attributes to we ARBITRARILY TAKE
+        # THE MAX EDGE FEATURE for each undirected edge
+        se, se_attr = to_trimmed(se, edge_attr=se_attr, reduce='max')
 
         # Recover corresponding source and target coordinates using the
         # previously-computed 'super_pos' cluster centroid positions
@@ -492,7 +491,7 @@ def visualize_3d(
         edges[::3] = s_pos
         edges[1::3] = t_pos
 
-        if h_edge_attr and input[i_level + 1].edge_attr is not None:
+        if h_edge_attr and se_attr is not None:
 
             # Recover edge features and convert them to RGB colors. NB:
             # edge features are assumed to be in [0, 1] or [-1, 1].
@@ -501,8 +500,7 @@ def visualize_3d(
             # implies that features are either direction-independent or
             # that the edge direction only changes the sign of the
             # feature
-            edge_attr = input[i_level + 1].edge_attr[edge_mask].abs()
-            colors = feats_to_rgb(edge_attr, normalize=True)
+            colors = feats_to_rgb(se_attr.abs(), normalize=True)
             colors = rgb_to_plotly_rgb(colors)
             colors = np.repeat(colors, 3)
             edge_width = point_size if h_edge_width is None else h_edge_width

@@ -74,11 +74,11 @@ class CutPursuitPartition(Transform):
         assert isinstance(self.spatial_weight, (int, float, list)), \
             "Expected a scalar or a List"
 
-        # Remove self loops, redundant edges and undirected edges
+        # Trim the graph
         # TODO: calling this on the level-0 adjacency graph is a bit sluggish
-        # but still saves partition time overall. May be worth finding a
-        # quick way of removing self loops and redundant edges...
-        data = data.clean_graph()
+        #  but still saves partition time overall. May be worth finding a
+        #  quick way of removing self loops and redundant edges...
+        data = data.to_trimmed()
 
         # Initialize the hierarchical partition parameters. In particular,
         # prepare the output as list of Data objects that will be stored in
@@ -181,8 +181,8 @@ class CutPursuitPartition(Transform):
                 pos=pos, x=x, edge_index=edge_index, edge_attr=edge_attr,
                 sub=Cluster(pointer, value), node_size=node_size_new)
 
-            # Remove self loops, redundant edges and undirected edges
-            d2 = d2.clean_graph()
+            # Trim the graph
+            d2 = d2.to_trimmed()
 
             # If some nodes are isolated in the graph, connect them to
             # their nearest neighbors, so their absence of connectivity
