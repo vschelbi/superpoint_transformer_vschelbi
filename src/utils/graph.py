@@ -10,7 +10,6 @@ from src.utils.sparse import sizes_to_pointers, sparse_sort, \
 from src.utils.scatter import scatter_pca, scatter_nearest_neighbor
 from src.utils.edge import edge_wise_points
 
-
 __all__ = [
     'is_pyg_edge_format', 'isolated_nodes', 'edge_to_superedge', 'subedges',
     'to_trimmed', 'is_trimmed']
@@ -394,6 +393,8 @@ def to_trimmed(edge_index, edge_attr=None, reduce='mean'):
     edge_index, edge_attr = remove_self_loops(
         edge_index, edge_attr=edge_attr)
 
+    if edge_attr is None:
+        return edge_index
     return edge_index, edge_attr
 
 
@@ -412,5 +413,5 @@ def is_trimmed(edge_index, return_trimmed=False):
     edge_index_trimmed = to_trimmed(edge_index)
     trimmed = edge_index.shape == edge_index_trimmed.shape
     if return_trimmed:
-      return trimmed, edge_index_trimmed
+        return trimmed, edge_index_trimmed
     return trimmed
