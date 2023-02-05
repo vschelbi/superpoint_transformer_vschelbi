@@ -272,7 +272,7 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
 
 
 def cluster_radius_nn(
-        x_points, idx, k_max=100, gap=0, clean=True, cycles=3,
+        x_points, idx, k_max=100, gap=0, trim=True, cycles=3,
         chunk_size=100000):
     """Compute the radius neighbors of clusters. Two clusters are
     considered neighbors if 2 of their points are distant of `gap` of
@@ -287,11 +287,9 @@ def cluster_radius_nn(
     :param idx:
     :param k_max:
     :param gap:
-    :param clean bool
-        If True, the output `edge_index` will be cleaned with
-        `clean_graph`. This will express all edges (i, j) so that with
-        i<j, remove duplicates and self-loops. This may save compute
-        and memory
+    :param trim bool
+        If True, the output `edge_index` will be trimmed using
+        `to_trimmed`, to save compute and memory
     :param cycles int
         Number of iterations. Starting from a point X in set A, one
         cycle accounts for searching the nearest neighbor, in A, of the
@@ -352,14 +350,13 @@ def cluster_radius_nn(
     edge_index = edge_index[:, ~missing_point_edge]
     distances = distances[~missing_point_edge]
 
-    # Express all edges (i, j) such that i<j, remove duplicates and
-    # self-loops. This is required before computing the actual nearest
-    # points between all cluster pairs. Since this operation is so
-    # costly, we first built on a coarse neighborhood edge_index to
+    # Trim teh graph. This is required before computing the actual
+    # nearest points between all cluster pairs. Since this operation is
+    # so costly, we first built on a coarse neighborhood edge_index to
     # alleviate compute and memory cost
-    if clean:
-        from src.utils import clean_graph
-        edge_index, distances = clean_graph(
+    if trim:
+        from src.utils import to_trimmed
+        edge_index, distances = to_trimmed(
             edge_index, edge_attr=distances, reduce='min')
     # Coalesce edges to remove duplicates
     else:

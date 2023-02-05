@@ -8,8 +8,7 @@ from src.data import NAG
 from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    subedges, clean_graph, cluster_radius_nn
-
+    subedges, to_trimmed, cluster_radius_nn, is_trimmed
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
@@ -366,13 +365,12 @@ def _horizontal_graph_by_delaunay(
     # to be duplicates. We remove duplicate point-wise graph edges at
     # this point to mitigate memory use. The symmetric edges and edge
     # features will be created at the very end
-    edges_point, _ = clean_graph(edges_point)
+    edges_point, _ = to_trimmed(edges_point)
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. Select only
     # inter-cluster edges and compute the corresponding source and
-    # target point and cluster indices. This will only return superedges
-    # se (i, j) with i<j
+    # target point and cluster indices
     se, se_id, edges_point, _ = edge_to_superedge(edges_point, super_index)
 
     # Remove edges whose distance is too large. We pay articular
@@ -428,10 +426,9 @@ def _horizontal_graph_by_delaunay(
     data.edge_index = se
     data.is_artificial = is_isolated
 
-    # Edge feature computation. NB: takes i<j edges as input and builds
-    # features for i<j edges only, to alleviate memory and compute
-    # impact of horizontal edges. Features for all i<j and i>j edges can
-    # be computed later using `_on_the_fly_horizontal_edge_features()`
+    # Edge feature computation. NB: operates on trimmed graphs only.
+    # Features for all undirected edges can be computed later using
+    # `_on_the_fly_horizontal_edge_features()`
     data = _minimalistic_horizontal_edge_features(
         data, nag[0].pos, edges_point, se_id)
 
@@ -522,7 +519,7 @@ class RadiusHorizontalGraph(Transform):
 
         # Compute the horizontal graph, without edge features
         nag = _horizontal_graph_by_radius(
-            nag, k_max=self.k_max, gap=self.gap, clean_graph=True,
+            nag, k_max=self.k_max, gap=self.gap, trim=True,
             cycles=cycles, chunk_size=chunk_size)
 
         # Compute the edge features, level by level
@@ -539,7 +536,7 @@ class RadiusHorizontalGraph(Transform):
         # Compute 'subedges', ie edges between level-0 points making up
         # the edges between the segments. These will be used for edge
         # features computation. NB: this operation simplifies the
-        # edge_index graph into a graph with only i<j edges. To restore
+        # edge_index graph into a trimmed graph. To restore
         # the bidirectional edges, we will need to reconstruct the j<i
         # edges later on (done in `_horizontal_edge_features`)
         edge_index, se_point_index, se_id = subedges(
@@ -553,10 +550,9 @@ class RadiusHorizontalGraph(Transform):
         data = nag[i_level]
         data.edge_index = edge_index
 
-        # Edge feature computation. NB: takes i<j edges as input and
-        # builds features for i<j edges only, to alleviate memory and
-        # compute impact of horizontal edges. Features for all i<j and
-        # i>j edges can be computed later using
+        # Edge feature computation. NB: operates on trimmed graph only
+        # to alleviate memory and compute. Features for all undirected
+        # edges can be computed later using
         # `_on_the_fly_horizontal_edge_features()`
         data = _minimalistic_horizontal_edge_features(
             data, nag[0].pos, se_point_index, se_id)
@@ -568,7 +564,7 @@ class RadiusHorizontalGraph(Transform):
 
 
 def _horizontal_graph_by_radius(
-        nag, k_max=100, gap=0, clean_graph=True, cycles=3, chunk_size=None):
+        nag, k_max=100, gap=0, trim=True, cycles=3, chunk_size=None):
     """Search neighboring segments with points distant from `gap`or
     less.
 
@@ -579,9 +575,9 @@ def _horizontal_graph_by_radius(
     :param gap: float, List(float)
         Two segments A and B are considered neighbors if there is a in A
         and b in B such that dist(a, b) < gap
-    :param clean_graph: bool
-        Whether the returned horizontal graph should be cleaned. If
-        True, clean_graph() will be called and all edges will be
+    :param trim: bool
+        Whether the returned horizontal graph should be trimmed. If
+        True, `to_trimmed()` will be called and all edges will be
         expressed with source_index < target_index, self-loops and
         redundant edges will be removed. This may be necessary to
         alleviate memory consumption before computing edge features
@@ -609,14 +605,14 @@ def _horizontal_graph_by_radius(
     for i_level, k, g, cy, cs in zip(
             range(1, nag.num_levels), k_max, gap, cycles, chunk_size):
         nag = _horizontal_graph_by_radius_for_single_level(
-            nag, i_level, k_max=k, gap=g, clean_graph=clean_graph,
+            nag, i_level, k_max=k, gap=g, trim=trim,
             cycles=cy, chunk_size=cs)
 
     return nag
 
 
 def _horizontal_graph_by_radius_for_single_level(
-        nag, i_level, k_max=100, gap=0, clean_graph=True, cycles=3,
+        nag, i_level, k_max=100, gap=0, trim=True, cycles=3,
         chunk_size=100000):
     """
 
@@ -624,7 +620,7 @@ def _horizontal_graph_by_radius_for_single_level(
     :param i_level:
     :param k_max:
     :param gap:
-    :param clean_graph:
+    :param trim:
     :param cycles:
     :param chunk_size:
     :return:
@@ -652,11 +648,9 @@ def _horizontal_graph_by_radius_for_single_level(
     # Compute the super_index for level-0 points wrt the target level
     super_index = nag.get_super_index(i_level)
 
-    # Search neighboring clusters. If clean_graph is True, the output
-    # (i, j) edges are expressed such that i<j and without duplicates.
-    # This alleviates compute and memory use
+    # Search neighboring clusters
     edge_index, distances = cluster_radius_nn(
-        nag[0].pos, super_index, k_max=k_max, gap=gap, clean=clean_graph,
+        nag[0].pos, super_index, k_max=k_max, gap=gap, trim=trim,
         cycles=cycles, chunk_size=chunk_size)
 
     # Save the graph in the Data object
@@ -667,10 +661,10 @@ def _horizontal_graph_by_radius_for_single_level(
     # nearest neighbor
     data.connect_isolated(k=1)
 
-    # Make the graph directed with only i<j nodes. This is temporary,
-    # to alleviate edge features computation
-    if clean_graph:
-        data.clean_graph(reduce='min')
+    # Trim the graph. This is temporary, to alleviate edge features
+    # computation
+    if trim:
+        data.to_trimmed(reduce='min')
 
     # Store the updated Data object in the NAG
     nag._list[i_level] = data
@@ -709,11 +703,9 @@ def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     # Recover the edges between the segments
     se = data.edge_index
 
-    assert (se[0] < se[1]).all(), \
-        "Expects only i->j edges with i<j, so as to alleviate compute and " \
-        "memory impact of horizontal edges. j->i edge features can easily " \
-        "be reconstructed later with `_on_the_fly_horizontal_edge_features`. " \
-        "Consider using `src.utils.clean_graph()` before computing the features"
+    assert is_trimmed(se), \
+        "Expects the graph to be trimmed, consider using " \
+        "`src.utils.to_trimmed()` before computing the features"
     assert getattr(data, 'normal', None) is not None, \
         "Expects input Data object to have a 'normal' attribute, holding the " \
         "segment normal vectors. See `src.utils.scatter_pca` to efficiently " \
@@ -761,9 +753,9 @@ class OnTheFlyEdgeFeatures(Transform):
     horizontal edges of the NAG levels except its first (ie the
     0-level).
 
-    Expects only i->j edges with i<j as input, along with some
-    edge-specific attributes that cannot be recovered from the
-    corresponding source and target node attributes.
+    Expects only trimmed edges as input, along with some edge-specific
+    attributes that cannot be recovered from the corresponding source
+    and target node attributes (see `src.utils.to_trimmed`).
 
     Accepts input edge_attr to be float16, to alleviate memory use and
     accelerate data loading and transforms. Output edge_attr will,
@@ -773,7 +765,7 @@ class OnTheFlyEdgeFeatures(Transform):
     source and target node attributes.
 
     Builds the j->i edges and corresponding features based on their i->j
-    counterparts.
+    counterparts in the trimmed graph.
 
     Equips the output NAG with all i->j and j->i nodes and corresponding
     features.
@@ -843,9 +835,10 @@ def _on_the_fly_horizontal_edge_features(
         normal_angle=True, log_length=True, log_surface=True, log_volume=True,
         log_size=True):
     """Compute all edges and edge features for a horizontal graph, given
-    the graph of (i, j) edges with i<j and some precomputed edge
-    attributes. For each edge, this will build additional edge features
-    from the node attributes, as well as the symmetric i>j edges and
+    a trimmed graph and some precomputed edge attributes.
+
+    For each edge i->j, this will build additional edge features from
+    the node attributes, as well as the symmetric j->i edge and
     corresponding features.
 
     :param data:
@@ -867,8 +860,9 @@ def _on_the_fly_horizontal_edge_features(
     # Recover the edges between the segments
     se = data.edge_index
 
-    assert (se[0] < se[1]).all(), \
-        "Expects only i->j edges with i<j"
+    assert is_trimmed(se), \
+        "Expects the graph to be trimmed, consider using " \
+        "`src.utils.to_trimmed()` before computing the features"
     assert not normal_angle or getattr(data, 'normal', None) is not None, \
         "Expects input Data to have a 'normal' attribute"
     assert not log_length or getattr(data, 'log_length', None) is not None, \
@@ -935,24 +929,24 @@ def _on_the_fly_horizontal_edge_features(
     else:
         se_log_size_ratio = torch.zeros_like(se_centroid_dist)
 
-    # The superedges we have created so far are only oriented i->j
-    # oriented with i<j. We need to create the edges and corresponding
-    # features for the Target->Source direction now
+    # The features we have created so far are only for the trimmed
+    # graph. For each edge i->j, need to create the j->i edge and
+    # corresponding features
     se = torch.cat((se, se.flip(0)), dim=1)
-    se_feat = torch.vstack([                                           # 14 TOT
-        torch.cat((se_mean_dist, se_mean_dist)),                       # 1
-        torch.cat((se_min_dist, se_min_dist)),                         # 1
-        torch.cat((se_std_dist, se_std_dist)),                         # 1
-        torch.cat((se_angle_s, se_angle_t)),                           # 1
-        torch.cat((se_angle_t, se_angle_s)),                           # 1
+    se_feat = torch.vstack([  # 14 TOT
+        torch.cat((se_mean_dist, se_mean_dist)),  # 1
+        torch.cat((se_min_dist, se_min_dist)),  # 1
+        torch.cat((se_std_dist, se_std_dist)),  # 1
+        torch.cat((se_angle_s, se_angle_t)),  # 1
+        torch.cat((se_angle_t, se_angle_s)),  # 1
 
         torch.cat((se_centroid_direction, -se_centroid_direction)).T,  # 3
-        torch.cat((se_centroid_dist, se_centroid_dist)),               # 1
-        torch.cat((se_normal_angle, se_normal_angle)),                 # 1
-        torch.cat((se_log_length_ratio, -se_log_length_ratio)),        # 1
-        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),      # 1
-        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),        # 1
-        torch.cat((se_log_size_ratio, -se_log_size_ratio))]).T         # 1
+        torch.cat((se_centroid_dist, se_centroid_dist)),  # 1
+        torch.cat((se_normal_angle, se_normal_angle)),  # 1
+        torch.cat((se_log_length_ratio, -se_log_length_ratio)),  # 1
+        torch.cat((se_log_surface_ratio, -se_log_surface_ratio)),  # 1
+        torch.cat((se_log_volume_ratio, -se_log_volume_ratio)),  # 1
+        torch.cat((se_log_size_ratio, -se_log_size_ratio))]).T  # 1
 
     # Only keep the required edge attributes
     mask = torch.tensor([

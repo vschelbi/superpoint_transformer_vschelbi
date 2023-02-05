@@ -12,7 +12,7 @@ import src
 from src.data.cluster import Cluster, ClusterBatch
 from src.utils import tensor_idx, is_dense, has_duplicates, \
     isolated_nodes, knn_2, save_tensor, load_tensor, save_dense_to_csr, \
-    load_csr_to_dense, clean_graph
+    load_csr_to_dense, to_trimmed
 
 
 __all__ = ['Data', 'Batch']
@@ -435,11 +435,18 @@ class Data(PyGData):
 
         return self
 
-    def clean_graph(self, reduce='mean'):
-        """Remove self loops, redundant edges and undirected edges."""
+    def to_trimmed(self, reduce='mean'):
+        """Convert to 'trimmed' graph: same as coalescing with the
+        additional constraint that (i, j) and (j, i) edges are duplicates.
+
+        If edge attributes are passed, 'reduce' will indicate how to fuse
+        duplicate edges' attributes.
+
+        NB: returned edges are expressed with i<j by default.
+        """
         assert self.has_edges
 
-        edge_index, edge_attr = clean_graph(
+        edge_index, edge_attr = to_trimmed(
             self.edge_index, edge_attr=self.edge_attr, reduce=reduce)
 
         self.edge_index = edge_index

@@ -13,7 +13,7 @@ from src.utils.edge import edge_wise_points
 
 __all__ = [
     'is_pyg_edge_format', 'isolated_nodes', 'edge_to_superedge', 'subedges',
-    'clean_graph']
+    'to_trimmed', 'is_trimmed']
 
 
 def is_pyg_edge_format(edge_index):
@@ -89,11 +89,10 @@ def subedges(
     on heuristics to avoid the Delaunay triangulation or any other O(N²)
     operation.
 
-    NB: the input edges will be coalesced in the first place and the
-    returned edge_index will reflect this change. This is because
-    subedge computation rely on costly operations. To save compute and
-    memory, we only build subedges for i<j edges, assuming the j<i edges
-    have the same subedges.
+    NB: the input edges will be trimmed (see `to_trimmed`) in the first
+    place and the returned edge_index will reflect this change. This is
+    because subedge computation relies on costly operations. To save
+    compute and memory, we only build subedges for the trimmed graph.
 
     :param points:
         Level-0 points
@@ -131,8 +130,8 @@ def subedges(
         divided into parts of `edge_index.shape[1] * chunk_size` or less
     :return:
     """
-    # Sort edges in lexicographic order and remove duplicates
-    edge_index = coalesce(edge_index)
+    # Trim the graph
+    edge_index = to_trimmed(edge_index)
 
     # Recursive call in case chunk is specified. Chunk allows limiting
     # the number of edges processed at once. This might alleviate
@@ -361,11 +360,22 @@ def subedges(
     return edge_index, ST_pairs, ST_uid
 
 
-def clean_graph(edge_index, edge_attr=None, reduce='mean'):
-    """Remove self loops, redundant edges and undirected edges. This
-    considers (i, j) and (j, i) edges to be the same. Returned edges
-    edges are expressed with i<j by default and duplicates are
-    discarded.
+def to_trimmed(edge_index, edge_attr=None, reduce='mean'):
+    """Convert to 'trimmed' graph: same as coalescing with the
+    additional constraint that (i, j) and (j, i) edges are duplicates.
+
+    If edge attributes are passed, 'reduce' will indicate how to fuse
+    duplicate edges' attributes.
+
+    NB: returned edges are expressed with i<j by default.
+
+    :param edge_index: 2xE LongTensor
+        Edges in `torch_geometric` format
+    :param edge_attr: ExC Tensor, optional
+        Edge attributes
+    :param reduce: str, optional
+        Reduction modes supported by `torch_geometric.utils.coalesce`
+    :return:
     """
     # Search for undirected edges, ie edges with (i,j) and (j,i)
     # both present in edge_index. Flip (j,i) into (i,j) to make them
@@ -385,3 +395,22 @@ def clean_graph(edge_index, edge_attr=None, reduce='mean'):
         edge_index, edge_attr=edge_attr)
 
     return edge_index, edge_attr
+
+
+def is_trimmed(edge_index, return_trimmed=False):
+    """Check if the graph is 'trimmed': same as coalescing with the
+    additional constraint that (i, j) and (j, i) edges are duplicates.
+
+    :param edge_index: 2xE LongTensor
+        Edges in `torch_geometric` format
+    :param return_trimmed: bool
+        If True, the trimmed graph will also be returned. Since checking
+        if the graph is trimmed requires computing the actual trimmed
+        graph, this may save some compute in certain situations
+    :return:
+    """
+    edge_index_trimmed = to_trimmed(edge_index)
+    trimmed = edge_index.shape == edge_index_trimmed.shape
+    if return_trimmed:
+      return trimmed, edge_index_trimmed
+    return trimmed
