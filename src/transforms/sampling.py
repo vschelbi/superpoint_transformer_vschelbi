@@ -1,7 +1,7 @@
 import re
 import torch
 from torch_geometric.nn.pool import voxel_grid
-from torch_geometric.utils import k_hop_subgraph
+from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
@@ -436,8 +436,14 @@ class SampleGraph(Transform):
         # Generate sampling indices
         idx = torch.multinomial(weights, k_sample, replacement=False)
 
+        # Convert the graph to undirected graph. This is needed because
+        # it is likely that the graph has been trimmed (see
+        # `src.utils.to_trimmed`), in which case the trimmed edge
+        # direction would affect the k-hop search
+        edge_index = to_undirected(nag[i_level].edge_index)
+
         # Search the k-hop neighbors of the sampled nodes
-        idx = k_hop_subgraph(idx, self.k_hops, nag[i_level].edge_index)[0]
+        idx = k_hop_subgraph(idx, self.k_hops, edge_index)[0]
 
         #TODO: drop segments beyond a certain threshold to keep the sampled
         # graph size relatively constant ?
