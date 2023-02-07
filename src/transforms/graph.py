@@ -734,7 +734,7 @@ def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source
     # direction now
-    se_feat = torch.vstack([se_mean_off, se_std_off, se_mean_dist]).T
+    se_feat = torch.vstack([se_mean_off.T, se_std_off.T, se_mean_dist]).T
 
     # Save superedges and superedge features in the Data object
     data.edge_index = se
