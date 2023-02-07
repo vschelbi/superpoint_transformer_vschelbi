@@ -788,13 +788,13 @@ class OnTheFlyEdgeFeatures(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, mean_dist=True, min_dist=True, std_dist=True,
+            self, mean_offset=True, std_offset=True, mean_dist=True,
             angle_source=True, angle_target=True, centroid_direction=True,
             centroid_dist=True, normal_angle=True, log_length=True,
             log_surface=True, log_volume=True, log_size=True):
+        self.mean_offset = mean_offset
+        self.std_offset = std_offset
         self.mean_dist = mean_dist
-        self.min_dist = min_dist
-        self.std_dist = std_dist
         self.angle_source = angle_source
         self.angle_target = angle_target
         self.centroid_direction = centroid_direction
@@ -809,9 +809,9 @@ class OnTheFlyEdgeFeatures(Transform):
         for i_level in range(1, nag.num_levels):
             nag._list[i_level] = _on_the_fly_horizontal_edge_features(
                 nag[i_level],
+                mean_offset=self.mean_offset,
+                std_offset=self.std_offset,
                 mean_dist=self.mean_dist,
-                min_dist=self.min_dist,
-                std_dist=self.std_dist,
                 angle_source=self.angle_source,
                 angle_target=self.angle_target,
                 centroid_direction=self.centroid_direction,
@@ -825,7 +825,7 @@ class OnTheFlyEdgeFeatures(Transform):
 
 
 def _on_the_fly_horizontal_edge_features(
-        data, mean_dist=True, min_dist=True, std_dist=True, angle_source=True,
+        data, mean_offset=True, std_offset=True, mean_dist=True, angle_source=True,
         angle_target=True, centroid_direction=True, centroid_dist=True,
         normal_angle=True, log_length=True, log_surface=True, log_volume=True,
         log_size=True):
@@ -837,9 +837,9 @@ def _on_the_fly_horizontal_edge_features(
     corresponding features.
 
     :param data:
+    :param mean_offset:
+    :param std_offset:
     :param mean_dist:
-    :param min_dist:
-    :param std_dist:
     :param angle_source:
     :param angle_target:
     :param centroid_direction:
@@ -959,9 +959,9 @@ def _on_the_fly_horizontal_edge_features(
 
     # Only keep the required edge attributes
     mask = torch.tensor([
-        mean_dist, min_dist, std_dist, angle_source, angle_target,
-        *[centroid_direction] * 3, centroid_dist, normal_angle, log_length,
-        log_surface, log_volume, log_size], device=data.device)
+        *[mean_offset] * 3, *[std_offset] * 3, mean_dist, angle_source,
+        angle_target, *[centroid_direction] * 3, centroid_dist, normal_angle,
+        log_length, log_surface, log_volume, log_size], device=data.device)
     se_feat = se_feat[:, mask]
 
     # Save superedges and superedge features in the Data object
