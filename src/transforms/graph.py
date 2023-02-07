@@ -13,8 +13,8 @@ from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
-    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'ConnectIsolated',
-    'NodeSize', 'JitterEdgeFeatures']
+    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'AddSelfLoops',
+    'ConnectIsolated', 'NodeSize', 'JitterEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
