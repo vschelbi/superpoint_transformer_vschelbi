@@ -18,9 +18,16 @@ class SelfAttentionBlock(nn.Module):
     :param in_dim:
     :param out_dim:
     :param qkv_bias:
+    :param qk_dim:
     :param qk_scale:
+    :param scale_qk_by_neigh:
     :param attn_drop:
     :param drop:
+    :param k_rpe:
+    :param q_rpe:
+    :param c_rpe:
+    :param v_rpe:
+    :param heads_share_rpe:
     """
 
     def __init__(
@@ -32,6 +39,7 @@ class SelfAttentionBlock(nn.Module):
             qkv_bias=True,
             qk_dim=8,
             qk_scale=None,
+            scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
             k_rpe=False,
@@ -47,6 +55,7 @@ class SelfAttentionBlock(nn.Module):
         self.num_heads = num_heads
         self.qk_dim = qk_dim
         self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
+        self.scale_qk_by_neigh = scale_qk_by_neigh
         self.heads_share_rpe = heads_share_rpe
 
         self.qkv = nn.Linear(dim, qk_dim * 2 * num_heads + dim, bias=qkv_bias)
@@ -135,6 +144,12 @@ class SelfAttentionBlock(nn.Module):
 
         # Apply scaling on the queries
         q = q * self.qk_scale
+
+        # Apply scaling based on the number of neighbors of each node.
+        # This will induce a scaled softmax
+        if self.scale_qk_by_neigh:
+            num_neigh_scale = (s.bincount(minlength=N) ** -0.5)[s]
+            q = q * num_neigh_scale.view(-1, 1, 1)
 
         # TODO: add the relative positional encodings to the
         #  compatibilities here

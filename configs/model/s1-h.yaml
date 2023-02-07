@@ -49,6 +49,7 @@ net:
   qk_dim: 4
   qkv_bias: True
   qk_scale: null
+  scale_qk_by_neigh: True
   k_rpe: False
   q_rpe: False
   c_rpe: False
@@ -64,4 +65,3 @@ net:
   unpool: 'index'
   fusion: 'cat'
   norm_mode: 'graph'
-

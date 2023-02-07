@@ -221,6 +221,7 @@ on_device_train_transform:
         level: all
         p: 0.5
         x_idx: 0
+    - transform: NAGAddSelfLoops
 
 # GPU-based val transforms
 # Should we actually sample at validation time ?
@@ -265,6 +266,7 @@ on_device_val_transform:
         level: '1+'
         key: 'edge_attr'
         idx: ${datamodule.select_feat_edge}
+    - transform: NAGAddSelfLoops
 
 # GPU-based test transforms
 on_device_test_transform: ${datamodule.on_device_val_transform}
