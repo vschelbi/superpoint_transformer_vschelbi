@@ -112,7 +112,7 @@ pre_transform:
     - transform: RadiusHorizontalGraph
       params:
         k_max: 30
-        gap: [0.1, 0.2, 1, 5]
+        gap: [0.2, 0.5, 1, 5]
         k_ratio: 0.2
         k_min: 20
         cycles: 3
@@ -186,11 +186,11 @@ on_device_train_transform:
         log_surface: True
         log_volume: True
         log_size: True
-    - transform: SampleEdges
-      params:
-        level: '1+'
-        n_min: [5, 5, 15, 15]
-        n_max: [10, 15, 25, 25]
+#    - transform: SampleEdges
+#      params:
+#        level: '1+'
+#        n_min: [5, 5, 15, 15]
+#        n_max: [10, 15, 25, 25]
     - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
       params:
         level: '1+'
