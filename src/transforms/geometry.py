@@ -128,8 +128,8 @@ class RandomTiltAndRotate(Transform):
             #  _minimalistic_horizontal_edge_features........
             if getattr(nag[i_level], 'edge_attr', None) is not None:
                 edge_attr = nag[i_level].edge_attr
-                edge_attr[:, 0:3] = edge_attr[:, 0:3] @ R.T  # mean subedge offset
-                edge_attr[:, 3:6] = edge_attr[:, 3:6] @ R.T  # std subedge offset
+                edge_attr[:, 0:3] = edge_attr[:, 0:3] @ R.T.half()  # mean subedge offset
+                edge_attr[:, 3:6] = edge_attr[:, 3:6] @ R.T.half()  # std subedge offset
                 nag[i_level].edge_attr = edge_attr
 
         return nag
