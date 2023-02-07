@@ -873,10 +873,10 @@ def _on_the_fly_horizontal_edge_features(
     assert not log_size or getattr(data, 'log_size', None) is not None, \
         "Expects input Data to have a 'log_size' attribute"
     assert getattr(data, 'edge_attr', None) is not None \
-           and data.edge_attr.shape[1] == 5, \
-        "Expects input Data 'edge_attr' to hold a Ex5 tensor of edge features" \
+           and data.edge_attr.shape[1] == 7, \
+        "Expects input Data 'edge_attr' to hold a Ex7 tensor of edge features" \
         " precomputed using `_minimalistic_horizontal_edge_features`: " \
-        "se_mean_dist, se_min_dist, se_std_dist, se_angle_s, se_angle_t"
+        "se_mean_off, se_std_off and se_mean_dist"
 
     # Recover already-existing features from the Data.edge_attr.
     # IMPORTANT: these are assumed to have been generated using
