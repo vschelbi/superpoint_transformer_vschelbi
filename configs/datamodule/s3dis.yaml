@@ -174,9 +174,9 @@ on_device_train_transform:
         p: 0.5
     - transform: OnTheFlyEdgeFeatures
       params:
+        mean_offset: True
+        std_offset: True
         mean_dist: True
-        min_dist: True
-        std_dist: True
         angle_source: True
         angle_target: True
         centroid_direction: True
@@ -234,9 +234,9 @@ on_device_val_transform:
         n_max: 256
     - transform: OnTheFlyEdgeFeatures
       params:
+        mean_offset: True
+        std_offset: True
         mean_dist: True
-        min_dist: True
-        std_dist: True
         angle_source: True
         angle_target: True
         centroid_direction: True

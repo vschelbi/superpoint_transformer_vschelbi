@@ -676,6 +676,9 @@ def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     """Compute the features for horizontal edges, given the edge graph
     and the level-0 'subedges' making up each edge.
 
+    The features computed here are partly based on:
+    https://github.com/loicland/superpoint_graph
+
     :param data:
     :param points:
     :param se_point_index:
@@ -713,33 +716,25 @@ def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
 
     # Direction are the pointwise source->target vectors, based on which
     # we will compute superedge descriptors
-    direction = points[se_point_index[1]] - points[se_point_index[0]]
+    offset = points[se_point_index[1]] - points[se_point_index[0]]
 
     # To stabilize the distance-based features' distribution, we use the
     # sqrt of the metric distance. This assumes coordinates are in meter
     # and that we are mostly interested in the range [1, 100]. Might
     # want to change this if your dataset is different
-    dist = torch.linalg.norm(direction, dim=1)
+    dist = torch.linalg.norm(offset, dim=1)
 
-    # Compute mean, min and std subedge distance
+    # Compute mean, min and std subedge direction
+    se_mean_off = scatter_mean(offset, se_id, dim=0)
+    se_std_off = scatter_std(offset, se_id, dim=0)
+
+    # Compute mean subedge distance
     se_mean_dist = scatter_mean(dist, se_id, dim=0).sqrt()
-    se_min_dist = scatter_min(dist, se_id, dim=0)[0].sqrt()
-    se_std_dist = scatter_std(dist, se_id, dim=0).sqrt()
-
-    # Compute the mean subedge direction
-    se_direction = scatter_mean(direction, se_id, dim=0)
-    se_direction /= torch.linalg.norm(se_direction, dim=1).view(-1, 1)
-
-    # Compute the angle between the mean edge direction and the segment
-    # normals
-    se_angle_s = (se_direction * data.normal[se[0]]).sum(dim=1).abs()
-    se_angle_t = (se_direction * data.normal[se[1]]).sum(dim=1).abs()
 
     # The superedges we have created so far are oriented. We need to
     # create the edges and corresponding features for the Target->Source
     # direction now
-    se_feat = torch.vstack([
-        se_mean_dist, se_min_dist, se_std_dist, se_angle_s, se_angle_t]).T
+    se_feat = torch.vstack([se_mean_off.T, se_std_off.T, se_mean_dist]).T
 
     # Save superedges and superedge features in the Data object
     data.edge_index = se
@@ -793,13 +788,13 @@ class OnTheFlyEdgeFeatures(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, mean_dist=True, min_dist=True, std_dist=True,
+            self, mean_offset=True, std_offset=True, mean_dist=True,
             angle_source=True, angle_target=True, centroid_direction=True,
             centroid_dist=True, normal_angle=True, log_length=True,
             log_surface=True, log_volume=True, log_size=True):
+        self.mean_offset = mean_offset
+        self.std_offset = std_offset
         self.mean_dist = mean_dist
-        self.min_dist = min_dist
-        self.std_dist = std_dist
         self.angle_source = angle_source
         self.angle_target = angle_target
         self.centroid_direction = centroid_direction
@@ -814,9 +809,9 @@ class OnTheFlyEdgeFeatures(Transform):
         for i_level in range(1, nag.num_levels):
             nag._list[i_level] = _on_the_fly_horizontal_edge_features(
                 nag[i_level],
+                mean_offset=self.mean_offset,
+                std_offset=self.std_offset,
                 mean_dist=self.mean_dist,
-                min_dist=self.min_dist,
-                std_dist=self.std_dist,
                 angle_source=self.angle_source,
                 angle_target=self.angle_target,
                 centroid_direction=self.centroid_direction,
@@ -830,7 +825,7 @@ class OnTheFlyEdgeFeatures(Transform):
 
 
 def _on_the_fly_horizontal_edge_features(
-        data, mean_dist=True, min_dist=True, std_dist=True, angle_source=True,
+        data, mean_offset=True, std_offset=True, mean_dist=True, angle_source=True,
         angle_target=True, centroid_direction=True, centroid_dist=True,
         normal_angle=True, log_length=True, log_surface=True, log_volume=True,
         log_size=True):
@@ -842,9 +837,9 @@ def _on_the_fly_horizontal_edge_features(
     corresponding features.
 
     :param data:
+    :param mean_offset:
+    :param std_offset:
     :param mean_dist:
-    :param min_dist:
-    :param std_dist:
     :param angle_source:
     :param angle_target:
     :param centroid_direction:
@@ -863,6 +858,10 @@ def _on_the_fly_horizontal_edge_features(
     assert is_trimmed(se), \
         "Expects the graph to be trimmed, consider using " \
         "`src.utils.to_trimmed()` before computing the features"
+    assert not angle_source or getattr(data, 'normal', None) is not None, \
+        "Expects input Data to have a 'normal' attribute"
+    assert not angle_target or getattr(data, 'normal', None) is not None, \
+        "Expects input Data to have a 'normal' attribute"
     assert not normal_angle or getattr(data, 'normal', None) is not None, \
         "Expects input Data to have a 'normal' attribute"
     assert not log_length or getattr(data, 'log_length', None) is not None, \
@@ -874,27 +873,23 @@ def _on_the_fly_horizontal_edge_features(
     assert not log_size or getattr(data, 'log_size', None) is not None, \
         "Expects input Data to have a 'log_size' attribute"
     assert getattr(data, 'edge_attr', None) is not None \
-           and data.edge_attr.shape[1] == 5, \
-        "Expects input Data 'edge_attr' to hold a Ex5 tensor of edge features" \
+           and data.edge_attr.shape[1] == 7, \
+        "Expects input Data 'edge_attr' to hold a Ex7 tensor of edge features" \
         " precomputed using `_minimalistic_horizontal_edge_features`: " \
-        "se_mean_dist, se_min_dist, se_std_dist, se_angle_s, se_angle_t"
+        "se_mean_off, se_std_off and se_mean_dist"
 
     # Recover already-existing features from the Data.edge_attr.
     # IMPORTANT: these are assumed to have been generated using
     # `_minimalistic_horizontal_edge_features` and to be the following:
+    #   - se_mean_off: mean subedge offset
+    #   - se_std_off: std subedge offset
     #   - se_mean_dist: mean subedge distance
-    #   - se_min_dist: min subedge distance
-    #   - se_std_dist: std subedge distance
-    #   - se_angle_s: angle between source normal and mean subedge
-    #   - se_angle_t: angle between target normal and mean subedge
     # Precomputed edge features might be expressed in float16, so we
     # convert them to float32 here
     se_feat_precomputed = data.edge_attr.float()
-    se_mean_dist = se_feat_precomputed[:, 0]
-    se_min_dist = se_feat_precomputed[:, 1]
-    se_std_dist = se_feat_precomputed[:, 2]
-    se_angle_s = se_feat_precomputed[:, 3]
-    se_angle_t = se_feat_precomputed[:, 4]
+    se_mean_off = se_feat_precomputed[:, :3]
+    se_std_off = se_feat_precomputed[:, 3:6]
+    se_mean_dist = se_feat_precomputed[:, 6]
 
     # Compute the distance and direction between the segments' centroids
     se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]
@@ -902,9 +897,23 @@ def _on_the_fly_horizontal_edge_features(
     se_centroid_direction /= se_centroid_dist.view(-1, 1)
     se_centroid_dist = se_centroid_dist.sqrt()
 
+    # Compute the mean subedge (normalized) direction
+    se_direction = se_mean_off / torch.linalg.norm(
+        se_mean_off, dim=1).view(-1, 1)
+
     # Compute some edge features based on segment attributes
-    if normal_angle and getattr(data, 'normal', None) is not None:
-        normal = data.normal
+    normal = getattr(data, 'normal', None)
+    if angle_source and normal is not None:
+        se_angle_s = (se_direction * normal[se[0]]).sum(dim=1).abs()
+    else:
+        se_angle_s = torch.zeros_like(se_centroid_dist)
+
+    if angle_target and normal is not None:
+        se_angle_t = (se_direction * normal[se[1]]).sum(dim=1).abs()
+    else:
+        se_angle_t = torch.zeros_like(se_centroid_dist)
+
+    if normal_angle and normal is not None:
         se_normal_angle = (normal[se[0]] * normal[se[1]]).sum(dim=1).abs()
     else:
         se_normal_angle = torch.zeros_like(se_centroid_dist)
@@ -934,12 +943,12 @@ def _on_the_fly_horizontal_edge_features(
     # corresponding features
     se = torch.cat((se, se.flip(0)), dim=1)
     se_feat = torch.vstack([  # 14 TOT
+        torch.cat((se_mean_off, -se_mean_off)).T,  # 3
+        torch.cat((se_std_off, -se_std_off)).T,  # 3
         torch.cat((se_mean_dist, se_mean_dist)),  # 1
-        torch.cat((se_min_dist, se_min_dist)),  # 1
-        torch.cat((se_std_dist, se_std_dist)),  # 1
+
         torch.cat((se_angle_s, se_angle_t)),  # 1
         torch.cat((se_angle_t, se_angle_s)),  # 1
-
         torch.cat((se_centroid_direction, -se_centroid_direction)).T,  # 3
         torch.cat((se_centroid_dist, se_centroid_dist)),  # 1
         torch.cat((se_normal_angle, se_normal_angle)),  # 1
@@ -950,9 +959,9 @@ def _on_the_fly_horizontal_edge_features(
 
     # Only keep the required edge attributes
     mask = torch.tensor([
-        mean_dist, min_dist, std_dist, angle_source, angle_target,
-        *[centroid_direction] * 3, centroid_dist, normal_angle, log_length,
-        log_surface, log_volume, log_size], device=data.device)
+        *[mean_offset] * 3, *[std_offset] * 3, mean_dist, angle_source,
+        angle_target, *[centroid_direction] * 3, centroid_dist, normal_angle,
+        log_length, log_surface, log_volume, log_size], device=data.device)
     se_feat = se_feat[:, mask]
 
     # Save superedges and superedge features in the Data object

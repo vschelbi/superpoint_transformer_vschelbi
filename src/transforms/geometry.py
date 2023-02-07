@@ -123,6 +123,15 @@ class RandomTiltAndRotate(Transform):
             if getattr(nag[i_level], 'normal', None) is not None:
                 nag[i_level].normal = nag[i_level].normal @ R.T
 
+            # TODO: this is an ugly, hardcoded patch to deal with
+            #  features assumedly created by
+            #  _minimalistic_horizontal_edge_features........
+            if getattr(nag[i_level], 'edge_attr', None) is not None:
+                edge_attr = nag[i_level].edge_attr
+                edge_attr[:, 0:3] = edge_attr[:, 0:3] @ R.T.half()  # mean subedge offset
+                edge_attr[:, 3:6] = edge_attr[:, 3:6] @ R.T.half()  # std subedge offset
+                nag[i_level].edge_attr = edge_attr
+
         return nag
 
 
@@ -179,6 +188,13 @@ class RandomAnisotropicScale(Transform):
                 normal = torch.nn.functional.normalize(normal, dim=1)
                 nag[i_level].normal = normal
 
+            # TODO: this is an ugly, hardcoded patch to deal with
+            #  features assumedly created by
+            #  _minimalistic_horizontal_edge_features........
+            if getattr(nag[i_level], 'edge_attr', None) is not None:
+                nag[i_level].edge_attr[:, :6] = \
+                    nag[i_level].edge_attr[:, :6] * scale.repeat(1, 2)  # mean and std subedge offset
+
         return nag
 
 
@@ -219,5 +235,15 @@ class RandomAxisFlip(Transform):
             # their orientations accordingly
             if getattr(nag[i_level], 'normal', None) is not None:
                 nag[i_level].normal[:, axis] *= -1
+                nag[i_level].normal[nag[i_level].normal[:, 2] < 0] *= -1
+
+            # TODO: this is an ugly, hardcoded patch to deal with
+            #  features assumedly created by
+            #  _minimalistic_horizontal_edge_features........
+            if getattr(nag[i_level], 'edge_attr', None) is not None:
+                edge_attr = nag[i_level].edge_attr
+                edge_attr[:, 0:3][:, axis] *= -1  # mean subedge offset
+                edge_attr[:, 3:6][:, axis] *= -1  # std subedge offset
+                nag[i_level].edge_attr = edge_attr
 
         return nag
