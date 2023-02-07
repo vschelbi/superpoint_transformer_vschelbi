@@ -176,7 +176,7 @@ class RandomAnisotropicScale(Transform):
 
     def _process(self, nag):
         # Generate the random scales
-        scale = 1 + (torch.rand(1) * 2 * self.delta - self.delta).to(nag.device)
+        scale = 1 + (torch.rand(1, device=nag.device) * 2 * self.delta - self.delta)
 
         for i_level in range(nag.num_levels):
             nag[i_level].pos = nag[i_level].pos * scale
@@ -193,7 +193,7 @@ class RandomAnisotropicScale(Transform):
             #  _minimalistic_horizontal_edge_features........
             if getattr(nag[i_level], 'edge_attr', None) is not None:
                 nag[i_level].edge_attr[:, :6] = \
-                    nag[i_level].edge_attr[:, :6] * scale  # mean and std subedge offset
+                    nag[i_level].edge_attr[:, :6] * scale.repeat(1, 2)  # mean and std subedge offset
 
         return nag
 
