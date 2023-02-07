@@ -13,7 +13,7 @@ from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
-    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'AddSelfLoops',
+    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'NAGAddSelfLoops',
     'ConnectIsolated', 'NodeSize', 'JitterEdgeFeatures']
 
 
@@ -963,7 +963,7 @@ def _on_the_fly_horizontal_edge_features(
     return data
 
 
-class AddSelfLoops(Transform):
+class NAGAddSelfLoops(Transform):
     """Add self-loops to all NAG levels having a horizontal graph. If
     the edges have attributes, the self-loops will receive 0-features.
     """
