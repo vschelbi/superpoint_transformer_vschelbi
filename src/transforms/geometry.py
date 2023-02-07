@@ -176,7 +176,7 @@ class RandomAnisotropicScale(Transform):
 
     def _process(self, nag):
         # Generate the random scales
-        scale = 1 + (torch.rand(1, device=nag.device) * 2 * self.delta - self.delta)
+        scale = 1 + (torch.rand(1) * 2 * self.delta - self.delta).to(nag.device)
 
         for i_level in range(nag.num_levels):
             nag[i_level].pos = nag[i_level].pos * scale
