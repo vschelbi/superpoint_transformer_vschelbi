@@ -372,6 +372,13 @@ class SampleGraph(Transform):
         If True, the classes will affect the chances of being
         dropped out. The scarcer the segment class, the greater
         its chances to be selected
+    :param use_batch: bool
+        If True, the 'Data.batch' attribute will be used to guide
+        sampling across batches. More specifically, if the input NAG is
+        a NAGBatch made up of multiple NAGs, the subgraphs will be
+        sampled in a way that guarantees each NAG is sampled from.
+        Obviously enough, if `k_sample > Data.batch.max() + 1`, not all
+        NAGs will be sampled from
     """
 
     _IN_TYPE = NAG
@@ -379,18 +386,19 @@ class SampleGraph(Transform):
 
     def __init__(
             self, i_level=-1, k_sample=1, k_hops=2, by_size=False,
-            by_class=False):
+            by_class=False, use_batch=True):
         self.i_level = i_level
         self.k_sample = k_sample
         self.k_hops = k_hops
         self.by_size = by_size
         self.by_class = by_class
+        self.use_batch = use_batch
 
     def _process(self, nag):
         device = nag.device
 
         # Skip if i_level is None. This little trick may be useful to
-        # turn this transform in Identity
+        # turn this transform into an Identity, if need be
         if self.i_level is None:
             return nag
 
@@ -433,8 +441,39 @@ class SampleGraph(Transform):
         # were added
         weights /= weights.sum()
 
-        # Generate sampling indices
-        idx = torch.multinomial(weights, k_sample, replacement=False)
+        # Generate sampling indices. If the Data object has a 'batch'
+        # attribute and 'self.use_batch', use it to guide the sampling
+        # across the batches
+        batch = getattr(nag[i_level], 'batch', None)
+        if batch is not None and self.use_batch:
+            idx_list = []
+            num_batch = batch.max() + 1
+            num_sampled = 0
+            k_batch = torch.div(k_sample, num_batch, rounding_mode='floor')
+            k_batch = k_batch.maximum(torch.ones_like(k_batch))
+            for i_batch in range(num_batch):
+
+                # Try to sample all NAGs in the batch as evenly as
+                # possible, within the constraints of k_sample and
+                # num_batch
+                if i_batch >= num_batch - 1:
+                    k_batch = k_sample - num_sampled
+
+                # Compute the sampling indices for the NAG at hand
+                mask = torch.where(i_batch == batch)[0]
+                idx_ = torch.multinomial(
+                    weights[mask], k_batch, replacement=False)
+                idx_list.append(mask[idx_])
+
+                # Update number of sampled subgraphs
+                num_sampled += k_batch
+                if num_sampled >= k_sample:
+                    break
+
+            # Aggregate sampling indices
+            idx = torch.cat(idx_list)
+        else:
+            idx = torch.multinomial(weights, k_sample, replacement=False)
 
         # Convert the graph to undirected graph. This is needed because
         # it is likely that the graph has been trimmed (see
@@ -443,7 +482,8 @@ class SampleGraph(Transform):
         edge_index = to_undirected(nag[i_level].edge_index)
 
         # Search the k-hop neighbors of the sampled nodes
-        idx = k_hop_subgraph(idx, self.k_hops, edge_index)[0]
+        idx = k_hop_subgraph(
+            idx, self.k_hops, edge_index, num_nodes=nag[i_level].num_nodes)[0]
 
         #TODO: drop segments beyond a certain threshold to keep the sampled
         # graph size relatively constant ?
@@ -519,6 +559,11 @@ class SampleEdges(Transform):
         Level at which to sample edges. Can be an int or a str. If the
         latter, 'all' will apply on all levels, 'i+' will apply on
         level-i and above, 'i-' will apply on level-i and below
+    :param n_min: int or List(int)
+        Minimum number of edges for each node, within the limits of its
+        input number of edges
+    :param n_max: int or List(int)
+        Maximum number of edges for each node
     """
 
     _IN_TYPE = NAG
