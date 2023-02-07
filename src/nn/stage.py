@@ -101,11 +101,11 @@ class Stage(nn.Module):
 
             # Build the RPE encoders here if shared across all blocks
             blocks_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, num_blocks, num_heads, 13, qk_dim, blocks_share_rpe,
+                k_rpe, num_blocks, num_heads, 18, qk_dim, blocks_share_rpe,
                 heads_share_rpe)
 
             blocks_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, num_blocks, num_heads, 13, qk_dim, blocks_share_rpe,
+                q_rpe, num_blocks, num_heads, 18, qk_dim, blocks_share_rpe,
                 heads_share_rpe)
 
             self.transformer_blocks = nn.ModuleList(

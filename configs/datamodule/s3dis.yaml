@@ -34,7 +34,7 @@ sample_graph_k_sample: 4
 sample_graph_k_hops: 4
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
 select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-select_feat_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+select_feat_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 
 # Preprocessing
 pre_transform:

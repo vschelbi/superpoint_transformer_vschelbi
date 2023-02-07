@@ -73,12 +73,12 @@ class SelfAttentionBlock(nn.Module):
         if not isinstance(k_rpe, bool):
             self.k_rpe = k_rpe
         else:
-            self.k_rpe = RPEFFN(14, out_dim=rpe_dim) if k_rpe else None
+            self.k_rpe = RPEFFN(18, out_dim=rpe_dim) if k_rpe else None
 
         if not isinstance(q_rpe, bool):
             self.q_rpe = q_rpe
         else:
-            self.q_rpe = RPEFFN(14, out_dim=rpe_dim) if q_rpe else None
+            self.q_rpe = RPEFFN(18, out_dim=rpe_dim) if q_rpe else None
 
         if c_rpe:
             raise NotImplementedError

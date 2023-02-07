@@ -173,10 +173,10 @@ class NeST(nn.Module):
 
             # Build the RPE encoders here if shared across all stages
             down_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, len(down_dim), 13, qk_dim, stages_share_rpe)
+                k_rpe, len(down_dim), 18, qk_dim, stages_share_rpe)
 
             down_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, len(down_dim), 13, qk_dim, stages_share_rpe)
+                q_rpe, len(down_dim), 18, qk_dim, stages_share_rpe)
 
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
@@ -226,10 +226,10 @@ class NeST(nn.Module):
 
             # Build the RPE encoder here if shared across all stages
             up_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, len(up_dim), 13, qk_dim, stages_share_rpe)
+                k_rpe, len(up_dim), 18, qk_dim, stages_share_rpe)
 
             up_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, len(up_dim), 13, qk_dim, stages_share_rpe)
+                q_rpe, len(up_dim), 18, qk_dim, stages_share_rpe)
 
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
@@ -323,10 +323,10 @@ class NeST(nn.Module):
 
             # Build the RPE encoder here if shared across all stages
             last_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, 1, 13, qk_dim, stages_share_rpe)[0]
+                k_rpe, 1, 18, qk_dim, stages_share_rpe)[0]
 
             last_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, 1, 13, qk_dim, stages_share_rpe)[0]
+                q_rpe, 1, 18, qk_dim, stages_share_rpe)[0]
 
             self.last_stage = Stage(
                 last_dim,

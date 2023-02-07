@@ -771,9 +771,9 @@ class OnTheFlyEdgeFeatures(Transform):
     edges. Besides, it expects the input `Data.edge_attr` to hold 5
     features precomputed with `_minimalistic_horizontal_edge_features`.
 
+    :param mean_offset:
+    :param std_offset:
     :param mean_dist:
-    :param min_dist:
-    :param std_dist:
     :param angle_source:
     :param angle_target:
     :param centroid_direction:
@@ -943,7 +943,7 @@ def _on_the_fly_horizontal_edge_features(
     # graph. For each edge i->j, need to create the j->i edge and
     # corresponding features
     se = torch.cat((se, se.flip(0)), dim=1)
-    se_feat = torch.vstack([  # 14 TOT
+    se_feat = torch.vstack([  # 18 TOT
         torch.cat((se_mean_off, -se_mean_off)).T,  # 3
         torch.cat((se_std_off, -se_std_off)).T,  # 3
         torch.cat((se_mean_dist, se_mean_dist)),  # 1
