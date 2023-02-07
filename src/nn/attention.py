@@ -96,7 +96,7 @@ class SelfAttentionBlock(nn.Module):
 
         # Apply scaling based on the number of neighbors of each node.
         # This will induce a scaled softmax
-        num_neigh_scale = (s.bincount(minlength=N) ** -0.5)[s]
+        num_neigh_scale = (s.bincount(minlength=N) ** -0.5)[s].view(-1, 1, 1)
         q = q * num_neigh_scale
 
         # TODO: add the relative positional encodings to the
