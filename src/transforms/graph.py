@@ -3,17 +3,18 @@ import numpy as np
 import itertools
 from scipy.spatial import Delaunay
 from torch_scatter import scatter_mean, scatter_std, scatter_min, segment_csr
+from torch_geometric.utils import add_self_loops
+from src.transforms import Transform
 import src
 from src.data import NAG
-from src.transforms import Transform
 import src.partition.utils.libpoint_utils as point_utils
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
     subedges, to_trimmed, cluster_radius_nn, is_trimmed
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
-    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'ConnectIsolated',
-    'NodeSize', 'JitterEdgeFeatures']
+    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'NAGAddSelfLoops',
+    'ConnectIsolated', 'NodeSize', 'JitterEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
@@ -960,6 +961,38 @@ def _on_the_fly_horizontal_edge_features(
     data.edge_attr = se_feat
 
     return data
+
+
+class NAGAddSelfLoops(Transform):
+    """Add self-loops to all NAG levels having a horizontal graph. If
+    the edges have attributes, the self-loops will receive 0-features.
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def _process(self, nag):
+        for i_level in range(1, nag.num_levels):
+
+            # Skip if the level has no horizontal graph
+            if not nag[i_level].has_edges:
+                continue
+
+            # Recover edges and attributes
+            num_nodes = nag[i_level].num_nodes
+            edge_index = nag[i_level].edge_index
+            edge_attr = getattr(nag[i_level], 'edge_attr', None)
+
+            # Add self-loops
+            edge_index, edge_attr = add_self_loops(
+                edge_index, edge_attr=edge_attr, num_nodes=num_nodes,
+                fill_value=0)
+
+            # Update the edges and attributes
+            nag[i_level].edge_index = edge_index
+            nag[i_level].edge_attr = edge_attr
+
+        return nag
 
 
 class ConnectIsolated(Transform):
