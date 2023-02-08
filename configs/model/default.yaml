@@ -18,7 +18,7 @@ scheduler:
   T_max: ${eval:'${trainer.max_epochs} - ${model.scheduler.num_warmup}'}
   eta_min: 1e-6
   warmup_init_lr: 1e-6
-  num_warmup: 20
+  num_warmup: 50
   warmup_strategy: 'cos'
 
 criterion:
@@ -28,9 +28,9 @@ criterion:
 # Parameters declared here to facilitate tuning configs. Those are only
 # used here for config interpolation but will/should actually fall in
 # the ignored kwargs of the PointSegmentationModule
-_p: [64, 64, 128, 128]
-_d: [64, 128, 256, 512]
-_u: [256, 128, 64]
+_p: [32, 64, 128]
+_d: [128, 128, 128, 128]
+_u: [128, 128, 128]
 _d_r: 2  # number of repeated dim layers in the encoder MLPs
 _u_r: 2  # number of repeated dim layers in the decoder MLPs
 _p_x: ${eval:'3 + ${datamodule.feat_point} + ${model.net.point_cat_diameter}'}  # size of handcrafted level-0 node features (points)
