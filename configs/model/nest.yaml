@@ -73,7 +73,7 @@ net:
   qkv_bias: True
   qk_scale: null
   scale_qk_by_neigh: True
-  k_rpe: False
+  k_rpe: True
   q_rpe: False
   c_rpe: False
   v_rpe: False
