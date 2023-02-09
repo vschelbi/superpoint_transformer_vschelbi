@@ -9,4 +9,4 @@ class LearnableParameter(nn.Parameter):
     position encodings, queries, keys, ...). Using this is useful to use
     custom weight initialization.
     """
-    pass
+
