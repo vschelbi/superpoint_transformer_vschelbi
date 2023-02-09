@@ -42,6 +42,7 @@ class SelfAttentionBlock(nn.Module):
             scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
+            in_rpe_dim=18,
             k_rpe=False,
             q_rpe=False,
             c_rpe=False,
@@ -58,10 +59,10 @@ class SelfAttentionBlock(nn.Module):
         self.scale_qk_by_neigh = scale_qk_by_neigh
         self.heads_share_rpe = heads_share_rpe
 
-        self.qkv = nn.Linear(dim, qk_dim * 2 * num_heads + dim, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, qk_dim * 2 * num_heads + dim, bias=qkv_bias)  # TODO: only 1 value for all heads ?
 
         # TODO: define relative positional encoding parameters and
-        #  trunacted-normal initialize them (see Swin-T implementation)
+        #  truncated-normal initialize them (see Swin-T implementation)
 
         # TODO: k/q/v RPE, pos/edge attr/both RPE, MLP/vector attention,
         #  mlp on pos/learnable lookup table/FFN/learnable FFN...
@@ -73,12 +74,12 @@ class SelfAttentionBlock(nn.Module):
         if not isinstance(k_rpe, bool):
             self.k_rpe = k_rpe
         else:
-            self.k_rpe = RPEFFN(18, out_dim=rpe_dim) if k_rpe else None
+            self.k_rpe = RPEFFN(in_rpe_dim, out_dim=rpe_dim) if k_rpe else None  # TODO: FFN have NO NORMALIZATION, does that make snese here ?
 
         if not isinstance(q_rpe, bool):
             self.q_rpe = q_rpe
         else:
-            self.q_rpe = RPEFFN(18, out_dim=rpe_dim) if q_rpe else None
+            self.q_rpe = RPEFFN(in_rpe_dim, out_dim=rpe_dim) if q_rpe else None  # TODO: FFN have NO NORMALIZATION, does that make snese here ?
 
         if c_rpe:
             raise NotImplementedError
@@ -87,24 +88,22 @@ class SelfAttentionBlock(nn.Module):
             raise NotImplementedError
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
-        self.out_proj = nn.Linear(out_dim, dim) if out_dim is not None else None
+        self.out_proj = nn.Linear(dim, out_dim) if out_dim is not None else None
 
         self.attn_drop = nn.Dropout(attn_drop) \
             if attn_drop is not None and attn_drop > 0 else None
         self.out_drop = nn.Dropout(drop) \
             if drop is not None and drop > 0 else None
 
-    def forward(self, x, edge_index, pos=None, edge_attr=None):
+    def forward(self, x, edge_index, edge_attr=None):
         """
-        :param x: Tensor of shape (N, C)
+        :param x: Tensor of shape (N, Cx)
             Node features
         :param edge_index: LongTensor of shape (2, E)
             Source and target indices for the edges of the attention
             graph. Source indicates the querying element, while Target
             indicates the key elements
-        :param pos: FloatTensor or shape (N, D)
-            Node positions for relative position encoding
-        :param edge_attr: FloatTensor or shape (E, F)
+        :param edge_attr: FloatTensor or shape (E, Ce)
             Edge attributes for relative pose encoding
         :return:
         """
@@ -112,6 +111,7 @@ class SelfAttentionBlock(nn.Module):
         E = edge_index.shape[1]
         H = self.num_heads
         D = self.qk_dim
+        DH = D * H
 
         # Optional linear projection of features
         if self.in_proj is not None:
@@ -130,7 +130,6 @@ class SelfAttentionBlock(nn.Module):
         # v = qkv[t, 2]  # [E, H, C // H]
 
         # Separate queries, keys, values
-        DH = D * H
         q = qkv[:, :DH].view(N, H, D)        # [N, H, D]
         k = qkv[:, DH:2 * DH].view(N, H, D)  # [N, H, D]
         v = qkv[:, 2 * DH:].view(N, H, -1)   # [N, H, C // H]
@@ -180,8 +179,6 @@ class SelfAttentionBlock(nn.Module):
         compat = torch.einsum('ehd, ehd -> eh', q, k)  # [E, H]
 
         # Compute the attention scores with scaled softmax
-        # TODO: need to scale the softmax based on the number of
-        #  elements in each group ?
         attn = softmax(compat, index=s, dim=0, num_nodes=N)  # [E, H]
 
         # Optional attention dropout

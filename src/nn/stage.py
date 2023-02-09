@@ -176,12 +176,7 @@ class Stage(nn.Module):
         if self.transformer_blocks is not None:
             for block in self.transformer_blocks:
                 x, norm_index, edge_index = block(
-                    x,
-                    norm_index,
-                    edge_index=edge_index,
-                    pos=pos,
-                    edge_attr=edge_attr)
-            # x = self.transformer_blocks(x, norm_index, edge_index=edge_index)
+                    x, norm_index, edge_index=edge_index, edge_attr=edge_attr)
 
         # MLP on output features to change channel size
         if self.out_mlp is not None:

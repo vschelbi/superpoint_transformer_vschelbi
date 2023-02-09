@@ -84,7 +84,7 @@ class TransformerBlock(nn.Module):
         self.drop_path = DropPath(drop_path) \
             if drop_path is not None and drop_path > 0 else nn.Identity()
 
-    def forward(self, x, norm_index, edge_index=None, pos=None, edge_attr=None):
+    def forward(self, x, norm_index, edge_index=None, edge_attr=None):
         """
         :param x: FloatTensor or shape (N, C)
             Node features
@@ -93,9 +93,6 @@ class TransformerBlock(nn.Module):
         :param edge_index: LongTensor of shape (2, E)
             Edges in torch_geometric [[sources], [targets]] format for
             the self-attention module
-        :param pos: FloatTensor or shape (N, D)
-            Node positions for relative position encoding in the
-            self-attention module
         :param edge_attr: FloatTensor or shape (E, F)
             Edge attributes in torch_geometric format for relative pose
             encoding in the self-attention module
@@ -121,10 +118,10 @@ class TransformerBlock(nn.Module):
             pass
         elif self.pre_ln:
             x = self.sa_norm(x, norm_index)
-            x = self.sa(x, edge_index, pos=pos, edge_attr=edge_attr)
+            x = self.sa(x, edge_index, edge_attr=edge_attr)
             x = shortcut + self.drop_path(x)
         else:
-            x = self.sa(x, edge_index, pos=pos, edge_attr=edge_attr)
+            x = self.sa(x, edge_index, edge_attr=edge_attr)
             x = self.drop_path(x)
             x = self.sa_norm(shortcut + x, norm_index)
 

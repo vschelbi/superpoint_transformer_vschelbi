@@ -1,14 +1,26 @@
+import torch
 from torch import nn
 from torch_geometric.nn.aggr import SumAggregation as SumPool
 from torch_geometric.nn.aggr import MeanAggregation as MeanPool
 from torch_geometric.nn.aggr import MaxAggregation as MaxPool
 from torch_geometric.nn.aggr import MinAggregation as MinPool
+from torch_scatter import scatter_sum
+from torch_geometric.utils import softmax
+from src.nn import RPEFFN, LearnableParameter
+from src.utils.nn import init_weights
 
 
-__all__ = ['SumPool', 'MeanPool', 'MaxPool', 'MinPool']
+__all__ = [
+    'SumPool', 'MeanPool', 'MaxPool', 'MinPool', 'AttentivePool',
+    'AttentivePoolWithLearntQueries']
 
 
-class AttentivePool(nn.Module):
+class BaseAttentivePool(nn.Module):
+    """Base class for attentive pooling classes. This class is not
+    intended to be instantiated, but avoids duplicating code between
+    similar child classes, which are expected to implement:
+      - `_get_query()`
+    """
 
     # TODO: this module could be used for pooling from one segment level
     #  to the next. But requires defining how. With QKV paradigm ? Then
@@ -21,4 +33,277 @@ class AttentivePool(nn.Module):
     #  AttentionalAggregation for possibilities. Among which, a
     #  learnable softmax temperature
 
-    pass
+    def __init__(
+            self,
+            dim,
+            num_heads=1,
+            in_dim=None,
+            out_dim=None,
+            qkv_bias=True,
+            qk_dim=8,
+            qk_scale=None,
+            scale_qk_by_neigh=True,
+            attn_drop=None,
+            drop=None,
+            in_rpe_dim=18,
+            k_rpe=False,
+            q_rpe=False,
+            c_rpe=False,
+            v_rpe=False,
+            heads_share_rpe=False):
+        super().__init__()
+
+        assert dim % num_heads == 0, f"dim must be a multiple of num_heads"
+
+        self.dim = dim
+        self.num_heads = num_heads
+        self.qk_dim = qk_dim
+        self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
+        self.scale_qk_by_neigh = scale_qk_by_neigh
+        self.heads_share_rpe = heads_share_rpe
+
+        self.kv = nn.Linear(dim, qk_dim * num_heads + dim, bias=qkv_bias)
+
+        # Build the RPE encoders, with the option of sharing weights
+        # across all heads
+        rpe_dim = qk_dim if heads_share_rpe else qk_dim * num_heads
+
+        if not isinstance(k_rpe, bool):
+            self.k_rpe = k_rpe
+        else:
+            self.k_rpe = RPEFFN(in_rpe_dim, out_dim=rpe_dim) if k_rpe else None  # TODO: FFN have NO NORMALIZATION, does that make snese here ?
+
+        if not isinstance(q_rpe, bool):
+            self.q_rpe = q_rpe
+        else:
+            self.q_rpe = RPEFFN(in_rpe_dim, out_dim=rpe_dim) if q_rpe else None  # TODO: FFN have NO NORMALIZATION, does that make snese here ?
+
+        if c_rpe:
+            raise NotImplementedError
+
+        if v_rpe:
+            raise NotImplementedError
+
+        self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
+        self.out_proj = nn.Linear(dim, out_dim) if out_dim is not None else None
+
+        self.attn_drop = nn.Dropout(attn_drop) \
+            if attn_drop is not None and attn_drop > 0 else None
+        self.out_drop = nn.Dropout(drop) \
+            if drop is not None and drop > 0 else None
+
+    def forward(self, x_child, x_parent, index, edge_attr=None):
+        """
+        :param x_child: Tensor of shape (Nc, Cc)
+            Node features for the children nodes
+        :param x_parent: Tensor of shape (Np, Cp)
+            Node features for the parent nodes
+        :param index: LongTensor of shape (Nc)
+            Indices indicating the parent of each for each child node
+        :param edge_attr: FloatTensor or shape (Nc, F)
+            Edge attributes for relative pose encoding
+        :return:
+        """
+        Nc = x_child.shape[0]
+        Np = x_parent.shape[0]
+        H = self.num_heads
+        D = self.qk_dim
+        DH = D * H
+
+        # Optional linear projection of features
+        if self.in_proj is not None:
+            x_child = self.in_proj(x_child)
+
+        # Compute queries from parent features
+        q = self._get_query(x_parent)  # [Np, DH]
+
+        # Compute keys and values from child features
+        kv = self.kv(x_child)  # [Nc, DH + C]
+
+        # Expand queries and separate keys and values
+        q = q[index].view(Nc, H, D)     # [Nc, H, D]
+        k = kv[:, :DH].view(Nc, H, D)   # [Nc, H, D]
+        v = kv[:, DH:].view(Nc, H, -1)  # [Nc, H, C // H]
+
+        # Apply scaling on the queries
+        q = q * self.qk_scale
+
+        # Apply scaling based on the number of neighbors of each node.
+        # This will induce a scaled softmax
+        if self.scale_qk_by_neigh:
+            num_neigh_scale = (index.bincount(minlength=Np) ** -0.5)[index]
+            q = q * num_neigh_scale.view(-1, 1, 1)
+
+        # TODO: add the relative positional encodings to the
+        #  compatibilities here
+        #  - k_rpe, q_rpe, c_rpe, v_rpe
+        #  - pos difference, absolute distance, squared distance, centroid distance, edge distance, ...
+        #  - with/out edge attributes
+        #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
+        #  - scalar rpe, vector rpe (see Stratified Transformer)
+        if self.k_rpe is not None:
+            rpe = self.k_rpe(edge_attr)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            k = k + rpe.view(Nc, H, -1)
+
+        if self.q_rpe is not None:
+            rpe = self.q_rpe(edge_attr)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            q = q + rpe.view(Nc, H, -1)
+
+        # Compute compatibility scores from the query-key products
+        compat = torch.einsum('nhd, nhd -> nh', q, k)  # [Nc, H]
+
+        # Compute the attention scores with scaled softmax
+        attn = softmax(compat, index=index, dim=0, num_nodes=Np)  # [Nc, H]
+
+        # Optional attention dropout
+        if self.attn_drop is not None:
+            attn = self.attn_drop(attn)
+
+        # Apply the attention on the values
+        x = (v * attn.unsqueeze(-1)).view(Nc, self.dim)  # [Nc, C]
+        x = scatter_sum(x, index, dim=0, dim_size=Np)  # [Np, C]
+
+        # Optional linear projection of features
+        if self.out_proj is not None:
+            x = self.out_proj(x)  # [Np, out_dim]
+
+        # Optional dropout on projection of features
+        if self.out_drop is not None:
+            x = self.out_drop(x)  # [Np, C] or [Np, out_dim]
+
+        return x
+
+    def _get_query(self, x_parent):
+        """Overwrite this method to implement the attentive pooling.
+
+        :param x_parent: Tensor of shape (Np, Cp)
+            Node features for the parent nodes
+
+        :returns Tensor of shape (Np, D * H)
+        """
+        raise NotImplementedError
+
+    def extra_repr(self) -> str:
+        return f'dim={self.dim}, num_heads={self.num_heads}'
+
+
+class AttentivePool(BaseAttentivePool):
+    def __init__(
+            self,
+            dim,
+            q_in_dim,
+            num_heads=1,
+            in_dim=None,
+            out_dim=None,
+            qkv_bias=True,
+            qk_dim=8,
+            qk_scale=None,
+            scale_qk_by_neigh=True,
+            attn_drop=None,
+            drop=None,
+            in_rpe_dim=18,
+            k_rpe=False,
+            q_rpe=False,
+            c_rpe=False,
+            v_rpe=False,
+            heads_share_rpe=False):
+        super().__init__(
+            dim,
+            num_heads=num_heads,
+            in_dim=in_dim,
+            out_dim=out_dim,
+            qkv_bias=qkv_bias,
+            qk_dim=qk_dim,
+            qk_scale=qk_scale,
+            scale_qk_by_neigh=scale_qk_by_neigh,
+            attn_drop=attn_drop,
+            drop=drop,
+            in_rpe_dim=in_rpe_dim,
+            k_rpe=k_rpe,
+            q_rpe=q_rpe,
+            c_rpe=c_rpe,
+            v_rpe=v_rpe,
+            heads_share_rpe=heads_share_rpe)
+
+        # Queries will be built from input parent feature
+        self.q = nn.Linear(q_in_dim, qk_dim * num_heads, bias=qkv_bias)  # TODO: use FFN heare to deal with handcrafted features
+
+    def _get_query(self, x_parent):
+        """Build queries from input parent features
+
+        :param x_parent: Tensor of shape (Np, Cp)
+            Node features for the parent nodes
+
+        :returns Tensor of shape (Np, D * H)
+        """
+        return self.q(x_parent)  # [Np, DH]
+
+
+
+class AttentivePoolWithLearntQueries(BaseAttentivePool):
+    def __init__(
+            self,
+            dim,
+            num_heads=1,
+            in_dim=None,
+            out_dim=None,
+            qkv_bias=True,
+            qk_dim=8,
+            qk_scale=None,
+            scale_qk_by_neigh=True,
+            attn_drop=None,
+            drop=None,
+            in_rpe_dim=18,
+            k_rpe=False,
+            q_rpe=False,
+            c_rpe=False,
+            v_rpe=False,
+            heads_share_rpe=False):
+        super().__init__(
+            dim,
+            num_heads=num_heads,
+            in_dim=in_dim,
+            out_dim=out_dim,
+            qkv_bias=qkv_bias,
+            qk_dim=qk_dim,
+            qk_scale=qk_scale,
+            scale_qk_by_neigh=scale_qk_by_neigh,
+            attn_drop=attn_drop,
+            drop=drop,
+            in_rpe_dim=in_rpe_dim,
+            k_rpe=k_rpe,
+            q_rpe=q_rpe,
+            c_rpe=c_rpe,
+            v_rpe=v_rpe,
+            heads_share_rpe=heads_share_rpe)
+
+        # Each head will learn its own query and all parent nodes will
+        # use these same queries.
+        self.q = LearnableParameter(torch.zeros(qk_dim * num_heads))
+
+        # `init_weights` initializes the weights with a truncated normal
+        # distribution
+        init_weights(self.q)
+
+    def _get_query(self, x_parent):
+        """Build queries from learnable queries. The parent features are
+        simply used to get the number of parent nodes and expand the
+        learnt queries accordingly.
+
+        :param x_parent: Tensor of shape (Np, Cp)
+            Node features for the parent nodes
+
+        :returns Tensor of shape (Np, D * H)
+        """
+        Np = x_parent.shape[0]
+        return self.q.repeat(Np, 1)
