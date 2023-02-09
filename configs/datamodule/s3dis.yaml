@@ -35,6 +35,7 @@ sample_graph_k_hops: 4
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
 select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 select_feat_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+select_feat_vertical_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8]
 
 # Preprocessing
 pre_transform:
@@ -159,26 +160,35 @@ on_device_train_transform:
         ratio: ${datamodule.dropout_segment_ratio}
         by_size: False
         by_class: False
-    - transform: JitterPosition  # before OnTheFlyEdgeFeatures to affect RPEs
+    - transform: JitterPosition  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
         sigma: 0.03
-    - transform: RandomTiltAndRotate  # before OnTheFlyEdgeFeatures to affect RPEs
+    - transform: RandomTiltAndRotate  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
         phi: 0.1
         theta: 180
-    - transform: RandomAnisotropicScale  # before OnTheFlyEdgeFeatures to affect RPEs
+    - transform: RandomAnisotropicScale  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
         delta: 0.2
-    - transform: RandomAxisFlip  # before OnTheFlyEdgeFeatures to affect RPEs
+    - transform: RandomAxisFlip  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
         p: 0.5
-    - transform: OnTheFlyEdgeFeatures
+    - transform: OnTheFlyHorizontalEdgeFeatures
       params:
         mean_offset: True
         std_offset: True
         mean_dist: True
         angle_source: True
         angle_target: True
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+    - transform: OnTheFlyVerticalEdgeFeatures
+      params:
         centroid_direction: True
         centroid_dist: True
         normal_angle: True
@@ -210,6 +220,11 @@ on_device_train_transform:
         level: '1+'
         key: 'edge_attr'
         idx: ${datamodule.select_feat_edge}
+    - transform: NAGSelectColumns
+      params:
+        level: 'all'
+        key: 'vertical_edge_attr'
+        idx: ${datamodule.select_feat_vertical_edge}
     - transform: JitterFeatures
       params:
         sigma: 0.01
@@ -233,13 +248,22 @@ on_device_val_transform:
         low: 0
         n_min: 128
         n_max: 256
-    - transform: OnTheFlyEdgeFeatures
+    - transform: OnTheFlyHorizontalEdgeFeatures
       params:
         mean_offset: True
         std_offset: True
         mean_dist: True
         angle_source: True
         angle_target: True
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+    - transform: OnTheFlyVerticalEdgeFeatures
+      params:
         centroid_direction: True
         centroid_dist: True
         normal_angle: True
@@ -266,6 +290,11 @@ on_device_val_transform:
         level: '1+'
         key: 'edge_attr'
         idx: ${datamodule.select_feat_edge}
+    - transform: NAGSelectColumns
+      params:
+        level: 'all'
+        key: 'vertical_edge_attr'
+        idx: ${datamodule.select_feat_vertical_edge}
     - transform: NAGAddSelfLoops
 
 # GPU-based test transforms

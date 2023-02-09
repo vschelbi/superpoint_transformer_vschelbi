@@ -13,8 +13,9 @@ from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
-    'RadiusHorizontalGraph', 'OnTheFlyEdgeFeatures', 'NAGAddSelfLoops',
-    'ConnectIsolated', 'NodeSize', 'JitterEdgeFeatures']
+    'RadiusHorizontalGraph', 'OnTheFlyHorizontalEdgeFeatures',
+    'OnTheFlyVerticalEdgeFeatures', 'NAGAddSelfLoops', 'ConnectIsolated',
+    'NodeSize', 'JitterEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
@@ -744,7 +745,7 @@ def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
     return data
 
 
-class OnTheFlyEdgeFeatures(Transform):
+class OnTheFlyHorizontalEdgeFeatures(Transform):
     """Compute edge features "on-the-fly" for all i->j and j->i
     horizontal edges of the NAG levels except its first (ie the
     0-level).
@@ -771,18 +772,34 @@ class OnTheFlyEdgeFeatures(Transform):
     edges. Besides, it expects the input `Data.edge_attr` to hold 5
     features precomputed with `_minimalistic_horizontal_edge_features`.
 
-    :param mean_offset:
-    :param std_offset:
-    :param mean_dist:
-    :param angle_source:
-    :param angle_target:
-    :param centroid_direction:
-    :param centroid_dist:
-    :param normal_angle:
-    :param log_length:
-    :param log_surface:
-    :param log_volume:
-    :param log_size:
+    :param mean_offset: bool
+        If True, compute the mean offset (subedges)
+    :param std_offset: bool
+        If True, compute the std offset (subedges)
+    :param mean_dist: bool
+        If True, compute the mean offset (subedges) distance
+    :param angle_source: bool
+        If True, compute the cosine of the angle between the mean offset
+        (subedges) and the source normal
+    :param angle_target: bool
+        If True, compute the cosine of the angle between the mean offset
+        (subedges) and the target normal
+    :param centroid_direction: bool
+        If True, compute the unit-normalized direction between the i and
+        j centroids
+    :param centroid_dist: bool
+        If True, compute the distance between the i and j centroids
+    :param normal_angle: bool
+        If True, compute the cosine of the angle between the i and j
+        normals
+    :param log_length: bool
+        If True, compute the i/j log length ratio
+    :param log_surface: bool
+        If True, compute the i/j log surface ratio
+    :param log_volume: bool
+        If True, compute the i/j log volume ratio
+    :param log_size: bool
+        If True, compute the i/j log size ratio
     """
 
     _IN_TYPE = NAG
@@ -837,20 +854,34 @@ def _on_the_fly_horizontal_edge_features(
     the node attributes, as well as the symmetric j->i edge and
     corresponding features.
 
-    :param data:
-    :param mean_offset:
-    :param std_offset:
-    :param mean_dist:
-    :param angle_source:
-    :param angle_target:
-    :param centroid_direction:
-    :param centroid_dist:
-    :param normal_angle:
-    :param log_length:
-    :param log_surface:
-    :param log_volume:
-    :param log_size:
-    :return:
+    :param mean_offset: bool
+        If True, compute the mean offset (subedges)
+    :param std_offset: bool
+        If True, compute the std offset (subedges)
+    :param mean_dist: bool
+        If True, compute the mean offset (subedges) distance
+    :param angle_source: bool
+        If True, compute the cosine of the angle between the mean offset
+        (subedges) and the source normal
+    :param angle_target: bool
+        If True, compute the cosine of the angle between the mean offset
+        (subedges) and the target normal
+    :param centroid_direction: bool
+        If True, compute the unit-normalized direction between the i and
+        j centroids
+    :param centroid_dist: bool
+        If True, compute the distance between the i and j centroids
+    :param normal_angle: bool
+        If True, compute the cosine of the angle between the i and j
+        normals
+    :param log_length: bool
+        If True, compute the i/j log length ratio
+    :param log_surface: bool
+        If True, compute the i/j log surface ratio
+    :param log_volume: bool
+        If True, compute the i/j log volume ratio
+    :param log_size: bool
+        If True, compute the i/j log size ratio
     """
 
     # Recover the edges between the segments
@@ -970,6 +1001,166 @@ def _on_the_fly_horizontal_edge_features(
     data.edge_attr = se_feat
 
     return data
+
+
+class OnTheFlyVerticalEdgeFeatures(Transform):
+    """Compute edge features "on-the-fly" for all vertical edges of the
+    NAG levels.
+
+    Optionally build some edge features that can be recovered from the
+    source and target node attributes.
+
+    Note: this transform is intended to be called after all sampling
+    transforms, to mitigate compute and memory impact of vertical
+    edges.
+
+    :param centroid_direction: bool
+        If True, compute the unit-normalized direction between the child
+        centroid and the parent centroid
+    :param centroid_dist: bool
+        If True, compute the distance between the child and parent
+        centroids
+    :param normal_angle: bool
+        If True, compute the cosine of the angle between the child and
+        parent normals
+    :param log_length: bool
+        If True, compute the parent/child log length ratio
+    :param log_surface: bool
+        If True, compute the parent/child log surface ratio
+    :param log_volume: bool
+        If True, compute the parent/child log volume ratio
+    :param log_size: bool
+        If True, compute the parent/child log size ratio
+    :return:
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(
+            self, centroid_direction=True, centroid_dist=True,
+            normal_angle=True, log_length=True, log_surface=True,
+            log_volume=True, log_size=True):
+        self.centroid_direction = centroid_direction
+        self.centroid_dist = centroid_dist
+        self.normal_angle = normal_angle
+        self.log_length = log_length
+        self.log_surface = log_surface
+        self.log_volume = log_volume
+        self.log_size = log_size
+
+    def _process(self, nag):
+        for i_level in range(1, nag.num_levels):
+            nag._list[i_level - 1] = _on_the_fly_vertical_edge_features(
+                nag[i_level - 1],
+                nag[i_level],
+                centroid_direction=self.centroid_direction,
+                centroid_dist=self.centroid_dist,
+                normal_angle=self.normal_angle,
+                log_length=self.log_length,
+                log_surface=self.log_surface,
+                log_volume=self.log_volume,
+                log_size=self.log_size)
+        return nag
+
+
+def _on_the_fly_vertical_edge_features(
+        data_child, data_parent, centroid_direction=True, centroid_dist=True,
+        normal_angle=True, log_length=True, log_surface=True, log_volume=True,
+        log_size=True):
+    """Compute edge features for a vertical graph, given child and
+    parent nodes.
+
+    :param data_child: Data object
+        Child nodes. Expected to hold `super_index`
+    :param data_parent: Data object
+        Parent nodes. Size must match `data_child.super_index.max()+1`
+    :param centroid_direction: bool
+        If True, compute the unit-normalized direction between the child
+        centroid and the parent centroid
+    :param centroid_dist: bool
+        If True, compute the distance between the child and parent
+        centroids
+    :param normal_angle: bool
+        If True, compute the cosine of the angle between the child and
+        parent normals
+    :param log_length: bool
+        If True, compute the parent/child log length ratio
+    :param log_surface: bool
+        If True, compute the parent/child log surface ratio
+    :param log_volume: bool
+        If True, compute the parent/child log volume ratio
+    :param log_size: bool
+        If True, compute the parent/child log size ratio
+    :return:
+    """
+
+    # Recover the parent index of each child node
+    idx = data_child.super_index
+    assert idx is not None, \
+        "Expects input child Data to have a 'super_index' attribute"
+
+    for d in [data_child, data_parent]:
+        assert not normal_angle or getattr(d, 'normal', None) is not None, \
+            "Expects input Data to have a 'normal' attribute"
+        assert not log_length or getattr(d, 'log_length', None) is not None, \
+            "Expects input Data to have a 'log_length' attribute"
+        assert not log_surface or getattr(d, 'log_surface', None) is not None, \
+            "Expects input Data to have a 'log_surface' attribute"
+        assert not log_volume or getattr(d, 'log_volume', None) is not None, \
+            "Expects input Data to have a 'log_volume' attribute"
+        assert not log_size or getattr(d, 'log_size', None) is not None, \
+            "Expects input Data to have a 'log_size' attribute"
+
+    # Compute the distance and direction between the segments' centroids
+    se_centroid_direction = data_parent.pos[idx] - data_child.pos
+    se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1)
+    se_centroid_direction /= se_centroid_dist.view(-1, 1)
+    se_centroid_dist = se_centroid_dist.sqrt()
+
+    # Compute some edge features based on segment attributes
+    normal_c = getattr(data_child, 'normal', None)
+    normal_p = getattr(data_parent, 'normal', None)
+    if normal_angle and normal_c is not None and normal_p is not None:
+        se_normal_angle = (normal_c * normal_p[idx]).sum(dim=1).abs()
+    else:
+        se_normal_angle = torch.zeros_like(se_centroid_dist)
+
+    def log_feature_ratio(key, required):
+        """Local helper to build log-ratio features"""
+        log_feat_c = getattr(data_child, key, None)
+        log_feat_p = getattr(data_parent, key, None)
+        if required and log_feat_c is not None and log_feat_p is not None:
+            log_feat = log_feat_p[idx] - log_feat_c
+        else:
+            log_feat = torch.zeros_like(se_centroid_dist)
+        return log_feat
+
+    se_log_length_ratio = log_feature_ratio('log_length', log_length)
+    se_log_surface_ratio = log_feature_ratio('log_surface', log_surface)
+    se_log_volume_ratio = log_feature_ratio('log_volume', log_volume)
+    se_log_size_ratio = log_feature_ratio('log_size', log_size)
+
+    # Aggregate all edge features
+    se_feat = torch.vstack([  # 9 TOT
+        se_centroid_direction.T,  # 3
+        se_centroid_dist,  # 1
+        se_normal_angle,  # 1
+        se_log_length_ratio,  # 1
+        se_log_surface_ratio,  # 1
+        se_log_volume_ratio,  # 1
+        se_log_size_ratio]).T  # 1
+
+    # Only keep the required edge attributes
+    mask = torch.tensor([
+        *[centroid_direction] * 3, centroid_dist, normal_angle, log_length,
+        log_surface, log_volume, log_size], device=data_child.device)
+    se_feat = se_feat[:, mask]
+
+    # Save vertical edge features in the child Data object
+    data_child.vertical_edge_attr = se_feat
+
+    return data_child
 
 
 class NAGAddSelfLoops(Transform):
