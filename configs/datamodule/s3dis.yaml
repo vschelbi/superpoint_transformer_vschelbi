@@ -28,7 +28,7 @@ spatial_weight: [5e-2, 5e-2, 5e-3, 5e-3]
 cutoff: [10, 10, 80, 640]
 w_adjacency: 1
 
-dropout_segment_ratio: [0.5, 0, 0, 0.3]
+dropout_segment_ratio: 0.2
 sample_graph_i_level: null  # setting to null will skip SampleGraph
 sample_graph_k_sample: 4
 sample_graph_k_hops: 4

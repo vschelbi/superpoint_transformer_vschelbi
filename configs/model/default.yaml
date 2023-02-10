@@ -4,7 +4,7 @@ num_classes: ${datamodule.num_classes}
 sampling_loss: False
 pointwise_loss: True
 weighted_loss: True
-transformer_lr_scale: 1
+transformer_lr_scale: 0.1
 
 optimizer:
   _target_: torch.optim.AdamW
@@ -18,7 +18,7 @@ scheduler:
   T_max: ${eval:'${trainer.max_epochs} - ${model.scheduler.num_warmup}'}
   eta_min: 1e-6
   warmup_init_lr: 1e-6
-  num_warmup: 50
+  num_warmup: 100
   warmup_strategy: 'cos'
 
 criterion:
