@@ -253,9 +253,11 @@ class DownNFuseStage(Stage):
             edge_index=None,
             edge_attr=None,
             num_super=None):
-        x = self.fusion(x1, self.pool(x2, index=pool_index, dim_size=num_super))
+        x_pooled = self.pool(
+            x2, x1, pool_index, edge_attr=edge_attr, num_pool=num_super)
+        x_fused = self.fusion(x1, x_pooled)
         return super().forward(
-            x,
+            x_fused,
             norm_index,
             pos=pos,
             node_size=node_size,

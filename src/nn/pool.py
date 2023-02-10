@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from torch_geometric.nn.aggr import SumAggregation as SumPool
-from torch_geometric.nn.aggr import MeanAggregation as MeanPool
-from torch_geometric.nn.aggr import MaxAggregation as MaxPool
-from torch_geometric.nn.aggr import MinAggregation as MinPool
+from torch_geometric.nn.aggr import SumAggregation
+from torch_geometric.nn.aggr import MeanAggregation
+from torch_geometric.nn.aggr import MaxAggregation
+from torch_geometric.nn.aggr import MinAggregation
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
 from src.nn import RPEFFN, LearnableParameter
@@ -13,6 +13,43 @@ from src.utils.nn import init_weights
 __all__ = [
     'SumPool', 'MeanPool', 'MaxPool', 'MinPool', 'AttentivePool',
     'AttentivePoolWithLearntQueries']
+
+
+class AgregationPoolMixIn:
+    """MixIn class to convert torch-geometric Aggregation modules into
+    Pool modules with our desired forward signature.
+
+    :param x_child: Tensor of shape (Nc, Cc)
+        Node features for the children nodes
+    :param x_parent: Any
+        Not used for Aggregation
+    :param index: LongTensor of shape (Nc)
+        Indices indicating the parent of each for each child node
+    :param edge_attr: Any
+        Not used for Aggregation
+    :param num_pool: int
+        Number of parent nodes Nc. If not provided, will be inferred
+        from `index.max() + 1`
+    :return:
+    """
+    def forward(self, x_child, x_parent, index, edge_attr=None, num_pool=None):
+        super().forward(x_child, index=index, dim_size=num_pool)
+
+
+class SumPool(AgregationPoolMixIn, SumAggregation):
+    pass
+
+
+class MeanPool(AgregationPoolMixIn, MeanAggregation):
+    pass
+
+
+class MaxPool(AgregationPoolMixIn, MaxAggregation):
+    pass
+
+
+class MinPool(AgregationPoolMixIn, MinAggregation):
+    pass
 
 
 class BaseAttentivePool(nn.Module):
@@ -92,7 +129,8 @@ class BaseAttentivePool(nn.Module):
         self.out_drop = nn.Dropout(drop) \
             if drop is not None and drop > 0 else None
 
-    def forward(self, x_child, x_parent, index, edge_attr=None):
+    def forward(
+            self, x_child, x_parent, index, edge_attr=None, num_pool=None):
         """
         :param x_child: Tensor of shape (Nc, Cc)
             Node features for the children nodes
@@ -102,10 +140,13 @@ class BaseAttentivePool(nn.Module):
             Indices indicating the parent of each for each child node
         :param edge_attr: FloatTensor or shape (Nc, F)
             Edge attributes for relative pose encoding
+        :param num_pool: int
+            Number of parent nodes Nc. If not provided, will be inferred
+            from the shape of x_parent
         :return:
         """
         Nc = x_child.shape[0]
-        Np = x_parent.shape[0]
+        Np = x_parent.shape[0] if num_pool is None else num_pool
         H = self.num_heads
         D = self.qk_dim
         DH = D * H
