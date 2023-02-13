@@ -933,6 +933,12 @@ def _on_the_fly_horizontal_edge_features(
     se_direction = se_mean_off / torch.linalg.norm(
         se_mean_off, dim=1).view(-1, 1)
 
+    # Sanity checks on normalized directions
+    se_centroid_direction[se_centroid_direction.is_nan()] = 0
+    se_centroid_direction = se_centroid_direction.clip(-1, 1)
+    se_direction[se_direction.is_nan()] = 0
+    se_direction = se_direction.clip(-1, 1)
+
     # Compute some edge features based on segment attributes
     normal = getattr(data, 'normal', None)
     if angle_source and normal is not None:
@@ -1117,6 +1123,10 @@ def _on_the_fly_vertical_edge_features(
     se_centroid_dist = torch.linalg.norm(se_centroid_direction, dim=1)
     se_centroid_direction /= se_centroid_dist.view(-1, 1)
     se_centroid_dist = se_centroid_dist.sqrt()
+
+    # Sanity checks on normalized directions
+    se_centroid_direction[se_centroid_direction.is_nan()] = 0
+    se_centroid_direction = se_centroid_direction.clip(-1, 1)
 
     # Compute some edge features based on segment attributes
     normal_c = getattr(data_child, 'normal', None)
