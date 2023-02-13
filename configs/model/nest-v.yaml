@@ -3,20 +3,19 @@ defaults:
 
 net:
   pool:
-    _target_: src.nn.AttentivePool  # MAKE A DIFFERENT INSTANCE FOR EACH POOL + SHARABLE ??? 
-    _partial_: True
-    dim: ${model.net.xxxxxxxxxx}
-    q_in_dim: ${eval:'len(${datamodule.select_feat_segment})'}
+    _target_: src.nn.AttentivePool
+    _partial_: True  # partial to let pool_factory pass the pool_dim
+    q_in_dim: ${eval:'1 + ${datamodule.feat_segment}'}  # size of handcrafted segment features + diameter
     num_heads: ${model.net.down_num_heads}
     in_dim: null
-    out_dim: ${model.net.xxxxxxxxxx}
+    out_dim: null  # no MLP here, for simplicity, the DownNFuseStage in_mlp will deal with it
     qkv_bias: ${model.net.qkv_bias}
     qk_dim: ${model.net.qk_dim}
     qk_scale: ${model.net.qk_scale}
     scale_qk_by_neigh: ${model.net.scale_qk_by_neigh}
     attn_drop: ${model.net.down_attn_drop}
     drop: ${model.net.down_residual_drop}
-    in_rpe_dim: ${eval:'len(${datamodule.select_feat_vertical_edge})'}
+    in_rpe_dim: ${datamodule.feat_vertical_edge}  # size of handcrafted vertical edge features
     k_rpe: ${model.net.k_rpe}
     q_rpe: ${model.net.q_rpe}
     c_rpe: ${model.net.c_rpe}

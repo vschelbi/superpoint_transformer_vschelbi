@@ -4,6 +4,8 @@ from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
     FastBatchNorm1d, CatFusion, CatInjection, RPEFFN
+from src.nn.pool import pool_factory
+
 
 __all__ = ['NeST']
 
@@ -26,6 +28,7 @@ class NeST(nn.Module):
             small_down_mlp=None,
 
             down_dim=None,
+            down_pool_dim=None,
             down_in_mlp=None,
             down_out_mlp=None,
             down_mlp_drop=None,
@@ -72,6 +75,7 @@ class NeST(nn.Module):
             qkv_bias=True,
             qk_scale=None,
             scale_qk_by_neigh=True,
+            in_rpe_dim=18,
             activation=nn.GELU(),
             pre_ln=True,
             no_sa=False,
@@ -106,18 +110,20 @@ class NeST(nn.Module):
         # Convert input arguments to nested lists
         (
             down_dim,
-             down_in_mlp,
-             down_out_mlp,
-             down_mlp_drop,
-             down_num_heads,
-             down_num_blocks,
-             down_ffn_ratio,
-             down_residual_drop,
-             down_attn_drop,
-             down_drop_path,
-             down_pos_injection_x_dim
+            down_pool_dim,
+            down_in_mlp,
+            down_out_mlp,
+            down_mlp_drop,
+            down_num_heads,
+            down_num_blocks,
+            down_ffn_ratio,
+            down_residual_drop,
+            down_attn_drop,
+            down_drop_path,
+            down_pos_injection_x_dim
         ) = listify_with_reference(
             down_dim,
+            down_pool_dim,
             down_in_mlp,
             down_out_mlp,
             down_mlp_drop,
@@ -180,7 +186,8 @@ class NeST(nn.Module):
 
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
-                    dim, num_blocks=num_blocks,
+                    dim,
+                    num_blocks=num_blocks,
                     in_mlp=in_mlp,
                     out_mlp=out_mlp,
                     mlp_activation=mlp_activation,
@@ -191,6 +198,7 @@ class NeST(nn.Module):
                     qkv_bias=qkv_bias,
                     qk_scale=qk_scale,
                     scale_qk_by_neigh=scale_qk_by_neigh,
+                    in_rpe_dim=in_rpe_dim,
                     ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop,
                     attn_drop=attn_drop,
@@ -203,7 +211,7 @@ class NeST(nn.Module):
                     q_rpe=stage_q_rpe,
                     c_rpe=c_rpe,
                     v_rpe=v_rpe,
-                    pool=pool,
+                    pool=pool_factory(pool, pool_dim),
                     fusion=fusion,
                     pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
@@ -212,12 +220,13 @@ class NeST(nn.Module):
                     heads_share_rpe=heads_share_rpe)
                 for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
                     ffn_ratio, residual_drop, attn_drop, drop_path,
-                    stage_k_rpe, stage_q_rpe, pos_injection_x_dim
+                    stage_k_rpe, stage_q_rpe, pool_dim, pos_injection_x_dim
                 in zip(
                     down_dim, down_num_blocks, down_in_mlp, down_out_mlp,
                     down_mlp_drop, down_num_heads, down_ffn_ratio,
                     down_residual_drop, down_attn_drop, down_drop_path,
-                    down_k_rpe, down_q_rpe, down_pos_injection_x_dim)])
+                    down_k_rpe, down_q_rpe, down_pool_dim,
+                    down_pos_injection_x_dim)])
         else:
             self.down_stages = None
 
@@ -233,7 +242,8 @@ class NeST(nn.Module):
 
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
-                    dim, num_blocks=num_blocks,
+                    dim,
+                    num_blocks=num_blocks,
                     in_mlp=in_mlp,
                     out_mlp=out_mlp,
                     mlp_activation=mlp_activation,
@@ -244,6 +254,7 @@ class NeST(nn.Module):
                     qkv_bias=qkv_bias,
                     qk_scale=qk_scale,
                     scale_qk_by_neigh=scale_qk_by_neigh,
+                    in_rpe_dim=in_rpe_dim,
                     ffn_ratio=ffn_ratio,
                     residual_drop=residual_drop,
                     attn_drop=attn_drop,
@@ -341,6 +352,7 @@ class NeST(nn.Module):
                 qkv_bias=qkv_bias,
                 qk_scale=qk_scale,
                 scale_qk_by_neigh=scale_qk_by_neigh,
+                in_rpe_dim=in_rpe_dim,
                 ffn_ratio=last_ffn_ratio,
                 residual_drop=last_residual_drop,
                 attn_drop=last_attn_drop,
@@ -503,6 +515,7 @@ class NeST(nn.Module):
             else None
         edge_index = nag[i_level].edge_index
         edge_attr = nag[i_level].edge_attr
+        v_edge_attr = nag[i_level - 1].vertical_edge_attr
 
         # Forward pass on the stage and store output x
         x_out, diameter = stage(
@@ -515,6 +528,7 @@ class NeST(nn.Module):
             super_index=super_index,
             edge_index=edge_index,
             edge_attr=edge_attr,
+            v_edge_attr=v_edge_attr,
             num_super=num_nodes)
 
         return x_out, diameter

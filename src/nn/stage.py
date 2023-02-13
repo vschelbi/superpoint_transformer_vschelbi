@@ -222,11 +222,15 @@ class DownNFuseStage(Stage):
         x2 -- Pool --
     """
 
-    def __init__(self, *args, pool='max', fusion='cat', **kwargs):
+    def __init__(
+            self, *args, pool='max', fusion='cat', **kwargs):
         super().__init__(*args, **kwargs)
 
         # Pooling operator
-        self.pool = pool_factory(pool)
+        # IMPORTANT: the `down_pool_block` naming MUST MATCH the one
+        # used in `PointSegmentationModule.configure_optimizers()` for
+        # differential learning rates to work
+        self.down_pool_block = pool_factory(pool)
 
         # Fusion operator
         self.fusion = fusion_factory(fusion)
@@ -242,9 +246,10 @@ class DownNFuseStage(Stage):
             super_index=None,
             edge_index=None,
             edge_attr=None,
+            v_edge_attr=None,
             num_super=None):
-        x_pooled = self.pool(
-            x_child, x_parent, pool_index, edge_attr=edge_attr,
+        x_pooled = self.down_pool_block(
+            x_child, x_parent, pool_index, edge_attr=v_edge_attr,
             num_pool=num_super)
         x_fused = self.fusion(x_parent, x_pooled)
         return super().forward(

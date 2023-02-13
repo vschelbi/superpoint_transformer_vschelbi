@@ -6,8 +6,8 @@ from torch_geometric.nn.aggr import MaxAggregation
 from torch_geometric.nn.aggr import MinAggregation
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
-from src.nn import RPEFFN, LearnableParameter
-from src.utils.nn import init_weights
+from src.nn import RPEFFN
+from src.utils.nn import init_weights, LearnableParameter
 
 
 __all__ = [
@@ -15,9 +15,10 @@ __all__ = [
     'AttentivePool', 'AttentivePoolWithLearntQueries']
 
 
-def pool_factory(pool):
+def pool_factory(pool, *args, **kwargs):
     """Build a Pool module from string or from an existing module. This
-    helper is intended to be used as a helper in Stage constructors.
+    helper is intended to be used as a helper in NEST and Stage
+    constructors.
     """
     if isinstance(pool, (AggregationPoolMixIn, BaseAttentivePool)):
         return pool
@@ -29,7 +30,7 @@ def pool_factory(pool):
         return MeanPool()
     if pool == 'sum':
         return SumPool()
-    raise NotImplementedError(f"Unknown pool mode '{pool}' mode")
+    return pool(*args, **kwargs)
 
 
 class AggregationPoolMixIn:
@@ -89,7 +90,7 @@ class BaseAttentivePool(nn.Module):
 
     def __init__(
             self,
-            dim,
+            dim=None,
             num_heads=1,
             in_dim=None,
             out_dim=None,
@@ -99,7 +100,7 @@ class BaseAttentivePool(nn.Module):
             scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
-            in_rpe_dim=18,
+            in_rpe_dim=9,
             k_rpe=False,
             q_rpe=False,
             c_rpe=False,
@@ -258,8 +259,8 @@ class BaseAttentivePool(nn.Module):
 class AttentivePool(BaseAttentivePool):
     def __init__(
             self,
-            dim,
-            q_in_dim,
+            dim=None,
+            q_in_dim=None,
             num_heads=1,
             in_dim=None,
             out_dim=None,
@@ -276,7 +277,7 @@ class AttentivePool(BaseAttentivePool):
             v_rpe=False,
             heads_share_rpe=False):
         super().__init__(
-            dim,
+            dim=dim,
             num_heads=num_heads,
             in_dim=in_dim,
             out_dim=out_dim,
@@ -311,7 +312,7 @@ class AttentivePool(BaseAttentivePool):
 class AttentivePoolWithLearntQueries(BaseAttentivePool):
     def __init__(
             self,
-            dim,
+            dim=None,
             num_heads=1,
             in_dim=None,
             out_dim=None,
@@ -328,7 +329,7 @@ class AttentivePoolWithLearntQueries(BaseAttentivePool):
             v_rpe=False,
             heads_share_rpe=False):
         super().__init__(
-            dim,
+            dim=dim,
             num_heads=num_heads,
             in_dim=in_dim,
             out_dim=out_dim,

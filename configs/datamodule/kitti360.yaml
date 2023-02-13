@@ -22,7 +22,7 @@ sample_graph_k_sample: 4
 sample_graph_k_hops: 3
 dropout_segment_ratio: [0.4, 0, 0, 0]
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
-select_feat_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+select_feat_horizontal_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 pre_transform:
     - transform: DataTo
@@ -126,7 +126,7 @@ train_transform:
       params:
         level: '1+'
         key: 'edge_attr'
-        idx: ${datamodule.select_feat_edge}
+        idx: ${datamodule.select_feat_horizontal_edge}
     - transform: NAGSelectColumns  # adapt datamodule.feat_point if modified
       params:
         level: 0

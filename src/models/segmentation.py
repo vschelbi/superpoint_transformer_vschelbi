@@ -246,16 +246,20 @@ class PointSegmentationModule(LightningModule):
             https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-optimizers
         """
         # Differential learning rate for transformer blocks
-        t_name = 'transformer_blocks'
+        t_names = ['transformer_blocks', 'down_pool_block']
         lr = self.hparams.optimizer.keywords['lr']
         t_lr = lr * self.hparams.transformer_lr_scale
         param_dicts = [
             {
-                "params": [p for n, p in self.named_parameters()
-                           if t_name not in n and p.requires_grad]},
+                "params": [
+                    p
+                    for n, p in self.named_parameters()
+                    if all([t not in n for t in t_names]) and p.requires_grad]},
             {
-                "params": [p for n, p in self.named_parameters()
-                           if t_name in n and p.requires_grad],
+                "params": [
+                    p
+                    for n, p in self.named_parameters()
+                    if any([t in n for t in t_names]) and p.requires_grad],
                 "lr": t_lr}]
         optimizer = self.hparams.optimizer(params=param_dicts)
 

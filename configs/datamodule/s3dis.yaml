@@ -15,7 +15,8 @@ dataloader:
 num_classes: 13
 feat_point: ${eval:'len(${datamodule.select_feat_point})'}
 feat_segment: ${eval:'len(${datamodule.select_feat_segment})'}
-feat_edge: ${eval:'len(${datamodule.select_feat_edge})'}
+feat_horizontal_edge: ${eval:'len(${datamodule.select_feat_horizontal_edge})'}
+feat_vertical_edge: ${eval:'len(${datamodule.select_feat_vertical_edge})'}
 
 # Parameters declared here to facilitate tuning configs without copying
 # all the pre_transforms
@@ -34,7 +35,7 @@ sample_graph_k_sample: 4
 sample_graph_k_hops: 4
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
 select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-select_feat_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+select_feat_horizontal_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 select_feat_vertical_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8]
 
 # Preprocessing
@@ -219,7 +220,7 @@ on_device_train_transform:
       params:
         level: '1+'
         key: 'edge_attr'
-        idx: ${datamodule.select_feat_edge}
+        idx: ${datamodule.select_feat_horizontal_edge}
     - transform: NAGSelectColumns
       params:
         level: 'all'
@@ -289,7 +290,7 @@ on_device_val_transform:
       params:
         level: '1+'
         key: 'edge_attr'
-        idx: ${datamodule.select_feat_edge}
+        idx: ${datamodule.select_feat_horizontal_edge}
     - transform: NAGSelectColumns
       params:
         level: 'all'

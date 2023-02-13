@@ -1100,17 +1100,17 @@ def _on_the_fly_vertical_edge_features(
     assert idx is not None, \
         "Expects input child Data to have a 'super_index' attribute"
 
-    for d in [data_child, data_parent]:
-        assert not normal_angle or getattr(d, 'normal', None) is not None, \
-            "Expects input Data to have a 'normal' attribute"
-        assert not log_length or getattr(d, 'log_length', None) is not None, \
-            "Expects input Data to have a 'log_length' attribute"
-        assert not log_surface or getattr(d, 'log_surface', None) is not None, \
-            "Expects input Data to have a 'log_surface' attribute"
-        assert not log_volume or getattr(d, 'log_volume', None) is not None, \
-            "Expects input Data to have a 'log_volume' attribute"
-        assert not log_size or getattr(d, 'log_size', None) is not None, \
-            "Expects input Data to have a 'log_size' attribute"
+    # for d in [data_child, data_parent]:
+    #     assert not normal_angle or getattr(d, 'normal', None) is not None, \
+    #         "Expects input Data to have a 'normal' attribute"
+    #     assert not log_length or getattr(d, 'log_length', None) is not None, \
+    #         "Expects input Data to have a 'log_length' attribute"
+    #     assert not log_surface or getattr(d, 'log_surface', None) is not None, \
+    #         "Expects input Data to have a 'log_surface' attribute"
+    #     assert not log_volume or getattr(d, 'log_volume', None) is not None, \
+    #         "Expects input Data to have a 'log_volume' attribute"
+    #     assert not log_size or getattr(d, 'log_size', None) is not None, \
+    #         "Expects input Data to have a 'log_size' attribute"
 
     # Compute the distance and direction between the segments' centroids
     se_centroid_direction = data_parent.pos[idx] - data_child.pos
