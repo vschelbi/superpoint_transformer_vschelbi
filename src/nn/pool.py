@@ -11,11 +11,28 @@ from src.utils.nn import init_weights
 
 
 __all__ = [
-    'SumPool', 'MeanPool', 'MaxPool', 'MinPool', 'AttentivePool',
-    'AttentivePoolWithLearntQueries']
+    'pool_factory', 'SumPool', 'MeanPool', 'MaxPool', 'MinPool',
+    'AttentivePool', 'AttentivePoolWithLearntQueries']
 
 
-class AgregationPoolMixIn:
+def pool_factory(pool):
+    """Build a Pool module from string or from an existing module. This
+    helper is intended to be used as a helper in Stage constructors.
+    """
+    if isinstance(pool, (AggregationPoolMixIn, BaseAttentivePool)):
+        return pool
+    if pool == 'max':
+        return MaxPool()
+    if pool == 'min':
+        return MinPool()
+    if pool == 'mean':
+        return MeanPool()
+    if pool == 'sum':
+        return SumPool()
+    raise NotImplementedError(f"Unknown pool mode '{pool}' mode")
+
+
+class AggregationPoolMixIn:
     """MixIn class to convert torch-geometric Aggregation modules into
     Pool modules with our desired forward signature.
 
@@ -36,19 +53,19 @@ class AgregationPoolMixIn:
         super().forward(x_child, index=index, dim_size=num_pool)
 
 
-class SumPool(AgregationPoolMixIn, SumAggregation):
+class SumPool(AggregationPoolMixIn, SumAggregation):
     pass
 
 
-class MeanPool(AgregationPoolMixIn, MeanAggregation):
+class MeanPool(AggregationPoolMixIn, MeanAggregation):
     pass
 
 
-class MaxPool(AgregationPoolMixIn, MaxAggregation):
+class MaxPool(AggregationPoolMixIn, MaxAggregation):
     pass
 
 
-class MinPool(AgregationPoolMixIn, MinAggregation):
+class MinPool(AggregationPoolMixIn, MinAggregation):
     pass
 
 
@@ -252,7 +269,7 @@ class AttentivePool(BaseAttentivePool):
             scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
-            in_rpe_dim=18,
+            in_rpe_dim=9,
             k_rpe=False,
             q_rpe=False,
             c_rpe=False,

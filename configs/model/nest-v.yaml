@@ -1,0 +1,24 @@
+defaults:
+  - nest.yaml
+
+net:
+  pool:
+    _target_: src.nn.AttentivePool  # MAKE A DIFFERENT INSTANCE FOR EACH POOL + SHARABLE ??? 
+    _partial_: True
+    dim: ${model.net.xxxxxxxxxx}
+    q_in_dim: ${eval:'len(${datamodule.select_feat_segment})'}
+    num_heads: ${model.net.down_num_heads}
+    in_dim: null
+    out_dim: ${model.net.xxxxxxxxxx}
+    qkv_bias: ${model.net.qkv_bias}
+    qk_dim: ${model.net.qk_dim}
+    qk_scale: ${model.net.qk_scale}
+    scale_qk_by_neigh: ${model.net.scale_qk_by_neigh}
+    attn_drop: ${model.net.down_attn_drop}
+    drop: ${model.net.down_residual_drop}
+    in_rpe_dim: ${eval:'len(${datamodule.select_feat_vertical_edge})'}
+    k_rpe: ${model.net.k_rpe}
+    q_rpe: ${model.net.q_rpe}
+    c_rpe: ${model.net.c_rpe}
+    v_rpe: ${model.net.v_rpe}
+    heads_share_rpe: ${model.net.heads_share_rpe}

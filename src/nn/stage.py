@@ -1,8 +1,7 @@
-import torch
 from torch import nn
 from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm, \
     RPEFFN
-from src.nn.pool import *
+from src.nn.pool import pool_factory
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
 from src.nn.position_encoding import *
@@ -227,24 +226,15 @@ class DownNFuseStage(Stage):
         super().__init__(*args, **kwargs)
 
         # Pooling operator
-        if pool == 'max':
-            self.pool = MaxPool()
-        elif pool == 'min':
-            self.pool = MinPool()
-        elif pool == 'mean':
-            self.pool = MeanPool()
-        elif pool == 'sum':
-            self.pool = SumPool()
-        else:
-            raise NotImplementedError(f'Unknown pool={pool} mode')
+        self.pool = pool_factory(pool)
 
         # Fusion operator
         self.fusion = fusion_factory(fusion)
 
     def forward(
             self,
-            x1,
-            x2,
+            x_parent,
+            x_child,
             norm_index,
             pool_index,
             pos=None,
@@ -254,8 +244,9 @@ class DownNFuseStage(Stage):
             edge_attr=None,
             num_super=None):
         x_pooled = self.pool(
-            x2, x1, pool_index, edge_attr=edge_attr, num_pool=num_super)
-        x_fused = self.fusion(x1, x_pooled)
+            x_child, x_parent, pool_index, edge_attr=edge_attr,
+            num_pool=num_super)
+        x_fused = self.fusion(x_parent, x_pooled)
         return super().forward(
             x_fused,
             norm_index,
@@ -293,8 +284,8 @@ class UpNFuseStage(Stage):
 
     def forward(
             self,
-            x1,
-            x2,
+            x_child,
+            x_parent,
             norm_index,
             unpool_index,
             pos=None,
@@ -302,9 +293,9 @@ class UpNFuseStage(Stage):
             super_index=None,
             edge_index=None,
             edge_attr=None):
-        x = self.fusion(x1, self.unpool(x2, unpool_index))
+        x_fused = self.fusion(x_child, self.unpool(x_parent, unpool_index))
         return super().forward(
-            x,
+            x_fused,
             norm_index,
             pos=pos,
             node_size=node_size,
