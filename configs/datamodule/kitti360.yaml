@@ -151,6 +151,7 @@ on_device_train_transform:
         k_hops: ${datamodule.sample_graph_k_hops}
         by_size: False
         by_class: False
+        disjoint: False
     - transform: DropoutSegments
       params:
         ratio: ${datamodule.dropout_segment_ratio}
