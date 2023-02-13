@@ -7,7 +7,7 @@ from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils import fast_randperm, sparse_sample
 from src.transforms import Transform
-from src.data import NAG
+from src.data import NAG, NAGBatch
 from src.utils.metrics import atomic_to_histogram
 
 
@@ -379,6 +379,11 @@ class SampleGraph(Transform):
         sampled in a way that guarantees each NAG is sampled from.
         Obviously enough, if `k_sample > Data.batch.max() + 1`, not all
         NAGs will be sampled from
+    :param disjoint: bool
+        If True, subgraphs sampled from the same NAG will be separated
+        as distinct NAGs themselves. Instead, when `disjoint=False`,
+        subgraphs sampled in the same NAG will be long the same NAG.
+        Hence, if two subgraphs share a node, they will be connected
     """
 
     _IN_TYPE = NAG
@@ -386,13 +391,14 @@ class SampleGraph(Transform):
 
     def __init__(
             self, i_level=-1, k_sample=1, k_hops=2, by_size=False,
-            by_class=False, use_batch=True):
+            by_class=False, use_batch=True, disjoint=False):
         self.i_level = i_level
         self.k_sample = k_sample
         self.k_hops = k_hops
         self.by_size = by_size
         self.by_class = by_class
         self.use_batch = use_batch
+        self.disjoint = disjoint
 
     def _process(self, nag):
         device = nag.device
@@ -475,6 +481,16 @@ class SampleGraph(Transform):
         else:
             idx = torch.multinomial(weights, k_sample, replacement=False)
 
+        # Sample the NAG and allow subgraphs sharing the same nodes to
+        # be connected
+        if not self.disjoint:
+            return self._sample_subgraphs(nag, i_level, idx)
+
+        # All sampled subgraphs are disjoint
+        return NAGBatch.from_nag_list([
+            self._sample_subgraphs(nag, i_level, i.view(1)) for i in idx])
+
+    def _sample_subgraphs(self, nag, i_level, idx):
         # Convert the graph to undirected graph. This is needed because
         # it is likely that the graph has been trimmed (see
         # `src.utils.to_trimmed`), in which case the trimmed edge
@@ -485,13 +501,11 @@ class SampleGraph(Transform):
         idx = k_hop_subgraph(
             idx, self.k_hops, edge_index, num_nodes=nag[i_level].num_nodes)[0]
 
-        #TODO: drop segments beyond a certain threshold to keep the sampled
+        # TODO: drop segments beyond a certain threshold to keep the sampled
         # graph size relatively constant ?
 
         # Select the nodes and update the NAG structure accordingly
-        nag = nag.select(i_level, idx)
-
-        return nag
+        return nag.select(i_level, idx)
 
 
 class SampleSegments(Transform):
