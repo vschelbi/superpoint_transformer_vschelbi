@@ -934,9 +934,9 @@ def _on_the_fly_horizontal_edge_features(
         se_mean_off, dim=1).view(-1, 1)
 
     # Sanity checks on normalized directions
-    se_centroid_direction[se_centroid_direction.is_nan()] = 0
+    se_centroid_direction[se_centroid_direction.isnan()] = 0
     se_centroid_direction = se_centroid_direction.clip(-1, 1)
-    se_direction[se_direction.is_nan()] = 0
+    se_direction[se_direction.isnan()] = 0
     se_direction = se_direction.clip(-1, 1)
 
     # Compute some edge features based on segment attributes
@@ -1125,7 +1125,7 @@ def _on_the_fly_vertical_edge_features(
     se_centroid_dist = se_centroid_dist.sqrt()
 
     # Sanity checks on normalized directions
-    se_centroid_direction[se_centroid_direction.is_nan()] = 0
+    se_centroid_direction[se_centroid_direction.isnan()] = 0
     se_centroid_direction = se_centroid_direction.clip(-1, 1)
 
     # Compute some edge features based on segment attributes
