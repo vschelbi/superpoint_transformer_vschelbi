@@ -13,18 +13,38 @@ feat_segment: 15
 # all the pre_transforms
 voxel: 0.1
 knn: 50
-regularization: [0.04, 0.2, 0.8, 1.4]
-spatial_weight: [1e-2, 0, 0, 0]
-cutoff: [10, 100, 1000, 10000]
-w_adjacency: -1
-sample_graph_i_level: 3
-sample_graph_k_sample: 4
-sample_graph_k_hops: 3
-sample_graph_disjoint: True
-dropout_segment_ratio: [0.4, 0, 0, 0]
-select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7]
-select_feat_horizontal_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+pcp_regularization: [0.04, 0.2, 0.8, 1.4]
+pcp_spatial_weight: [1e-2, 0, 0, 0]
+pcp_cutoff: [10, 100, 1000, 10000]
+pcp_k_adjacency: 10
+pcp_w_adjacency: -1
+pcp_iterations: 15
+graph_k_max: 50
+graph_gap: [0, 1, 5, 10]
 
+# Batch construction parameterization
+dropout_segment_ratio: 0.3
+sample_point_min: 16
+sample_point_max: 64
+sample_graph_i_level: 3  # setting to null will skip SampleGraph
+sample_graph_k_sample: 4
+sample_graph_k_hops: 4
+sample_graph_disjoint: True
+select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
+select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+select_feat_horizontal_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+select_feat_vertical_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+
+# Augmentations parameterization
+pos_jitter: 0.03
+tilt_n_rotate_phi: 0.1
+tilt_n_rotate_theta: 180
+anisotropic_scaling: 0.2
+node_feat_jitter: 0.01
+h_edge_feat_jitter: 0.01
+v_edge_feat_jitter: 0.01
+
+# Preprocessing
 pre_transform:
     - transform: DataTo
       params:
@@ -68,8 +88,8 @@ pre_transform:
         device: 'cuda'
     - transform: AdjacencyGraph
       params:
-        k: 10
-        w: ${datamodule.w_adjacency}
+        k: ${datamodule.pcp_k_adjacency}
+        w: ${datamodule.pcp_w_adjacency}
     - transform: ConnectIsolated
       params:
         k: 1
@@ -78,11 +98,11 @@ pre_transform:
         device: 'cpu'
     - transform: CutPursuitPartition
       params:
-        regularization: ${datamodule.regularization}
-        spatial_weight: ${datamodule.spatial_weight}
-        k_adjacency: 10
-        cutoff: ${datamodule.cutoff}
-        iterations: 15
+        regularization: ${datamodule.pcp_regularization}
+        spatial_weight: ${datamodule.pcp_spatial_weight}
+        k_adjacency: ${datamodule.pcp_k_adjacency}
+        cutoff: ${datamodule.pcp_cutoff}
+        iterations: ${datamodule.pcp_iterations}
         parallel: True
         verbose: True
     - transform: NAGTo
@@ -90,22 +110,17 @@ pre_transform:
         device: 'cuda'
     - transform: SegmentFeatures
       params:
-        n_max: 32
-        n_min: 5
-#    - transform: DelaunayHorizontalGraph
-#      params:
-#        n_max_edge: 64
-#        n_min: 5
-#        max_dist: [5, 10, 100, 100]
+        n_min: 32
+        n_max: 128
     - transform: RadiusHorizontalGraph
       params:
-        k_max: 50
-        gap: [0, 1, 5, 10]
+        k_max: ${datamodule.graph_k_max}
+        gap: ${datamodule.graph_gap}
         k_ratio: 0.2
         k_min: 20
         cycles: 3
         margin: 0.2
-        chunk_size: [1e6, 1e5, 1e4, 1e3]
+        chunk_size: [1e6, 1e5, 1e4, 1e3]  # reduce if CUDA memory errors
         halfspace_filter: True
         bbox_filter: True
         target_pc_flip: True
@@ -114,37 +129,27 @@ pre_transform:
       params:
         device: 'cpu'
 
+# CPU-based train transforms
 train_transform:
     - transform: NAGRemoveKeys  # remove any features already computed in CutPursuitPartition
       params:
         level: '1+'
         keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
-    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
-      params:
-        level: '1+'
-        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
-    - transform: NAGSelectColumns
-      params:
-        level: '1+'
-        key: 'edge_attr'
-        idx: ${datamodule.select_feat_horizontal_edge}
-    - transform: NAGSelectColumns  # adapt datamodule.feat_point if modified
-      params:
-        level: 0
-        key: 'x'
-        idx: ${datamodule.select_feat_point}
 
+# CPU-based val transforms
 val_transform: ${datamodule.train_transform}
 
+# CPU-based test transforms
 test_transform: ${datamodule.train_transform}
 
+# GPU-based train transforms
 on_device_train_transform:
     - transform: SampleSegments
       params:
-        high: 1
         low: 0
-        n_min: 16
-        n_max: 32
+        high: 1
+        n_min: ${datamodule.sample_point_min}
+        n_max: ${datamodule.sample_point_max}
     - transform: SampleGraph
       params:
         i_level: ${datamodule.sample_graph_i_level}
@@ -158,29 +163,88 @@ on_device_train_transform:
         ratio: ${datamodule.dropout_segment_ratio}
         by_size: False
         by_class: False
-    - transform: JitterPosition
+    - transform: JitterPosition  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
-        sigma: 0.03
-    - transform: JitterFeatures
+        sigma: ${datamodule.pos_jitter}
+    - transform: RandomTiltAndRotate  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
-        sigma: 0.01
-    - transform: RandomTiltAndRotate
+        phi: ${datamodule.tilt_n_rotate_phi}
+        theta: ${datamodule.tilt_n_rotate_theta}
+    - transform: RandomAnisotropicScale  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
-        phi: 0.1
-        theta: 180
-    - transform: RandomAnisotropicScale
-      params:
-        delta: 0.2
-    - transform: RandomAxisFlip
+        delta: ${datamodule.anisotropic_scaling}
+    - transform: RandomAxisFlip  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
         p: 0.5
+    - transform: OnTheFlyHorizontalEdgeFeatures
+      params:
+        mean_offset: True
+        std_offset: True
+        mean_dist: True
+        angle_source: True
+        angle_target: True
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+    - transform: OnTheFlyVerticalEdgeFeatures
+      params:
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+#    - transform: SampleEdges
+#      params:
+#        level: '1+'
+#        n_min: [5, 5, 15, 15]
+#        n_max: [10, 15, 25, 25]
+    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
+      params:
+        level: '1+'
+        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
+    - transform: NAGSelectColumns
+      params:
+        level: 0
+        key: 'x'
+        idx: ${datamodule.select_feat_point}
+    - transform: NAGSelectColumns
+      params:
+        level: '1+'
+        key: 'x'
+        idx: ${datamodule.select_feat_segment}
+    - transform: NAGSelectColumns
+      params:
+        level: '1+'
+        key: 'edge_attr'
+        idx: ${datamodule.select_feat_horizontal_edge}
+    - transform: NAGSelectColumns
+      params:
+        level: 'all'
+        key: 'vertical_edge_attr'
+        idx: ${datamodule.select_feat_vertical_edge}
+    - transform: JitterFeatures
+      params:
+        sigma: ${datamodule.node_feat_jitter}
+    - transform: JitterHorizontalEdgeFeatures
+      params:
+        sigma: ${datamodule.h_edge_feat_jitter}
+    - transform: JitterVerticalEdgeFeatures
+      params:
+        sigma: ${datamodule.v_edge_feat_jitter}
     - transform: NAGColorAutoContrast
       params:
         level: all
         p: 0.5
         x_idx: 0
+    - transform: NAGAddSelfLoops
 
-# Should we actually sample at validation time ?
+# GPU-based val transforms
 on_device_val_transform:
     - transform: SampleSegments
       params:
@@ -189,4 +253,5 @@ on_device_val_transform:
         n_min: 128
         n_max: 256
 
+# GPU-based test transforms
 on_device_test_transform: ${datamodule.on_device_val_transform}

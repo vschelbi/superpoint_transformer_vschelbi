@@ -15,7 +15,7 @@ __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
     'RadiusHorizontalGraph', 'OnTheFlyHorizontalEdgeFeatures',
     'OnTheFlyVerticalEdgeFeatures', 'NAGAddSelfLoops', 'ConnectIsolated',
-    'NodeSize', 'JitterEdgeFeatures']
+    'NodeSize', 'JitterHorizontalEdgeFeatures', 'JitterVerticalEdgeFeatures']
 
 
 class AdjacencyGraph(Transform):
@@ -1251,7 +1251,7 @@ class NodeSize(Transform):
         return nag
 
 
-class JitterEdgeFeatures(Transform):
+class JitterHorizontalEdgeFeatures(Transform):
     """Add some gaussian noise to data.edge_attr for all data in a NAG.
 
     :param sigma: float or List(float)
@@ -1262,6 +1262,7 @@ class JitterEdgeFeatures(Transform):
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    _KEY = 'edge_attr'
 
     def __init__(self, sigma=0.01):
         assert isinstance(sigma, (int, float, list))
@@ -1277,12 +1278,26 @@ class JitterEdgeFeatures(Transform):
 
         for i_level in range(nag.num_levels):
 
-            if sigma[i_level] <= 0 \
-                    or getattr(nag[i_level], 'edge_attr', None) is None:
+            feat = getattr(nag[i_level], self._KEY, None)
+
+            if feat is None or sigma[i_level] <= 0:
                 continue
 
-            noise = torch.randn_like(
-                nag[i_level].edge_attr, device=device) * self.sigma
-            nag[i_level].edge_attr += noise
+            noise = torch.randn_like(feat, device=device) * self.sigma
+            feat += noise
+
+            setattr(nag[i_level], self._KEY, feat)
 
         return nag
+
+class JitterVerticalEdgeFeatures(JitterHorizontalEdgeFeatures):
+    """Add some gaussian noise to data.vertical_edge_attr for all data
+    in a NAG.
+
+    :param sigma: float or List(float)
+        Standard deviation of the gaussian noise. A list may be passed
+        to transform NAG levels with different parameters. Passing
+        sigma <= 0 will prevent any jittering.
+    """
+
+    _KEY = 'vertical_edge_attr'
