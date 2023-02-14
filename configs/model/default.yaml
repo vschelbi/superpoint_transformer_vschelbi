@@ -9,7 +9,7 @@ transformer_lr_scale: 0.1
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
-  lr: 0.01
+  lr: 0.1
   weight_decay: 1e-4
 
 scheduler:
