@@ -50,8 +50,8 @@ class AggregationPoolMixIn:
         from `index.max() + 1`
     :return:
     """
-    def forward(self, x_child, x_parent, index, edge_attr=None, num_pool=None):
-        super().forward(x_child, index=index, dim_size=num_pool)
+    def __call__(self, x_child, x_parent, index, edge_attr=None, num_pool=None):
+        return super().__call__(x_child, index=index, dim_size=num_pool)
 
 
 class SumPool(AggregationPoolMixIn, SumAggregation):
