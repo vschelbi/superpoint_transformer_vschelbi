@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import itertools
 from scipy.spatial import Delaunay
-from torch_scatter import scatter_mean, scatter_std, scatter_min, segment_csr
+from torch_scatter import scatter_mean, scatter_std, segment_csr
 from torch_geometric.utils import add_self_loops
 from src.transforms import Transform
 import src
