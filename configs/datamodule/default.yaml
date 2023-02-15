@@ -27,6 +27,10 @@ on_device_train_transform: null
 on_device_val_transform: null
 on_device_test_transform: null
 
+# Test-time augmentation
+tta_runs: null
+tta_val: False
+
 # DataLoader parameters. Would be good to have them live in another file
 dataloader:
     batch_size: 4

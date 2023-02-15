@@ -4,9 +4,14 @@ from pytorch_lightning import LightningDataModule
 from src.transforms import instantiate_transforms
 from src.loader import DataLoader
 from src.data import NAGBatch
+from src.transforms import SampleGraphs, NAGSaveNodeIndex
 
 
 log = logging.getLogger(__name__)
+
+
+# List of transforms not allowed for test-time augmentation
+_TTA_CONFLICTS = [SampleGraphs]
 
 
 class BaseDataModule(LightningDataModule):
@@ -53,7 +58,8 @@ class BaseDataModule(LightningDataModule):
             val_transform=None, test_transform=None,
             on_device_train_transform=None, on_device_val_transform=None,
             on_device_test_transform=None, dataloader=None, mini=False,
-            trainval=False, val_on_test=False, **kwargs):
+            trainval=False, val_on_test=False, tta_runs=None, tta_val=False,
+            **kwargs):
         super().__init__()
 
         # This line allows to access init params with 'self.hparams'
@@ -82,6 +88,9 @@ class BaseDataModule(LightningDataModule):
 
         # Instantiate the transforms
         self.set_transforms()
+
+        # Check TTA and transforms conflicts
+        self.check_tta_conflicts()
 
     @property
     def dataset_class(self):
@@ -171,6 +180,25 @@ class BaseDataModule(LightningDataModule):
                     continue
                 setattr(self, name, transform)
 
+    def check_tta_conflicts(self):
+        """Make sure the transforms are Test-Time Augmentation-friendly
+        """
+        # Skip if not TTA
+        if self.hparams.tta_runs is None or self.hparams.tta_runs == 1:
+            return
+
+        # Make sure all transforms are test-time augmentation friendly
+        transforms = self.test_transform.transforms
+        transforms += self.on_device_test_transform.transforms
+        if self.hparams.tta_val:
+            transforms += self.val_transform.transforms
+            transforms += self.on_device_val_transform.transforms
+        for t in transforms:
+            if t in _TTA_CONFLICTS:
+                raise NotImplementedError(
+                    f"Cannot use {t} with test-time augmentation. The "
+                    f"following transforms are not supported: {_TTA_CONFLICTS}")
+
     def train_dataloader(self):
         return DataLoader(
             dataset=self.train_dataset,
@@ -213,8 +241,8 @@ class BaseDataModule(LightningDataModule):
     @torch.no_grad()
     def on_after_batch_transfer(self, nag_list, dataloader_idx):
         """Intended to call on-device operations. Typically,
-        NAGBatch.from_nag_list and some Transforms like SampleSegments
-        and DropoutSegments are faster on GPU, and we may prefer
+        NAGBatch.from_nag_list and some Transforms like SampleSubNodes
+        and SampleSegments are faster on GPU, and we may prefer
         executing those on GPU rather than in CPU-based DataLoader.
 
         Use self.on_device_<stage>_transform, to benefit from this hook.
@@ -241,10 +269,36 @@ class BaseDataModule(LightningDataModule):
                 'Unsure which stage we are in, defaulting to '
                 'self.on_device_train_transform')
             on_device_transform = self.on_device_train_transform
+
+        # Skip on_device_transform if None
         if on_device_transform is None:
             return nag
-        else:
+
+        # Apply on_device_transform only once when in training mode and
+        # if no test-time augmentation is required
+        if self.trainer.training \
+                or self.hparams.tta_runs is None \
+                or self.hparams.tta_runs == 1 or \
+                (self.trainer.validating and not self.hparams.tta_val):
             return on_device_transform(nag)
+
+        # TODO : TTA
+        #  - add node identifier (which level ?)
+        #  - run on device transform multiple times and accumulate into list of NAGs
+        #  - make SURE ALL INPUT NODES ARE COVERED !!!
+        # Run test-time augmentations and produce a list of NAGs for
+        # each inference run. Since the augmentations may change the
+        # sampling of the nodes, we save their input id here before
+        # anything. This will allow us to fuse the multiple predictions
+        # for each node in the `LightningModule.step()`. We return the
+        # input NAG as well as the list of augmented NAGs. Passing the
+        # input NAG will help us make sure all nodes have received a
+        # prediction
+        nag = NAGSaveNodeIndex()(nag)
+        nag_list = []
+        for i_run in range(self.hparams.tta_runs):
+            nag_list.append(on_device_transform(nag.clone()))
+        return nag, nag_list
 
     def __repr__(self):
         return f'{self.__class__.__name__}'

@@ -12,8 +12,8 @@ from src.utils.metrics import atomic_to_histogram
 
 
 __all__ = [
-    'Shuffle', 'SaveOriginalPosId', 'GridSampling3D', 'SampleSegments',
-    'SampleGraph', 'DropoutSegments', 'SampleEdges']
+    'Shuffle', 'SaveNodeIndex', 'NAGSaveNodeIndex', 'GridSampling3D',
+    'SampleSubNodes', 'SampleGraphs', 'SampleSegments', 'SampleEdges']
 
 
 class Shuffle(Transform):
@@ -24,13 +24,12 @@ class Shuffle(Transform):
         return data.select(idx, update_sub=False, update_super=False)
 
 
-class SaveOriginalPosId(Transform):
-    """Adds the index of the points to the Data object attributes. This
-    allows tracking points from the output back to the input data 
-    object.
+class SaveNodeIndex(Transform):
+    """Adds the index of the nodes to the Data object attributes. This
+    allows tracking nodes from the output back to the input Data object.
     """
 
-    KEY = 'origin_id'
+    KEY = 'node_id'
 
     def __init__(self, key=None):
         self.KEY = key if key is not None else self.KEY
@@ -41,6 +40,20 @@ class SaveOriginalPosId(Transform):
 
         setattr(data, self.KEY, torch.arange(0, data.pos.shape[0]))
         return data
+
+
+class NAGSaveNodeIndex(SaveNodeIndex):
+    """SaveNodeIndex, applied to each NAG level.
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def _process(self, nag):
+        transform = SaveNodeIndex(key=self.KEY)
+        for i_level in range(nag.num_levels):
+            nag._list[i_level] = transform(nag._list[i_level])
+        return nag
 
 
 class GridSampling3D(Transform):
@@ -98,7 +111,7 @@ class GridSampling3D(Transform):
         if verbose:
             print(
                 "If you need to keep track of the position of your points, use "
-                "SaveOriginalPosId transform before using GridSampling3D.")
+                "SaveNodeIndex transform before using GridSampling3D.")
 
             if self.mode == "last":
                 print(
@@ -181,7 +194,7 @@ def _group_data(
     _VOTING_KEYS = ['y', 'instance_labels', 'super_index', 'is_val']
 
     # Keys for which voxel aggregation will be based on majority voting
-    _LAST_KEYS = ['batch', SaveOriginalPosId.KEY]
+    _LAST_KEYS = ['batch', SaveNodeIndex.KEY]
 
     # Supported mode for aggregation
     _MODES = ['mean', 'last']
@@ -252,14 +265,68 @@ def _group_data(
     return data
 
 
-class DropoutSegments(Transform):
+class SampleSubNodes(Transform):
+    """Sample elements at `low`-level, based on which segment they
+    belong to at `high`-level.
+
+    The sampling operation is run without replacement and each segment
+    is sampled at least `n_min` and at most `n_max` times, within the
+    limits allowed by its actual size.
+
+    Optionally, a `mask` can be passed to filter out some `low`-level
+    points.
+
+    :param high: int
+        Partition level of the segments we want to sample. By default,
+        `high=1` to sample the level-1 segments
+    :param low: int
+        Partition level we will sample from, guided by the `high`
+        segments. By default, `high=0` to sample the level-0 points.
+        `low=-1` is accepted when level-0 has a `sub` attribute (ie
+        level-0 points are themselves segments of `-1` level absent
+        from the NAG object).
+    :param n_max: int
+        Maximum number of `low`-level elements to sample in each
+        `high`-level segment
+    :param n_min: int
+        Minimum number of `low`-level elements to sample in each
+        `high`-level segment, within the limits of its size (ie no
+        oversampling)
+    :param mask: list, np.ndarray, torch.LongTensor, torch.BoolTensor
+        Indicates a subset of `low`-level elements to consider. This
+        allows ignoring
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(
+            self, high=1, low=0, n_max=32, n_min=16, mask=None):
+        assert isinstance(high, int)
+        assert isinstance(low, int)
+        assert isinstance(n_max, int)
+        assert isinstance(n_min, int)
+        self.high = high
+        self.low = low
+        self.n_max = n_max
+        self.n_min = n_min
+        self.mask = mask
+
+    def _process(self, nag):
+        idx = nag.get_sampling(
+            high=self.high, low=self.low, n_max=self.n_max, n_min=self.n_min,
+            return_pointers=False)
+        return nag.select(self.low, idx)
+
+
+class SampleSegments(Transform):
     """Remove randomly-picked nodes from each level 1+ of the NAG. This
     operation relies on `NAG.select()` to maintain index consistency
     across the NAG levels.
 
-    Note: we do not directly prune level-0 points, see `SampleSegments`
+    Note: we do not directly prune level-0 points, see `SampleSubNodes`
     for that. For speed consideration, it is recommended to use
-    `SampleSegments` first before `DropoutSegments`, to minimize the
+    `SampleSubNodes` first before `SampleSegments`, to minimize the
     number of level-0 points to manipulate.
 
     :param ratio: float or list(float)
@@ -343,7 +410,7 @@ class DropoutSegments(Transform):
         return nag
 
 
-class SampleGraph(Transform):
+class SampleGraphs(Transform):
     """Randomly pick segments from `i_level`, along with their `k_hops`
     neighbors. This can be thought as a spherical sampling in the graph
     of i_level.
@@ -351,9 +418,9 @@ class SampleGraph(Transform):
     This operation relies on `NAG.select()` to maintain index
     consistency across the NAG levels.
 
-    Note: we do not directly sample level-0 points, see `SampleSegments`
+    Note: we do not directly sample level-0 points, see `SampleSubNodes`
     for that. For speed consideration, it is recommended to use
-    `SampleSegments` first before `SampleGraph`, to minimize the
+    `SampleSubNodes` first before `SampleGraphs`, to minimize the
     number of level-0 points to manipulate.
 
     :param i_level: int
@@ -506,60 +573,6 @@ class SampleGraph(Transform):
 
         # Select the nodes and update the NAG structure accordingly
         return nag.select(i_level, idx)
-
-
-class SampleSegments(Transform):
-    """Sample elements at `low`-level, based on which segment they
-    belong to at `high`-level.
-
-    The sampling operation is run without replacement and each segment
-    is sampled at least `n_min` and at most `n_max` times, within the
-    limits allowed by its actual size.
-
-    Optionally, a `mask` can be passed to filter out some `low`-level
-    points.
-
-    :param high: int
-        Partition level of the segments we want to sample. By default,
-        `high=1` to sample the level-1 segments
-    :param low: int
-        Partition level we will sample from, guided by the `high`
-        segments. By default, `high=0` to sample the level-0 points.
-        `low=-1` is accepted when level-0 has a `sub` attribute (ie
-        level-0 points are themselves segments of `-1` level absent
-        from the NAG object).
-    :param n_max: int
-        Maximum number of `low`-level elements to sample in each
-        `high`-level segment
-    :param n_min: int
-        Minimum number of `low`-level elements to sample in each
-        `high`-level segment, within the limits of its size (ie no
-        oversampling)
-    :param mask: list, np.ndarray, torch.LongTensor, torch.BoolTensor
-        Indicates a subset of `low`-level elements to consider. This
-        allows ignoring
-    """
-
-    _IN_TYPE = NAG
-    _OUT_TYPE = NAG
-
-    def __init__(
-            self, high=1, low=0, n_max=32, n_min=16, mask=None):
-        assert isinstance(high, int)
-        assert isinstance(low, int)
-        assert isinstance(n_max, int)
-        assert isinstance(n_min, int)
-        self.high = high
-        self.low = low
-        self.n_max = n_max
-        self.n_min = n_min
-        self.mask = mask
-
-    def _process(self, nag):
-        idx = nag.get_sampling(
-            high=self.high, low=self.low, n_max=self.n_max, n_min=self.n_min,
-            return_pointers=False)
-        return nag.select(self.low, idx)
 
 
 class SampleEdges(Transform):

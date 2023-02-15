@@ -4,10 +4,12 @@ from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from src.metrics import ConfusionMatrix
 from src.utils import loss_with_target_histogram, atomic_to_histogram, \
-    init_weights, wandb_confusion_matrix
+    init_weights, wandb_confusion_matrix, knn_2
 from src.nn import Classifier
 from src.optim.lr_scheduler import ON_PLATEAU_SCHEDULERS
 from pytorch_lightning.loggers.wandb import WandbLogger
+from src.data import NAG
+from src.transforms import NAGSaveNodeIndex
 
 
 log = logging.getLogger(__name__)
@@ -113,7 +115,78 @@ class PointSegmentationModule(LightningModule):
         self.val_oa_best.reset()
         self.val_macc_best.reset()
 
-    def step(self, nag):
+    def step(self, batch):
+        # Forward step on the input batch. If a (NAG, List(NAG)) is
+        # passed, the multi-run inference will be triggered
+        if isinstance(batch, NAG):
+            logits, preds, y_hist = self.step_single_run_inference(batch)
+        else:
+            logits, preds, y_hist = self.step_multi_run_inference(*batch)
+
+        # Compute the loss either in a point-wise or segment-wise
+        # fashion
+        if self.hparams.pointwise_loss:
+            loss = loss_with_target_histogram(self.criterion, logits, y_hist)
+        else:
+            loss = self.criterion(logits, y_hist.argmax(dim=1))
+
+        return loss, preds, y_hist
+
+    def step_single_run_inference(self, nag):
+        """Single-run inference
+        """
+        y_hist = self.step_get_y_hist(nag)
+        logits = self.forward(nag)
+        preds = torch.argmax(logits, dim=1)
+        return logits, preds, y_hist
+
+    def step_multi_run_inference(self, nag_ref, nag_list):
+        """Multi-run inference, typically with test-time augmentation.
+        See `BaseDataModule.on_after_batch_transfer`
+        """
+        # Recover the original id of each node in the reference Data
+        order = nag_ref[1][NAGSaveNodeIndex.KEY].argsort()
+
+        # Recover the target labels from the reference NAG and sort
+        # them wrt the input node order
+        y_hist = self.step_get_y_hist(nag_ref)[order]
+
+        # Build the global logits, in which the multi-run
+        # logits will be accumulated, before computing their final
+        # prediction
+        logits = torch.zeros_like(y_hist, dtype=torch.float)
+        seen = torch.zeros_like(y_hist[:, 0], dtype=torch.bool)
+
+        for i_run, nag in enumerate(nag_list):
+            # Recover the node identifier that should have been
+            # implanted by `BaseDataModule.on_after_batch_transfer`
+            node_id = nag[1][NAGSaveNodeIndex.KEY]
+
+            # Forward on the augmented data and update the global
+            # logits of the node
+            logits[node_id] += self.forward(nag)
+            seen[node_id] = True
+
+        # If some nodes were not seen across any of the multi-runs,
+        # search their nearest seen neighbor
+        unseen_idx = torch.where(~seen)[0]
+        if unseen_idx.size() > 0:
+            seen_idx = torch.where(seen)[0]
+            x_search = nag_ref[1].pos[seen_idx]
+            x_query = nag_ref[1].pos[unseen_idx]
+            neighbors = knn_2(x_search, x_query, 1, r_max=2)[0]
+            assert neighbors.ge(0).all(), \
+                "Could not find a neighbor for all unseen nodes. Consider " \
+                "sampling less nodes in the augmentations, or increase the " \
+                "search radius"
+            logits[unseen_idx] = logits[seen_idx][neighbors]
+
+        # Compute the global prediction
+        preds = torch.argmax(logits, dim=1)
+
+        return logits, preds, y_hist
+
+    def step_get_y_hist(self, nag):
         # Recover level-1 label histograms, either from the level-0
         # sampled points (ie sampling will affect the loss and metrics)
         # or directly from the precomputed level-1 label histograms (ie
@@ -132,18 +205,7 @@ class PointSegmentationModule(LightningModule):
         # unlabeled/ignored points
         y_hist = y_hist[:, :self.num_classes]
 
-        # Inference on the batch
-        logits = self.forward(nag)
-        preds = torch.argmax(logits, dim=1)
-
-        # Compute the loss either in a point-wise or segment-wise
-        # fashion
-        if self.hparams.pointwise_loss:
-            loss = loss_with_target_histogram(self.criterion, logits, y_hist)
-        else:
-            loss = self.criterion(logits, y_hist.argmax(dim=1))
-
-        return loss, preds, y_hist
+        return y_hist
 
     def training_step(self, batch, batch_idx):
         loss, preds, targets = self.step(batch)

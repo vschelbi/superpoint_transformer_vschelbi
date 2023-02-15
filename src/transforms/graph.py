@@ -1290,6 +1290,7 @@ class JitterHorizontalEdgeFeatures(Transform):
 
         return nag
 
+
 class JitterVerticalEdgeFeatures(JitterHorizontalEdgeFeatures):
     """Add some gaussian noise to data.vertical_edge_attr for all data
     in a NAG.

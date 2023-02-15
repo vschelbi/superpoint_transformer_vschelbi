@@ -3,7 +3,7 @@ import numpy as np
 import os.path as osp
 import plotly.graph_objects as go
 from src.data import Data, NAG, Cluster
-from src.transforms import GridSampling3D, SaveOriginalPosId
+from src.transforms import GridSampling3D, SaveNodeIndex
 from src.utils import fast_randperm, to_trimmed
 from torch_scatter import scatter_mean
 from src.utils.color import *
@@ -92,7 +92,7 @@ def visualize_3d(
         # Add an ID to the points before applying NAG.select
         nag_temp = input.clone()
         for i in range(nag_temp.num_levels):
-            nag_temp._list[i] = SaveOriginalPosId()(nag_temp[i])
+            nag_temp._list[i] = SaveNodeIndex()(nag_temp[i])
 
         # Apply the selection
         nag_temp = nag_temp.select(*select)
@@ -101,7 +101,7 @@ def visualize_3d(
         # has been selected
         for i in range(num_levels):
             selected = torch.zeros(input[i].num_nodes, dtype=torch.bool)
-            selected[nag_temp[i][SaveOriginalPosId.KEY]] = True
+            selected[nag_temp[i][SaveNodeIndex.KEY]] = True
             input[i].selected = selected
 
         del nag_temp, selected
@@ -109,7 +109,7 @@ def visualize_3d(
     elif select is not None and not is_nag:
 
         # Add an ID to the points before applying NAG.select
-        data_temp = SaveOriginalPosId()(Data(pos=input.pos.clone()))
+        data_temp = SaveNodeIndex()(Data(pos=input.pos.clone()))
 
         # Apply the selection
         data_temp = data_temp.select(select)[0]
@@ -117,7 +117,7 @@ def visualize_3d(
         # Indicate, for each node of the hierarchical graph, whether it
         # has been selected
         selected = torch.zeros(input.num_nodes, dtype=torch.bool)
-        selected[data_temp[SaveOriginalPosId.KEY]] = True
+        selected[data_temp[SaveNodeIndex.KEY]] = True
         input.selected = selected
 
         del data_temp, selected
@@ -139,7 +139,7 @@ def visualize_3d(
     # structure will be affected too. To maintain NAG consistency, we
     # only support 'GridSampling3D' with mode='last' and random sampling
     # without replacement. To keep track of the sampled points and index
-    # the NAG accordingly, we use 'SaveOriginalPosId'
+    # the NAG accordingly, we use 'SaveNodeIndex'
     idx = torch.arange(data_0.num_points)
 
     # If a voxel size is specified, voxelize the level-0. We first
@@ -147,9 +147,9 @@ def visualize_3d(
     # voxelization on this. We then recover the original grid-sampled
     # points indices to be used with Data.select or NAG.select
     if voxel > 0:
-        data_temp = SaveOriginalPosId()(Data(pos=data_0.pos.clone()))
+        data_temp = SaveNodeIndex()(Data(pos=data_0.pos.clone()))
         data_temp = GridSampling3D(voxel, mode='last')(data_temp)
-        idx = data_temp[SaveOriginalPosId.KEY]
+        idx = data_temp[SaveNodeIndex.KEY]
         del data_temp
 
     # If the cloud is too large with respect to required 'max_points',
