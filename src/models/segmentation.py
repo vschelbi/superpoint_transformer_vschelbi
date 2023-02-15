@@ -174,17 +174,21 @@ class PointSegmentationModule(LightningModule):
         # If some nodes were not seen across any of the multi-runs,
         # search their nearest seen neighbor
         unseen_idx = torch.where(~seen)[0]
-        if unseen_idx.size() > 0:
+        if unseen_idx.shape[0] > 0:
             seen_idx = torch.where(seen)[0]
             x_search = nag[1].pos[seen_idx]
             x_query = nag[1].pos[unseen_idx]
             neighbors = knn_2(x_search, x_query, 1, r_max=2)[0]
-            if not neighbors.lt(0).any():
+            num_unseen = unseen_idx.shape[0]
+            num_seen = seen_idx.shape[0]
+            num_left_out = (neighbors == -1).sum().long()
+            if num_left_out > 0:
                 log.warning(
-                    "Could not find a neighbor for all unseen nodes. These "
-                    "nodes will default to label-0 class prediction. Consider "
-                    "sampling less nodes in the augmentations, or increase the "
-                    "search radius")
+                    f"Could not find a neighbor for all unseen nodes: num_seen="
+                    f"{num_seen}, num_unseen={num_unseen}, num_left_out="
+                    f"{num_left_out}. These left out nodes will default to "
+                    f"label-0 class prediction. Consider sampling less nodes "
+                    f"in the augmentations, or increase the search radius")
             logits[unseen_idx] = logits[seen_idx][neighbors]
 
         # Compute the global prediction
