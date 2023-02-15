@@ -140,16 +140,17 @@ class PointSegmentationModule(LightningModule):
         preds = torch.argmax(logits, dim=1)
         return logits, preds, y_hist
 
-    def step_multi_run_inference(self, nag_ref, nag_list):
+    def step_multi_run_inference(self, nag, transform, num_runs):
         """Multi-run inference, typically with test-time augmentation.
         See `BaseDataModule.on_after_batch_transfer`
         """
-        # Recover the original id of each node in the reference Data
-        order = nag_ref[1][NAGSaveNodeIndex.KEY].argsort()
+        # Since the transform may change the sampling of the nodes, we
+        # save their input id here before anything. This will allow us
+        # to fuse the multiple predictions for each node
+        transform.transforms = [NAGSaveNodeIndex()] + transform.transforms
 
-        # Recover the target labels from the reference NAG and sort
-        # them wrt the input node order
-        y_hist = self.step_get_y_hist(nag_ref)[order]
+        # Recover the target labels from the reference NAG
+        y_hist = self.step_get_y_hist(nag)
 
         # Build the global logits, in which the multi-run
         # logits will be accumulated, before computing their final
@@ -157,14 +158,17 @@ class PointSegmentationModule(LightningModule):
         logits = torch.zeros_like(y_hist, dtype=torch.float)
         seen = torch.zeros_like(y_hist[:, 0], dtype=torch.bool)
 
-        for i_run, nag in enumerate(nag_list):
+        for i_run in range(num_runs):
+            # Apply transform
+            nag_ = transform(nag.clone())
+
             # Recover the node identifier that should have been
             # implanted by `BaseDataModule.on_after_batch_transfer`
-            node_id = nag[1][NAGSaveNodeIndex.KEY]
+            node_id = nag_[1][NAGSaveNodeIndex.KEY]
 
             # Forward on the augmented data and update the global
             # logits of the node
-            logits[node_id] += self.forward(nag)
+            logits[node_id] += self.forward(nag_)
             seen[node_id] = True
 
         # If some nodes were not seen across any of the multi-runs,
@@ -172,13 +176,15 @@ class PointSegmentationModule(LightningModule):
         unseen_idx = torch.where(~seen)[0]
         if unseen_idx.size() > 0:
             seen_idx = torch.where(seen)[0]
-            x_search = nag_ref[1].pos[seen_idx]
-            x_query = nag_ref[1].pos[unseen_idx]
+            x_search = nag[1].pos[seen_idx]
+            x_query = nag[1].pos[unseen_idx]
             neighbors = knn_2(x_search, x_query, 1, r_max=2)[0]
-            assert neighbors.ge(0).all(), \
-                "Could not find a neighbor for all unseen nodes. Consider " \
-                "sampling less nodes in the augmentations, or increase the " \
-                "search radius"
+            if not neighbors.lt(0).any():
+                log.warning(
+                    "Could not find a neighbor for all unseen nodes. These "
+                    "nodes will default to label-0 class prediction. Consider "
+                    "sampling less nodes in the augmentations, or increase the "
+                    "search radius")
             logits[unseen_idx] = logits[seen_idx][neighbors]
 
         # Compute the global prediction

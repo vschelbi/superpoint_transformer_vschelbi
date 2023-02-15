@@ -4,7 +4,7 @@ from pytorch_lightning import LightningDataModule
 from src.transforms import instantiate_transforms
 from src.loader import DataLoader
 from src.data import NAGBatch
-from src.transforms import SampleGraphs, NAGSaveNodeIndex
+from src.transforms import SampleGraphs
 
 
 log = logging.getLogger(__name__)
@@ -282,23 +282,10 @@ class BaseDataModule(LightningDataModule):
                 (self.trainer.validating and not self.hparams.tta_val):
             return on_device_transform(nag)
 
-        # TODO : TTA
-        #  - add node identifier (which level ?)
-        #  - run on device transform multiple times and accumulate into list of NAGs
-        #  - make SURE ALL INPUT NODES ARE COVERED !!!
-        # Run test-time augmentations and produce a list of NAGs for
-        # each inference run. Since the augmentations may change the
-        # sampling of the nodes, we save their input id here before
-        # anything. This will allow us to fuse the multiple predictions
-        # for each node in the `LightningModule.step()`. We return the
-        # input NAG as well as the list of augmented NAGs. Passing the
-        # input NAG will help us make sure all nodes have received a
-        # prediction
-        nag = NAGSaveNodeIndex()(nag)
-        nag_list = []
-        for i_run in range(self.hparams.tta_runs):
-            nag_list.append(on_device_transform(nag.clone()))
-        return nag, nag_list
+        # We return the input NAG as well as the augmentation transform
+        # and the number of runs. Those will be used by
+        # `LightningModule.step` to accumulate multiple augmented runs
+        return nag, on_device_transform, self.hparams.tta_runs
 
     def __repr__(self):
         return f'{self.__class__.__name__}'
