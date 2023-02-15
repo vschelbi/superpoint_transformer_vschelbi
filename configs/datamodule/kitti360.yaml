@@ -43,6 +43,9 @@ anisotropic_scaling: 0.2
 node_feat_jitter: 0.01
 h_edge_feat_jitter: 0.01
 v_edge_feat_jitter: 0.01
+node_feat_drop: 0.2
+h_edge_feat_drop: 0.2
+v_edge_feat_drop: 0.2
 
 # Preprocessing
 pre_transform:
@@ -242,16 +245,79 @@ on_device_train_transform:
         level: all
         p: 0.5
         x_idx: 0
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.node_feat_drop}
+        key: 'x'
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.h_edge_feat_drop}
+        key: 'edge_attr'
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.v_edge_feat_drop}
+        key: 'vertical_edge_attr'
     - transform: NAGAddSelfLoops
 
 # GPU-based val transforms
 on_device_val_transform:
     - transform: SampleSegments
       params:
-        high: 1
         low: 0
+        high: 1
         n_min: 128
         n_max: 256
+    - transform: OnTheFlyHorizontalEdgeFeatures
+      params:
+        mean_offset: True
+        std_offset: True
+        mean_dist: True
+        angle_source: True
+        angle_target: True
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+    - transform: OnTheFlyVerticalEdgeFeatures
+      params:
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
+      params:
+        level: '1+'
+        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
+    - transform: NAGSelectColumns
+      params:
+        level: 0
+        key: 'x'
+        idx: ${datamodule.select_feat_point}
+    - transform: NAGSelectColumns
+      params:
+        level: '1+'
+        key: 'x'
+        idx: ${datamodule.select_feat_segment}
+    - transform: NAGSelectColumns
+      params:
+        level: '1+'
+        key: 'edge_attr'
+        idx: ${datamodule.select_feat_horizontal_edge}
+    - transform: NAGSelectColumns
+      params:
+        level: 'all'
+        key: 'vertical_edge_attr'
+        idx: ${datamodule.select_feat_vertical_edge}
+    - transform: NAGAddSelfLoops
 
 # GPU-based test transforms
 on_device_test_transform: ${datamodule.on_device_val_transform}

@@ -54,6 +54,9 @@ anisotropic_scaling: 0.2
 node_feat_jitter: 0.01
 h_edge_feat_jitter: 0.01
 v_edge_feat_jitter: 0.01
+node_feat_drop: 0.2
+h_edge_feat_drop: 0.2
+v_edge_feat_drop: 0.2
 
 # Preprocessing
 pre_transform:
@@ -258,6 +261,21 @@ on_device_train_transform:
         level: all
         p: 0.5
         x_idx: 0
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.node_feat_drop}
+        key: 'x'
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.h_edge_feat_drop}
+        key: 'edge_attr'
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.v_edge_feat_drop}
+        key: 'vertical_edge_attr'
     - transform: NAGAddSelfLoops
 
 # GPU-based val transforms
@@ -266,8 +284,8 @@ on_device_train_transform:
 on_device_val_transform:
     - transform: SampleSegments
       params:
-        high: 1
         low: 0
+        high: 1
         n_min: 128
         n_max: 256
     - transform: OnTheFlyHorizontalEdgeFeatures
