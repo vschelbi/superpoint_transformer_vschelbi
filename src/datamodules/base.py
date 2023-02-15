@@ -4,14 +4,13 @@ from pytorch_lightning import LightningDataModule
 from src.transforms import instantiate_transforms
 from src.loader import DataLoader
 from src.data import NAGBatch
-from src.transforms import SampleGraphs
 
 
 log = logging.getLogger(__name__)
 
 
 # List of transforms not allowed for test-time augmentation
-_TTA_CONFLICTS = [SampleGraphs]
+_TTA_CONFLICTS = []
 
 
 class BaseDataModule(LightningDataModule):

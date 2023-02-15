@@ -1,0 +1,116 @@
+defaults:
+  - kitti360.yaml
+
+# Test-time augmentation
+tta_runs: 5
+tta_val: True
+tta:
+    # Batch construction parameterization
+    sample_point_min: 64
+    sample_point_max: 256
+    sample_segment_ratio: 0.3
+    sample_edge_n_min: -1  # [5, 5, 15, 15]
+    sample_edge_n_max: -1  # [10, 15, 25, 25]
+
+    # Augmentations parameterization
+    pos_jitter: 0.03
+    tilt_n_rotate_phi: 0.1
+    tilt_n_rotate_theta: 180
+    anisotropic_scaling: 0.2
+    node_feat_jitter: 0.01
+    h_edge_feat_jitter: 0.01
+    v_edge_feat_jitter: 0.01
+
+# GPU-based val transforms
+on_device_val_transform:
+    - transform: SampleSubNodes
+      params:
+        low: 0
+        high: 1
+        n_min: ${datamodule.tta.sample_point_min}
+        n_max: ${datamodule.tta.sample_point_max}
+    - transform: SampleSegments
+      params:
+        ratio: ${datamodule.tta.sample_segment_ratio}
+        by_size: False
+        by_class: False
+    - transform: JitterPosition  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+      params:
+        sigma: ${datamodule.tta.pos_jitter}
+    - transform: RandomTiltAndRotate  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+      params:
+        phi: ${datamodule.tta.tilt_n_rotate_phi}
+        theta: ${datamodule.tta.tilt_n_rotate_theta}
+    - transform: RandomAnisotropicScale  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+      params:
+        delta: ${datamodule.tta.anisotropic_scaling}
+    - transform: RandomAxisFlip  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+      params:
+        p: 0.5
+    - transform: OnTheFlyHorizontalEdgeFeatures
+      params:
+        mean_offset: True
+        std_offset: True
+        mean_dist: True
+        angle_source: True
+        angle_target: True
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+    - transform: OnTheFlyVerticalEdgeFeatures
+      params:
+        centroid_direction: True
+        centroid_dist: True
+        normal_angle: True
+        log_length: True
+        log_surface: True
+        log_volume: True
+        log_size: True
+    - transform: SampleEdges
+      params:
+        level: '1+'
+        n_min: ${datamodule.tta.sample_edge_n_min}
+        n_max: ${datamodule.tta.sample_edge_n_max}
+    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
+      params:
+        level: '1+'
+        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
+    - transform: NAGSelectColumns
+      params:
+        level: 0
+        key: 'x'
+        idx: ${datamodule.select_feat_point}
+    - transform: NAGSelectColumns
+      params:
+        level: '1+'
+        key: 'x'
+        idx: ${datamodule.select_feat_segment}
+    - transform: NAGSelectColumns
+      params:
+        level: '1+'
+        key: 'edge_attr'
+        idx: ${datamodule.select_feat_horizontal_edge}
+    - transform: NAGSelectColumns
+      params:
+        level: 'all'
+        key: 'vertical_edge_attr'
+        idx: ${datamodule.select_feat_vertical_edge}
+    - transform: JitterFeatures
+      params:
+        sigma: ${datamodule.tta.node_feat_jitter}
+    - transform: JitterHorizontalEdgeFeatures
+      params:
+        sigma: ${datamodule.tta.h_edge_feat_jitter}
+    - transform: JitterVerticalEdgeFeatures
+      params:
+        sigma: ${datamodule.tta.v_edge_feat_jitter}
+    - transform: NAGColorAutoContrast
+      params:
+        level: all
+        p: 0.5
+        x_idx: 0
+    - transform: NAGAddSelfLoops
