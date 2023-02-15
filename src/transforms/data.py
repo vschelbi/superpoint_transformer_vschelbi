@@ -7,7 +7,8 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 __all__ = [
     'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeyToX',
-    'NAGAddKeyToX', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns']
+    'NAGAddKeyToX', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns',
+    'DropoutColumns', 'NAGDropoutColumns']
 
 
 class DataToNAG(Transform):
