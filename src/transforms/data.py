@@ -399,25 +399,22 @@ class DropoutColumns(Transform):
             return data
 
         # Recover the Data attribute of interest
-        attr = data[self.key]
-        if attr.dim() == 1:
-            attr = attr.view(-1, 1)
-        num_col = attr.shape[1]
+        if data[self.key].dim() == 1:
+            data[self.key] = data[self.key].view(-1, 1)
+        num_col = data[self.key].shape[1]
 
-        # Prepare the column indexing. In case an index was passed, the
-        # columns sharing the same index will undergo the same dropout
-        group = torch.tensor(self.group, device=device) if self.group is not None \
-            else torch.arange(num_col, device=device)
-        group = consecutive_cluster(group)[0]
+        # Prepare column indexing
+        if self.group is None:
+            self.group = torch.arange(num_col, device=device)
+        elif self.group.device != device:
+            self.group = self.group.to(device)
+        group = consecutive_cluster(self.group)[0]
         assert group.shape[0] == num_col
 
         # Compute a boolean mask across the columns, indicating whether
         # they should (not) be dropped
-        mask = torch.rand(attr.shape[1], device=data.device) > self.p
-        attr *= mask[group].float().view(1, -1)
-
-        # Restore the Data attribute
-        data[self.key] = attr
+        mask = torch.rand(num_col, device=data.device) > self.p
+        data[self.key] *= mask[group].float().view(1, -1)
 
         return data
 
