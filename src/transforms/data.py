@@ -414,7 +414,7 @@ class DropoutColumns(Transform):
         # Compute a boolean mask across the columns, indicating whether
         # they should (not) be dropped
         mask = torch.rand(attr.shape[1], device=data.device) > self.p
-        attr *= mask[group].float()
+        attr *= mask[group].float().view(1, -1)
 
         # Restore the Data attribute
         data[self.key] = attr
