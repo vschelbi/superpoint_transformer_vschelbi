@@ -213,8 +213,8 @@ class BaseDataModule(LightningDataModule):
     @torch.no_grad()
     def on_after_batch_transfer(self, nag_list, dataloader_idx):
         """Intended to call on-device operations. Typically,
-        NAGBatch.from_nag_list and some Transforms like SampleSegments
-        and DropoutSegments are faster on GPU, and we may prefer
+        NAGBatch.from_nag_list and some Transforms like SampleSubNodes
+        and SampleSegments are faster on GPU, and we may prefer
         executing those on GPU rather than in CPU-based DataLoader.
 
         Use self.on_device_<stage>_transform, to benefit from this hook.

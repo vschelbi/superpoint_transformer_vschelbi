@@ -26,9 +26,9 @@ graph_gap: [0, 1, 5, 10]
 dropout_segment_ratio: 0.3
 sample_point_min: 16
 sample_point_max: 64
-sample_graph_i_level: 3  # setting to null will skip SampleGraph
-sample_graph_k_sample: 4
-sample_graph_k_hops: 4
+sample_graph_i_level: 3  # setting to null will skip SampleKHopSubgraphs
+sample_graph_k: 4
+sample_graph_hops: 4
 sample_graph_disjoint: True
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
 select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
@@ -149,21 +149,21 @@ test_transform: ${datamodule.train_transform}
 
 # GPU-based train transforms
 on_device_train_transform:
-    - transform: SampleSegments
+    - transform: SampleSubNodes
       params:
         low: 0
         high: 1
         n_min: ${datamodule.sample_point_min}
         n_max: ${datamodule.sample_point_max}
-    - transform: SampleGraph
+    - transform: SampleKHopSubgraphs
       params:
         i_level: ${datamodule.sample_graph_i_level}
-        k_sample: ${datamodule.sample_graph_k_sample}
-        k_hops: ${datamodule.sample_graph_k_hops}
+        k: ${datamodule.sample_graph_k}
+        hops: ${datamodule.sample_graph_hops}
         by_size: False
         by_class: False
         disjoint: ${datamodule.sample_graph_disjoint}
-    - transform: DropoutSegments
+    - transform: SampleSegments
       params:
         ratio: ${datamodule.dropout_segment_ratio}
         by_size: False
@@ -266,7 +266,7 @@ on_device_train_transform:
 
 # GPU-based val transforms
 on_device_val_transform:
-    - transform: SampleSegments
+    - transform: SampleSubNodes
       params:
         low: 0
         high: 1
