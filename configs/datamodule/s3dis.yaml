@@ -45,6 +45,8 @@ select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical 
 select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 select_feat_horizontal_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
 select_feat_vertical_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+sample_edge_n_min: -1  # [5, 5, 15, 15]
+sample_edge_n_max: -1  # [10, 15, 25, 25]
 
 # Augmentations parameterization
 pos_jitter: 0.03
@@ -218,11 +220,11 @@ on_device_train_transform:
         log_surface: True
         log_volume: True
         log_size: True
-#    - transform: SampleEdges
-#      params:
-#        level: '1+'
-#        n_min: [5, 5, 15, 15]
-#        n_max: [10, 15, 25, 25]
+    - transform: SampleEdges
+      params:
+        level: '1+'
+        n_min: ${datamodule.sample_edge_n_min}
+        n_max: ${datamodule.sample_edge_n_max}
     - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
       params:
         level: '1+'
