@@ -5,7 +5,7 @@ from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from src.utils import fast_randperm, sparse_sample
+from src.utils import fast_randperm, sparse_sample, knn_2
 from src.transforms import Transform
 from src.data import NAG, NAGBatch
 from src.utils.metrics import atomic_to_histogram
@@ -343,42 +343,37 @@ class SampleSegments(Transform):
         return nag
 
 
-class SampleKHopSubgraphs(Transform):
-    """Randomly pick segments from `i_level`, along with their `hops`
-    neighbors. This can be thought as a spherical sampling in the graph
-    of i_level.
+class BaseSampleSubgraphs(Transform):
+    """Base class for sampling subgraphs from a NAG. It randomly picks
+    `k` seed nodes from `i_level`, from which `k` subgraphs can be
+    grown. Child classes must implement `_sample_subgraphs()` to
+    describe how these subgraphs are built. Optionally, the see sampling
+    can be driven by their class, or their size, using `by_class` and
+    `by_size`, respectively.
 
     This operation relies on `NAG.select()` to maintain index
     consistency across the NAG levels.
-
-    Note: we do not directly sample level-0 points, see `SampleSubNodes`
-    for that. For speed consideration, it is recommended to use
-    `SampleSubNodes` first before `SampleKHopSubgraphs`, to minimize the
-    number of level-0 points to manipulate.
 
     :param i_level: int
         Partition level we want to pick from. By default, `i_level=-1`
         will sample the highest level of the input NAG
     :param k: int
-        Number of sub-graphs/segments to pick
-    :param hops: int
-        Number of hops ruling the neighborhood size selected around the
-        sampled nodes/segments
+        Number of sub-graphs/seeds to pick
     :param by_size: bool
         If True, the segment size will affect the chances of being
-        selected out. The larger the segment, the greater its chances
-        to be picked
+        selected as a seed. The larger the segment, the greater its
+        chances to be picked
     :param by_class: bool
         If True, the classes will affect the chances of being
-        dropped out. The scarcer the segment class, the greater
+        selected as a seed. The scarcer the segment class, the greater
         its chances to be selected
     :param use_batch: bool
-        If True, the 'Data.batch' attribute will be used to guide
+        If True, the 'Data.batch' attribute will be used to guide seed
         sampling across batches. More specifically, if the input NAG is
         a NAGBatch made up of multiple NAGs, the subgraphs will be
         sampled in a way that guarantees each NAG is sampled from.
-        Obviously enough, if `k > Data.batch.max() + 1`, not all
-        NAGs will be sampled from
+        Obviously enough, if `k < batch.max() + 1`, not all NAGs will be
+        sampled from
     :param disjoint: bool
         If True, subgraphs sampled from the same NAG will be separated
         as distinct NAGs themselves. Instead, when `disjoint=False`,
@@ -390,11 +385,10 @@ class SampleKHopSubgraphs(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, i_level=-1, k=1, hops=2, by_size=False,
-            by_class=False, use_batch=True, disjoint=False):
+            self, i_level=1, k=1, by_size=False, by_class=False,
+            use_batch=True, disjoint=True):
         self.i_level = i_level
         self.k = k
-        self.hops = hops
         self.by_size = by_size
         self.by_class = by_class
         self.use_batch = use_batch
@@ -403,9 +397,9 @@ class SampleKHopSubgraphs(Transform):
     def _process(self, nag):
         device = nag.device
 
-        # Skip if i_level is None. This little trick may be useful to
-        # turn this transform into an Identity, if need be
-        if self.i_level is None:
+        # Skip if i_level is None or k<=0. This may be useful to turn
+        # this transform into an Identity, if need be
+        if self.i_level is None or self.k <= 0:
             return nag
 
         # Initialization
@@ -413,10 +407,6 @@ class SampleKHopSubgraphs(Transform):
             else nag.num_levels - 1
         k = self.k if self.k < nag[i_level].num_nodes \
             else 1
-
-        # Skip if level has not graph
-        if not nag[i_level].has_edges:
-            return nag
 
         # Initialize all segments with the same weights
         weights = torch.ones(nag[i_level].num_nodes, device=device)
@@ -491,6 +481,63 @@ class SampleKHopSubgraphs(Transform):
             self._sample_subgraphs(nag, i_level, i.view(1)) for i in idx])
 
     def _sample_subgraphs(self, nag, i_level, idx):
+        raise NotImplementedError
+
+
+class SampleKHopSubgraphs(BaseSampleSubgraphs):
+    """Randomly pick segments from `i_level`, along with their `hops`
+    neighbors. This can be thought as a spherical sampling in the graph
+    of i_level.
+
+    This operation relies on `NAG.select()` to maintain index
+    consistency across the NAG levels.
+
+    Note: we do not directly sample level-0 points, see `SampleSubNodes`
+    for that. For speed consideration, it is recommended to use
+    `SampleSubNodes` first before `SampleKHopSubgraphs`, to minimize the
+    number of level-0 points to manipulate.
+
+    :param hops: int
+        Number of hops ruling the neighborhood size selected around the
+        seed nodes
+    :param i_level: int
+        Partition level we want to pick from. By default, `i_level=-1`
+        will sample the highest level of the input NAG
+    :param k: int
+        Number of sub-graphs/seeds to pick
+    :param by_size: bool
+        If True, the segment size will affect the chances of being
+        selected as a seed. The larger the segment, the greater its
+        chances to be picked
+    :param by_class: bool
+        If True, the classes will affect the chances of being
+        selected as a seed. The scarcer the segment class, the greater
+        its chances to be selected
+    :param use_batch: bool
+        If True, the 'Data.batch' attribute will be used to guide seed
+        sampling across batches. More specifically, if the input NAG is
+        a NAGBatch made up of multiple NAGs, the subgraphs will be
+        sampled in a way that guarantees each NAG is sampled from.
+        Obviously enough, if `k < batch.max() + 1`, not all NAGs will be
+        sampled from
+    :param disjoint: bool
+        If True, subgraphs sampled from the same NAG will be separated
+        as distinct NAGs themselves. Instead, when `disjoint=False`,
+        subgraphs sampled in the same NAG will be long the same NAG.
+        Hence, if two subgraphs share a node, they will be connected
+    """
+    def __init__(
+            self, hops=2, i_level=1, k=1, by_size=False, by_class=False,
+            use_batch=True, disjoint=False):
+        super().__init__(
+            i_level=i_level, k=k, by_size=by_size, by_class=by_class,
+            use_batch=use_batch, disjoint=disjoint)
+        self.hops = hops
+
+    def _sample_subgraphs(self, nag, i_level, idx):
+        assert nag[i_level].has_edges, \
+            "Expected Data object to have edges for k-hop subgraph sampling"
+
         # Convert the graph to undirected graph. This is needed because
         # it is likely that the graph has been trimmed (see
         # `src.utils.to_trimmed`), in which case the trimmed edge
@@ -501,8 +548,77 @@ class SampleKHopSubgraphs(Transform):
         idx = k_hop_subgraph(
             idx, self.hops, edge_index, num_nodes=nag[i_level].num_nodes)[0]
 
-        # TODO: drop segments beyond a certain threshold to keep the sampled
-        # graph size relatively constant ?
+        # Select the nodes and update the NAG structure accordingly
+        return nag.select(i_level, idx)
+
+
+class SampleRadiusSubgraphs(BaseSampleSubgraphs):
+    """Randomly pick segments from `i_level`, along with their
+    spherical neighborhood of fixed radius.
+
+    This operation relies on `NAG.select()` to maintain index
+    consistency across the NAG levels.
+
+    Note: we do not directly sample level-0 points, see `SampleSubNodes`
+    for that. For speed consideration, it is recommended to use
+    `SampleSubNodes` first before `SampleRadiusSubgraphs`, to minimize
+    the number of level-0 points to manipulate.
+
+    :param r: float
+        Radius for spherical sampling
+    :param i_level: int
+        Partition level we want to pick from. By default, `i_level=-1`
+        will sample the highest level of the input NAG
+    :param k: int
+        Number of sub-graphs/seeds to pick
+    :param by_size: bool
+        If True, the segment size will affect the chances of being
+        selected as a seed. The larger the segment, the greater its
+        chances to be picked
+    :param by_class: bool
+        If True, the classes will affect the chances of being
+        selected as a seed. The scarcer the segment class, the greater
+        its chances to be selected
+    :param use_batch: bool
+        If True, the 'Data.batch' attribute will be used to guide seed
+        sampling across batches. More specifically, if the input NAG is
+        a NAGBatch made up of multiple NAGs, the subgraphs will be
+        sampled in a way that guarantees each NAG is sampled from.
+        Obviously enough, if `k < batch.max() + 1`, not all NAGs will be
+        sampled from
+    :param disjoint: bool
+        If True, subgraphs sampled from the same NAG will be separated
+        as distinct NAGs themselves. Instead, when `disjoint=False`,
+        subgraphs sampled in the same NAG will be long the same NAG.
+        Hence, if two subgraphs share a node, they will be connected
+    """
+    def __init__(
+            self, r=2, i_level=1, k=1, by_size=False, by_class=False,
+            use_batch=True, disjoint=False):
+        super().__init__(
+            i_level=i_level, k=k, by_size=by_size, by_class=by_class,
+            use_batch=use_batch, disjoint=disjoint)
+        self.r = r
+
+    def _sample_subgraphs(self, nag, i_level, idx):
+        # Neighbors are searched using the node coordinates. This is not
+        # the optimal search for cluster-cluster distances, but is the
+        # fastest for our needs here. If need be, one could make this
+        # search more accurate using something like:
+        # `src.utils.neighbors.cluster_radius_nn`
+        search_mask = torch.ones_like(nag[i_level].pos[:, 0], dtype=torch.bool)
+        search_mask[idx] = False
+        x_search = nag[i_level].pos[search_mask]
+        x_query = nag[i_level].pos[idx]
+        k = x_search.shape[0]
+        neighbors = knn_2(x_search, x_query, k, r_max=self.r)[0]
+
+        # Convert neighborhoods to node indices for `NAG.select()`
+        neighbors = neighbors.flatten()
+        idx_neigh = neighbors[neighbors != -1]
+
+        # Add the seed nodes indices and remove duplicates
+        idx = torch.cat((idx, idx_neigh)).unique()
 
         # Select the nodes and update the NAG structure accordingly
         return nag.select(i_level, idx)

@@ -98,7 +98,7 @@ def knn_2(x_search, x_query, k, r_max=1):
         neighbors = neighbors[:, 0]
         distances = distances[:, 0]
 
-    return distances, neighbors
+    return neighbors, distances
 
 
 def inliers_split(

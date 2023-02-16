@@ -386,7 +386,7 @@ class Data(PyGData):
         high = self.pos.max(dim=0).values
         low = self.pos.min(dim=0).values
         r_max = torch.linalg.norm(high - low)
-        distances, neighbors = knn_2(
+        neighbors, distances = knn_2(
             self.pos, self.pos[is_out], k + 1, r_max=r_max)
         distances = distances[:, 1:]
         neighbors = neighbors[:, 1:]
