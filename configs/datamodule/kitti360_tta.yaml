@@ -20,6 +20,9 @@ tta:
     node_feat_jitter: 0.01
     h_edge_feat_jitter: 0.01
     v_edge_feat_jitter: 0.01
+    node_feat_drop: 0
+    h_edge_feat_drop: 0
+    v_edge_feat_drop: 0
 
 # GPU-based val transforms
 on_device_val_transform:
@@ -113,4 +116,19 @@ on_device_val_transform:
         level: all
         p: 0.5
         x_idx: 0
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.node_feat_drop}
+        key: 'x'
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.h_edge_feat_drop}
+        key: 'edge_attr'
+    - transform: NAGDropoutColumns
+      params:
+        level: 'all'
+        p: ${datamodule.v_edge_feat_drop}
+        key: 'vertical_edge_attr'
     - transform: NAGAddSelfLoops

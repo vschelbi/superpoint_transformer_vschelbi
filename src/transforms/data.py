@@ -394,6 +394,10 @@ class DropoutColumns(Transform):
     def _process(self, data):
         device = data.device
 
+        # Skip dropout if p <= 0
+        if self.p <= 0:
+            return data
+
         # Skip dropout if the attribute is not present in the input Data
         if getattr(data, self.key, None) is None:
             return data

@@ -45,9 +45,9 @@ anisotropic_scaling: 0.2
 node_feat_jitter: 0.01
 h_edge_feat_jitter: 0.01
 v_edge_feat_jitter: 0.01
-node_feat_drop: 0.2
-h_edge_feat_drop: 0.2
-v_edge_feat_drop: 0.2
+node_feat_drop: 0
+h_edge_feat_drop: 0
+v_edge_feat_drop: 0
 
 # Preprocessing
 pre_transform:
