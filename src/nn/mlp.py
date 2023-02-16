@@ -7,7 +7,7 @@ __all__ = ['MLP', 'FFN', 'RPEFFN', 'Classifier']
 
 def mlp(
         dims, activation=nn.LeakyReLU(), last_activation=True,
-        norm=FastBatchNorm1d, momentum=0.1, drop=None):
+        norm=FastBatchNorm1d, drop=None):
     """Helper to build MLP-like structures.
 
     :param dims: List[int]
@@ -18,8 +18,6 @@ def mlp(
         Whether the last layer should have an activation
     :param norm: nn.Module
         Normalization. Can be None, for FFN for instance
-    :param momentum: float
-        Normalization momentum
     :param drop: float in [0, 1]
         Dropout on the output features. No dropout layer will be
         created if `drop=None` or `drop < 0`
@@ -35,7 +33,7 @@ def mlp(
     for i in range(1, len(dims)):
         modules.append(nn.Linear(dims[i - 1], dims[i], bias=bias))
         if norm is not None:
-            modules.append(norm(dims[i], momentum=momentum))
+            modules.append(norm(dims[i]))
         if activation is not None and (last_activation or i < len(dims) - 1):
             modules.append(activation)
 
@@ -53,11 +51,11 @@ class MLP(nn.Module):
 
     def __init__(
             self, dims, activation=nn.LeakyReLU(), norm=FastBatchNorm1d,
-            momentum=0.1, drop=None):
+            drop=None):
         super().__init__()
         self.mlp = mlp(
             dims, activation=activation, last_activation=True, norm=norm,
-            momentum=momentum, drop=drop)
+            drop=drop)
         self.out_dim = dims[-1]
 
     def forward(self, x):

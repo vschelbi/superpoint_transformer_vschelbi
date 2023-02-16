@@ -15,14 +15,12 @@ class NodeMLP(nn.Module):
 
     def __init__(
             self, dims, level=0, activation=nn.LeakyReLU(),
-            norm=FastBatchNorm1d, momentum=0.1, drop=None):
+            norm=FastBatchNorm1d, drop=None):
 
         super().__init__()
 
         self.level = level
-        self.mlp = MLP(
-            dims, activation=activation, norm=norm, momentum=momentum,
-            drop=drop)
+        self.mlp = MLP(dims, activation=activation, norm=norm, drop=drop)
 
     @property
     def out_dim(self):

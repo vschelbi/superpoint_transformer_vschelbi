@@ -3,7 +3,7 @@ from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
-    FastBatchNorm1d, CatFusion, CatInjection, RPEFFN
+    FastBatchNorm1d, CatFusion, CatInjection, RPEFFN, MLP
 from src.nn.pool import pool_factory
 
 
@@ -69,6 +69,7 @@ class NeST(nn.Module):
             last_inject_pos=True,
             last_pos_injection_x_dim=None,
 
+            node_mlp=None,
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=FastBatchNorm1d,
             qk_dim=8,
@@ -184,6 +185,13 @@ class NeST(nn.Module):
             down_q_rpe = _build_shared_rpe_encoders(
                 q_rpe, len(down_dim), 18, qk_dim, stages_share_rpe)
 
+            # Build MLPs to process Level-1+ raw handcrafted features.
+            # These will be called before each DownNFuseStage and their
+            # output will be passed to DownNFuseStage and UpNFuseStage
+            self.node_mlps = _build_node_mlp(
+                node_mlp, len(down_dim), mlp_activation, mlp_norm,
+                down_inject_x or up_inject_x)
+
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
                     dim,
@@ -218,14 +226,34 @@ class NeST(nn.Module):
                     cat_diameter=cat_diameter,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
-                for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
-                    ffn_ratio, residual_drop, attn_drop, drop_path,
-                    stage_k_rpe, stage_q_rpe, pool_dim, pos_injection_x_dim
+                for dim,
+                    num_blocks,
+                    in_mlp,
+                    out_mlp,
+                    mlp_drop,
+                    num_heads,
+                    ffn_ratio,
+                    residual_drop,
+                    attn_drop,
+                    drop_path,
+                    stage_k_rpe,
+                    stage_q_rpe,
+                    pool_dim,
+                    pos_injection_x_dim
                 in zip(
-                    down_dim, down_num_blocks, down_in_mlp, down_out_mlp,
-                    down_mlp_drop, down_num_heads, down_ffn_ratio,
-                    down_residual_drop, down_attn_drop, down_drop_path,
-                    down_k_rpe, down_q_rpe, down_pool_dim,
+                    down_dim,
+                    down_num_blocks,
+                    down_in_mlp,
+                    down_out_mlp,
+                    down_mlp_drop,
+                    down_num_heads,
+                    down_ffn_ratio,
+                    down_residual_drop,
+                    down_attn_drop,
+                    down_drop_path,
+                    down_k_rpe,
+                    down_q_rpe,
+                    down_pool_dim,
                     down_pos_injection_x_dim)])
         else:
             self.down_stages = None
@@ -273,14 +301,32 @@ class NeST(nn.Module):
                     pos_injection_x_dim=pos_injection_x_dim,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
-                for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
-                    ffn_ratio, residual_drop, attn_drop, drop_path,
-                    stage_k_rpe, stage_q_rpe, pos_injection_x_dim
+                for dim,
+                    num_blocks,
+                    in_mlp,
+                    out_mlp,
+                    mlp_drop,
+                    num_heads,
+                    ffn_ratio,
+                    residual_drop,
+                    attn_drop,
+                    drop_path,
+                    stage_k_rpe,
+                    stage_q_rpe,
+                    pos_injection_x_dim
                 in zip(
-                    up_dim, up_num_blocks, up_in_mlp, up_out_mlp,
-                    up_mlp_drop, up_num_heads, up_ffn_ratio,
-                    up_residual_drop, up_attn_drop, up_drop_path,
-                    up_k_rpe, up_q_rpe, up_pos_injection_x_dim)])
+                    up_dim,
+                    up_num_blocks,
+                    up_in_mlp,
+                    up_out_mlp,
+                    up_mlp_drop,
+                    up_num_heads,
+                    up_ffn_ratio,
+                    up_residual_drop,
+                    up_attn_drop,
+                    up_drop_path,
+                    up_k_rpe, up_q_rpe,
+                    up_pos_injection_x_dim)])
         else:
             self.up_stages = None
 
@@ -440,11 +486,22 @@ class NeST(nn.Module):
         # Iteratively encode level-1 and above
         down_outputs = []
         if self.down_stages is not None:
-            for i_stage, stage in enumerate(self.down_stages):
+            print(len(self.down_stages))
+            print(len(self.node_mlps))
+            for i_stage, (stage, node_mlp) in enumerate(zip(
+                    self.down_stages, self.node_mlps)):
 
                 # Forward on the down stage and the corresponding NAG
                 # level
                 i_level = i_stage + 1
+
+                # Process handcrafted node features. We need to do this
+                # here before those can be passed to the DownNFuseStage
+                # and, later on, to the UpNFuseStage
+                if node_mlp is not None:
+                    nag[i_level].x = node_mlp(nag[i_level].x)
+
+                # Forward on the DownNFuseStage
                 x, diameter = self._forward_down_stage(stage, nag, i_level, x)
                 down_outputs.append(x)
 
@@ -618,3 +675,14 @@ def _build_shared_rpe_encoders(
         return [RPEFFN(in_dim, out_dim=out_dim)] * num_stages
 
     return [rpe] * num_stages
+
+
+def _build_node_mlp(node_mlp, num_stage, activation, norm, needed):
+    # Build MLPs to process Level-1+ raw handcrafted features.
+    # These will be called before each DownNFuseStage and their
+    # output will be passed to DownNFuseStage and UpNFuseStage
+    if not needed or node_mlp is None:
+        return [None] * num_stage
+    return nn.ModuleList([
+        MLP(node_mlp, activation=activation, norm=norm)
+        for _ in range(num_stage)])

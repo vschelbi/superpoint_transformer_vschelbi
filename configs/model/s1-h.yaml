@@ -2,10 +2,12 @@ defaults:
   - nest.yaml
 
 # Size of output features
-_d: 64
+_d: [64]
 
 net:
-  down_in_mlp: ${eval:'[${model._d_x} + ${model._p}[-1]] + [${model._d}] * ${model._d_r}'}
+  down_pool_dim: ${eval:'[${model._p}[-1]]'}
+  down_in_mlp: ${eval:'[ [${model._d_x} + ${model._p}[-1]] + ${model._d} * ${model._d_r} ]'}
   up_dim: null  # no decoder
+  up_in_mlp: null
   small: null  # no branch for 'small' L1 nodes
   last_dim: null  # no modules after the 'small' nodes branch merge

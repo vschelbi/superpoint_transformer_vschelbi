@@ -76,7 +76,6 @@ class Stage(nn.Module):
                 in_mlp,
                 activation=mlp_activation,
                 norm=mlp_norm,
-                momentum=0.1,
                 drop=mlp_drop)
             in_dim = in_mlp[0]
         else:
@@ -90,7 +89,6 @@ class Stage(nn.Module):
                 out_mlp,
                 activation=mlp_activation,
                 norm=mlp_norm,
-                momentum=0.1,
                 drop=mlp_drop)
         else:
             self.out_mlp = None
@@ -223,8 +221,19 @@ class DownNFuseStage(Stage):
     """
 
     def __init__(
-            self, *args, pool='max', fusion='cat', **kwargs):
-        super().__init__(*args, **kwargs)
+            self,
+            *args,
+            pool='max',
+            fusion='cat',
+            mlp_activation=nn.LeakyReLU(),
+            mlp_norm=FastBatchNorm1d,
+            mlp_drop=None,
+            **kwargs):
+        super().__init__(
+            *args,
+            mlp_activation=mlp_activation,
+            mlp_norm=mlp_norm,
+            mlp_drop=mlp_drop, **kwargs)
 
         # Pooling operator
         # IMPORTANT: the `down_pool_block` naming MUST MATCH the one
@@ -248,10 +257,16 @@ class DownNFuseStage(Stage):
             edge_attr=None,
             v_edge_attr=None,
             num_super=None):
+
+        # Pool the children features
         x_pooled = self.down_pool_block(
             x_child, x_parent, pool_index, edge_attr=v_edge_attr,
             num_pool=num_super)
+
+        # Fuse parent and pooled child features
         x_fused = self.fusion(x_parent, x_pooled)
+
+        # Stage forward
         return super().forward(
             x_fused,
             norm_index,
@@ -298,7 +313,13 @@ class UpNFuseStage(Stage):
             super_index=None,
             edge_index=None,
             edge_attr=None):
-        x_fused = self.fusion(x_child, self.unpool(x_parent, unpool_index))
+        # Unpool the parent features
+        x_unpool = self.unpool(x_parent, unpool_index)
+
+        # Fuse unpooled parent and child features
+        x_fused = self.fusion(x_child, x_unpool)
+
+        # Stage forward
         return super().forward(
             x_fused,
             norm_index,

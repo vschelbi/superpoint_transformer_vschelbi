@@ -11,9 +11,9 @@ __all__ = ['FastBatchNorm1d', 'UnitSphereNorm', 'LayerNorm']
 class FastBatchNorm1d(nn.Module):
     """Credits: https://github.com/torch-points3d/torch-points3d"""
 
-    def __init__(self, num_features, momentum=0.1, **kwargs):
+    def __init__(self, num_features, **kwargs):
         super().__init__()
-        self.batch_norm = nn.BatchNorm1d(num_features, momentum=momentum, **kwargs)
+        self.batch_norm = nn.BatchNorm1d(num_features, **kwargs)
 
     def _forward_dense(self, x):
         return self.batch_norm(x.permute(0, 2, 1)).permute(0, 2, 1)
