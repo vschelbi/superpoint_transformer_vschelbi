@@ -486,8 +486,6 @@ class NeST(nn.Module):
         # Iteratively encode level-1 and above
         down_outputs = []
         if self.down_stages is not None:
-            print(len(self.down_stages))
-            print(len(self.node_mlps))
             for i_stage, (stage, node_mlp) in enumerate(zip(
                     self.down_stages, self.node_mlps)):
 
