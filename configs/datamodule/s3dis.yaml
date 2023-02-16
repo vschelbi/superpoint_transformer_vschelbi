@@ -38,6 +38,7 @@ dropout_segment_ratio: 0.3
 sample_point_min: 32
 sample_point_max: 128
 sample_graph_r: 5  # set to r<=0 to skip SampleRadiusSubgraphs
+sample_graph_k: 4
 sample_graph_i_level: 1
 sample_graph_disjoint: True
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
@@ -55,9 +56,9 @@ anisotropic_scaling: 0.2
 node_feat_jitter: 0.01
 h_edge_feat_jitter: 0.01
 v_edge_feat_jitter: 0.01
-node_feat_drop: 0.2
-h_edge_feat_drop: 0.2
-v_edge_feat_drop: 0.2
+node_feat_drop: 0
+h_edge_feat_drop: 0
+v_edge_feat_drop: 0
 
 # Preprocessing
 pre_transform:
@@ -173,6 +174,7 @@ on_device_train_transform:
     - transform: SampleRadiusSubgraphs
       params:
         r: ${datamodule.sample_graph_r}
+        k: ${datamodule.sample_graph_k}
         i_level: ${datamodule.sample_graph_i_level}
         by_size: False
         by_class: False

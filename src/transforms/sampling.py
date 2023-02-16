@@ -607,22 +607,35 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         # fastest for our needs here. If need be, one could make this
         # search more accurate using something like:
         # `src.utils.neighbors.cluster_radius_nn`
-        search_mask = torch.ones_like(nag[i_level].pos[:, 0], dtype=torch.bool)
-        search_mask[idx] = False
-        x_search = nag[i_level].pos[search_mask]
-        x_query = nag[i_level].pos[idx]
-        k = x_search.shape[0]
-        neighbors = knn_2(x_search, x_query, k, r_max=self.r)[0]
 
-        # Convert neighborhoods to node indices for `NAG.select()`
-        neighbors = neighbors.flatten()
-        idx_neigh = neighbors[neighbors != -1]
+        # TODO: searching using knn_2 was sluggish, switching to brute
+        #  force for now. If bottleneck, need to investigate alternative
+        #  search approaches
+        # # Search using radius knn utils
+        # search_mask = torch.ones_like(nag[i_level].pos[:, 0], dtype=torch.bool)
+        # search_mask[idx] = False
+        # x_search = nag[i_level].pos
+        # x_query = nag[i_level].pos[idx]
+        # k = x_search.shape[0]
+        # neighbors = knn_2(x_search, x_query, k, r_max=self.r)[0]
+        #
+        # # Convert neighborhoods to node indices for `NAG.select()`
+        # neighbors = neighbors.flatten()
+        # idx = neighbors[neighbors != -1].unique()
 
-        # Add the seed nodes indices and remove duplicates
-        idx = torch.cat((idx, idx_neigh)).unique()
+        # TODO: Assuming idx.shape[0] is small, we search spherical
+        #  samplings one by one, without any fancy KNN search tool,
+        #  because it seems faster that way, probably due to the large
+        #  number of neighbors
+        idx_select_list = []
+        pos = nag[i_level].pos
+        for i in idx:
+            distance = torch.linalg.norm(pos - pos[i].view(1, -1), dim=1)
+            idx_select_list.append(torch.where(distance < self.r)[0])
+        idx_select = torch.cat(idx_select_list).unique()
 
         # Select the nodes and update the NAG structure accordingly
-        return nag.select(i_level, idx)
+        return nag.select(i_level, idx_select)
 
 
 class SampleSubNodes(Transform):

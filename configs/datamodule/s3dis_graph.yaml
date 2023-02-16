@@ -1,4 +1,4 @@
 defaults:
   - s3dis.yaml
 
-sample_graph_i_level: 3
+sample_graph_i_level: 1
