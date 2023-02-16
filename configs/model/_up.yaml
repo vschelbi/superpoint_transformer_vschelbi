@@ -10,9 +10,9 @@ net:
   up_num_heads: ${model.net.down_num_heads}
   up_num_blocks: ${model.net.down_num_blocks}
   up_ffn_ratio: ${model.net.down_ffn_ratio}
-  up_residual_drop: ${model.net.down_}
-  up_attn_drop: ${model.net.down_up_attn_drop}
-  up_drop_path: ${model.net.down_up_drop_path}
-  up_inject_pos: ${model.net.down_up_inject_pos}  # appends position features = (3) or more depending on pos_injection and point_pos_injection_x_dim
-  up_inject_x: ${model.net.down_up_inject_x}
-  up_pos_injection_x_dim: ${model.net.down_up_pos_injection_x_dim}
+  up_residual_drop: ${model.net.down_residual_drop}
+  up_attn_drop: ${model.net.down_attn_drop}
+  up_drop_path: ${model.net.down_drop_path}
+  up_inject_pos: ${model.net.down_inject_pos}  # appends position features = (3) or more depending on pos_injection and point_pos_injection_x_dim
+  up_inject_x: ${model.net.down_inject_x}
+  up_pos_injection_x_dim: ${model.net.down_pos_injection_x_dim}
