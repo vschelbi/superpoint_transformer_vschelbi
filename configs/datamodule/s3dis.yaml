@@ -34,7 +34,7 @@ graph_k_max: 30
 graph_gap: [0.2, 0.5, 1, 5]
 
 # Batch construction parameterization
-dropout_segment_ratio: 0.3
+dropout_segment_ratio: [0.5, 0, 0, 0]
 sample_point_min: 32
 sample_point_max: 128
 sample_graph_r: 5  # set to r<=0 to skip SampleRadiusSubgraphs
