@@ -4,8 +4,8 @@ from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
     FastBatchNorm1d, CatFusion, CatInjection, RPEFFN, MLP
+from src.nn.pool import BaseAttentivePool
 from src.nn.pool import pool_factory
-
 
 __all__ = ['NeST']
 
@@ -70,6 +70,8 @@ class NeST(nn.Module):
             last_pos_injection_x_dim=None,
 
             node_mlp=None,
+            h_edge_mlp=None,
+            v_edge_mlp=None,
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=FastBatchNorm1d,
             qk_dim=8,
@@ -161,6 +163,15 @@ class NeST(nn.Module):
             up_drop_path,
             up_pos_injection_x_dim)
 
+        # Local helper variables describing the architecture
+        num_down = len(down_dim)
+        num_up = len(up_dim)
+        needs_node_hf = down_inject_x or up_inject_x
+        needs_h_edge_hf = any(
+            x > 0 for x in down_num_blocks + up_num_blocks + [last_num_blocks])
+        needs_v_edge_hf = num_down > 0 and isinstance(
+            pool_factory(pool, down_pool_dim[0]), BaseAttentivePool)
+
         # Module operating on Level-0 points in isolation
         self.point_stage = PointStage(
             point_mlp,
@@ -175,22 +186,31 @@ class NeST(nn.Module):
         # handcrafted features to the NAG's features
         self.feature_fusion = CatFusion()
 
+        # Build MLPs that will be used to process handcrafted segment
+        # and edge features. These will be called before each
+        # DownNFuseStage and their output will be passed to
+        # DownNFuseStage and UpNFuseStage
+        node_mlp = node_mlp if needs_node_hf else None
+        self.node_mlps = _build_mlps(
+            node_mlp, num_down, mlp_activation, mlp_norm)
+
+        h_edge_mlp = h_edge_mlp if needs_h_edge_hf else None
+        self.h_edge_mlps = _build_mlps(
+            h_edge_mlp, num_down, mlp_activation, mlp_norm)
+
+        v_edge_mlp = v_edge_mlp if needs_v_edge_hf else None
+        self.v_edge_mlps = _build_mlps(
+            v_edge_mlp, num_down, mlp_activation, mlp_norm)
+
         # Transformer encoder (down) Stages operating on Level-i data
-        if len(down_dim) > 0:
+        if num_down > 0:
 
             # Build the RPE encoders here if shared across all stages
             down_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, len(down_dim), 18, qk_dim, stages_share_rpe)
+                k_rpe, num_down, 18, qk_dim, stages_share_rpe)
 
             down_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, len(down_dim), 18, qk_dim, stages_share_rpe)
-
-            # Build MLPs to process Level-1+ raw handcrafted features.
-            # These will be called before each DownNFuseStage and their
-            # output will be passed to DownNFuseStage and UpNFuseStage
-            self.node_mlps = _build_node_mlp(
-                node_mlp, len(down_dim), mlp_activation, mlp_norm,
-                down_inject_x or up_inject_x)
+                q_rpe, num_down, 18, qk_dim, stages_share_rpe)
 
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
@@ -259,14 +279,14 @@ class NeST(nn.Module):
             self.down_stages = None
 
         # Transformer decoder (up) Stages operating on Level-i data
-        if len(up_dim) > 0:
+        if num_up > 0:
 
             # Build the RPE encoder here if shared across all stages
             up_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, len(up_dim), 18, qk_dim, stages_share_rpe)
+                k_rpe, num_up, 18, qk_dim, stages_share_rpe)
 
             up_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, len(up_dim), 18, qk_dim, stages_share_rpe)
+                q_rpe, num_up, 18, qk_dim, stages_share_rpe)
 
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
@@ -486,18 +506,29 @@ class NeST(nn.Module):
         # Iteratively encode level-1 and above
         down_outputs = []
         if self.down_stages is not None:
-            for i_stage, (stage, node_mlp) in enumerate(zip(
-                    self.down_stages, self.node_mlps)):
+
+            enum = enumerate(zip(
+                self.down_stages,
+                self.node_mlps,
+                self.h_edge_mlps,
+                self.v_edge_mlps))
+
+            for i_stage, (stage, node_mlp, h_edge_mlp, v_edge_mlp) in enum:
 
                 # Forward on the down stage and the corresponding NAG
                 # level
                 i_level = i_stage + 1
 
-                # Process handcrafted node features. We need to do this
-                # here before those can be passed to the DownNFuseStage
-                # and, later on, to the UpNFuseStage
+                # Process handcrafted node and edge features. We need to
+                # do this here before those can be passed to the
+                # DownNFuseStage and, later on, to the UpNFuseStage
                 if node_mlp is not None:
                     nag[i_level].x = node_mlp(nag[i_level].x)
+                if h_edge_mlp is not None:
+                    nag[i_level].edge_attr = h_edge_mlp(nag[i_level].edge_attr)
+                if v_edge_mlp is not None:
+                    nag[i_level - 1].vertical_edge_attr = v_edge_mlp(
+                        nag[i_level - 1].vertical_edge_attr)
 
                 # Forward on the DownNFuseStage
                 x, diameter = self._forward_down_stage(stage, nag, i_level, x)
@@ -675,12 +706,9 @@ def _build_shared_rpe_encoders(
     return [rpe] * num_stages
 
 
-def _build_node_mlp(node_mlp, num_stage, activation, norm, needed):
-    # Build MLPs to process Level-1+ raw handcrafted features.
-    # These will be called before each DownNFuseStage and their
-    # output will be passed to DownNFuseStage and UpNFuseStage
-    if not needed or node_mlp is None:
+def _build_mlps(layers, num_stage, activation, norm):
+    if layers is None:
         return [None] * num_stage
     return nn.ModuleList([
-        MLP(node_mlp, activation=activation, norm=norm)
+        MLP(layers, activation=activation, norm=norm)
         for _ in range(num_stage)])

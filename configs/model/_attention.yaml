@@ -13,7 +13,7 @@ net:
   qkv_bias: True
   qk_scale: null
   scale_qk_by_neigh: True
-  in_rpe_dim: ${datamodule.feat_horizontal_edge}
+  in_rpe_dim: ${eval:'${model._x_he_mlp} if ${model._x_he_mlp} else ${model._x_he_raw}'}
   k_rpe: True
   q_rpe: False
   c_rpe: False

@@ -10,7 +10,9 @@ defaults:
 net:
   _target_: src.models.components.nest.NeST
 
-  node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_s}] * ${model._d_r} if ${model._x_s} else None'}
+  node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_n_mlp}] * ${model._d_r} if ${model._x_n_mlp} else None'}
+  h_edge_mlp: ${eval:'[${model._x_he_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
+  v_edge_mlp: ${eval:'[${model._x_ve_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
   mlp_activation:
     _target_: torch.nn.LeakyReLU
     negative_slope: 0.01
