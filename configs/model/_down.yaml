@@ -8,8 +8,8 @@ net:
   down_in_mlp: ${eval:'[ [${model._d_x} + ${model._p}[-1]] + [${model._d}[0]] * ${model._d_r}, [${model._d_x} + ${model._d}[0]] + [${model._d}[1]] * ${model._d_r}, [${model._d_x} + ${model._d}[1]] + [${model._d}[2]] * ${model._d_r}, [${model._d_x} + ${model._d}[2]] + [${model._d}[3]] * ${model._d_r} ]'}
   down_out_mlp: null
   down_mlp_drop: null
-  down_num_heads: 8
-  down_num_blocks: 1
+  down_num_heads: 16
+  down_num_blocks: 3
   down_ffn_ratio: 1
   down_residual_drop: null
   down_attn_drop: null
