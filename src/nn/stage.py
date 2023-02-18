@@ -1,6 +1,5 @@
 from torch import nn
-from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm, \
-    RPEFFN
+from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm
 from src.nn.pool import pool_factory
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
@@ -204,7 +203,7 @@ def _build_shared_rpe_encoders(
         out_dim = out_dim * num_heads
 
     if blocks_share and rpe:
-        return [RPEFFN(in_dim, out_dim=out_dim)] * num_blocks
+        return [nn.Linear(in_dim, out_dim)] * num_blocks
 
     return [rpe] * num_blocks
 

@@ -3,7 +3,7 @@ from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
-    FastBatchNorm1d, CatFusion, CatInjection, RPEFFN, MLP
+    FastBatchNorm1d, CatFusion, CatInjection, MLP
 from src.nn.pool import BaseAttentivePool
 from src.nn.pool import pool_factory
 
@@ -701,7 +701,7 @@ def _build_shared_rpe_encoders(
     # too. We copy the same module instance to be shared across all
     # stages and blocks
     if stages_share and rpe:
-        return [RPEFFN(in_dim, out_dim=out_dim)] * num_stages
+        return [nn.Linear(in_dim, out_dim)] * num_stages
 
     return [rpe] * num_stages
 

@@ -79,7 +79,9 @@ class TransformerBlock(nn.Module):
             self.ffn_norm = LayerNorm(dim)
             self.ffn_ratio = ffn_ratio
             self.ffn = FFN(
-                dim, hidden_dim=int(dim * ffn_ratio), activation=activation,
+                dim,
+                hidden_dim=int(dim * ffn_ratio),
+                activation=activation,
                 drop=residual_drop)
 
         # Optional DropPath module for stochastic depth

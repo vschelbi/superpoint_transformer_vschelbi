@@ -2,7 +2,7 @@ from torch import nn
 from src.nn.norm import FastBatchNorm1d
 
 
-__all__ = ['MLP', 'FFN', 'RPEFFN', 'Classifier']
+__all__ = ['MLP', 'FFN', 'Classifier']
 
 
 def mlp(
@@ -86,23 +86,6 @@ class FFN(nn.Module):
 
     def forward(self, x):
         return self.ffn(x)
-
-
-class RPEFFN(FFN):
-    """Feed-Forward Network for Relative Position Encoding. By
-    convention, these MLPs have 2 Linear layers and no normalization,
-    the last layer has no activation and an optional dropout may be
-    applied on the output features. Besides, if not provided, the hidden
-    layer is chosen to be the max between input dim, output dim and 16
-    (this subtlety is the only difference with FFN.
-    """
-
-    def __init__(
-            self, dim, hidden_dim=None, out_dim=None, activation=nn.LeakyReLU(),
-            drop=None):
-        super().__init__(
-            dim, hidden_dim=hidden_dim or max(dim, out_dim, 16), out_dim=out_dim,
-            activation=activation, drop=drop)
 
 
 class Classifier(nn.Module):
