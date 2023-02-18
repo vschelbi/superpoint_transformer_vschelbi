@@ -87,6 +87,7 @@ class NeST(nn.Module):
             q_rpe=False,
             c_rpe=False,
             v_rpe=False,
+            share_hf_mlps=False,
             stages_share_rpe=False,
             blocks_share_rpe=False,
             heads_share_rpe=False,
@@ -192,15 +193,15 @@ class NeST(nn.Module):
         # DownNFuseStage and UpNFuseStage
         node_mlp = node_mlp if needs_node_hf else None
         self.node_mlps = _build_mlps(
-            node_mlp, num_down, mlp_activation, mlp_norm)
+            node_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
 
         h_edge_mlp = h_edge_mlp if needs_h_edge_hf else None
         self.h_edge_mlps = _build_mlps(
-            h_edge_mlp, num_down, mlp_activation, mlp_norm)
+            h_edge_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
 
         v_edge_mlp = v_edge_mlp if needs_v_edge_hf else None
         self.v_edge_mlps = _build_mlps(
-            v_edge_mlp, num_down, mlp_activation, mlp_norm)
+            v_edge_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
 
         # Transformer encoder (down) Stages operating on Level-i data
         if num_down > 0:
@@ -706,9 +707,14 @@ def _build_shared_rpe_encoders(
     return [rpe] * num_stages
 
 
-def _build_mlps(layers, num_stage, activation, norm):
+def _build_mlps(layers, num_stage, activation, norm, shared):
     if layers is None:
         return [None] * num_stage
+
+    if shared:
+        return nn.ModuleList([
+            MLP(layers, activation=activation, norm=norm)] * num_stage)
+
     return nn.ModuleList([
         MLP(layers, activation=activation, norm=norm)
         for _ in range(num_stage)])

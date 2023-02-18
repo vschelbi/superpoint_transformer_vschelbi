@@ -13,6 +13,7 @@ net:
   node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_n_mlp}] * ${model._d_r} if ${model._x_n_mlp} else None'}
   h_edge_mlp: ${eval:'[${model._x_he_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
   v_edge_mlp: ${eval:'[${model._x_ve_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
+  share_hf_mlps: False
   mlp_activation:
     _target_: torch.nn.LeakyReLU
     negative_slope: 0.01
