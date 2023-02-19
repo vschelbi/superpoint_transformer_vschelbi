@@ -694,8 +694,8 @@ def _build_shared_rpe_encoders(
     if not isinstance(rpe, bool):
         assert stages_share, \
             "If anything else but a boolean is passed for the RPE encoder, " \
-            "this value will be passed to all Stages and stages_share should " \
-            "be set to True."
+            "this value will be passed to all Stages and `stages_share` " \
+            "should be set to True."
         return [rpe] * num_stages
 
     # If all stages share the same RPE encoder, all blocks and all heads
