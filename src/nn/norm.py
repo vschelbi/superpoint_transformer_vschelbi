@@ -219,9 +219,9 @@ class GroupNorm(torch.nn.Module):
         if self.mode == 'node':
             if batch is None:
                 out = nn.functional.group_norm(
-                    x.t().unsqueeze(0), self.num_groups, weight=self.weight,
-                    bias=self.bias, eps=self.eps)
-                return out.squeeze(0).t()
+                    x, self.num_groups, weight=self.weight, bias=self.bias,
+                    eps=self.eps)
+                return out
 
         raise ValueError(f"Unknown normalization mode: {self.mode}")
 
