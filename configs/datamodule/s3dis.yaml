@@ -34,7 +34,7 @@ graph_k_max: 30
 graph_gap: [0.2, 0.5, 1, 5]
 
 # Batch construction parameterization
-dropout_segment_ratio: 0.2
+dropout_segment_ratio: 0.1
 dropout_segment_by_size: True
 dropout_segment_by_class: False
 sample_point_min: 32
