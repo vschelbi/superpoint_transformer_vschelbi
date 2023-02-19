@@ -183,31 +183,31 @@ class GroupNorm(torch.nn.Module):
                     x.shape[0], dtype=torch.long, device=x.device)
 
             # Separate group features using a new dimension
-            x = x.view(-1, self.num_groups, self.group_channels)  # NxGxC
+            x = x.view(-1, self.num_groups, self.group_channels)
 
             # Compute the number of items in each group normalization
             batch_size = int(batch.max()) + 1
             norm = degree(batch, batch_size, dtype=x.dtype).clamp_(min=1)
-            norm = norm.mul_(self.group_channels).view(-1, 1)  # Bx1
+            norm = norm.mul_(self.group_channels).view(-1, 1, 1)
 
             # Compute the groupwise mean
             mean = scatter(
                 x, batch, dim=0, dim_size=batch_size, reduce='add').sum(
-                dim=-1, keepdim=True) / norm  # BxGx1
+                dim=-1, keepdim=True) / norm
 
             # Groupwise mean-centering
-            x = x - mean.index_select(0, batch)  # NxGxC
+            x = x - mean.index_select(0, batch)
 
             # Compute the groupwise variance
             var = scatter(
                 x * x, batch, dim=0, dim_size=batch_size, reduce='add').sum(
-                dim=-1, keepdim=True) / norm  # BxG
+                dim=-1, keepdim=True) / norm
 
             # Groupwise std scaling
-            out = x / (var + self.eps).sqrt().index_select(0, batch)  # NxGxC
+            out = x / (var + self.eps).sqrt().index_select(0, batch)
 
             # Restore input shape
-            out = out.view(-1, self.in_channels)  # Nxin_channels
+            out = out.view(-1, self.in_channels)
 
             # Apply learnable mean and variance to each channel
             if self.weight is not None and self.bias is not None:
