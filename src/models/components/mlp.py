@@ -1,7 +1,7 @@
 from torch_scatter import scatter
 from torch import nn
 from src.data import NAG
-from src.nn import MLP, FastBatchNorm1d
+from src.nn import MLP, BatchNorm
 
 
 __all__ = ['NodeMLP']
@@ -15,7 +15,7 @@ class NodeMLP(nn.Module):
 
     def __init__(
             self, dims, level=0, activation=nn.LeakyReLU(),
-            norm=FastBatchNorm1d, drop=None):
+            norm=BatchNorm, drop=None):
 
         super().__init__()
 

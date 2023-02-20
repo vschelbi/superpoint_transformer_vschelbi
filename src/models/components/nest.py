@@ -3,7 +3,7 @@ from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
-    FastBatchNorm1d, CatFusion, CatInjection, MLP
+    BatchNorm, CatFusion, CatInjection, MLP
 from src.nn.pool import BaseAttentivePool
 from src.nn.pool import pool_factory
 
@@ -73,7 +73,7 @@ class NeST(nn.Module):
             h_edge_mlp=None,
             v_edge_mlp=None,
             mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d,
+            mlp_norm=BatchNorm,
             qk_dim=8,
             qkv_bias=True,
             qk_scale=None,
@@ -524,12 +524,17 @@ class NeST(nn.Module):
                 # do this here before those can be passed to the
                 # DownNFuseStage and, later on, to the UpNFuseStage
                 if node_mlp is not None:
-                    nag[i_level].x = node_mlp(nag[i_level].x)
+                    norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+                    nag[i_level].x = node_mlp(nag[i_level].x, batch=norm_index)
                 if h_edge_mlp is not None:
-                    nag[i_level].edge_attr = h_edge_mlp(nag[i_level].edge_attr)
+                    norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+                    norm_index = norm_index[nag[i_level].edge_index[0]]
+                    nag[i_level].edge_attr = h_edge_mlp(
+                        nag[i_level].edge_attr, batch=norm_index)
                 if v_edge_mlp is not None:
+                    norm_index = nag[i_level - 1].norm_index(mode=self.norm_mode)
                     nag[i_level - 1].vertical_edge_attr = v_edge_mlp(
-                        nag[i_level - 1].vertical_edge_attr)
+                        nag[i_level - 1].vertical_edge_attr, batch=norm_index)
 
                 # Forward on the DownNFuseStage
                 x, diameter = self._forward_down_stage(stage, nag, i_level, x)

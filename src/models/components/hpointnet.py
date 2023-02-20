@@ -1,5 +1,5 @@
 from torch import nn
-from src.nn import FastBatchNorm1d, CatInjection
+from src.nn import BatchNorm, CatInjection
 from src.models.components import NeST
 
 
@@ -91,7 +91,7 @@ class HPointNet(NeST):
             activation=nn.LeakyReLU(),
             pos_injection=CatInjection,
             cat_diameter=False,
-            norm=FastBatchNorm1d,
+            norm=BatchNorm,
             pool='max',
             unpool='index',
             fusion='cat'):

@@ -18,7 +18,7 @@ net:
     _target_: torch.nn.LeakyReLU
     negative_slope: 0.01
   mlp_norm:
-    _target_: src.nn.FastBatchNorm1d
+    _target_: src.nn.BatchNorm
     _partial_: True
 
   pos_injection:

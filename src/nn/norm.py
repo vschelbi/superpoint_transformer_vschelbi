@@ -8,12 +8,13 @@ from torch_geometric.utils import degree
 
 
 __all__ = [
-    'FastBatchNorm1d', 'UnitSphereNorm', 'LayerNorm', 'InstanceNorm',
-    'GraphNorm', 'GroupNorm']
+    'BatchNorm', 'UnitSphereNorm', 'LayerNorm', 'InstanceNorm', 'GraphNorm',
+    'GroupNorm', 'INDEX_BASED_NORMS']
 
 
-class FastBatchNorm1d(nn.Module):
-    """Credits: https://github.com/torch-points3d/torch-points3d"""
+class BatchNorm(nn.Module):
+    """Credits: https://github.com/torch-points3d/torch-points3d
+    """
 
     def __init__(self, num_features, **kwargs):
         super().__init__()
@@ -228,3 +229,6 @@ class GroupNorm(torch.nn.Module):
     def __repr__(self):
         return (f'{self.__class__.__name__}(in_channels={self.in_channels}, '
                 f'num_groups={self.num_groups}, mode={self.mode})')
+
+
+INDEX_BASED_NORMS = [LayerNorm, InstanceNorm, GraphNorm, GroupNorm]

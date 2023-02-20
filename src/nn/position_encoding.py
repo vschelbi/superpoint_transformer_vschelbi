@@ -75,10 +75,10 @@ class AdditiveMLPInjection(BasePositionalInjection):
         """
         super().__init__(dim=dim, x_dim=None, fusion='additive')
 
-        self.mlp = FFN(3, out_dim=self.dim, activation=nn.LeakyReLU())
+        self.ffn = FFN(3, out_dim=self.dim, activation=nn.LeakyReLU())
 
     def _encode(self, pos):
-        return self.mlp(pos)
+        return self.ffn(pos)
 
 
 class FourierInjection(BasePositionalInjection):
@@ -156,7 +156,7 @@ class LearnableFourierInjection(BasePositionalInjection):
         sines = torch.sin(projected)
         F = 1 / np.sqrt(self.F_dim) * torch.cat([cosines, sines], dim=-1)
         # Step 2. Compute projected Fourier features (eq. 6)
-        Y = self.mlp(F)
+        Y = self.mlp(F)  # TODO: finish ................................
         # Step 3. Reshape to x's shape
         PEx = Y.reshape((N, self.D))
         return PEx

@@ -1,5 +1,5 @@
 from torch import nn
-from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm
+from src.nn import MLP, TransformerBlock, BatchNorm, UnitSphereNorm
 from src.nn.pool import pool_factory
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
@@ -50,7 +50,7 @@ class Stage(nn.Module):
             in_mlp=None,
             out_mlp=None,
             mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d,
+            mlp_norm=BatchNorm,
             mlp_drop=None,
             pos_injection=CatInjection,
             pos_injection_x_dim=None,
@@ -166,7 +166,7 @@ class Stage(nn.Module):
 
         # MLP on input features to change channel size
         if self.in_mlp is not None:
-            x = self.in_mlp(x)
+            x = self.in_mlp(x, batch=norm_index)
 
         # Transformer blocks
         if self.transformer_blocks is not None:
@@ -176,7 +176,7 @@ class Stage(nn.Module):
 
         # MLP on output features to change channel size
         if self.out_mlp is not None:
-            x = self.out_mlp(x)
+            x = self.out_mlp(x, batch=norm_index)
 
         return x, diameter
 
@@ -225,7 +225,7 @@ class DownNFuseStage(Stage):
             pool='max',
             fusion='cat',
             mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d,
+            mlp_norm=BatchNorm,
             mlp_drop=None,
             **kwargs):
         super().__init__(
@@ -359,7 +359,7 @@ class PointStage(Stage):
             self,
             in_mlp,
             mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d,
+            mlp_norm=BatchNorm,
             mlp_drop=None,
             pos_injection=CatInjection,
             pos_injection_x_dim=None,
