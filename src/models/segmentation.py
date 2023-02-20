@@ -9,7 +9,6 @@ from src.nn import Classifier
 from src.optim.lr_scheduler import ON_PLATEAU_SCHEDULERS
 from pytorch_lightning.loggers.wandb import WandbLogger
 from src.data import NAG
-from src.transforms import NAGSaveNodeIndex
 
 
 log = logging.getLogger(__name__)
