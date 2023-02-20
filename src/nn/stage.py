@@ -1,6 +1,5 @@
 from torch import nn
-from src.nn import MLP, TransformerBlock, FastBatchNorm1d, UnitSphereNorm, \
-    RPEFFN
+from src.nn import MLP, TransformerBlock, BatchNorm, UnitSphereNorm
 from src.nn.pool import pool_factory
 from src.nn.unpool import *
 from src.nn.fusion import fusion_factory
@@ -51,7 +50,7 @@ class Stage(nn.Module):
             in_mlp=None,
             out_mlp=None,
             mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d,
+            mlp_norm=BatchNorm,
             mlp_drop=None,
             pos_injection=CatInjection,
             pos_injection_x_dim=None,
@@ -76,7 +75,6 @@ class Stage(nn.Module):
                 in_mlp,
                 activation=mlp_activation,
                 norm=mlp_norm,
-                momentum=0.1,
                 drop=mlp_drop)
             in_dim = in_mlp[0]
         else:
@@ -90,7 +88,6 @@ class Stage(nn.Module):
                 out_mlp,
                 activation=mlp_activation,
                 norm=mlp_norm,
-                momentum=0.1,
                 drop=mlp_drop)
         else:
             self.out_mlp = None
@@ -169,7 +166,7 @@ class Stage(nn.Module):
 
         # MLP on input features to change channel size
         if self.in_mlp is not None:
-            x = self.in_mlp(x)
+            x = self.in_mlp(x, batch=norm_index)
 
         # Transformer blocks
         if self.transformer_blocks is not None:
@@ -179,7 +176,7 @@ class Stage(nn.Module):
 
         # MLP on output features to change channel size
         if self.out_mlp is not None:
-            x = self.out_mlp(x)
+            x = self.out_mlp(x, batch=norm_index)
 
         return x, diameter
 
@@ -206,7 +203,7 @@ def _build_shared_rpe_encoders(
         out_dim = out_dim * num_heads
 
     if blocks_share and rpe:
-        return [RPEFFN(in_dim, out_dim=out_dim)] * num_blocks
+        return [nn.Linear(in_dim, out_dim)] * num_blocks
 
     return [rpe] * num_blocks
 
@@ -223,8 +220,19 @@ class DownNFuseStage(Stage):
     """
 
     def __init__(
-            self, *args, pool='max', fusion='cat', **kwargs):
-        super().__init__(*args, **kwargs)
+            self,
+            *args,
+            pool='max',
+            fusion='cat',
+            mlp_activation=nn.LeakyReLU(),
+            mlp_norm=BatchNorm,
+            mlp_drop=None,
+            **kwargs):
+        super().__init__(
+            *args,
+            mlp_activation=mlp_activation,
+            mlp_norm=mlp_norm,
+            mlp_drop=mlp_drop, **kwargs)
 
         # Pooling operator
         # IMPORTANT: the `down_pool_block` naming MUST MATCH the one
@@ -248,10 +256,16 @@ class DownNFuseStage(Stage):
             edge_attr=None,
             v_edge_attr=None,
             num_super=None):
+
+        # Pool the children features
         x_pooled = self.down_pool_block(
             x_child, x_parent, pool_index, edge_attr=v_edge_attr,
             num_pool=num_super)
+
+        # Fuse parent and pooled child features
         x_fused = self.fusion(x_parent, x_pooled)
+
+        # Stage forward
         return super().forward(
             x_fused,
             norm_index,
@@ -298,7 +312,13 @@ class UpNFuseStage(Stage):
             super_index=None,
             edge_index=None,
             edge_attr=None):
-        x_fused = self.fusion(x_child, self.unpool(x_parent, unpool_index))
+        # Unpool the parent features
+        x_unpool = self.unpool(x_parent, unpool_index)
+
+        # Fuse unpooled parent and child features
+        x_fused = self.fusion(x_child, x_unpool)
+
+        # Stage forward
         return super().forward(
             x_fused,
             norm_index,
@@ -339,7 +359,7 @@ class PointStage(Stage):
             self,
             in_mlp,
             mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d,
+            mlp_norm=BatchNorm,
             mlp_drop=None,
             pos_injection=CatInjection,
             pos_injection_x_dim=None,
@@ -360,10 +380,10 @@ class PointStage(Stage):
             pos_injection_x_dim=pos_injection_x_dim,
             cat_diameter=cat_diameter)
 
-    def forward(self, x, pos, node_size=None, super_index=None, **kwargs):
+    def forward(self, x, pos, norm_index, node_size=None, super_index=None, **kwargs):
         return super().forward(
             x,
-            None,
+            norm_index,
             pos=pos,
             node_size=node_size,
             super_index=super_index)

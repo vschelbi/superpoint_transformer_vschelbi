@@ -1,0 +1,8 @@
+defaults:
+  - default.yaml
+
+# Partial NEST config specifically for the branch for 'small' L1 nodes
+net:
+  small: 20  # node size separating "small" and "not small" L1 nodes
+  small_point_mlp: ${eval:'[${model._p_x}] + ${model._p}'}
+  small_down_mlp: ${eval:'[${model._d_x} + ${model._p}[-1]] + [${model._d}[0]] * ${model._d_r}'}

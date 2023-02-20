@@ -23,9 +23,11 @@ graph_k_max: 50
 graph_gap: [0, 1, 5, 10]
 
 # Batch construction parameterization
-sample_point_min: 16
-sample_point_max: 64
-sample_segment_ratio: 0.3
+dropout_segment_ratio: 0.1
+dropout_segment_by_size: True
+dropout_segment_by_class: False
+sample_point_min: 32
+sample_point_max: 128
 sample_graph_r: 20  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
 sample_graph_i_level: 1
@@ -165,9 +167,9 @@ on_device_train_transform:
         disjoint: ${datamodule.sample_graph_disjoint}
     - transform: SampleSegments
       params:
-        ratio: ${datamodule.sample_segment_ratio}
-        by_size: False
-        by_class: False
+        ratio: ${datamodule.dropout_segment_ratio}
+        by_size: ${datamodule.dropout_segment_by_size}
+        by_class: ${datamodule.dropout_segment_by_class}
     - transform: JitterPosition  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
         sigma: ${datamodule.pos_jitter}

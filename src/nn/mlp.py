@@ -1,13 +1,13 @@
 from torch import nn
-from src.nn.norm import FastBatchNorm1d
+from src.nn.norm import BatchNorm, INDEX_BASED_NORMS
 
 
-__all__ = ['MLP', 'FFN', 'RPEFFN', 'Classifier']
+__all__ = ['MLP', 'FFN', 'Classifier']
 
 
 def mlp(
         dims, activation=nn.LeakyReLU(), last_activation=True,
-        norm=FastBatchNorm1d, momentum=0.1, drop=None):
+        norm=BatchNorm, drop=None):
     """Helper to build MLP-like structures.
 
     :param dims: List[int]
@@ -17,9 +17,10 @@ def mlp(
     :param last_activation: bool
         Whether the last layer should have an activation
     :param norm: nn.Module
-        Normalization. Can be None, for FFN for instance
-    :param momentum: float
-        Normalization momentum
+        Normalization. Can be None, for FFN for instance. Must be
+        instantiable using norm(in_channels). If more parameters need to
+        be passed to the norm, consider using a partially instantiated
+        class
     :param drop: float in [0, 1]
         Dropout on the output features. No dropout layer will be
         created if `drop=None` or `drop < 0`
@@ -35,7 +36,7 @@ def mlp(
     for i in range(1, len(dims)):
         modules.append(nn.Linear(dims[i - 1], dims[i], bias=bias))
         if norm is not None:
-            modules.append(norm(dims[i], momentum=momentum))
+            modules.append(norm(dims[i]))
         if activation is not None and (last_activation or i < len(dims) - 1):
             modules.append(activation)
 
@@ -43,7 +44,7 @@ def mlp(
     if drop is not None and drop > 0:
         modules.append(nn.Dropout(drop, inplace=True))
 
-    return nn.Sequential(*modules)
+    return nn.ModuleList(modules)
 
 
 class MLP(nn.Module):
@@ -52,19 +53,27 @@ class MLP(nn.Module):
     """
 
     def __init__(
-            self, dims, activation=nn.LeakyReLU(), norm=FastBatchNorm1d,
-            momentum=0.1, drop=None):
+            self, dims, activation=nn.LeakyReLU(), last_activation=True,
+            norm=BatchNorm, drop=None):
         super().__init__()
         self.mlp = mlp(
-            dims, activation=activation, last_activation=True, norm=norm,
-            momentum=momentum, drop=drop)
+            dims, activation=activation, last_activation=last_activation,
+            norm=norm, drop=drop)
         self.out_dim = dims[-1]
 
-    def forward(self, x):
-        return self.mlp(x)
+    def forward(self, x, batch=None):
+        # We need to manually iterate over the ModuleList to be able to
+        # pass the batch index when need be, for some specific
+        # normalization layers
+        for module in self.mlp:
+            if isinstance(module, INDEX_BASED_NORMS):
+                x = module(x, batch=batch)
+            else:
+                x = module(x)
+        return x
 
 
-class FFN(nn.Module):
+class FFN(MLP):
     """Feed-Forward Network as used in Transformers. By convention,
     these MLPs have 2 Linear layers and no normalization, the last layer
     has no activation and an optional dropout may be applied on the
@@ -74,37 +83,15 @@ class FFN(nn.Module):
     def __init__(
             self, dim, hidden_dim=None, out_dim=None, activation=nn.LeakyReLU(),
             drop=None):
-        super().__init__()
 
         # Build the channel sizes for the 2 linear layers
         hidden_dim = hidden_dim or dim
         out_dim = out_dim or dim
         channels = [dim, hidden_dim, out_dim]
 
-        self.ffn = mlp(
+        super().__init__(
             channels, activation=activation, last_activation=False, norm=None,
             drop=drop)
-        self.out_dim = out_dim
-
-    def forward(self, x):
-        return self.ffn(x)
-
-
-class RPEFFN(FFN):
-    """Feed-Forward Network for Relative Position Encoding. By
-    convention, these MLPs have 2 Linear layers and no normalization,
-    the last layer has no activation and an optional dropout may be
-    applied on the output features. Besides, if not provided, the hidden
-    layer is chosen to be the max between input dim, output dim and 16
-    (this subtlety is the only difference with FFN.
-    """
-
-    def __init__(
-            self, dim, hidden_dim=None, out_dim=None, activation=nn.LeakyReLU(),
-            drop=None):
-        super().__init__(
-            dim, hidden_dim=hidden_dim or max(dim, out_dim, 16), out_dim=out_dim,
-            activation=activation, drop=drop)
 
 
 class Classifier(nn.Module):

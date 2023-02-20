@@ -3,9 +3,9 @@ from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
-    FastBatchNorm1d, CatFusion, CatInjection, RPEFFN
+    BatchNorm, CatFusion, CatInjection, MLP, LayerNorm
+from src.nn.pool import BaseAttentivePool
 from src.nn.pool import pool_factory
-
 
 __all__ = ['NeST']
 
@@ -69,21 +69,26 @@ class NeST(nn.Module):
             last_inject_pos=True,
             last_pos_injection_x_dim=None,
 
+            node_mlp=None,
+            h_edge_mlp=None,
+            v_edge_mlp=None,
             mlp_activation=nn.LeakyReLU(),
-            mlp_norm=FastBatchNorm1d,
+            mlp_norm=BatchNorm,
             qk_dim=8,
             qkv_bias=True,
             qk_scale=None,
             scale_qk_by_neigh=True,
             in_rpe_dim=18,
-            activation=nn.GELU(),
-            pre_ln=True,
+            activation=nn.LeakyReLU(),
+            norm=LayerNorm,
+            pre_norm=True,
             no_sa=False,
             no_ffn=False,
             k_rpe=False,
             q_rpe=False,
             c_rpe=False,
             v_rpe=False,
+            share_hf_mlps=False,
             stages_share_rpe=False,
             blocks_share_rpe=False,
             heads_share_rpe=False,
@@ -160,6 +165,15 @@ class NeST(nn.Module):
             up_drop_path,
             up_pos_injection_x_dim)
 
+        # Local helper variables describing the architecture
+        num_down = len(down_dim)
+        num_up = len(up_dim)
+        needs_node_hf = down_inject_x or up_inject_x
+        needs_h_edge_hf = any(
+            x > 0 for x in down_num_blocks + up_num_blocks + [last_num_blocks])
+        needs_v_edge_hf = num_down > 0 and isinstance(
+            pool_factory(pool, down_pool_dim[0]), BaseAttentivePool)
+
         # Module operating on Level-0 points in isolation
         self.point_stage = PointStage(
             point_mlp,
@@ -174,15 +188,31 @@ class NeST(nn.Module):
         # handcrafted features to the NAG's features
         self.feature_fusion = CatFusion()
 
+        # Build MLPs that will be used to process handcrafted segment
+        # and edge features. These will be called before each
+        # DownNFuseStage and their output will be passed to
+        # DownNFuseStage and UpNFuseStage
+        node_mlp = node_mlp if needs_node_hf else None
+        self.node_mlps = _build_mlps(
+            node_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
+
+        h_edge_mlp = h_edge_mlp if needs_h_edge_hf else None
+        self.h_edge_mlps = _build_mlps(
+            h_edge_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
+
+        v_edge_mlp = v_edge_mlp if needs_v_edge_hf else None
+        self.v_edge_mlps = _build_mlps(
+            v_edge_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
+
         # Transformer encoder (down) Stages operating on Level-i data
-        if len(down_dim) > 0:
+        if num_down > 0:
 
             # Build the RPE encoders here if shared across all stages
             down_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, len(down_dim), 18, qk_dim, stages_share_rpe)
+                k_rpe, num_down, 18, qk_dim, stages_share_rpe)
 
             down_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, len(down_dim), 18, qk_dim, stages_share_rpe)
+                q_rpe, num_down, 18, qk_dim, stages_share_rpe)
 
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
@@ -204,7 +234,8 @@ class NeST(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=drop_path,
                     activation=activation,
-                    pre_ln=pre_ln,
+                    norm=norm,
+                    pre_norm=pre_norm,
                     no_sa=no_sa,
                     no_ffn=no_ffn,
                     k_rpe=stage_k_rpe,
@@ -218,27 +249,47 @@ class NeST(nn.Module):
                     cat_diameter=cat_diameter,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
-                for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
-                    ffn_ratio, residual_drop, attn_drop, drop_path,
-                    stage_k_rpe, stage_q_rpe, pool_dim, pos_injection_x_dim
+                for dim,
+                    num_blocks,
+                    in_mlp,
+                    out_mlp,
+                    mlp_drop,
+                    num_heads,
+                    ffn_ratio,
+                    residual_drop,
+                    attn_drop,
+                    drop_path,
+                    stage_k_rpe,
+                    stage_q_rpe,
+                    pool_dim,
+                    pos_injection_x_dim
                 in zip(
-                    down_dim, down_num_blocks, down_in_mlp, down_out_mlp,
-                    down_mlp_drop, down_num_heads, down_ffn_ratio,
-                    down_residual_drop, down_attn_drop, down_drop_path,
-                    down_k_rpe, down_q_rpe, down_pool_dim,
+                    down_dim,
+                    down_num_blocks,
+                    down_in_mlp,
+                    down_out_mlp,
+                    down_mlp_drop,
+                    down_num_heads,
+                    down_ffn_ratio,
+                    down_residual_drop,
+                    down_attn_drop,
+                    down_drop_path,
+                    down_k_rpe,
+                    down_q_rpe,
+                    down_pool_dim,
                     down_pos_injection_x_dim)])
         else:
             self.down_stages = None
 
         # Transformer decoder (up) Stages operating on Level-i data
-        if len(up_dim) > 0:
+        if num_up > 0:
 
             # Build the RPE encoder here if shared across all stages
             up_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, len(up_dim), 18, qk_dim, stages_share_rpe)
+                k_rpe, num_up, 18, qk_dim, stages_share_rpe)
 
             up_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, len(up_dim), 18, qk_dim, stages_share_rpe)
+                q_rpe, num_up, 18, qk_dim, stages_share_rpe)
 
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
@@ -260,7 +311,8 @@ class NeST(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=drop_path,
                     activation=activation,
-                    pre_ln=pre_ln,
+                    norm=norm,
+                    pre_norm=pre_norm,
                     no_sa=no_sa,
                     no_ffn=no_ffn,
                     k_rpe=stage_k_rpe,
@@ -273,14 +325,32 @@ class NeST(nn.Module):
                     pos_injection_x_dim=pos_injection_x_dim,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
-                for dim, num_blocks, in_mlp, out_mlp, mlp_drop, num_heads,
-                    ffn_ratio, residual_drop, attn_drop, drop_path,
-                    stage_k_rpe, stage_q_rpe, pos_injection_x_dim
+                for dim,
+                    num_blocks,
+                    in_mlp,
+                    out_mlp,
+                    mlp_drop,
+                    num_heads,
+                    ffn_ratio,
+                    residual_drop,
+                    attn_drop,
+                    drop_path,
+                    stage_k_rpe,
+                    stage_q_rpe,
+                    pos_injection_x_dim
                 in zip(
-                    up_dim, up_num_blocks, up_in_mlp, up_out_mlp,
-                    up_mlp_drop, up_num_heads, up_ffn_ratio,
-                    up_residual_drop, up_attn_drop, up_drop_path,
-                    up_k_rpe, up_q_rpe, up_pos_injection_x_dim)])
+                    up_dim,
+                    up_num_blocks,
+                    up_in_mlp,
+                    up_out_mlp,
+                    up_mlp_drop,
+                    up_num_heads,
+                    up_ffn_ratio,
+                    up_residual_drop,
+                    up_attn_drop,
+                    up_drop_path,
+                    up_k_rpe, up_q_rpe,
+                    up_pos_injection_x_dim)])
         else:
             self.up_stages = None
 
@@ -358,7 +428,8 @@ class NeST(nn.Module):
                 attn_drop=last_attn_drop,
                 drop_path=last_drop_path,
                 activation=activation,
-                pre_ln=pre_ln,
+                norm=norm,
+                pre_norm=pre_norm,
                 no_sa=no_sa,
                 no_ffn=no_ffn,
                 k_rpe=last_k_rpe,
@@ -411,7 +482,9 @@ class NeST(nn.Module):
 
             # Encode level-0 data for small L1 nodes
             x_small, diameter_small = self.point_stage_small(
-                nag_small[0].x, nag_small[0].pos,
+                nag_small[0].x,
+                nag_small[0].pos,
+                nag_small[0].norm_index(mode=self.norm_mode),
                 super_index=nag_small[0].super_index)
 
             # Append the diameter to the level-1 features
@@ -432,7 +505,10 @@ class NeST(nn.Module):
         # Encode level-0 data
         # NB: no node_size for the level-0 points
         x, diameter = self.point_stage(
-            nag[0].x, nag[0].pos, super_index=nag[0].super_index)
+            nag[0].x,
+            nag[0].pos,
+            nag[0].norm_index(mode=self.norm_mode),
+            super_index=nag[0].super_index)
 
         # Append the diameter to the level-1 features
         nag[1].x = self.feature_fusion(nag[1].x, diameter)
@@ -440,11 +516,36 @@ class NeST(nn.Module):
         # Iteratively encode level-1 and above
         down_outputs = []
         if self.down_stages is not None:
-            for i_stage, stage in enumerate(self.down_stages):
+
+            enum = enumerate(zip(
+                self.down_stages,
+                self.node_mlps,
+                self.h_edge_mlps,
+                self.v_edge_mlps))
+
+            for i_stage, (stage, node_mlp, h_edge_mlp, v_edge_mlp) in enum:
 
                 # Forward on the down stage and the corresponding NAG
                 # level
                 i_level = i_stage + 1
+
+                # Process handcrafted node and edge features. We need to
+                # do this here before those can be passed to the
+                # DownNFuseStage and, later on, to the UpNFuseStage
+                if node_mlp is not None:
+                    norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+                    nag[i_level].x = node_mlp(nag[i_level].x, batch=norm_index)
+                if h_edge_mlp is not None:
+                    norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+                    norm_index = norm_index[nag[i_level].edge_index[0]]
+                    nag[i_level].edge_attr = h_edge_mlp(
+                        nag[i_level].edge_attr, batch=norm_index)
+                if v_edge_mlp is not None:
+                    norm_index = nag[i_level - 1].norm_index(mode=self.norm_mode)
+                    nag[i_level - 1].vertical_edge_attr = v_edge_mlp(
+                        nag[i_level - 1].vertical_edge_attr, batch=norm_index)
+
+                # Forward on the DownNFuseStage
                 x, diameter = self._forward_down_stage(stage, nag, i_level, x)
                 down_outputs.append(x)
 
@@ -607,14 +708,27 @@ def _build_shared_rpe_encoders(
     if not isinstance(rpe, bool):
         assert stages_share, \
             "If anything else but a boolean is passed for the RPE encoder, " \
-            "this value will be passed to all Stages and stages_share should " \
-            "be set to True."
+            "this value will be passed to all Stages and `stages_share` " \
+            "should be set to True."
         return [rpe] * num_stages
 
     # If all stages share the same RPE encoder, all blocks and all heads
     # too. We copy the same module instance to be shared across all
     # stages and blocks
     if stages_share and rpe:
-        return [RPEFFN(in_dim, out_dim=out_dim)] * num_stages
+        return [nn.Linear(in_dim, out_dim)] * num_stages
 
     return [rpe] * num_stages
+
+
+def _build_mlps(layers, num_stage, activation, norm, shared):
+    if layers is None:
+        return [None] * num_stage
+
+    if shared:
+        return nn.ModuleList([
+            MLP(layers, activation=activation, norm=norm)] * num_stage)
+
+    return nn.ModuleList([
+        MLP(layers, activation=activation, norm=norm)
+        for _ in range(num_stage)])

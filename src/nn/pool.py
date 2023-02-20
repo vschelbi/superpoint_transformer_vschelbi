@@ -6,7 +6,6 @@ from torch_geometric.nn.aggr import MaxAggregation
 from torch_geometric.nn.aggr import MinAggregation
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
-from src.nn import RPEFFN
 from src.utils.nn import init_weights, LearnableParameter
 
 
@@ -126,12 +125,12 @@ class BaseAttentivePool(nn.Module):
         if not isinstance(k_rpe, bool):
             self.k_rpe = k_rpe
         else:
-            self.k_rpe = RPEFFN(in_rpe_dim, out_dim=rpe_dim) if k_rpe else None  # TODO: FFN have NO NORMALIZATION, does that make snese here ?
+            self.k_rpe = nn.Linear(in_rpe_dim, rpe_dim) if k_rpe else None
 
         if not isinstance(q_rpe, bool):
             self.q_rpe = q_rpe
         else:
-            self.q_rpe = RPEFFN(in_rpe_dim, out_dim=rpe_dim) if q_rpe else None  # TODO: FFN have NO NORMALIZATION, does that make snese here ?
+            self.q_rpe = nn.Linear(in_rpe_dim, rpe_dim) if q_rpe else None
 
         if c_rpe:
             raise NotImplementedError

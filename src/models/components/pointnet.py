@@ -1,5 +1,5 @@
 from torch import nn
-from src.nn import FastBatchNorm1d, CatInjection
+from src.nn import BatchNorm, CatInjection
 from src.models.components import NeST
 
 
@@ -43,7 +43,7 @@ class PointNet(NeST):
             down_drop=None,
 
             activation=nn.LeakyReLU(),
-            norm=FastBatchNorm1d,
+            norm=BatchNorm,
             pool='max',
             pos_injection=CatInjection):
 

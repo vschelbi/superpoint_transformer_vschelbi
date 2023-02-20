@@ -1,87 +1,24 @@
 defaults:
   - default.yaml
+  - _point.yaml
+  - _down.yaml
+  - _up.yaml
+  - _last.yaml
+  - _small.yaml
+  - _attention.yaml
 
 net:
   _target_: src.models.components.nest.NeST
 
-  point_mlp: ${eval:'[${model._p_x}] + ${model._p}'}
-  point_drop: null
-  point_pos_injection:
-    _target_: src.nn.CatInjection
-    _partial_: True
-  point_pos_injection_x_dim: null
-  point_cat_diameter: False
-
-  down_dim: ${model._d}
-  down_pool_dim: ${eval:'[${model._p}[-1]] + ${model._d}[:-1]'}
-  down_in_mlp: ${eval:'[ [${model._d_x} + ${model._p}[-1]] + [${model._d}[0]] * ${model._d_r}, [${model._d_x} + ${model._d}[0]] + [${model._d}[1]] * ${model._d_r}, [${model._d_x} + ${model._d}[1]] + [${model._d}[2]] * ${model._d_r}, [${model._d_x} + ${model._d}[2]] + [${model._d}[3]] * ${model._d_r} ]'}
-  down_out_mlp: null
-  down_mlp_drop: null
-  down_num_heads: 8
-  down_num_blocks: 1
-  down_ffn_ratio: 1
-  down_residual_drop: null
-  down_attn_drop: null
-  down_drop_path: null
-  down_inject_pos: True  # append segment position features (or more depending on pos_injection and point_pos_injection_x_dim)
-  down_inject_x: True  # append handcrafted segment features
-  down_pos_injection_x_dim: null
-
-  up_dim: ${model._u}
-  up_in_mlp: ${eval:'[ [${model._u_x} + ${model._d}[-1] + ${model._d}[-2]] + [${model._u}[0]] * ${model._u_r}, [${model._u_x} + ${model._u}[0] + ${model._d}[-3]] + [${model._u}[1]] * ${model._u_r}, [${model._u_x} + ${model._u}[1] + ${model._d}[-4]] + [${model._u}[2]] * ${model._u_r} ]'}
-  up_out_mlp: null
-  up_mlp_drop: null
-  up_num_heads: ${model.net.down_num_heads}
-  up_num_blocks: ${model.net.down_num_blocks}
-  up_ffn_ratio: ${model.net.down_ffn_ratio}
-  up_residual_drop: null
-  up_attn_drop: null
-  up_drop_path: null
-  up_inject_pos: True  # appends position features = (3) or more depending on pos_injection and point_pos_injection_x_dim
-  up_inject_x: False
-  up_pos_injection_x_dim: null
-
-  small: null
-  small_point_mlp: null
-  small_down_mlp: null
-
-  last_dim: null
-  last_in_mlp: null
-  last_out_mlp: null
-  last_mlp_drop: null
-  last_num_heads: ${model.net.down_num_heads}
-  last_num_blocks: ${model.net.down_num_blocks}
-  last_ffn_ratio: ${model.net.down_ffn_ratio}
-  last_residual_drop: null
-  last_attn_drop: null
-  last_drop_path: null
-  last_inject_pos: True
-  last_pos_injection_x_dim: null
-
+  node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_n_mlp}] * ${model._d_r} if ${model._x_n_mlp} else None'}
+  h_edge_mlp: ${eval:'[${model._x_he_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
+  v_edge_mlp: ${eval:'[${model._x_ve_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
+  share_hf_mlps: False
   mlp_activation:
     _target_: torch.nn.LeakyReLU
-    negative_slope: 0.01
   mlp_norm:
-    _target_: src.nn.FastBatchNorm1d
+    _target_: src.nn.BatchNorm
     _partial_: True
-  activation:
-    _target_: torch.nn.LeakyReLU
-    negative_slope: 0.01
-  pre_ln: True
-  no_sa: False
-  no_ffn: True
-  qk_dim: 4
-  qkv_bias: True
-  qk_scale: null
-  scale_qk_by_neigh: True
-  in_rpe_dim: ${datamodule.feat_horizontal_edge}
-  k_rpe: True
-  q_rpe: False
-  c_rpe: False
-  v_rpe: False
-  stages_share_rpe: False
-  blocks_share_rpe: False
-  heads_share_rpe: False
 
   pos_injection:
     _target_: src.nn.CatInjection
@@ -91,3 +28,6 @@ net:
   unpool: 'index'
   fusion: 'cat'
   norm_mode: 'graph'
+
+  small: null  # no branch for 'small' L1 nodes
+  last_dim: null  # no modules after the 'small' nodes branch merge

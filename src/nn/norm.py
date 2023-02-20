@@ -2,18 +2,23 @@ import torch
 from torch import nn
 from torch_scatter import scatter
 from src.utils import scatter_mean_weighted
-from torch_geometric.nn.norm import LayerNorm
+from torch_geometric.nn.norm import LayerNorm, InstanceNorm, GraphNorm
+from torch_geometric.nn.inits import ones, zeros
+from torch_geometric.utils import degree
 
 
-__all__ = ['FastBatchNorm1d', 'UnitSphereNorm', 'LayerNorm']
+__all__ = [
+    'BatchNorm', 'UnitSphereNorm', 'LayerNorm', 'InstanceNorm', 'GraphNorm',
+    'GroupNorm', 'INDEX_BASED_NORMS']
 
 
-class FastBatchNorm1d(nn.Module):
-    """Credits: https://github.com/torch-points3d/torch-points3d"""
+class BatchNorm(nn.Module):
+    """Credits: https://github.com/torch-points3d/torch-points3d
+    """
 
-    def __init__(self, num_features, momentum=0.1, **kwargs):
+    def __init__(self, num_features, **kwargs):
         super().__init__()
-        self.batch_norm = nn.BatchNorm1d(num_features, momentum=momentum, **kwargs)
+        self.batch_norm = nn.BatchNorm1d(num_features, **kwargs)
 
     def _forward_dense(self, x):
         return self.batch_norm(x.permute(0, 2, 1)).permute(0, 2, 1)
@@ -125,3 +130,105 @@ class UnitSphereNorm(nn.Module):
         pos = (pos - center) / (diameter.view(-1, 1) + 1e-2)
 
         return pos, diameter_segment.view(-1, 1)
+
+
+class GroupNorm(torch.nn.Module):
+    """Group normalization on graphs.
+
+    :param in_channels: int
+        Number of input channels
+    :param num_groups: int
+        Number of groups. Must be a divider of `in_channels`
+    :param eps: float
+    :param affine: bool
+    :param mode: str
+        Normalization mode. `mode='graph'` will normalize input nodes
+        based on the input `batch` they belong to. `mode='node'` will
+        apply BatchNorm on each node separately.
+    """
+    def __init__(
+            self, in_channels, num_groups=4, eps=1e-5, affine=True,
+            mode='graph'):
+        super().__init__()
+
+        assert in_channels % num_groups == 0, \
+            f"`in_channels` must be a multiple of `num_groups`"
+        self.in_channels = in_channels
+        self.num_groups = num_groups
+        self.group_channels = in_channels // num_groups
+        self.eps = eps
+        self.mode = mode
+
+        if affine:
+            self.weight = nn.Parameter(torch.Tensor(in_channels))
+            self.bias = nn.Parameter(torch.Tensor(in_channels))
+        else:
+            self.register_parameter('weight', None)
+            self.register_parameter('bias', None)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        ones(self.weight)
+        zeros(self.bias)
+
+    def forward(self, x, batch=None):
+        """"""
+        if self.mode == 'graph':
+
+            # If graph-wise normalization mode and 'batch' is not
+            # provided, we consider all input nodes to belong to the
+            # same graph
+            if batch is None:
+                batch = torch.zeros(
+                    x.shape[0], dtype=torch.long, device=x.device)
+
+            # Separate group features using a new dimension
+            x = x.view(-1, self.num_groups, self.group_channels)
+
+            # Compute the number of items in each group normalization
+            batch_size = int(batch.max()) + 1
+            norm = degree(batch, batch_size, dtype=x.dtype).clamp_(min=1)
+            norm = norm.mul_(self.group_channels).view(-1, 1, 1)
+
+            # Compute the groupwise mean
+            mean = scatter(
+                x, batch, dim=0, dim_size=batch_size, reduce='add').sum(
+                dim=-1, keepdim=True) / norm
+
+            # Groupwise mean-centering
+            x = x - mean.index_select(0, batch)
+
+            # Compute the groupwise variance
+            var = scatter(
+                x * x, batch, dim=0, dim_size=batch_size, reduce='add').sum(
+                dim=-1, keepdim=True) / norm
+
+            # Groupwise std scaling
+            out = x / (var + self.eps).sqrt().index_select(0, batch)
+
+            # Restore input shape
+            out = out.view(-1, self.in_channels)
+
+            # Apply learnable mean and variance to each channel
+            if self.weight is not None and self.bias is not None:
+                out = out * self.weight + self.bias
+
+            return out
+
+        # GroupNorm in a node wise fashion
+        if self.mode == 'node':
+            if batch is None:
+                out = nn.functional.group_norm(
+                    x, self.num_groups, weight=self.weight, bias=self.bias,
+                    eps=self.eps)
+                return out
+
+        raise ValueError(f"Unknown normalization mode: {self.mode}")
+
+    def __repr__(self):
+        return (f'{self.__class__.__name__}(in_channels={self.in_channels}, '
+                f'num_groups={self.num_groups}, mode={self.mode})')
+
+
+INDEX_BASED_NORMS = (LayerNorm, InstanceNorm, GraphNorm, GroupNorm)
