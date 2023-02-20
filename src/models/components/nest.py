@@ -3,7 +3,7 @@ from torch import nn
 from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
-    BatchNorm, CatFusion, CatInjection, MLP
+    BatchNorm, CatFusion, CatInjection, MLP, LayerNorm
 from src.nn.pool import BaseAttentivePool
 from src.nn.pool import pool_factory
 
@@ -79,7 +79,8 @@ class NeST(nn.Module):
             qk_scale=None,
             scale_qk_by_neigh=True,
             in_rpe_dim=18,
-            activation=nn.GELU(),
+            activation=nn.LeakyReLU(),
+            norm=LayerNorm,
             pre_norm=True,
             no_sa=False,
             no_ffn=False,
@@ -233,6 +234,7 @@ class NeST(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=drop_path,
                     activation=activation,
+                    norm=norm,
                     pre_norm=pre_norm,
                     no_sa=no_sa,
                     no_ffn=no_ffn,
@@ -309,6 +311,7 @@ class NeST(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=drop_path,
                     activation=activation,
+                    norm=norm,
                     pre_norm=pre_norm,
                     no_sa=no_sa,
                     no_ffn=no_ffn,
@@ -425,6 +428,7 @@ class NeST(nn.Module):
                 attn_drop=last_attn_drop,
                 drop_path=last_drop_path,
                 activation=activation,
+                norm=norm,
                 pre_norm=pre_norm,
                 no_sa=no_sa,
                 no_ffn=no_ffn,

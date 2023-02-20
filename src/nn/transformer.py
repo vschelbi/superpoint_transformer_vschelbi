@@ -38,7 +38,7 @@ class TransformerBlock(nn.Module):
             residual_drop=None,
             attn_drop=None,
             drop_path=None,
-            activation=nn.GELU(),
+            activation=nn.LeakyReLU(),
             norm=LayerNorm,
             pre_norm=True,
             no_sa=False,

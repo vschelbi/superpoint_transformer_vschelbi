@@ -6,6 +6,9 @@ net:
   activation:
     _target_: torch.nn.LeakyReLU
     negative_slope: 0.01
+  norm:
+    _target_: src.nn.LayerNorm
+    _partial_: True
   pre_norm: True
   no_sa: False
   no_ffn: True
