@@ -482,7 +482,9 @@ class NeST(nn.Module):
 
             # Encode level-0 data for small L1 nodes
             x_small, diameter_small = self.point_stage_small(
-                nag_small[0].x, nag_small[0].pos,
+                nag_small[0].x,
+                nag_small[0].pos,
+                nag_small[0].norm_index(mode=self.norm_mode),
                 super_index=nag_small[0].super_index)
 
             # Append the diameter to the level-1 features
@@ -503,7 +505,10 @@ class NeST(nn.Module):
         # Encode level-0 data
         # NB: no node_size for the level-0 points
         x, diameter = self.point_stage(
-            nag[0].x, nag[0].pos, super_index=nag[0].super_index)
+            nag[0].x,
+            nag[0].pos,
+            nag[0].norm_index(mode=self.norm_mode),
+            super_index=nag[0].super_index)
 
         # Append the diameter to the level-1 features
         nag[1].x = self.feature_fusion(nag[1].x, diameter)

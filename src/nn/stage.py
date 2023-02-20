@@ -380,10 +380,10 @@ class PointStage(Stage):
             pos_injection_x_dim=pos_injection_x_dim,
             cat_diameter=cat_diameter)
 
-    def forward(self, x, pos, node_size=None, super_index=None, **kwargs):
+    def forward(self, x, pos, norm_index, node_size=None, super_index=None, **kwargs):
         return super().forward(
             x,
-            None,
+            norm_index,
             pos=pos,
             node_size=node_size,
             super_index=super_index)

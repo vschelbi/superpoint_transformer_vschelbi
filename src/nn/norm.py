@@ -231,4 +231,4 @@ class GroupNorm(torch.nn.Module):
                 f'num_groups={self.num_groups}, mode={self.mode})')
 
 
-INDEX_BASED_NORMS = [LayerNorm, InstanceNorm, GraphNorm, GroupNorm]
+INDEX_BASED_NORMS = (LayerNorm, InstanceNorm, GraphNorm, GroupNorm)
