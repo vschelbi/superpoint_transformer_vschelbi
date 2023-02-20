@@ -1,5 +1,6 @@
 from torch import nn
-from src.nn import SelfAttentionBlock, FFN, DropPath, LayerNorm
+from src.nn import SelfAttentionBlock, FFN, DropPath, LayerNorm, \
+    INDEX_BASED_NORMS
 
 
 __all__ = ['TransformerBlock']
@@ -12,12 +13,12 @@ __all__ = ['TransformerBlock']
 class TransformerBlock(nn.Module):
     """Base block of the Transformer architecture:
 
-        x ----------------- + ----------------- + -->
-            \              |   \               |
-             -- LN -- SA --     -- LN -- FFN --
+        x ---------------- + ---------------- + -->
+            \             |   \              |
+             -- N -- SA --     -- N -- FFN --
 
     Where:
-        - LN: LayerNorm
+        - N: Normalization
         - SA: Self-Attention
         - FFN: Feed-Forward Network
 
@@ -38,7 +39,8 @@ class TransformerBlock(nn.Module):
             attn_drop=None,
             drop_path=None,
             activation=nn.GELU(),
-            pre_ln=True,
+            norm=LayerNorm,
+            pre_norm=True,
             no_sa=False,
             no_ffn=False,
             k_rpe=False,
@@ -49,12 +51,12 @@ class TransformerBlock(nn.Module):
         super().__init__()
 
         self.dim = dim
-        self.pre_ln = pre_ln
+        self.pre_norm = pre_norm
 
         # Self-Attention residual branch
         self.no_sa = no_sa
         if not no_sa:
-            self.sa_norm = LayerNorm(dim)
+            self.sa_norm = norm(dim)
             self.sa = SelfAttentionBlock(
                 dim,
                 num_heads=num_heads,
@@ -76,7 +78,7 @@ class TransformerBlock(nn.Module):
         # Feed-Forward Network residual branch
         self.no_ffn = no_ffn
         if not no_ffn:
-            self.ffn_norm = LayerNorm(dim)
+            self.ffn_norm = norm(dim)
             self.ffn_ratio = ffn_ratio
             self.ffn = FFN(
                 dim,
@@ -120,23 +122,32 @@ class TransformerBlock(nn.Module):
         # are provided
         if self.no_sa or edge_index is None or edge_index.shape[1] == 0:
             pass
-        elif self.pre_ln:
-            x = self.sa_norm(x, norm_index)
+        elif self.pre_norm:
+            x = self._forward_norm(self.sa_norm, x, norm_index)
             x = self.sa(x, edge_index, edge_attr=edge_attr)
             x = shortcut + self.drop_path(x)
         else:
             x = self.sa(x, edge_index, edge_attr=edge_attr)
             x = self.drop_path(x)
-            x = self.sa_norm(shortcut + x, norm_index)
+            x = self._forward_norm(self.sa_norm, shortcut + x, norm_index)
 
         # Feed-Forward Network residual branch
-        if not self.no_ffn and self.pre_ln:
-            x = self.ffn_norm(x, norm_index)
+        if not self.no_ffn and self.pre_norm:
+            x = self._forward_norm(self.ffn_norm, x, norm_index)
             x = self.ffn(x)
             x = shortcut + self.drop_path(x)
-        if not self.no_ffn and not self.pre_ln:
+        if not self.no_ffn and not self.pre_norm:
             x = self.ffn(x)
             x = self.drop_path(x)
-            x = self.ffn_norm(shortcut + x, norm_index)
+            x = self._forward_norm(self.ffn_norm, shortcut + x, norm_index)
 
         return x, norm_index, edge_index
+
+    @staticmethod
+    def _forward_norm(norm, x, norm_index):
+        """Simple helper for the forward pass on norm modules. Some
+        modules require an index, while others don't.
+        """
+        if isinstance(norm, INDEX_BASED_NORMS):
+            return norm(x, batch=norm_index)
+        return norm(x)
