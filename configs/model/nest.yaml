@@ -16,7 +16,6 @@ net:
   share_hf_mlps: False
   mlp_activation:
     _target_: torch.nn.LeakyReLU
-    negative_slope: 0.01
   mlp_norm:
     _target_: src.nn.BatchNorm
     _partial_: True
