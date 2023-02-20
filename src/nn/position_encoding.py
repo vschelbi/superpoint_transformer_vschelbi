@@ -130,12 +130,9 @@ class LearnableFourierInjection(BasePositionalInjection):
         # Projection matrix on learned lines (used in eq. 2)
         self.Wr = nn.Linear(self.M, self.F_dim // 2, bias=False)
         # MLP (GeLU(F @ W1 + B1) @ W2 + B2 (eq. 6)
-        self.mlp = nn.Sequential(
-            nn.Linear(self.F_dim, self.H_dim, bias=True),
-            nn.GELU(),
-            nn.Linear(self.H_dim, self.D)
-        )
-
+        self.ffn = FFN(
+            self.F_dim, hidden_dim=self.H_dim, out_dim=self.D,
+            activation=nn.GELU(), drop=None)
         self.init_weights()
 
     def init_weights(self):
@@ -156,7 +153,7 @@ class LearnableFourierInjection(BasePositionalInjection):
         sines = torch.sin(projected)
         F = 1 / np.sqrt(self.F_dim) * torch.cat([cosines, sines], dim=-1)
         # Step 2. Compute projected Fourier features (eq. 6)
-        Y = self.mlp(F)  # TODO: finish ................................
+        Y = self.ffn(F)
         # Step 3. Reshape to x's shape
         PEx = Y.reshape((N, self.D))
         return PEx

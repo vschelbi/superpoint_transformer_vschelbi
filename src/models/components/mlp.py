@@ -14,13 +14,14 @@ class NodeMLP(nn.Module):
     """
 
     def __init__(
-            self, dims, level=0, activation=nn.LeakyReLU(),
-            norm=BatchNorm, drop=None):
+            self, dims, level=0, activation=nn.LeakyReLU(), norm=BatchNorm,
+            drop=None, norm_mode='graph'):
 
         super().__init__()
 
         self.level = level
         self.mlp = MLP(dims, activation=activation, norm=norm, drop=drop)
+        self.norm_mode = norm_mode
 
     @property
     def out_dim(self):
@@ -31,7 +32,8 @@ class NodeMLP(nn.Module):
         assert nag.num_levels > self.level
 
         # Compute node features from the handcrafted features
-        x = self.mlp(nag[self.level].x)
+        norm_index = nag[self.i_level].norm_index(mode=self.norm_mode)
+        x = self.mlp(nag[self.level].x, batch=norm_index)
 
         # If node level is 1, output level-1 features
         if self.level == 1:
