@@ -12,9 +12,9 @@ from src.utils.metrics import atomic_to_histogram
 
 
 __all__ = [
-    'Shuffle', 'SaveNodeIndex', 'GridSampling3D', 'SampleSubNodes',
-    'SampleKHopSubgraphs', 'SampleRadiusSubgraphs', 'SampleSegments',
-    'SampleEdges']
+    'Shuffle', 'SaveNodeIndex', 'NAGSaveNodeIndex', 'GridSampling3D',
+    'SampleSubNodes', 'SampleKHopSubgraphs', 'SampleRadiusSubgraphs',
+    'SampleSegments', 'SampleEdges']
 
 
 class Shuffle(Transform):
