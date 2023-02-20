@@ -147,7 +147,9 @@ class PointSegmentationModule(LightningModule):
         # Since the transform may change the sampling of the nodes, we
         # save their input id here before anything. This will allow us
         # to fuse the multiple predictions for each node
-        transform.transforms = [NAGSaveNodeIndex()] + transform.transforms
+        KEY = 'tta_node_id'
+        transform.transforms = [NAGSaveNodeIndex(key=KEY)] \
+                               + transform.transforms
 
         # Recover the target labels from the reference NAG
         y_hist = self.step_get_y_hist(nag)
@@ -164,12 +166,15 @@ class PointSegmentationModule(LightningModule):
 
             # Recover the node identifier that should have been
             # implanted by `BaseDataModule.on_after_batch_transfer`
-            node_id = nag_[1][NAGSaveNodeIndex.KEY]
+            node_id = nag_[1][KEY]
 
             # Forward on the augmented data and update the global
             # logits of the node
             logits[node_id] += self.forward(nag_)
             seen[node_id] = True
+
+        # Restore the original transform inplace modification
+        transform.transforms = transform.transforms[1:]
 
         # If some nodes were not seen across any of the multi-runs,
         # search their nearest seen neighbor
