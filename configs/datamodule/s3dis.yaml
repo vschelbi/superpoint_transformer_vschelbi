@@ -6,6 +6,7 @@ _target_: src.datamodules.s3dis.S3DISDataModule
 fold: 5
 trainval: True
 val_on_test: True
+in_memory: False  # set to True to load all processed S3DIS in RAM. This will accelerate training but CAREFUL not to modify the data in place !
 
 dataloader:
     batch_size: 1
