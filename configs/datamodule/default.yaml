@@ -32,4 +32,5 @@ on_device_test_transform: null
 dataloader:
     batch_size: 4
     num_workers: 2
-    pin_memory: False
+    pin_memory: True
+    persistent_workers: True
