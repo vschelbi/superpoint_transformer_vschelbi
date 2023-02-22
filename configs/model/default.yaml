@@ -23,7 +23,6 @@ scheduler:
 
 criterion:
   _target_: torch.nn.CrossEntropyLoss
-  label_smoothing: 0.0
 
 # Parameters declared here to facilitate tuning configs. Those are only
 # used here for config interpolation but will/should actually fall in
