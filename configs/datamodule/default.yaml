@@ -4,6 +4,7 @@ data_dir: ${paths.data_dir}
 x32: True
 y_to_csr: True
 x16_edge: True
+in_memory: False
 
 # Number of classes must be specified to help instantiating the model.
 # Concretely, num_classes here will be passed to the DataModule and the
@@ -35,4 +36,5 @@ tta_val: False
 dataloader:
     batch_size: 4
     num_workers: 2
-    pin_memory: False
+    pin_memory: True
+    persistent_workers: True

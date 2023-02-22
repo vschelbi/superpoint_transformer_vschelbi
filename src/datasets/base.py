@@ -98,6 +98,14 @@ class BaseDataset(InMemoryDataset):
         are used to generate a hash. It can be used, for instance, when
         one wants to instantiate a dataset with already-processed data,
         without knowing the exact config that was used to generate it
+    in_memory: bool, optional
+        If True, the processed dataset will be entirely loaded in RAM
+        upon instantiation. This will accelerate training and inference
+        but requires large memory. WARNING: __getitem__ directly
+        returns the data in memory, so any modification to the returned
+        object will affect the `in_memory_data` too. Be careful to clone
+        the object before modifying it. Besides, the `transform` are
+        pre-applied to the in_memory data
     """
     _LEVEL0_SAVE_KEYS = [
         'pos', 'x', 'rgb', 'y', 'node_size', 'super_index', 'is_val']
@@ -108,7 +116,7 @@ class BaseDataset(InMemoryDataset):
             self, root, stage='train', transform=None, pre_transform=None,
             pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True,
             x16_edge=True, val_mixed_in_train=False, test_mixed_in_val=False,
-            custom_hash=None, **kwargs):
+            custom_hash=None, in_memory=False, **kwargs):
 
         assert stage in ['train', 'val', 'trainval', 'test']
 
@@ -123,6 +131,7 @@ class BaseDataset(InMemoryDataset):
         self.val_mixed_in_train = val_mixed_in_train
         self.test_mixed_in_val = test_mixed_in_val
         self.custom_hash = custom_hash
+        self.in_memory = in_memory
 
         # Sanity check on the cloud ids. Ensures cloud ids are unique
         # across all stages, unless `val_mixed_in_train` or
@@ -157,6 +166,18 @@ class BaseDataset(InMemoryDataset):
                 for odt in self.on_device_transform.transforms):
             self.on_device_transform.transforms = \
                 [t] + self.on_device_transform.transforms
+
+        # Load the processed data, if the dataset must be in memory
+        if self.in_memory:
+            in_memory_data = [
+                NAG.load(
+                    self.processed_paths[i], keys_low=self._LEVEL0_LOAD_KEYS)
+                for i in range(len(self))]
+            if self.transform is not None:
+                in_memory_data = [self.transform(x) for x in in_memory_data]
+            self._in_memory_data = in_memory_data
+        else:
+            self._in_memory_data = None
 
     @property
     def class_names(self):
@@ -302,6 +323,13 @@ class BaseDataset(InMemoryDataset):
         return raw_path
 
     @property
+    def in_memory_data(self):
+        """If the `self.in_memory`, this will return all processed data,
+        loaded in memory. Returns None otherwise.
+        """
+        return self._in_memory_data
+
+    @property
     def submission_dir(self):
         """Submissions are saved in the `submissions` folder, in the
         same hierarchy as `raw` and `processed` directories. Each
@@ -443,7 +471,11 @@ class BaseDataset(InMemoryDataset):
         # NAG, and accumulate the class counts from the label histograms
         counts = torch.zeros(self.num_classes)
         for i in range(len(self)):
-            y = NAG.load(self.processed_paths[i], low=low, keys_low=['y'])[0].y
+            if self.in_memory:
+                y = self.in_memory_data[i][low].y
+            else:
+                y = NAG.load(
+                    self.processed_paths[i], low=low, keys_low=['y'])[0].y
             counts += y.sum(dim=0)[:self.num_classes]
 
         # Compute the class weights. Optionally, a 'smooth' function may
@@ -464,9 +496,24 @@ class BaseDataset(InMemoryDataset):
 
     def __getitem__(self, idx):
         """Load a preprocessed NAG from disk and apply `self.transform`
-        if any.
+        if any. Optionally, one may pass a tuple (idx, bool) where the
+        boolean indicates whether the data should be loaded from disk, if
+        `self.in_memory=True`.
         """
-        # Read the NAG
+        # Prepare from_hdd
+        from_hdd = False
+        if isinstance(idx, tuple):
+            assert len(idx) == 2 and isinstance(idx[1], bool), \
+                "Only supports indexing with `int` or `(int, bool)` where the" \
+                " boolean indicates whether the data should be loaded from " \
+                "disk, when `self.in_memory=True`."
+            idx, from_hdd = idx
+
+        # Get the processed NAG directly from RAM
+        if self.in_memory and not from_hdd:
+            return self.in_memory_data[idx]
+
+        # Read the NAG from HDD
         nag = NAG.load(
             self.processed_paths[idx], keys_low=self._LEVEL0_LOAD_KEYS)
 

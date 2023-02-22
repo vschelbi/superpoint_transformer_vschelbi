@@ -199,11 +199,13 @@ class BaseDataModule(LightningDataModule):
                     f"following transforms are not supported: {_TTA_CONFLICTS}")
 
     def train_dataloader(self):
+        from torch.utils.data import RandomSampler
         return DataLoader(
             dataset=self.train_dataset,
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
+            persistent_workers=self.hparams.dataloader.persistent_workers,
             shuffle=True)
 
     def val_dataloader(self):
@@ -212,6 +214,7 @@ class BaseDataModule(LightningDataModule):
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
+            persistent_workers=self.hparams.dataloader.persistent_workers,
             shuffle=False)
 
     def test_dataloader(self):
@@ -220,6 +223,7 @@ class BaseDataModule(LightningDataModule):
             batch_size=self.hparams.dataloader.batch_size,
             num_workers=self.hparams.dataloader.num_workers,
             pin_memory=self.hparams.dataloader.pin_memory,
+            persistent_workers=self.hparams.dataloader.persistent_workers,
             shuffle=False)
 
     def predict_dataloader(self):
