@@ -23,10 +23,8 @@ class Data(PyGData):
     specific needs.
     """
 
-    _INDEXABLE = [
-        'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size', 'sub']
+    _NOT_INDEXABLE = ['_csr_', '_cluster_', 'edge_index', 'edge_attr']
 
-    _READABLE = _INDEXABLE + ['edge_index', 'edge_attr']
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -550,7 +548,7 @@ class Data(PyGData):
         if idx.shape[0] == 0:
             keys_idx = []
         elif keys_idx is None:
-            keys_idx = Data._INDEXABLE
+            keys_idx = list(set(f.keys()) - set(Data._NOT_INDEXABLE))
         if keys is None:
             all_keys = list(f.keys())
             for k in ['_csr_', '_cluster_']:

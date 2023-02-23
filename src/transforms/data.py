@@ -7,8 +7,8 @@ from src.utils.nn import trunc_normal_
 
 
 __all__ = [
-    'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeyToX',
-    'NAGAddKeyToX', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns',
+    'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeysToX',
+    'NAGAddKeysToX', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns',
     'DropoutColumns', 'NAGDropoutColumns', 'NAGJitterKey']
 
 
@@ -38,7 +38,7 @@ class RemoveKeys(Transform):
 
     :param keys: list(str)
         List of attribute names
-    :param strict: bool=False
+    :param strict: bool
         If True, will raise an exception if an attribute from key is
         not within the input Data keys
     """
@@ -107,7 +107,7 @@ class NAGRemoveKeys(Transform):
         return nag
 
 
-class AddKeyToX(Transform):
+class AddKeysToX(Transform):
     """Get attributes from their keys and concatenate them to x.
 
     :param keys: str or list(str)
@@ -175,7 +175,7 @@ class AddKeyToX(Transform):
         return data
 
 
-class NAGAddKeyToX(Transform):
+class NAGAddKeysToX(Transform):
     """Get attributes from their keys and concatenate them to x.
 
     :param level: int or str
@@ -217,7 +217,7 @@ class NAGAddKeyToX(Transform):
             raise ValueError(f'Unsupported level={self.level}')
 
         transforms = [
-            AddKeyToX(
+            AddKeysToX(
                 keys=k, strict=self.strict, delete_after=self.delete_after)
             for k in level_keys]
 

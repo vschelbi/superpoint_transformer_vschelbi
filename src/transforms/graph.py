@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import itertools
 from scipy.spatial import Delaunay
-from torch_scatter import scatter_mean, scatter_std, segment_csr
+from torch_scatter import scatter_mean, scatter_std
 from torch_geometric.utils import add_self_loops
 from src.transforms import Transform
 import src
@@ -72,23 +72,70 @@ class SegmentFeatures(Transform):
     """Compute segment features for all the NAG levels except its first
     (ie the 0-level). These are handcrafted node features that will be
     saved in the node attributes. To make use of those at training time,
-    remember to move them to the `x` attribute using `AddKeyToX` and
-    `NAGAddKeyToX`.
+    remember to move them to the `x` attribute using `AddKeysToX` and
+    `NAGAddKeysToX`.
 
+    :param linearity: bool
+        Whether linearity should be computed
+    :param planarity: bool
+        Whether planarity should be computed
+    :param scattering: bool
+        Whether scattering should be computed
+    :param verticality: bool
+        Whether verticality should be computed
+    :param curvature: bool
+        Whether curvature should be computed
+    :param log_length: bool
+        Whether log_length should be computed
+    :param log_surface: bool
+        Whether log_surface should be computed
+    :param log_volume: bool
+        Whether log_volume should be computed
+    :param normal: bool
+        Whether normal should be computed
+    :param log_size: bool
+        Whether log_size should be computed
     :param n_max: int
         Maximum number of level-0 points to sample in each cluster to
         when building node features
     :param n_min: int
         Minimum number of level-0 points to sample in each cluster,
         unless it contains fewer points
+    :param mean_keys: List(str)
+        Attributes will be taken from the points and the segment-wise
+        mean aggregation will be saved under `mean_<key>`
+    :param std_keys: List(str)
+        Attributes will be taken from the points and the segment-wise
+        std aggregation will be saved under `std_<key>`
+    :param strict: bool
+        If True, will raise an exception if an attribute from key is
+        not within the input point Data keys
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    _NO_REPR = ['strict']
 
-    def __init__(self, n_max=32, n_min=5):
+    def __init__(
+            self, linearity=False, planarity=False, scattering=False,
+            verticality=False, curvature=False, log_length=False,
+            log_surface=False, log_volume=False, normal=False, log_size=False,
+            n_max=32, n_min=5, mean_keys=[], std_keys=[], strict=True):
+        self.linearity = linearity
+        self.planarity = planarity
+        self.scattering = scattering
+        self.verticality = verticality
+        self.curvature = curvature
+        self.log_length = log_length
+        self.log_surface = log_surface
+        self.log_volume = log_volume
+        self.normal = normal
+        self.log_size = log_size
         self.n_max = n_max
         self.n_min = n_min
+        self.mean_keys = mean_keys
+        self.std_keys = std_keys
+        self.strict = strict
 
     def _process(self, nag):
         for i_level in range(1, nag.num_levels):
@@ -98,7 +145,11 @@ class SegmentFeatures(Transform):
 
 
 def _compute_cluster_features(
-        i_level, nag, n_max=32, n_min=5):
+        i_level, nag, linearity=False, planarity=False, scattering=False,
+        verticality=False, curvature=False, log_length=False, log_surface=False,
+        log_volume=False, normal=False, log_size=False, n_max=32, n_min=5,
+        mean_keys=[], std_keys=[], strict=True):
+
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster features on level-0"
     assert nag[0].num_nodes < np.iinfo(np.uint32).max, \
@@ -133,37 +184,60 @@ def _compute_cluster_features(
     f = torch.from_numpy(f.astype('float32'))
 
     # Recover length, surface and volume
-    data.linearity = f[:, 0].to(device)
-    data.planarity = f[:, 1].to(device)
-    data.scattering = f[:, 2].to(device)
-    data.verticality = f[:, 3].to(device)
-    data.curvature = f[:, 10].to(device)
-    data.log_length = torch.log(f[:, 7] + 1).to(device)
-    data.log_surface = torch.log(f[:, 8] + 1).to(device)
-    data.log_volume = torch.log(f[:, 9] + 1).to(device)
-    data.normal = f[:, 4:7].view(-1, 3).to(device)
-    data.log_size = (torch.log(sub_size + 1) - np.log(2)) / 10
+    if linearity:
+        data.linearity = f[:, 0].to(device).view(-1, 1)
+
+    if planarity:
+        data.planarity = f[:, 1].to(device).view(-1, 1)
+
+    if scattering:
+        data.scattering = f[:, 2].to(device).view(-1, 1)
+
+    if verticality:
+        data.verticality = f[:, 3].to(device).view(-1, 1)
+
+    if curvature:
+        data.curvature = f[:, 10].to(device).view(-1, 1)
+
+    if log_length:
+        data.log_length = torch.log(f[:, 7] + 1).to(device).view(-1, 1)
+
+    if log_surface:
+        data.log_surface = torch.log(f[:, 8] + 1).to(device).view(-1, 1)
+
+    if log_volume:
+        data.log_volume = torch.log(f[:, 9] + 1).to(device).view(-1, 1)
 
     # As a way to "stabilize" the normals' orientation, we choose to
     # express them as oriented in the z+ half-space
-    data.normal[data.normal[:, 2] < 0] *= -1
+    if normal:
+        data.normal = f[:, 4:7].view(-1, 3).to(device)
+        data.normal[data.normal[:, 2] < 0] *= -1
 
-    # Add elevation if present in the points, raise an error if not
-    # found
-    if getattr(nag[0], 'elevation', None) is not None:
-        data.elevation = segment_csr(nag[0].elevation, ptr_samples, reduce='mean')
+    if log_size:
+        data.log_size = (torch.log(sub_size + 1).view(-1, 1) - np.log(2)) / 10
 
     # TODO: augment with Rep-SURF umbrella features ?
     # TODO: Random PointNet + PCA features ?
 
-    # To guide the sampling for superedges, we want to sample among
-    # points whose neighbors in the level-0 adjacency graph belong to
-    # a different cluster in the i_level graph. To this end, we first
-    # need to tell whose i_level cluster each level-0 point belongs to.
-    # This step requires having access to the whole NAG, since we need
-    # to convert level-0 point indices into their corresponding level-i
-    # superpoint indices
+    # Get the cluster index each poitn belongs to
     super_index = nag.get_super_index(i_level)
+
+    # Add the mean of point attributes, identified by their key
+    for key in mean_keys:
+        f = getattr(nag[0], key, None)
+        if f is not None:
+            data[f'mean_{key}'] = scatter_mean(nag[0][key], super_index, dim=0)
+        elif strict:
+            raise ValueError(f"Could not find key=`{key}` in the points")
+
+    # Add the std of point attributes, identified by their key
+    for key in std_keys:
+        f = getattr(nag[0], key, None)
+        if f is not None:
+            data[f'std_{key}'] = scatter_std(nag[0][key], super_index, dim=0)
+        elif strict:
+            raise ValueError(f"Could not find key=`{key}` in the points")
 
     # To debug sampling
     if src.is_debug_enabled():
