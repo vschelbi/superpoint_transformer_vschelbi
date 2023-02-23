@@ -6,20 +6,20 @@ tta_runs: 5
 tta_val: True
 tta:
     # Batch construction parameterization
-    sample_point_min: 32
-    sample_point_max: 128
-    sample_segment_ratio: 0.3
-    sample_edge_n_min: -1  # [5, 5, 15, 15]
-    sample_edge_n_max: -1  # [10, 15, 25, 25]
+    sample_point_min: 128
+    sample_point_max: 256
+    sample_segment_ratio: 0
+    sample_edge_n_min: 10
+    sample_edge_n_max: 25
 
     # Augmentations parameterization
-    pos_jitter: 0.03
-    tilt_n_rotate_phi: 0.1
+    pos_jitter: 0
+    tilt_n_rotate_phi: 0.2
     tilt_n_rotate_theta: 180
     anisotropic_scaling: 0.2
-    node_feat_jitter: 0.01
-    h_edge_feat_jitter: 0.01
-    v_edge_feat_jitter: 0.01
+    node_feat_jitter: 0
+    h_edge_feat_jitter: 0
+    v_edge_feat_jitter: 0
     node_feat_drop: 0
     h_edge_feat_drop: 0
     v_edge_feat_drop: 0
