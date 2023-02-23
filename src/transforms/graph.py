@@ -15,7 +15,7 @@ __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
     'RadiusHorizontalGraph', 'OnTheFlyHorizontalEdgeFeatures',
     'OnTheFlyVerticalEdgeFeatures', 'NAGAddSelfLoops', 'ConnectIsolated',
-    'NodeSize', 'JitterHorizontalEdgeFeatures', 'JitterVerticalEdgeFeatures']
+    'NodeSize']
 
 
 class AdjacencyGraph(Transform):
@@ -1249,56 +1249,3 @@ class NodeSize(Transform):
         for i_level in range(self.low + 1, nag.num_levels):
             nag[i_level].node_size = nag.get_sub_size(i_level, low=self.low)
         return nag
-
-
-class JitterHorizontalEdgeFeatures(Transform):
-    """Add some gaussian noise to data.edge_attr for all data in a NAG.
-
-    :param sigma: float or List(float)
-        Standard deviation of the gaussian noise. A list may be passed
-        to transform NAG levels with different parameters. Passing
-        sigma <= 0 will prevent any jittering.
-    """
-
-    _IN_TYPE = NAG
-    _OUT_TYPE = NAG
-    _KEY = 'edge_attr'
-
-    def __init__(self, sigma=0.01):
-        assert isinstance(sigma, (int, float, list))
-        self.sigma = float(sigma)
-
-    def _process(self, nag):
-        device = nag.device
-
-        if not isinstance(self.sigma, list):
-            sigma = [self.sigma] * nag.num_levels
-        else:
-            sigma = self.sigma
-
-        for i_level in range(nag.num_levels):
-
-            feat = getattr(nag[i_level], self._KEY, None)
-
-            if feat is None or sigma[i_level] <= 0:
-                continue
-
-            noise = torch.randn_like(feat, device=device) * self.sigma
-            feat += noise
-
-            setattr(nag[i_level], self._KEY, feat)
-
-        return nag
-
-
-class JitterVerticalEdgeFeatures(JitterHorizontalEdgeFeatures):
-    """Add some gaussian noise to data.vertical_edge_attr for all data
-    in a NAG.
-
-    :param sigma: float or List(float)
-        Standard deviation of the gaussian noise. A list may be passed
-        to transform NAG levels with different parameters. Passing
-        sigma <= 0 will prevent any jittering.
-    """
-
-    _KEY = 'vertical_edge_attr'

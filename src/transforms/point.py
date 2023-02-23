@@ -8,9 +8,9 @@ from src.data import NAG
 
 
 __all__ = [
-    'PointFeatures', 'GroundElevation', 'RoomPosition', 'JitterColor',
-    'JitterFeatures', 'ColorAutoContrast', 'NAGColorAutoContrast', 'ColorDrop',
-    'NAGColorDrop', 'ColorNormalize', 'NAGColorNormalize']
+    'PointFeatures', 'GroundElevation', 'RoomPosition', 'ColorAutoContrast',
+    'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop', 'ColorNormalize',
+    'NAGColorNormalize']
 
 
 class PointFeatures(Transform):
@@ -313,76 +313,6 @@ class RoomPosition(Transform):
         data.pos_room = pos
 
         return data
-
-
-class JitterColor(Transform):
-    """Add some gaussian noise to data.rgb for all data in a NAG.
-
-    :param sigma: float or List(float)
-        Standard deviation of the gaussian noise. A list may be passed
-        to transform NAG levels with different parameters. Passing
-        sigma <= 0 will prevent any jittering.
-    """
-
-    _IN_TYPE = NAG
-    _OUT_TYPE = NAG
-
-    def __init__(self, sigma=0.05):
-        assert isinstance(sigma, (int, float, list))
-        self.sigma = float(sigma)
-
-    def _process(self, nag):
-        device = nag.device
-
-        if not isinstance(self.sigma, list):
-            sigma = [self.sigma] * nag.num_levels
-        else:
-            sigma = self.sigma
-
-        for i_level in range(nag.num_levels):
-
-            if sigma[i_level] <= 0 or getattr(nag[i_level], 'rgb', None) is None:
-                continue
-
-            noise = torch.randn_like(nag[i_level].rgb, device=device) * self.sigma
-            nag[i_level].rgb += noise
-
-        return nag
-
-
-class JitterFeatures(Transform):
-    """Add some gaussian noise to data.x for all data in a NAG.
-
-    :param sigma: float or List(float)
-        Standard deviation of the gaussian noise. A list may be passed
-        to transform NAG levels with different parameters. Passing
-        sigma <= 0 will prevent any jittering.
-    """
-
-    _IN_TYPE = NAG
-    _OUT_TYPE = NAG
-
-    def __init__(self, sigma=0.01):
-        assert isinstance(sigma, (int, float, list))
-        self.sigma = float(sigma)
-
-    def _process(self, nag):
-        device = nag.device
-
-        if not isinstance(self.sigma, list):
-            sigma = [self.sigma] * nag.num_levels
-        else:
-            sigma = self.sigma
-
-        for i_level in range(nag.num_levels):
-
-            if sigma[i_level] <= 0 or getattr(nag[i_level], 'x', None) is None:
-                continue
-
-            noise = torch.randn_like(nag[i_level].x, device=device) * self.sigma
-            nag[i_level].x += noise
-
-        return nag
 
 
 class ColorTransform(Transform):

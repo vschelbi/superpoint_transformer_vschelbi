@@ -3,12 +3,13 @@ from src.data import Data, NAG
 from src.transforms import Transform
 from src.utils import tensor_idx
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from src.utils.nn import trunc_normal_
 
 
 __all__ = [
     'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeyToX',
     'NAGAddKeyToX', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns',
-    'DropoutColumns', 'NAGDropoutColumns']
+    'DropoutColumns', 'NAGDropoutColumns', 'NAGJitterKey']
 
 
 class DataToNAG(Transform):
@@ -471,5 +472,74 @@ class NAGDropoutColumns(Transform):
 
         for i_level in range(nag.num_levels):
             nag._list[i_level] = transforms[i_level](nag._list[i_level])
+
+        return nag
+
+
+class NAGJitterKey(Transform):
+    """Add some gaussian noise to Data['key'] for all data in a NAG.
+
+    :param key: str
+        The attribute on which to apply jittering
+    :param sigma: float or List(float)
+        Standard deviation of the gaussian noise. A list may be passed
+        to transform NAG levels with different parameters. Passing
+        sigma <= 0 will prevent any jittering
+    :param trunc: float or List(float)
+        Standard deviation of the gaussian noise. A list may be passed
+        to transform NAG levels with different parameters. Passing
+        trunc <= 0 will not truncate the normal distribution
+    :param strict: bool
+        Whether an error should be raised if one of the input NAG levels
+        does not have `key` attribute
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, key=None, sigma=0.01, trunc=0.05, strict=False):
+        assert key is not None, "A key must be specified"
+        assert isinstance(sigma, (int, float, list))
+        assert isinstance(trunc, (int, float, list))
+        self.key = key
+        self.sigma = sigma
+        self.trunc = trunc
+        self.strict = strict
+
+    def _process(self, nag):
+        if not isinstance(self.sigma, list):
+            sigma = [self.sigma] * nag.num_levels
+        else:
+            sigma = self.sigma
+
+        if not isinstance(self.trunc, list):
+            trunc = [self.trunc] * nag.num_levels
+        else:
+            trunc = self.trunc
+
+        for i_level in range(nag.num_levels):
+
+            if sigma[i_level] <= 0:
+                continue
+
+            if getattr(nag[i_level], self.key, None) is None:
+                if self.strict:
+                    raise ValueError(
+                        f"Input data does not have any '{self.key} attribute")
+                else:
+                    continue
+
+            if trunc[i_level] > 0:
+                noise = trunc_normal_(
+                    torch.empty_like(nag[i_level][self.key]),
+                    mean=0.,
+                    std=sigma[i_level],
+                    a=-trunc[i_level],
+                    b=trunc[i_level])
+            else:
+                noise = torch.randn_like(
+                    nag[i_level][self.key]) * sigma[i_level]
+
+            nag[i_level][self.key] += noise
 
         return nag

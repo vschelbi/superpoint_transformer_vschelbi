@@ -37,9 +37,11 @@ on_device_val_transform:
         ratio: ${datamodule.tta.sample_segment_ratio}
         by_size: False
         by_class: False
-    - transform: JitterPosition  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+    - transform: NAGJitterKey  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
+        key: 'pos'
         sigma: ${datamodule.tta.pos_jitter}
+        trunc: ${datamodule.voxel}
     - transform: RandomTiltAndRotate  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
       params:
         phi: ${datamodule.tta.tilt_n_rotate_phi}
@@ -102,15 +104,21 @@ on_device_val_transform:
         level: 'all'
         key: 'vertical_edge_attr'
         idx: ${datamodule.select_feat_vertical_edge}
-    - transform: JitterFeatures
+    - transform: NAGJitterKey
       params:
+        key: 'x'
         sigma: ${datamodule.tta.node_feat_jitter}
-    - transform: JitterHorizontalEdgeFeatures
+        trunc: ${eval:'2 * ${datamodule.tta.node_feat_jitter}'}
+    - transform: NAGJitterKey
       params:
+        key: 'edge_attr'
         sigma: ${datamodule.tta.h_edge_feat_jitter}
-    - transform: JitterVerticalEdgeFeatures
+        trunc: ${eval:'2 * ${datamodule.tta.h_edge_feat_jitter}'}
+    - transform: NAGJitterKey
       params:
+        key: 'vertical_edge_attr'
         sigma: ${datamodule.tta.v_edge_feat_jitter}
+        trunc: ${eval:'2 * ${datamodule.tta.v_edge_feat_jitter}'}
     - transform: NAGColorAutoContrast
       params:
         level: all

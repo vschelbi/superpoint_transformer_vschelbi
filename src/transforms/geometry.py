@@ -2,11 +2,12 @@ import torch
 from src.data import NAG
 from src.transforms import Transform
 from src.utils.geometry import rodrigues_rotation_matrix
+from src.utils.nn import trunc_normal_
 
 
 __all__ = [
-    'CenterPosition', 'JitterPosition', 'RandomTiltAndRotate',
-    'RandomAnisotropicScale', 'RandomAxisFlip']
+    'CenterPosition', 'RandomTiltAndRotate', 'RandomAnisotropicScale',
+    'RandomAxisFlip']
 
 
 class CenterPosition(Transform):
@@ -20,41 +21,6 @@ class CenterPosition(Transform):
         offset = nag[0].pos.mean(dim=0)
         for i_level in range(nag.num_levels):
             nag[i_level].pos -= offset
-        return nag
-
-
-class JitterPosition(Transform):
-    """Add some gaussian noise to the node positions of a NAG.
-
-    :param sigma: float or List(float)
-        Standard deviation of the gaussian noise. A list may be passed
-        to transform NAG levels with different parameters. Passing
-        sigma <= 0 will prevent any jittering.
-    """
-
-    _IN_TYPE = NAG
-    _OUT_TYPE = NAG
-
-    def __init__(self, sigma=0.01):
-        assert isinstance(sigma, (int, float, list))
-        self.sigma = sigma
-
-    def _process(self, nag):
-        device = nag.device
-
-        if not isinstance(self.sigma, list):
-            sigma = [self.sigma] * nag.num_levels
-        else:
-            sigma = self.sigma
-
-        for i_level in range(nag.num_levels):
-
-            if sigma[i_level] <= 0 or getattr(nag[i_level], 'pos', None) is None:
-                continue
-
-            noise = torch.randn_like(nag[i_level].pos, device=device) * sigma[i_level]
-            nag[i_level].pos += noise
-
         return nag
 
 
