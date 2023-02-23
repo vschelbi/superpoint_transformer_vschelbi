@@ -192,14 +192,14 @@ class PointFeatures(Transform):
             if self.curvature:
                 data.curvature = f[:, 10].t.view(-1, 1).to(device)
 
-            if self.log_length:
-                data.log_length = torch.log(f[:, 7] + 1).view(-1, 1).to(device)
+            if self.length:
+                data.length = f[:, 7].view(-1, 1).to(device)
 
-            if self.log_surface:
-                data.log_surface = torch.log(f[:, 8] + 1).view(-1, 1).to(device)
+            if self.surface:
+                data.surface = f[:, 8].view(-1, 1).to(device)
 
-            if self.log_volume:
-                data.log_volume = torch.log(f[:, 9] + 1).view(-1, 1).to(device)
+            if self.volume:
+                data.volume = f[:, 9].view(-1, 1).to(device)
 
             # As a way to "stabilize" the normals' orientation, we
             # choose to express them as oriented in the z+ half-space
