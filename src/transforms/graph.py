@@ -117,10 +117,22 @@ class SegmentFeatures(Transform):
     _NO_REPR = ['strict']
 
     def __init__(
-            self, linearity=False, planarity=False, scattering=False,
-            verticality=False, curvature=False, log_length=False,
-            log_surface=False, log_volume=False, normal=False, log_size=False,
-            n_max=32, n_min=5, mean_keys=[], std_keys=[], strict=True):
+            self,
+            linearity=False,
+            planarity=False,
+            scattering=False,
+            verticality=False,
+            curvature=False,
+            log_length=False,
+            log_surface=False,
+            log_volume=False,
+            normal=False,
+            log_size=False,
+            n_max=32,
+            n_min=5,
+            mean_keys=[],
+            std_keys=[],
+            strict=True):
         self.linearity = linearity
         self.planarity = planarity
         self.scattering = scattering
@@ -140,15 +152,44 @@ class SegmentFeatures(Transform):
     def _process(self, nag):
         for i_level in range(1, nag.num_levels):
             nag = _compute_cluster_features(
-                i_level, nag, n_max=self.n_max, n_min=self.n_min)
+                i_level,
+                nag,
+                linearity=self.linearity,
+                planarity=self.planarity,
+                scattering=self.scattering,
+                verticality=self.verticality,
+                curvature=self.curvature,
+                log_length=self.log_length,
+                log_surface=self.log_surface,
+                log_volume=self.log_volume,
+                normal=self.normal,
+                log_size=self.log_size,
+                n_max=self.n_max,
+                n_min=self.n_min,
+                mean_keys=self.mean_keys,
+                std_keys=self.std_keys,
+                strict=self.strict)
         return nag
 
 
 def _compute_cluster_features(
-        i_level, nag, linearity=False, planarity=False, scattering=False,
-        verticality=False, curvature=False, log_length=False, log_surface=False,
-        log_volume=False, normal=False, log_size=False, n_max=32, n_min=5,
-        mean_keys=[], std_keys=[], strict=True):
+        i_level,
+        nag,
+        linearity=False,
+        planarity=False,
+        scattering=False,
+        verticality=False,
+        curvature=False,
+        log_length=False,
+        log_surface=False,
+        log_volume=False,
+        normal=False,
+        log_size=False,
+        n_max=32,
+        n_min=5,
+        mean_keys=[],
+        std_keys=[],
+        strict=True):
 
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster features on level-0"
@@ -565,9 +606,18 @@ class RadiusHorizontalGraph(Transform):
     _NO_REPR = ['chunk_size']
 
     def __init__(
-            self, k_max=100, gap=0, k_ratio=0.2, k_min=20, cycles=3,
-            margin=0.2, chunk_size=100000, halfspace_filter=True,
-            bbox_filter=True, target_pc_flip=True, source_pc_sort=False):
+            self,
+            k_max=100,
+            gap=0,
+            k_ratio=0.2,
+            k_min=20,
+            cycles=3,
+            margin=0.2,
+            chunk_size=100000,
+            halfspace_filter=True,
+            bbox_filter=True,
+            target_pc_flip=True,
+            source_pc_sort=False):
         self.k_max = k_max
         self.gap = gap
         self.k_ratio = k_ratio
@@ -640,7 +690,12 @@ class RadiusHorizontalGraph(Transform):
 
 
 def _horizontal_graph_by_radius(
-        nag, k_max=100, gap=0, trim=True, cycles=3, chunk_size=None):
+        nag,
+        k_max=100,
+        gap=0,
+        trim=True,
+        cycles=3,
+        chunk_size=None):
     """Search neighboring segments with points distant from `gap`or
     less.
 
@@ -688,7 +743,12 @@ def _horizontal_graph_by_radius(
 
 
 def _horizontal_graph_by_radius_for_single_level(
-        nag, i_level, k_max=100, gap=0, trim=True, cycles=3,
+        nag,
+        i_level,
+        k_max=100,
+        gap=0,
+        trim=True,
+        cycles=3,
         chunk_size=100000):
     """
 
@@ -748,7 +808,11 @@ def _horizontal_graph_by_radius_for_single_level(
     return nag
 
 
-def _minimalistic_horizontal_edge_features(data, points, se_point_index, se_id):
+def _minimalistic_horizontal_edge_features(
+        data,
+        points,
+        se_point_index,
+        se_id):
     """Compute the features for horizontal edges, given the edge graph
     and the level-0 'subedges' making up each edge.
 
@@ -880,10 +944,19 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, mean_offset=True, std_offset=True, mean_dist=True,
-            angle_source=True, angle_target=True, centroid_direction=True,
-            centroid_dist=True, normal_angle=True, log_length=True,
-            log_surface=True, log_volume=True, log_size=True):
+            self,
+            mean_offset=True,
+            std_offset=True,
+            mean_dist=True,
+            angle_source=True,
+            angle_target=True,
+            centroid_direction=True,
+            centroid_dist=True,
+            normal_angle=True,
+            log_length=True,
+            log_surface=True,
+            log_volume=True,
+            log_size=True):
         self.mean_offset = mean_offset
         self.std_offset = std_offset
         self.mean_dist = mean_dist
@@ -917,9 +990,18 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
 
 
 def _on_the_fly_horizontal_edge_features(
-        data, mean_offset=True, std_offset=True, mean_dist=True, angle_source=True,
-        angle_target=True, centroid_direction=True, centroid_dist=True,
-        normal_angle=True, log_length=True, log_surface=True, log_volume=True,
+        data,
+        mean_offset=True,
+        std_offset=True,
+        mean_dist=True,
+        angle_source=True,
+        angle_target=True,
+        centroid_direction=True,
+        centroid_dist=True,
+        normal_angle=True,
+        log_length=True,
+        log_surface=True,
+        log_volume=True,
         log_size=True):
     """Compute all edges and edge features for a horizontal graph, given
     a trimmed graph and some precomputed edge attributes.
@@ -1118,9 +1200,14 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, centroid_direction=True, centroid_dist=True,
-            normal_angle=True, log_length=True, log_surface=True,
-            log_volume=True, log_size=True):
+            self,
+            centroid_direction=True,
+            centroid_dist=True,
+            normal_angle=True,
+            log_length=True,
+            log_surface=True,
+            log_volume=True,
+            log_size=True):
         self.centroid_direction = centroid_direction
         self.centroid_dist = centroid_dist
         self.normal_angle = normal_angle
@@ -1145,8 +1232,14 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
 
 
 def _on_the_fly_vertical_edge_features(
-        data_child, data_parent, centroid_direction=True, centroid_dist=True,
-        normal_angle=True, log_length=True, log_surface=True, log_volume=True,
+        data_child,
+        data_parent,
+        centroid_direction=True,
+        centroid_dist=True,
+        normal_angle=True,
+        log_length=True,
+        log_surface=True,
+        log_volume=True,
         log_size=True):
     """Compute edge features for a vertical graph, given child and
     parent nodes.

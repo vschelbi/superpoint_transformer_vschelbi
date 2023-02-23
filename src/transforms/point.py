@@ -65,10 +65,21 @@ class PointFeatures(Transform):
     # TODO: Random PointNet + PCA features ?
 
     def __init__(
-            self, rgb=False, hsv=False, lab=False,
-            density=False, linearity=False, planarity=False, scattering=False,
-            verticality=False, normal=False, length=False, surface=False,
-            volume=False, curvature=False, k_min=5):
+            self,
+            rgb=False,
+            hsv=False,
+            lab=False,
+            density=False,
+            linearity=False,
+            planarity=False,
+            scattering=False,
+            verticality=False,
+            normal=False,
+            length=False,
+            surface=False,
+            volume=False,
+            curvature=False,
+            k_min=5):
         self.rgb = rgb
         self.hsv = hsv
         self.lab = lab
@@ -510,8 +521,10 @@ class ColorNormalize(ColorTransform):
     """
 
     def __init__(
-            self, mean=[0.5136457, 0.49523646, 0.44921124],
-            std=[0.18308958, 0.18415008, 0.19252081], x_idx=None):
+            self,
+            mean=[0.5136457, 0.49523646, 0.44921124],
+            std=[0.18308958, 0.18415008, 0.19252081],
+            x_idx=None):
         super().__init__(x_idx=x_idx)
         self.mean = mean.float().view(1, -1) if isinstance(mean, torch.Tensor) \
             else torch.tensor(mean).float().view(1, -1)
