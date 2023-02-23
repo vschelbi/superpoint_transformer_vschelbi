@@ -22,6 +22,7 @@ class NeST(nn.Module):
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
             point_cat_diameter=False,
+            point_log_diameter=False,
 
             small=None,
             small_point_mlp=None,
@@ -95,6 +96,7 @@ class NeST(nn.Module):
 
             pos_injection=CatInjection,
             cat_diameter=False,
+            log_diameter=False,
             pool='max',
             unpool='index',
             fusion='cat',
@@ -182,7 +184,8 @@ class NeST(nn.Module):
             mlp_drop=point_drop,
             pos_injection=point_pos_injection,
             pos_injection_x_dim=point_pos_injection_x_dim,
-            cat_diameter=point_cat_diameter)
+            cat_diameter=point_cat_diameter,
+            log_diameter=point_log_diameter)
 
         # Operator to append the features such as the diameter or other 
         # handcrafted features to the NAG's features
@@ -247,6 +250,7 @@ class NeST(nn.Module):
                     pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
                     cat_diameter=cat_diameter,
+                    log_diameter=log_diameter,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
                 for dim,
@@ -380,7 +384,8 @@ class NeST(nn.Module):
             mlp_drop=point_drop,
             pos_injection=point_pos_injection,
             pos_injection_x_dim=point_pos_injection_x_dim,
-            cat_diameter=point_cat_diameter) \
+            cat_diameter=point_cat_diameter,
+            log_diameter=point_log_diameter) \
             if small is not None else None
 
         self.down_stage_small = DownNFuseStage(
@@ -394,6 +399,7 @@ class NeST(nn.Module):
             fusion='cat',
             pos_injection=pos_injection,
             cat_diameter=cat_diameter,
+            log_diameter=log_diameter,
             pos_injection_x_dim=down_pos_injection_x_dim[0]) \
             if small is not None else None
 
@@ -438,6 +444,7 @@ class NeST(nn.Module):
                 v_rpe=v_rpe,
                 pos_injection=pos_injection,
                 cat_diameter=cat_diameter,
+                log_diameter=log_diameter,
                 blocks_share_rpe=blocks_share_rpe,
                 heads_share_rpe=heads_share_rpe,
                 pos_injection_x_dim=last_pos_injection_x_dim)

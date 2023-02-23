@@ -35,6 +35,7 @@ class PointNet(NeST):
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
             point_cat_diameter=False,
+            point_log_diameter=False,
 
             small=None,
             small_point_mlp=None,
@@ -53,6 +54,7 @@ class PointNet(NeST):
             point_pos_injection=point_pos_injection,
             point_pos_injection_x_dim=point_pos_injection_x_dim,
             point_cat_diameter=point_cat_diameter,
+            point_log_diameter=point_log_diameter,
 
             small=small,
             small_point_mlp=small_point_mlp,

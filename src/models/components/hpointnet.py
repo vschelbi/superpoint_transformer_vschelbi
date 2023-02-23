@@ -21,6 +21,7 @@ class HPointNet(NeST):
     :param point_pos_injection:
     :param point_pos_injection_x_dim:
     :param point_cat_diameter:
+    :param point_log_diameter:
     :param small:
     :param small_point_mlp:
     :param small_down_mlp:
@@ -45,6 +46,7 @@ class HPointNet(NeST):
     :param activation:
     :param pos_injection:
     :param cat_diameter:
+    :param log_diameter:
     :param norm:
     :param pool:
     :param unpool:
@@ -62,6 +64,7 @@ class HPointNet(NeST):
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
             point_cat_diameter=False,
+            point_log_diameter=False,
 
             small=None,
             small_point_mlp=None,
@@ -91,6 +94,7 @@ class HPointNet(NeST):
             activation=nn.LeakyReLU(),
             pos_injection=CatInjection,
             cat_diameter=False,
+            log_diameter=False,
             norm=BatchNorm,
             pool='max',
             unpool='index',
@@ -105,6 +109,7 @@ class HPointNet(NeST):
             point_pos_injection=point_pos_injection,
             point_pos_injection_x_dim=point_pos_injection_x_dim,
             point_cat_diameter=point_cat_diameter,
+            point_log_diameter=point_log_diameter,
 
             small=small,
             small_point_mlp=small_point_mlp,
@@ -139,6 +144,7 @@ class HPointNet(NeST):
 
             pos_injection=pos_injection,
             cat_diameter=cat_diameter,
+            log_diameter=log_diameter,
             mlp_activation=activation,
             mlp_norm=norm,
             pool=pool,
