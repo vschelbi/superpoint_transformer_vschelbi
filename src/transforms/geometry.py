@@ -2,7 +2,6 @@ import torch
 from src.data import NAG
 from src.transforms import Transform
 from src.utils.geometry import rodrigues_rotation_matrix
-from src.utils.nn import trunc_normal_
 
 
 __all__ = [

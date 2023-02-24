@@ -840,7 +840,9 @@ class SampleEdges(Transform):
 
         # Select edges and their attributes, if relevant
         data.edge_index = data.edge_index[:, idx]
-        if getattr(data, 'edge_attr', None) is not None:
+        if data.has_edge_attr:
             data.edge_attr = data.edge_attr[idx]
+        for key in data.edge_keys:
+            data[key] = data[key][idx]
 
         return data

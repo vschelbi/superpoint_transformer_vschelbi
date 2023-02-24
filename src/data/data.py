@@ -108,6 +108,25 @@ class Data(PyGData):
         return self.edge_index is not None and self.edge_index.shape[1] > 0
 
     @property
+    def has_edge_attr(self):
+        """Whether the edges have features in `edge_attr`."""
+        return self.edge_attr is not None and self.edge_attr.shape[0] > 0
+
+    @property
+    def edge_keys(self):
+        """All keys starting with `edge_`, apart from `edge_index` and
+        `edge_attr`.
+        """
+        return [
+            k for k in self.keys
+            if k.startswith('edge_') and k not in ['edge_index', 'edge_attr']]
+
+    @property
+    def v_edge_keys(self):
+        """All keys starting with `v_edge_`."""
+        return [k for k in self.keys if k.startswith('v_edge_')]
+
+    @property
     def num_edges(self):
         """Overwrite the torch_geometric initial definition, which
         somehow returns incorrect results, like:
@@ -331,16 +350,16 @@ class Data(PyGData):
             # Slice tensor elements containing num_edges elements. Note
             # we deal with edges first, to rule out the case where
             # num_edges = num_nodes. This will deal with `edge_attr` but
-            # also any other attribute containing 'edge' in its key and
+            # also any other attribute whose key starts with 'edge_' and
             # whose first dimension size matches the number of edges in
             # `edge_index`. An exception is made for attributes
-            # containing 'v_edge', those are expected to be node
+            # starting with 'v_edge': those are expected to be node
             # attributes and must be treated as such
-            if is_tensor and is_node_size and 'v_edge' in key:
+            if is_tensor and is_node_size and key in self.v_edge_keys:
                 data[key] = item[idx]
 
             elif self.has_edges and is_tensor and is_edge_size and \
-                    'edge' in key:
+                    key in self.edge_keys:
                 data[key] = item[idx_edge]
 
             # Slice other tensor elements containing num_nodes elements
@@ -381,6 +400,14 @@ class Data(PyGData):
         # Make sure there is no edge_attr if there is no edge_index
         if not self.has_edges:
             self.edge_attr = None
+
+        # Make sure there are no additional edge attributes. Creating
+        # such attributes for the new edges is ambiguous, so we raise an
+        # error if there are any other `edge_` keys beyond `edge_index`
+        # and `edge_attr`
+        assert len(self.edge_keys) == 0, \
+            f"Cannot connect isolated nodes because creating " \
+            f"{self.edge_keys} values for the new edges is ambiguous."
 
         # Search for isolated nodes and exit if no node is isolated
         is_isolated = self.is_isolated()

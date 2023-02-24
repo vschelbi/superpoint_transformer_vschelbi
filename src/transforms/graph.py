@@ -603,7 +603,7 @@ class RadiusHorizontalGraph(Transform):
     'subedges' between the segments.
 
     By default, a series of handcrafted edge attributes are computed and
-    stored in the corresponding `Data.edge_attr`. However, if one only
+    stored in the corresponding `Data.edge_<key>`. However, if one only
     needs a subset of those at train time, one may make use of
     `SelectColumns` and `NAGSelectColumns`.
 
@@ -990,8 +990,8 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
     attributes that cannot be recovered from the corresponding source
     and target node attributes (see `src.utils.to_trimmed`).
 
-    Accepts input edge_attr to be float16, to alleviate memory use and
-    accelerate data loading and transforms. Output edge_attr will,
+    Accepts input edge_<key> to be float16, to alleviate memory use and
+    accelerate data loading and transforms. Output edge_<key> will,
     however, be in float32.
 
     Optionally adds some edge features that can be recovered from the
@@ -1005,8 +1005,7 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
 
     Note: this transform is intended to be called after all sampling
     transforms, to mitigate compute and memory impact of horizontal
-    edges. Besides, it expects the input `Data.edge_attr` to hold 5
-    features precomputed with `_minimalistic_horizontal_edge_features`.
+    edges.
 
     :param mean_off: bool
         If True, compute the mean offset (subedges)
@@ -1429,17 +1428,27 @@ class NAGAddSelfLoops(Transform):
 
             # Recover edges and attributes
             num_nodes = nag[i_level].num_nodes
-            edge_index = nag[i_level].edge_index
+            edge_index_old = nag[i_level].edge_index
             edge_attr = getattr(nag[i_level], 'edge_attr', None)
 
             # Add self-loops
             edge_index, edge_attr = add_self_loops(
-                edge_index, edge_attr=edge_attr, num_nodes=num_nodes,
+                edge_index_old,
+                edge_attr=edge_attr,
+                num_nodes=num_nodes,
                 fill_value=0)
 
             # Update the edges and attributes
             nag[i_level].edge_index = edge_index
             nag[i_level].edge_attr = edge_attr
+
+            # Set any other 'edge_' attributes to zeros too
+            for key in nag[i_level].edge_keys:
+                nag[i_level][key] = add_self_loops(
+                    edge_index_old,
+                    edge_attr=nag[i_level][key],
+                    num_nodes=num_nodes,
+                    fill_value=0)[1]
 
         return nag
 
