@@ -14,8 +14,8 @@ dataloader:
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 13
-num_hf_point: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.point_hf})'}
-num_hf_segment: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.segment_hf})'}
+num_hf_point: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.point_hf}])'}
+num_hf_segment: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.segment_hf}])'}
 num_hf_horizontal_edge: ${eval:'len(${datamodule.select_feat_horizontal_edge})'}
 num_hf_vertical_edge: ${eval:'len(${datamodule.select_feat_vertical_edge})'}
 
