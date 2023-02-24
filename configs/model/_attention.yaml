@@ -6,7 +6,7 @@ net:
   activation:
     _target_: torch.nn.LeakyReLU
   norm:
-    _target_: src.nn.BatchNorm
+    _target_: src.nn.GraphNorm
     _partial_: True
   pre_norm: True
   no_sa: False

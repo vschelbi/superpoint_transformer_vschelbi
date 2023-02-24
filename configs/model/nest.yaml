@@ -17,7 +17,7 @@ net:
   mlp_activation:
     _target_: torch.nn.LeakyReLU
   mlp_norm:
-    _target_: src.nn.BatchNorm
+    _target_: src.nn.GraphNorm
     _partial_: True
 
   pos_injection:
