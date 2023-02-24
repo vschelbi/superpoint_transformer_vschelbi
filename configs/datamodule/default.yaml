@@ -1,3 +1,6 @@
+defaults:
+  - _features.yaml
+
 _target_: null
 
 data_dir: ${paths.data_dir}

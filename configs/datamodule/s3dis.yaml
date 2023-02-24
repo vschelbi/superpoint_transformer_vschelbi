@@ -14,19 +14,36 @@ dataloader:
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 13
-feat_point: ${eval:'len(${datamodule.select_feat_point})'}
-feat_segment: ${eval:'len(${datamodule.select_feat_segment})'}
-feat_horizontal_edge: ${eval:'len(${datamodule.select_feat_horizontal_edge})'}
-feat_vertical_edge: ${eval:'len(${datamodule.select_feat_vertical_edge})'}
+num_hf_point: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.point_hf})'}
+num_hf_segment: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.segment_hf})'}
+num_hf_horizontal_edge: ${eval:'len(${datamodule.select_feat_horizontal_edge})'}
+num_hf_vertical_edge: ${eval:'len(${datamodule.select_feat_vertical_edge})'}
 
 # Parameters declared here to facilitate tuning configs without copying
 # all the pre_transforms
 
-# Features that will be computed for points and segments
-level_0_save_keys: null  # level-0 keys to save on disk after preprocessing, 'null' to save all
-level_0_load_keys: null  # level-0 keys to load from disk after preprocessing, 'null' to load all
-level_x_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
-level_x_load_keys: null  # level-1+ keys to load from disk after preprocessing, 'null' to load all
+# Features that will be computed, saved, loaded for points and segments
+partition_hf: ['rgb', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation']  # point features used for the partition
+point_hf: ['rgb', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation', 'pos_room']  # point features used for training
+segment_hf: ['mean_rgb', 'mean_pos_room', 'mean_elevation', 'log_length', 'log_surface', 'log_volume', 'log_size', 'normal']  # segment features used for training
+
+point_save_keys: null  # level-0 keys to save on disk after preprocessing, 'null' to save all
+segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
+
+point_basic_load_keys: ['pos', 'y', 'super_index', 'is_val']  # needed point attributes, other than features
+segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index', 'edge_attr']  # needed segment attributes, other than features
+
+point_load_keys: ${eval:'${datamodule.point_basic_load_keys} + ${datamodule.point_hf}'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
+segment_load_keys: ${eval:'${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf}'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
+
+
+
+
+
+
+
+
+
 
 # Based on SPG: https://arxiv.org/pdf/1711.09869.pdf
 voxel: 0.03
@@ -122,7 +139,7 @@ pre_transform:
         device: 'cpu'
     - transform: AddKeysToX  # move some features to 'x' to be used for partition
       params:
-        keys: ['rgb', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation']
+        keys: ${datamodule.partition_hf}
         delete_after: False
     - transform: CutPursuitPartition
       params:
