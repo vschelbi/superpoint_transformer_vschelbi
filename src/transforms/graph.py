@@ -348,15 +348,34 @@ class DelaunayHorizontalGraph(Transform):
         filtering. If a node was isolated by max_dist filtering, we
         preserve its shortest edge to avoid it, even if it is larger
         than max_dist
+    :param mean_offset: bool
+        Whether the mean_offset edge feature should be computed? If
+        true, it will be saved under the `edge_mean_offset` attribute
+    :param std_offset: bool
+        Whether the std_offset edge feature should be computed? If
+        true, it will be saved under the `edge_std_offset` attribute
+    :param mean_dist: bool
+        Whether the mean_dist edge feature should be computed? If
+        true, it will be saved under the `edge_mean_dist` attribute
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, n_max_edge=64, n_min=5, max_dist=-1):
+    def __init__(
+            self,
+            n_max_edge=64,
+            n_min=5,
+            max_dist=-1,
+            mean_offset=True,
+            std_offset=True,
+            mean_dist=True):
         self.n_max_edge = n_max_edge
         self.n_min = n_min
         self.max_dist = max_dist
+        self.mean_offset = mean_offset
+        self.std_offset = std_offset
+        self.mean_dist = mean_dist
 
     def _process(self, nag):
         assert isinstance(self.max_dist, (int, float, list)), \
@@ -368,14 +387,27 @@ class DelaunayHorizontalGraph(Transform):
 
         for i_level, md in zip(range(1, nag.num_levels), max_dist):
             nag = _horizontal_graph_by_delaunay(
-                i_level, nag, n_max_edge=self.n_max_edge, n_min=self.n_min,
-                max_dist=md)
+                i_level,
+                nag,
+                n_max_edge=self.n_max_edge,
+                n_min=self.n_min,
+                max_dist=md,
+                mean_offset=self.mean_offset,
+                std_offset=self.std_offset,
+                mean_dist=self.mean_dist)
 
         return nag
 
 
 def _horizontal_graph_by_delaunay(
-        i_level, nag, n_max_edge=64, n_min=5, max_dist=-1):
+        i_level,
+        nag,
+        n_max_edge=64,
+        n_min=5,
+        max_dist=-1,
+        mean_offset=True,
+        std_offset=True,
+        mean_dist=True):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster graph on level 0"
     assert nag[0].has_edges, \
@@ -547,7 +579,13 @@ def _horizontal_graph_by_delaunay(
     # Features for all undirected edges can be computed later using
     # `_on_the_fly_horizontal_edge_features()`
     data = _minimalistic_horizontal_edge_features(
-        data, nag[0].pos, edges_point, se_id)
+        data,
+        nag[0].pos,
+        edges_point,
+        se_id,
+        mean_offset=mean_offset,
+        std_offset=std_offset,
+        mean_dist=mean_dist)
 
     # Restore the i_level Data object, if need be
     nag._list[i_level] = data
@@ -599,6 +637,15 @@ class RadiusHorizontalGraph(Transform):
     :param source_pc_sort: bool
         Whether the source and target subedge point pairs should be
         ordered along the same vector
+    :param mean_offset: bool
+        Whether the mean_offset edge feature should be computed? If
+        true, it will be saved under the `edge_mean_offset` attribute
+    :param std_offset: bool
+        Whether the std_offset edge feature should be computed? If
+        true, it will be saved under the `edge_std_offset` attribute
+    :param mean_dist: bool
+        Whether the mean_dist edge feature should be computed? If
+        true, it will be saved under the `edge_mean_dist` attribute
     """
 
     _IN_TYPE = NAG
@@ -617,7 +664,10 @@ class RadiusHorizontalGraph(Transform):
             halfspace_filter=True,
             bbox_filter=True,
             target_pc_flip=True,
-            source_pc_sort=False):
+            source_pc_sort=False,
+            mean_offset=True,
+            std_offset=True,
+            mean_dist=True):
         self.k_max = k_max
         self.gap = gap
         self.k_ratio = k_ratio
@@ -629,6 +679,9 @@ class RadiusHorizontalGraph(Transform):
         self.bbox_filter = bbox_filter
         self.target_pc_flip = target_pc_flip
         self.source_pc_sort = source_pc_sort
+        self.mean_offset = mean_offset
+        self.std_offset = std_offset
+        self.mean_dist = mean_dist
 
     def _process(self, nag):
         # Convert parameters to list for each NAG level, if need be
@@ -653,12 +706,31 @@ class RadiusHorizontalGraph(Transform):
                 range(1, nag.num_levels), k_ratio, k_min, cycles, margin,
                 chunk_size):
             nag = self._process_edge_features_for_single_level(
-                nag, i_level, kr, km, cy, mg, cs)
+                nag,
+                i_level,
+                kr,
+                km,
+                cy,
+                mg,
+                cs,
+                mean_offset=self.mean_offset,
+                std_offset=self.std_offset,
+                mean_dist=self.mean_dist)
 
         return nag
 
     def _process_edge_features_for_single_level(
-            self, nag, i_level, k_ratio, k_min, cycles, margin, chunk_size):
+            self,
+            nag,
+            i_level,
+            k_ratio,
+            k_min,
+            cycles,
+            margin,
+            chunk_size,
+            mean_offset=True,
+            std_offset=True,
+            mean_dist=True):
         # Compute 'subedges', ie edges between level-0 points making up
         # the edges between the segments. These will be used for edge
         # features computation. NB: this operation simplifies the
@@ -666,11 +738,19 @@ class RadiusHorizontalGraph(Transform):
         # the bidirectional edges, we will need to reconstruct the j<i
         # edges later on (done in `_horizontal_edge_features`)
         edge_index, se_point_index, se_id = subedges(
-            nag[0].pos, nag.get_super_index(i_level), nag[i_level].edge_index,
-            k_ratio=k_ratio, k_min=k_min, cycles=cycles, pca_on_cpu=True,
-            margin=margin, halfspace_filter=self.halfspace_filter,
-            bbox_filter=self.bbox_filter, target_pc_flip=self.target_pc_flip,
-            source_pc_sort=self.source_pc_sort, chunk_size=chunk_size)
+            nag[0].pos,
+            nag.get_super_index(i_level),
+            nag[i_level].edge_index,
+            k_ratio=k_ratio,
+            k_min=k_min,
+            cycles=cycles,
+            pca_on_cpu=True,
+            margin=margin,
+            halfspace_filter=self.halfspace_filter,
+            bbox_filter=self.bbox_filter,
+            target_pc_flip=self.target_pc_flip,
+            source_pc_sort=self.source_pc_sort,
+            chunk_size=chunk_size)
 
         # Prepare for edge feature computation
         data = nag[i_level]
@@ -681,7 +761,13 @@ class RadiusHorizontalGraph(Transform):
         # edges can be computed later using
         # `_on_the_fly_horizontal_edge_features()`
         data = _minimalistic_horizontal_edge_features(
-            data, nag[0].pos, se_point_index, se_id)
+            data,
+            nag[0].pos,
+            se_point_index,
+            se_id,
+            mean_offset=mean_offset,
+            std_offset=std_offset,
+            mean_dist=mean_dist)
 
         # Restore the i_level Data object
         nag._list[i_level] = data
@@ -812,7 +898,10 @@ def _minimalistic_horizontal_edge_features(
         data,
         points,
         se_point_index,
-        se_id):
+        se_id,
+        mean_offset=True,
+        std_offset=True,
+        mean_dist=True):
     """Compute the features for horizontal edges, given the edge graph
     and the level-0 'subedges' making up each edge.
 
@@ -823,6 +912,9 @@ def _minimalistic_horizontal_edge_features(
     :param points:
     :param se_point_index:
     :param se_id:
+    :param mean_offset:
+    :param std_offset:
+    :param mean_dist:
     :return:
     """
     # TODO: other superedge ideas to better describe how 2 clusters
@@ -871,14 +963,14 @@ def _minimalistic_horizontal_edge_features(
     # Compute mean subedge distance
     se_mean_dist = scatter_mean(dist, se_id, dim=0).sqrt()
 
-    # The superedges we have created so far are oriented. We need to
-    # create the edges and corresponding features for the Target->Source
-    # direction now
-    se_feat = torch.vstack([se_mean_off.T, se_std_off.T, se_mean_dist]).T
-
     # Save superedges and superedge features in the Data object
+    if mean_offset:
+        data.egde_mean_offset = se_mean_off
+    if std_offset:
+        data.egde_std_offset = se_std_off
+    if mean_dist:
+        data.egde_mean_dist = se_mean_dist.view(-1, 1)
     data.edge_index = se
-    data.edge_attr = se_feat
 
     return data
 
@@ -1046,10 +1138,23 @@ def _on_the_fly_horizontal_edge_features(
     assert is_trimmed(se), \
         "Expects the graph to be trimmed, consider using " \
         "`src.utils.to_trimmed()` before computing the features"
-    assert not angle_source or getattr(data, 'normal', None) is not None, \
-        "Expects input Data to have a 'normal' attribute"
-    assert not angle_target or getattr(data, 'normal', None) is not None, \
-        "Expects input Data to have a 'normal' attribute"
+    assert not mean_offset or getattr(data, 'mean_offset', None) is not None, \
+        "Expects input Data to have a 'mean_offset' attribute precomputed " \
+        "using `_minimalistic_horizontal_edge_features`"
+    assert not std_offset or getattr(data, 'std_offset', None) is not None, \
+        "Expects input Data to have a 'std_offset' attribute precomputed " \
+        "using `_minimalistic_horizontal_edge_features`"
+    assert not mean_dist or getattr(data, 'mean_dist', None) is not None, \
+        "Expects input Data to have a 'mean_dist' attribute precomputed " \
+        "using `_minimalistic_horizontal_edge_features`"
+    assert not angle_source or getattr(data, 'normal', None) is not None and \
+           getattr(data, 'mean_offset', None) is not None, \
+        "Expects input Data to have a 'normal' attribute a 'mean_offset' " \
+        "attribute precomputed using `_minimalistic_horizontal_edge_features`"
+    assert not angle_target or getattr(data, 'normal', None) is not None and \
+           getattr(data, 'mean_offset', None) is not None, \
+        "Expects input Data to have a 'normal' attribute a 'mean_offset' " \
+        "attribute precomputed using `_minimalistic_horizontal_edge_features`"
     assert not normal_angle or getattr(data, 'normal', None) is not None, \
         "Expects input Data to have a 'normal' attribute"
     assert not log_length or getattr(data, 'log_length', None) is not None, \
@@ -1060,13 +1165,8 @@ def _on_the_fly_horizontal_edge_features(
         "Expects input Data to have a 'log_volume' attribute"
     assert not log_size or getattr(data, 'log_size', None) is not None, \
         "Expects input Data to have a 'log_size' attribute"
-    assert getattr(data, 'edge_attr', None) is not None \
-           and data.edge_attr.shape[1] == 7, \
-        "Expects input Data 'edge_attr' to hold a Ex7 tensor of edge features" \
-        " precomputed using `_minimalistic_horizontal_edge_features`: " \
-        "se_mean_off, se_std_off and se_mean_dist"
 
-    # Recover already-existing features from the Data.edge_attr.
+    # Recover already-existing features from the Data.edge_xxx.
     # IMPORTANT: these are assumed to have been generated using
     # `_minimalistic_horizontal_edge_features` and to be the following:
     #   - se_mean_off: mean subedge offset
@@ -1074,10 +1174,18 @@ def _on_the_fly_horizontal_edge_features(
     #   - se_mean_dist: mean subedge distance
     # Precomputed edge features might be expressed in float16, so we
     # convert them to float32 here
-    se_feat_precomputed = data.edge_attr.float()
-    se_mean_off = se_feat_precomputed[:, :3]
-    se_std_off = se_feat_precomputed[:, 3:6]
-    se_mean_dist = se_feat_precomputed[:, 6]
+    se_mean_off = data.edge_mean_off.float()
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    if std_offset:
+        f = data.edge_std_off.float()
+        data.edge_std_off = torch.cat((f, f), dim=0)
+    if mean_dist:
+        f = data.edge_mean_dist.view(-1, 1).float()
+        data.edge_mean_dist = torch.cat((f, f), dim=0)
+
+
 
     # Compute the distance and direction between the segments' centroids
     se_centroid_direction = data.pos[se[1]] - data.pos[se[0]]

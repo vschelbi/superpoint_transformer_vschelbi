@@ -330,7 +330,10 @@ class Data(PyGData):
 
             # Slice tensor elements containing num_edges elements. Note
             # we deal with edges first, to rule out the case where
-            # num_edges = num_nodes
+            # num_edges = num_nodes. This will deal with `edge_attr` but
+            # also any other attribute containing 'edge' in its key and
+            # whose first dimension size matches the number of edges in
+            # `edge_index`
             if self.has_edges and is_tensor and is_edge_size and 'edge' in key:
                 data[key] = item[idx_edge].clone()
 

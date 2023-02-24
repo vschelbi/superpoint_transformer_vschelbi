@@ -57,7 +57,7 @@ point_save_keys: null  # level-0 keys to save on disk after preprocessing, 'null
 segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
 
 point_basic_load_keys: ['pos', 'y', 'super_index', 'is_val']  # needed point attributes, other than features
-segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index', 'edge_attr']  # needed segment attributes, other than features
+segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index']  # needed segment attributes, other than features
 
 point_load_keys: ${eval:'${datamodule.point_basic_load_keys} + ${datamodule.point_hf}'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
 segment_load_keys: ${eval:'${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf}'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
@@ -207,6 +207,9 @@ pre_transform:
         bbox_filter: True
         target_pc_flip: True
         source_pc_sort: False
+        mean_offset: True
+        std_offset: True
+        mean_dist: True
     - transform: NAGTo
       params:
         device: 'cpu'
@@ -292,16 +295,16 @@ on_device_train_transform:
       params:
         level: '1+'
         keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
-    - transform: NAGSelectColumns
-      params:
-        level: 0
-        key: 'x'
-        idx: ${datamodule.select_feat_point}
-    - transform: NAGSelectColumns
-      params:
-        level: '1+'
-        key: 'x'
-        idx: ${datamodule.select_feat_segment}
+#    - transform: NAGSelectColumns
+#      params:
+#        level: 0
+#        key: 'x'
+#        idx: ${datamodule.select_feat_point}
+#    - transform: NAGSelectColumns
+#      params:
+#        level: '1+'
+#        key: 'x'
+#        idx: ${datamodule.select_feat_segment}
     - transform: NAGSelectColumns
       params:
         level: '1+'
