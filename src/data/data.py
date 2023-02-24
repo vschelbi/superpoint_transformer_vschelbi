@@ -290,7 +290,7 @@ class Data(PyGData):
         # 'Data.sub' of the level above
         out_super = (None, None)
         if self.is_sub:
-            data.super_index = self.super_index[idx].clone()
+            data.super_index = self.super_index[idx]
 
         if self.is_sub and update_super:
             # Convert superpoint indices, in case some superpoints have
@@ -333,13 +333,19 @@ class Data(PyGData):
             # num_edges = num_nodes. This will deal with `edge_attr` but
             # also any other attribute containing 'edge' in its key and
             # whose first dimension size matches the number of edges in
-            # `edge_index`
-            if self.has_edges and is_tensor and is_edge_size and 'edge' in key:
-                data[key] = item[idx_edge].clone()
+            # `edge_index`. An exception is made for attributes
+            # containing 'v_edge', those are expected to be node
+            # attributes and must be treated as such
+            if is_tensor and is_node_size and 'v_edge' in key:
+                data[key] = item[idx]
+
+            elif self.has_edges and is_tensor and is_edge_size and \
+                    'edge' in key:
+                data[key] = item[idx_edge]
 
             # Slice other tensor elements containing num_nodes elements
             elif is_tensor and is_node_size:
-                data[key] = item[idx].clone()
+                data[key] = item[idx]
 
             # Other Data attributes are simply copied
             else:
