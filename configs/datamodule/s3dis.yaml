@@ -23,9 +23,35 @@ num_hf_vertical_edge: ${eval:'len(${datamodule.select_feat_vertical_edge})'}
 # all the pre_transforms
 
 # Features that will be computed, saved, loaded for points and segments
-partition_hf: ['rgb', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation']  # point features used for the partition
-point_hf: ['rgb', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation', 'pos_room']  # point features used for training
-segment_hf: ['mean_rgb', 'mean_pos_room', 'mean_elevation', 'log_length', 'log_surface', 'log_volume', 'log_size', 'normal']  # segment features used for training
+partition_hf:  # point features used for the partition
+  - 'rgb'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'elevation'
+point_hf:  # point features used for training
+  - 'rgb'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'elevation'
+  - 'pos_room'
+segment_hf:  # segment features used for training
+  - 'mean_rgb'
+  - 'mean_pos_room'
+  - 'mean_elevation'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'curvature'
+  - 'log_length'
+  - 'log_surface'
+  - 'log_volume'
+  - 'log_size'
+  - 'normal'
 
 point_save_keys: null  # level-0 keys to save on disk after preprocessing, 'null' to save all
 segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
@@ -35,15 +61,6 @@ segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index', 'edge_
 
 point_load_keys: ${eval:'${datamodule.point_basic_load_keys} + ${datamodule.point_hf}'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
 segment_load_keys: ${eval:'${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf}'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
-
-
-
-
-
-
-
-
-
 
 # Based on SPG: https://arxiv.org/pdf/1711.09869.pdf
 voxel: 0.03
@@ -196,10 +213,10 @@ pre_transform:
 
 # CPU-based train transforms
 train_transform:
-    - transform: NAGRemoveKeys  # remove any features already computed in CutPursuitPartition
-      params:
-        level: '1+'
-        keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
+#    - transform: NAGRemoveKeys  # remove any features already computed in CutPursuitPartition
+#      params:
+#        level: '1+'
+#        keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
 
 # CPU-based val transforms
 val_transform: ${datamodule.train_transform}
