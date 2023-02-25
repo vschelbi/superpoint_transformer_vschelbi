@@ -80,7 +80,7 @@ on_device_val_transform:
         level: '1+'
         n_min: ${datamodule.tta.sample_edge_n_min}
         n_max: ${datamodule.tta.sample_edge_n_max}
-    - transform: NAGAddKeysToX  # adapt datamodule.feat_segment if modified
+    - transform: NAGAddKeysTo  # adapt datamodule.feat_segment if modified
       params:
         level: '1+'
         keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']

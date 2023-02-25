@@ -72,8 +72,8 @@ class SegmentFeatures(Transform):
     """Compute segment features for all the NAG levels except its first
     (ie the 0-level). These are handcrafted node features that will be
     saved in the node attributes. To make use of those at training time,
-    remember to move them to the `x` attribute using `AddKeysToX` and
-    `NAGAddKeysToX`.
+    remember to move them to the `x` attribute using `AddKeysTo` and
+    `NAGAddKeysTo`.
 
     :param linearity: bool
         Whether linearity should be computed
@@ -103,7 +103,7 @@ class SegmentFeatures(Transform):
         unless it contains fewer points
     :param mean_keys: List(str)
         Attributes will be taken from the points and the segment-wise
-        mean aggregation will be saved under `mean_<key>`
+        mean aggregation will be saved under `<key>`
     :param std_keys: List(str)
         Attributes will be taken from the points and the segment-wise
         std aggregation will be saved under `std_<key>`
@@ -267,7 +267,7 @@ def _compute_cluster_features(
     for key in mean_keys:
         f = getattr(nag[0], key, None)
         if f is not None:
-            data[f'mean_{key}'] = scatter_mean(nag[0][key], super_index, dim=0)
+            data[key] = scatter_mean(nag[0][key], super_index, dim=0)
         elif strict:
             raise ValueError(f"Could not find key=`{key}` in the points")
 
@@ -1202,7 +1202,10 @@ def _on_the_fly_horizontal_edge_features(
         se_direction = se_direction.clip(-1, 1)
 
         if mean_off:
-            f_list.append(torch.cat((se_mean_off, -se_mean_off), dim=0))
+            # We place mean_off in the first 3 edge_attr columns, for
+            # homogeneity with input edge_attr from
+            # _minimalistic_horizontal_edge_features
+            f_list = [torch.cat((se_mean_off, -se_mean_off), dim=0)] + f_list
 
         if angle_source:
             f = (se_direction * data.normal[se[0]]).sum(dim=1).abs()
@@ -1257,7 +1260,8 @@ def _on_the_fly_horizontal_edge_features(
     # edge_<key> to save memory
     for k in ['edge_attr'] + data.edge_keys:
         data[k] = None
-    data.edge_attr = torch.cat(f_list, dim=1)
+    if len(f_list) > 0:
+        data.edge_attr = torch.cat(f_list, dim=1)
 
     return data
 
@@ -1423,7 +1427,9 @@ def _on_the_fly_vertical_edge_features(
         f_list.append(f.view(-1, 1))
 
     # Stack all the vertical edge features into the child 'v_edge_attr'
-    data_child.v_edge_attr = torch.cat(f_list, dim=1)
+    data_child.v_edge_attr = None
+    if len(f_list) > 0:
+        data_child.v_edge_attr = torch.cat(f_list, dim=1)
 
     return data_child
 
@@ -1447,6 +1453,7 @@ class NAGAddSelfLoops(Transform):
             num_nodes = nag[i_level].num_nodes
             edge_index = nag[i_level].edge_index
             edge_attr = nag[i_level].edge_attr
+
             nag[i_level].raise_if_edge_keys()
 
             # Add self-loops

@@ -17,13 +17,7 @@ in_memory: False
 # config interpolation
 num_classes: ???
 
-# Similar to num_classes, the size of handcrafted features for points
-# and segments should be specified here. This facilitates model
-# parameterization with config interpolation
-partition_hf: ???
-point_hf: ???
-segment_hf: ???
-
+# Transforms
 pre_transform: null
 train_transform: null
 val_transform: null

@@ -6,7 +6,7 @@ _target_: src.datamodules.s3dis.S3DISDataModule
 fold: 5
 trainval: True
 val_on_test: True
-in_memory: False  # set to True to load all processed S3DIS in RAM. This will accelerate training but CAREFUL not to modify the data in place !
+in_memory: False  # set to True to load all processed S3DIS in RAM. This may accelerate training but CAREFUL not to modify the data in place !
 
 dataloader:
     batch_size: 1
@@ -14,13 +14,6 @@ dataloader:
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 13
-num_hf_point: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.point_hf}])'}
-num_hf_segment: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.segment_hf}])'}
-num_hf_horizontal_edge: ${eval:'len(${datamodule.select_feat_horizontal_edge})'}
-num_hf_v_edge: ${eval:'len(${datamodule.select_feat_v_edge})'}
-
-# Parameters declared here to facilitate tuning configs without copying
-# all the pre_transforms
 
 # Features that will be computed, saved, loaded for points and segments
 partition_hf:  # point features used for the partition
@@ -39,9 +32,9 @@ point_hf:  # point features used for training
   - 'elevation'
   - 'pos_room'
 segment_hf:  # segment features used for training
-  - 'mean_rgb'
-  - 'mean_pos_room'
-  - 'mean_elevation'
+  - 'rgb'
+  - 'pos_room'
+  - 'elevation'
   - 'linearity'
   - 'planarity'
   - 'scattering'
@@ -52,17 +45,23 @@ segment_hf:  # segment features used for training
   - 'log_volume'
   - 'log_size'
   - 'normal'
+edge_hf:  # horizontal edge features used for training
+  - 'mean_off'
+  - 'std_off'
+  - 'mean_dist'
+  - 'angle_source'
+  - 'angle_target'
+  - 'centroid_dir'
+  - 'centroid_dist'
+  - 'normal_angle'
+  - 'log_length'
+  - 'log_surface'
+  - 'log_volume'
+  - 'log_size'
+v_edge_hf: []  # vertical edge features used for training
 
-!!!!! edge and vedge attributes !!!! ['edge_attr', 'v_edge_attr', ...]
-
-point_save_keys: null  # level-0 keys to save on disk after preprocessing, 'null' to save all
-segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
-
-point_basic_load_keys: ['pos', 'y', 'super_index', 'is_val']  # needed point attributes, other than features
-segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index']  # needed segment attributes, other than features
-
-point_load_keys: ${eval:'${datamodule.point_basic_load_keys} + ${datamodule.point_hf}'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
-segment_load_keys: ${eval:'${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf}'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
+# Parameters declared here to facilitate tuning configs without copying
+# all the pre_transforms
 
 # Based on SPG: https://arxiv.org/pdf/1711.09869.pdf
 voxel: 0.03
@@ -86,10 +85,6 @@ sample_graph_r: 7  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
 sample_graph_i_level: 1
 sample_graph_disjoint: True
-select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
-select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-select_feat_horizontal_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-select_feat_v_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8]
 sample_edge_n_min: -1  # [5, 5, 15, 15]
 sample_edge_n_max: -1  # [10, 15, 25, 25]
 
@@ -98,10 +93,13 @@ pos_jitter: 0.03
 tilt_n_rotate_phi: 0.1
 tilt_n_rotate_theta: 180
 anisotropic_scaling: 0.2
+rgb_jitter: 0.01
+rgb_autocontrast: 0.5
+rgb_drop: 0.3
 node_feat_jitter: 0.01
 h_edge_feat_jitter: 0.01
 v_edge_feat_jitter: 0.01
-node_feat_drop: 0
+node_feat_drop: 0.3
 h_edge_feat_drop: 0
 v_edge_feat_drop: 0
 
@@ -156,7 +154,7 @@ pre_transform:
     - transform: DataTo
       params:
         device: 'cpu'
-    - transform: AddKeysToX  # move some features to 'x' to be used for partition
+    - transform: AddKeysTo  # move some features to 'x' to be used for partition
       params:
         keys: ${datamodule.partition_hf}
         delete_after: False
@@ -176,10 +174,6 @@ pre_transform:
     - transform: NAGTo
       params:
         device: 'cuda'
-#    - transform: NAGAddKeysToX  # save canonical room position 'pos_room' in x. This can be optionally discarded later on in train_transform
-#      params:
-#        level: 0
-#        keys: ['pos_room']
     - transform: SegmentFeatures
       params:
         linearity: True
@@ -217,11 +211,7 @@ pre_transform:
         device: 'cpu'
 
 # CPU-based train transforms
-train_transform:
-#    - transform: NAGRemoveKeys  # remove any features already computed in CutPursuitPartition
-#      params:
-#        level: '1+'
-#        keys: [ 'linearity', 'planarity', 'scattering', 'verticality', 'curvature']
+train_transform: null
 
 # CPU-based val transforms
 val_transform: ${datamodule.train_transform}
@@ -231,6 +221,10 @@ test_transform: ${datamodule.train_transform}
 
 # GPU-based train transforms
 on_device_train_transform:
+
+    # Apply sampling transforms first to reduce the number of nodes and
+    # edges. These operations are compute-intensive and are the reason
+    # why these transforms are not performed on CPU
     - transform: SampleSubNodes
       params:
         low: 0
@@ -250,73 +244,77 @@ on_device_train_transform:
         ratio: ${datamodule.sample_segment_ratio}
         by_size: ${datamodule.sample_segment_by_size}
         by_class: ${datamodule.sample_segment_by_class}
-    - transform: NAGJitterKey  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+
+    # Apply geometric transforms affecting position, offsets, normals
+    # before calling transforms relying on those, such as on-the-fly
+    # edge features computation
+    - transform: NAGJitterKey
       params:
         key: 'pos'
         sigma: ${datamodule.pos_jitter}
         trunc: ${datamodule.voxel}
-    - transform: RandomTiltAndRotate  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+    - transform: RandomTiltAndRotate
       params:
         phi: ${datamodule.tilt_n_rotate_phi}
         theta: ${datamodule.tilt_n_rotate_theta}
-    - transform: RandomAnisotropicScale  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+    - transform: RandomAnisotropicScale
       params:
         delta: ${datamodule.anisotropic_scaling}
-    - transform: RandomAxisFlip  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+    - transform: RandomAxisFlip
       params:
         p: 0.5
+
+    # Compute some horizontal and vertical edges on-the-fly. Those are
+    # only computed now since they can be deduced from point and node
+    # attributes. Besides, the OnTheFlyHorizontalEdgeFeatures transform
+    # takes a trimmed graph as input and doubles its size, creating j->i
+    # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: True
-        std_off: True
-        mean_dist: True
-        angle_source: True
-        angle_target: True
-        centroid_dir: True
-        centroid_dist: True
-        normal_angle: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        log_size: True
+        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
+        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
+        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
+        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
+        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: True
-        centroid_dist: True
-        normal_angle: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        log_size: True
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+
+    # Edge sampling is only performed after the horizontal graph is
+    # untrimmed by OnTheFlyHorizontalEdgeFeatures
     - transform: SampleEdges
       params:
         level: '1+'
         n_min: ${datamodule.sample_edge_n_min}
         n_max: ${datamodule.sample_edge_n_max}
-    - transform: NAGAddKeysToX  # adapt datamodule.feat_segment if modified
+
+    # Move all point and segment features to 'x', except for "rgb", on
+    # which we want to apply specific transforms
+    - transform: NAGAddKeysTo
+      params:
+        level: 0
+        keys: ${eval:'[k for k in ${datamodule.point_hf} if k =! "rgb"]'}
+        to: 'x'
+    - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
-#    - transform: NAGSelectColumns
-#      params:
-#        level: 0
-#        key: 'x'
-#        idx: ${datamodule.select_feat_point}
-#    - transform: NAGSelectColumns
-#      params:
-#        level: '1+'
-#        key: 'x'
-#        idx: ${datamodule.select_feat_segment}
-    - transform: NAGSelectColumns
-      params:
-        level: '1+'
-        key: 'edge_attr'
-        idx: ${datamodule.select_feat_horizontal_edge}
-    - transform: NAGSelectColumns
-      params:
-        level: 'all'
-        key: 'v_edge_attr'
-        idx: ${datamodule.select_feat_v_edge}
+        keys: ${eval:'[k for k in ${datamodule.segment_hf} if k =! "rgb"]'}
+        to: 'x'
+
+    # Add some noise and randomly some point, node and edge features
     - transform: NAGJitterKey
       params:
         key: 'x'
@@ -332,85 +330,107 @@ on_device_train_transform:
         key: 'v_edge_attr'
         sigma: ${datamodule.v_edge_feat_jitter}
         trunc: ${eval:'2 * ${datamodule.v_edge_feat_jitter}'}
-    - transform: NAGColorAutoContrast
-      params:
-        level: all
-        p: 0.5
-        x_idx: 0
     - transform: NAGDropoutColumns
       params:
-        level: 'all'
         p: ${datamodule.node_feat_drop}
         key: 'x'
     - transform: NAGDropoutColumns
       params:
-        level: 'all'
         p: ${datamodule.h_edge_feat_drop}
         key: 'edge_attr'
     - transform: NAGDropoutColumns
       params:
-        level: 'all'
         p: ${datamodule.v_edge_feat_drop}
         key: 'v_edge_attr'
+
+    # RGB-specific transforms. In particular, the color dropout will
+    # switch off all three color channels together, instead of just one
+    # by one with
+#    - transform: NAGColorNormalize
+#      params:
+#        level: 'all'
+    - transform: NAGJitterKey
+      params:
+        key: 'rgb'
+        sigma: ${datamodule.rgb_jitter}
+        trunc: ${eval:'2 * ${datamodule.rgb_jitter}'}
+    - transform: NAGColorAutoContrast
+      params:
+        p: ${datamodule.rgb_autocontrast}
+    - transform: NAGColorDrop
+      params:
+        p: ${datamodule.rgb_drop}
+
+    # Finally move RGB to node and segment features, if need be
+    - transform: NAGAddKeysTo
+      params:
+        keys: 'rgb'
+        to: 'x'
+        strict: False
+
+    # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
 
 # GPU-based val transforms
-# Should we actually sample at validation time ?
-# Should we do test-time augmentations ?
 on_device_val_transform:
+
+    # Apply sampling transforms first to reduce the number of nodes and
+    # edges. These operations are compute-intensive and are the reason
+    # why these transforms are not performed on CPU
     - transform: SampleSubNodes
       params:
         low: 0
         high: 1
         n_min: 128
         n_max: 256
+
+    # Compute some horizontal and vertical edges on-the-fly. Those are
+    # only computed now since they can be deduced from point and node
+    # attributes. Besides, the OnTheFlyHorizontalEdgeFeatures transform
+    # takes a trimmed graph as input and doubles its size, creating j->i
+    # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: True
-        std_off: True
-        mean_dist: True
-        angle_source: True
-        angle_target: True
-        centroid_dir: True
-        centroid_dist: True
-        normal_angle: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        log_size: True
+        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
+        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
+        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
+        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
+        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: True
-        centroid_dist: True
-        normal_angle: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        log_size: True
-    - transform: NAGAddKeysToX  # adapt datamodule.feat_segment if modified
-      params:
-        level: '1+'
-        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
-    - transform: NAGSelectColumns
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+
+    # Color transforms here before fusing all features together
+#    - transform: NAGColorNormalize
+#      params:
+#        level: 'all'
+
+    # Move all point and segment features to 'x', including "rgb"
+    - transform: NAGAddKeysTo
       params:
         level: 0
-        key: 'x'
-        idx: ${datamodule.select_feat_point}
-    - transform: NAGSelectColumns
+        keys: ${datamodule.point_hf}
+        to: 'x'
+    - transform: NAGAddKeysTo
       params:
         level: '1+'
-        key: 'x'
-        idx: ${datamodule.select_feat_segment}
-    - transform: NAGSelectColumns
-      params:
-        level: '1+'
-        key: 'edge_attr'
-        idx: ${datamodule.select_feat_horizontal_edge}
-    - transform: NAGSelectColumns
-      params:
-        level: 'all'
-        key: 'v_edge_attr'
-        idx: ${datamodule.select_feat_v_edge}
+        keys: ${datamodule.segment_hf}
+        to: 'x'
+
+    # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
 
 # GPU-based test transforms
