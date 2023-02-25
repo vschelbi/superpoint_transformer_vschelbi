@@ -166,7 +166,8 @@ class RandomAnisotropicScale(Transform):
                 assert edge_attr.shape[1] == 7, \
                     "Expected exactly 7 features in `edge_attr`, generated " \
                     "with `_minimalistic_horizontal_edge_features`"
-                edge_attr *= scale.repeat(1, 2)
+                edge_attr[:, :3] *= scale
+                edge_attr[:, 3:] *= scale.norm()  # std_off and mean_dist are scaled by the scaling norm, slightly incorrect for std_off...
                 nag[i_level].edge_attr = edge_attr
 
         return nag
