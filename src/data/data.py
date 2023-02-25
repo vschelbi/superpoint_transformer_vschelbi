@@ -23,10 +23,8 @@ class Data(PyGData):
     specific needs.
     """
 
-    _INDEXABLE = [
-        'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size', 'sub']
+    _NOT_INDEXABLE = ['_csr_', '_cluster_', 'edge_index', 'edge_attr']
 
-    _READABLE = _INDEXABLE + ['edge_index', 'edge_attr']
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -108,6 +106,25 @@ class Data(PyGData):
     def has_edges(self):
         """Whether the points have edges."""
         return self.edge_index is not None and self.edge_index.shape[1] > 0
+
+    @property
+    def has_edge_attr(self):
+        """Whether the edges have features in `edge_attr`."""
+        return self.edge_attr is not None and self.edge_attr.shape[0] > 0
+
+    @property
+    def edge_keys(self):
+        """All keys starting with `edge_`, apart from `edge_index` and
+        `edge_attr`.
+        """
+        return [
+            k for k in self.keys
+            if k.startswith('edge_') and k not in ['edge_index', 'edge_attr']]
+
+    @property
+    def v_edge_keys(self):
+        """All keys starting with `v_edge_`."""
+        return [k for k in self.keys if k.startswith('v_edge_')]
 
     @property
     def num_edges(self):
@@ -292,7 +309,7 @@ class Data(PyGData):
         # 'Data.sub' of the level above
         out_super = (None, None)
         if self.is_sub:
-            data.super_index = self.super_index[idx].clone()
+            data.super_index = self.super_index[idx]
 
         if self.is_sub and update_super:
             # Convert superpoint indices, in case some superpoints have
@@ -332,13 +349,22 @@ class Data(PyGData):
 
             # Slice tensor elements containing num_edges elements. Note
             # we deal with edges first, to rule out the case where
-            # num_edges = num_nodes
-            if self.has_edges and is_tensor and is_edge_size and 'edge' in key:
-                data[key] = item[idx_edge].clone()
+            # num_edges = num_nodes. This will deal with `edge_attr` but
+            # also any other attribute whose key starts with 'edge_' and
+            # whose first dimension size matches the number of edges in
+            # `edge_index`. An exception is made for attributes
+            # starting with 'v_edge': those are expected to be node
+            # attributes and must be treated as such
+            if is_tensor and is_node_size and key in self.v_edge_keys:
+                data[key] = item[idx]
+
+            elif self.has_edges and is_tensor and is_edge_size and \
+                    key in self.edge_keys:
+                data[key] = item[idx_edge]
 
             # Slice other tensor elements containing num_nodes elements
             elif is_tensor and is_node_size:
-                data[key] = item[idx].clone()
+                data[key] = item[idx]
 
             # Other Data attributes are simply copied
             else:
@@ -374,6 +400,14 @@ class Data(PyGData):
         # Make sure there is no edge_attr if there is no edge_index
         if not self.has_edges:
             self.edge_attr = None
+
+        # Make sure there are no additional edge attributes. Creating
+        # such attributes for the new edges is ambiguous, so we raise an
+        # error if there are any other `edge_` keys beyond `edge_index`
+        # and `edge_attr`
+        assert len(self.edge_keys) == 0, \
+            f"Cannot connect isolated nodes because creating " \
+            f"{self.edge_keys} values for the new edges is ambiguous."
 
         # Search for isolated nodes and exit if no node is isolated
         is_isolated = self.is_isolated()
@@ -550,7 +584,7 @@ class Data(PyGData):
         if idx.shape[0] == 0:
             keys_idx = []
         elif keys_idx is None:
-            keys_idx = Data._INDEXABLE
+            keys_idx = list(set(f.keys()) - set(Data._NOT_INDEXABLE))
         if keys is None:
             all_keys = list(f.keys())
             for k in ['_csr_', '_cluster_']:

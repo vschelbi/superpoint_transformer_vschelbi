@@ -228,8 +228,16 @@ class NAG:
 
     @staticmethod
     def load(
-            path, low=0, high=-1, idx=None, keys_idx=None, keys_low=None,
-            keys=None, update_super=True, update_sub=True, verbose=False):
+            path,
+            low=0,
+            high=-1,
+            idx=None,
+            keys_idx=None,
+            keys_low=None,
+            keys=None,
+            update_super=True,
+            update_sub=True,
+            verbose=False):
         """Load NAG from an HDF5 file. See `NAG.save` for writing such
         file. Options allow reading only part of the data.
 
@@ -360,7 +368,12 @@ class NAG:
                 assert d.num_points == self[i + 1].num_sub
 
     def get_sampling(
-            self, high=1, low=0, n_max=32, n_min=1, mask=None,
+            self,
+            high=1,
+            low=0,
+            n_max=32,
+            n_min=1,
+            mask=None,
             return_pointers=False):
         """Compute indices to sample elements at `low`-level, based on
         which segment they belong to at `high`-level.

@@ -80,9 +80,19 @@ def edge_to_superedge(edges, super_index, edge_attr=None):
 
 
 def subedges(
-        points, index, edge_index, k_ratio=0.2, k_min=20, cycles=3,
-        pca_on_cpu=True, margin=0.2, halfspace_filter=True, bbox_filter=True,
-        target_pc_flip=True, source_pc_sort=False, chunk_size=None):
+        points,
+        index,
+        edge_index,
+        k_ratio=0.2,
+        k_min=20,
+        cycles=3,
+        pca_on_cpu=True,
+        margin=0.2,
+        halfspace_filter=True,
+        bbox_filter=True,
+        target_pc_flip=True,
+        source_pc_sort=False,
+        chunk_size=None):
     """Compute the subedges making up each edge between segments. These
     are needed for superedge features computation. This approach relies
     on heuristics to avoid the Delaunay triangulation or any other O(N²)
@@ -146,11 +156,19 @@ def subedges(
             start = i_chunk * chunk_size
             end = (i_chunk + 1) * chunk_size
             out_list.append(subedges(
-                points, index, edge_index[:, start:end], k_ratio=k_ratio,
-                k_min=k_min, cycles=cycles, pca_on_cpu=pca_on_cpu,
-                margin=margin, halfspace_filter=halfspace_filter,
-                bbox_filter=bbox_filter, target_pc_flip=target_pc_flip,
-                source_pc_sort=source_pc_sort, chunk_size=None))
+                points,
+                index,
+                edge_index[:, start:end],
+                k_ratio=k_ratio,
+                k_min=k_min,
+                cycles=cycles,
+                pca_on_cpu=pca_on_cpu,
+                margin=margin,
+                halfspace_filter=halfspace_filter,
+                bbox_filter=bbox_filter,
+                target_pc_flip=target_pc_flip,
+                source_pc_sort=source_pc_sort,
+                chunk_size=None))
 
         # Combine outputs
         device = points.device

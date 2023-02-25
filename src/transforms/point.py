@@ -25,8 +25,6 @@ class PointFeatures(Transform):
 
     Parameters
     ----------
-    pos: bool
-        Use point position.
     rgb: bool
         Use rgb color. Assumes Data.rgb holds either [0, 1] floats or
         [0, 255] integers
@@ -57,12 +55,6 @@ class PointFeatures(Transform):
         Use local volume. Assumes ``Data.neighbor_index``.
     curvature: bool
         Use local curvature. Assumes ``Data.neighbor_index``.
-    elevation: bool
-        Use local elevation. Assumes ``Data.elevation`` has been
-        computed beforehand using `GroundElevation`.
-    pos_room: bool
-        Use room position. Assumes ``Data.pos_room`` has been
-        computed beforehand using `RoomPosition`.
     k_min: int
         Minimum number of neighbors to consider for geometric features
         computation. Points with less than k_min neighbors will receive
@@ -73,14 +65,21 @@ class PointFeatures(Transform):
     # TODO: Random PointNet + PCA features ?
 
     def __init__(
-            self, pos=False, radius=5, rgb=False, hsv=False, lab=False,
-            density=False, linearity=False, planarity=False, scattering=False,
-            verticality=False, normal=False, length=False, surface=False,
-            volume=False, curvature=False, elevation=False, pos_room=False,
+            self,
+            rgb=False,
+            hsv=False,
+            lab=False,
+            density=False,
+            linearity=False,
+            planarity=False,
+            scattering=False,
+            verticality=False,
+            normal=False,
+            length=False,
+            surface=False,
+            volume=False,
+            curvature=False,
             k_min=5):
-
-        self.pos = pos
-        self.radius = radius
         self.rgb = rgb
         self.hsv = hsv
         self.lab = lab
@@ -94,8 +93,6 @@ class PointFeatures(Transform):
         self.surface = surface
         self.volume = volume
         self.curvature = curvature
-        self.elevation = elevation
-        self.pos_room = pos_room
         self.k_min = k_min
 
     def _process(self, data):
@@ -106,13 +103,6 @@ class PointFeatures(Transform):
         assert data.neighbor_index.max() < np.iinfo(np.uint32).max, \
             "Too high 'neighbor_index' indices for `uint32` indices"
 
-        features = []
-
-        # Add xyz normalized. The scaling factor drives the maximum
-        # cluster size the partition may produce
-        if self.pos and data.pos is not None:
-            features.append((data.pos - data.pos.mean(dim=0)) / self.radius)
-
         # Add RGB to the features. If colors are stored in int, we
         # assume they are encoded in  [0, 255] and normalize them.
         # Otherwise, we assume they have already been [0, 1] normalized
@@ -120,7 +110,7 @@ class PointFeatures(Transform):
             f = data.rgb
             if f.dtype in [torch.uint8, torch.int, torch.long]:
                 f = f.float() / 255
-            features.append(f)
+            data.rgb = f
 
         # Add HSV to the features. If colors are stored in int, we
         # assume they are encoded in  [0, 255] and normalize them.
@@ -133,7 +123,7 @@ class PointFeatures(Transform):
                 f = f.float() / 255
             hsv = rgb2hsv(f)
             hsv[:, 0] /= 360.
-            features.append(hsv)
+            data.hsv = f
 
         # Add LAB to the features. If colors are stored in int, we
         # assume they are encoded in  [0, 255] and normalize them.
@@ -144,7 +134,7 @@ class PointFeatures(Transform):
             f = data.rgb
             if f.dtype in [torch.uint8, torch.int, torch.long]:
                 f = f.float() / 255
-            features.append(rgb2lab(f) / 100)
+            data.lab = rgb2lab(f) / 100
 
         # Add local surfacic density to the features. The local density
         # is approximated as K / D² where K is the number of nearest
@@ -155,7 +145,7 @@ class PointFeatures(Transform):
         if self.density:
             dmax = data.neighbor_distance.max(dim=1).values
             k = data.neighbor_index.ge(0).sum(dim=1)
-            features.append((k / dmax ** 2).view(-1, 1))
+            data.density = (k / dmax ** 2).view(-1, 1)
 
         # Add local geometric features
         needs_geof = any((
@@ -165,9 +155,11 @@ class PointFeatures(Transform):
 
             # Prepare data for numpy boost interface. Note: we add each
             # point to its own neighborhood before computation
+            device = data.pos.device
             xyz = data.pos.cpu().numpy()
             nn = torch.cat(
-                (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbor_index), dim=1)
+                (torch.arange(xyz.shape[0]).view(-1, 1), data.neighbor_index),
+                dim=1)
             k = nn.shape[1]
 
             # Check for missing neighbors (indicated by -1 indices)
@@ -192,32 +184,39 @@ class PointFeatures(Transform):
                 xyz, nn, nn_ptr, self.k_min, False)
             f = torch.from_numpy(f.astype('float32'))
 
-            # Heuristic to increase the importance of verticality
-            f[:, 3] *= 2
+            # Keep only required features
+            if self.linearity:
+                data.linearity = f[:, 0].view(-1, 1).to(device)
 
-            # Select only required features
-            mask = (
-                [self.linearity, self.planarity, self.scattering, self.verticality]
-                + [self.normal] * 3
-                + [self.length, self.surface, self.volume, self.curvature])
-            features.append(f[:, mask].to(data.pos.device))
+            if self.planarity:
+                data.planarity = f[:, 1].view(-1, 1).to(device)
 
-        # Add elevation to the features
-        if self.elevation:
-            assert getattr(data, 'elevation', None) is not None, \
-                "Data.elevation must be computed beforehand using " \
-                "`GroundElevation`"
-            features.append(data.elevation.view(-1, 1))
+            if self.scattering:
+                data.scattering = f[:, 2].view(-1, 1).to(device)
 
-        # Add room position to the features
-        if self.pos_room:
-            assert getattr(data, 'pos_room', None) is not None, \
-                "Data.pos_room must be computed beforehand using " \
-                "`RoomPosition`"
-            features.append(data.pos_room.view(-1, 1))
+            # Heuristic to increase importance of verticality in
+            # partition
+            if self.verticality:
+                data.verticality = f[:, 3].view(-1, 1).to(device)
+                data.verticality *= 2
 
-        # Save all features in the Data.x attribute
-        data.x = torch.cat(features, dim=1).to(data.pos.device)
+            if self.curvature:
+                data.curvature = f[:, 10].t.view(-1, 1).to(device)
+
+            if self.length:
+                data.length = f[:, 7].view(-1, 1).to(device)
+
+            if self.surface:
+                data.surface = f[:, 8].view(-1, 1).to(device)
+
+            if self.volume:
+                data.volume = f[:, 9].view(-1, 1).to(device)
+
+            # As a way to "stabilize" the normals' orientation, we
+            # choose to express them as oriented in the z+ half-space
+            if self.normal:
+                data.normal = f[:, 4:7].view(-1, 3).to(device)
+                data.normal[data.normal[:, 2] < 0] *= -1
 
         return data
 
@@ -263,7 +262,7 @@ class GroundElevation(Transform):
         h = h / self.scale
 
         # Save in Data attribute `elevation`
-        data.elevation = torch.from_numpy(h).to(data.device)
+        data.elevation = torch.from_numpy(h).to(data.device).view(-1, 1)
 
         return data
 
@@ -522,8 +521,10 @@ class ColorNormalize(ColorTransform):
     """
 
     def __init__(
-            self, mean=[0.5136457, 0.49523646, 0.44921124],
-            std=[0.18308958, 0.18415008, 0.19252081], x_idx=None):
+            self,
+            mean=[0.5136457, 0.49523646, 0.44921124],
+            std=[0.18308958, 0.18415008, 0.19252081],
+            x_idx=None):
         super().__init__(x_idx=x_idx)
         self.mean = mean.float().view(1, -1) if isinstance(mean, torch.Tensor) \
             else torch.tensor(mean).float().view(1, -1)

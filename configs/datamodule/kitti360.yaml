@@ -35,7 +35,7 @@ sample_graph_disjoint: True
 select_feat_point: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]  # 8-10 use the canonical room position
 select_feat_segment: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 select_feat_horizontal_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
-select_feat_vertical_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+select_feat_v_edge: [0, 1, 2, 3, 4, 5, 6, 7, 8]
 sample_edge_n_min: -1  # [5, 5, 15, 15]
 sample_edge_n_max: -1  # [10, 15, 25, 25]
 
@@ -187,12 +187,12 @@ on_device_train_transform:
         p: 0.5
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_offset: True
-        std_offset: True
+        mean_off: True
+        std_off: True
         mean_dist: True
         angle_source: True
         angle_target: True
-        centroid_direction: True
+        centroid_dir: True
         centroid_dist: True
         normal_angle: True
         log_length: True
@@ -201,7 +201,7 @@ on_device_train_transform:
         log_size: True
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_direction: True
+        centroid_dir: True
         centroid_dist: True
         normal_angle: True
         log_length: True
@@ -213,7 +213,7 @@ on_device_train_transform:
         level: '1+'
         n_min: ${datamodule.sample_edge_n_min}
         n_max: ${datamodule.sample_edge_n_max}
-    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
+    - transform: NAGAddKeysToX  # adapt datamodule.feat_segment if modified
       params:
         level: '1+'
         keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
@@ -235,8 +235,8 @@ on_device_train_transform:
     - transform: NAGSelectColumns
       params:
         level: 'all'
-        key: 'vertical_edge_attr'
-        idx: ${datamodule.select_feat_vertical_edge}
+        key: 'v_edge_attr'
+        idx: ${datamodule.select_feat_v_edge}
     - transform: NAGJitterKey
       params:
         key: 'x'
@@ -249,7 +249,7 @@ on_device_train_transform:
         trunc: ${eval:'2 * ${datamodule.h_edge_feat_jitter}'}
     - transform: NAGJitterKey
       params:
-        key: 'vertical_edge_attr'
+        key: 'v_edge_attr'
         sigma: ${datamodule.v_edge_feat_jitter}
         trunc: ${eval:'2 * ${datamodule.v_edge_feat_jitter}'}
     - transform: NAGColorAutoContrast
@@ -271,7 +271,7 @@ on_device_train_transform:
       params:
         level: 'all'
         p: ${datamodule.v_edge_feat_drop}
-        key: 'vertical_edge_attr'
+        key: 'v_edge_attr'
     - transform: NAGAddSelfLoops
 
 # GPU-based val transforms
@@ -284,12 +284,12 @@ on_device_val_transform:
         n_max: 256
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_offset: True
-        std_offset: True
+        mean_off: True
+        std_off: True
         mean_dist: True
         angle_source: True
         angle_target: True
-        centroid_direction: True
+        centroid_dir: True
         centroid_dist: True
         normal_angle: True
         log_length: True
@@ -298,14 +298,14 @@ on_device_val_transform:
         log_size: True
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_direction: True
+        centroid_dir: True
         centroid_dist: True
         normal_angle: True
         log_length: True
         log_surface: True
         log_volume: True
         log_size: True
-    - transform: NAGAddKeyToX  # adapt datamodule.feat_segment if modified
+    - transform: NAGAddKeysToX  # adapt datamodule.feat_segment if modified
       params:
         level: '1+'
         keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
@@ -327,8 +327,8 @@ on_device_val_transform:
     - transform: NAGSelectColumns
       params:
         level: 'all'
-        key: 'vertical_edge_attr'
-        idx: ${datamodule.select_feat_vertical_edge}
+        key: 'v_edge_attr'
+        idx: ${datamodule.select_feat_v_edge}
     - transform: NAGAddSelfLoops
 
 # GPU-based test transforms

@@ -107,16 +107,29 @@ class BaseDataset(InMemoryDataset):
         the object before modifying it. Besides, the `transform` are
         pre-applied to the in_memory data
     """
-    _LEVEL0_SAVE_KEYS = [
-        'pos', 'x', 'rgb', 'y', 'node_size', 'super_index', 'is_val']
-    _LEVEL0_LOAD_KEYS = [
-        'pos', 'x', 'y', 'node_size', 'super_index', 'is_val']
 
     def __init__(
-            self, root, stage='train', transform=None, pre_transform=None,
-            pre_filter=None, on_device_transform=None, x32=True, y_to_csr=True,
-            x16_edge=True, val_mixed_in_train=False, test_mixed_in_val=False,
-            custom_hash=None, in_memory=False, **kwargs):
+            self,
+            root,
+            stage='train',
+            transform=None,
+            pre_transform=None,
+            pre_filter=None,
+            on_device_transform=None,
+            x32=True,
+            y_to_csr=True,
+            x16_edge=True,
+            val_mixed_in_train=False,
+            test_mixed_in_val=False,
+            custom_hash=None,
+            in_memory=False,
+            point_save_keys=None,
+            point_no_save_keys=None,
+            point_load_keys=None,
+            segment_save_keys=None,
+            segment_no_save_keys=None,
+            segment_load_keys=None,
+            **kwargs):
 
         assert stage in ['train', 'val', 'trainval', 'test']
 
@@ -132,6 +145,12 @@ class BaseDataset(InMemoryDataset):
         self.test_mixed_in_val = test_mixed_in_val
         self.custom_hash = custom_hash
         self.in_memory = in_memory
+        self.point_save_keys = point_save_keys
+        self.point_no_save_keys = point_no_save_keys
+        self.point_load_keys = point_load_keys
+        self.segment_save_keys = segment_save_keys
+        self.segment_no_save_keys = segment_no_save_keys
+        self.segment_load_keys = segment_load_keys
 
         # Sanity check on the cloud ids. Ensures cloud ids are unique
         # across all stages, unless `val_mixed_in_train` or
@@ -171,7 +190,9 @@ class BaseDataset(InMemoryDataset):
         if self.in_memory:
             in_memory_data = [
                 NAG.load(
-                    self.processed_paths[i], keys_low=self._LEVEL0_LOAD_KEYS)
+                    self.processed_paths[i],
+                    keys_low=self.point_load_keys,
+                    keys=self.segment_load_keys)
                 for i in range(len(self))]
             if self.transform is not None:
                 in_memory_data = [self.transform(x) for x in in_memory_data]
@@ -430,8 +451,16 @@ class BaseDataset(InMemoryDataset):
             nag = NAG([data])
 
         # To save some disk space, we discard some level-0 attributes
-        level0_keys = set(nag[0].keys) - set(self._LEVEL0_SAVE_KEYS)
-        nag._list[0] = RemoveKeys(keys=level0_keys)(nag[0])
+        if self.point_save_keys is not None:
+            keys = set(nag[0].keys) - set(self.point_save_keys)
+            nag = NAGRemoveKeys(level=0, keys=keys)(nag)
+        elif self.point_no_save_keys is not None:
+            nag = NAGRemoveKeys(level=0, keys=self.point_no_save_keys)(nag)
+        if self.segment_save_keys is not None:
+            keys = set(nag[1].keys) - set(self.segment_save_keys)
+            nag = NAGRemoveKeys(level='1+', keys=keys)(nag)
+        elif self.segment_no_save_keys is not None:
+            nag = NAGRemoveKeys(level=0, keys=self.segment_no_save_keys)(nag)
 
         # Save pre_transformed data to the processed dir/<path>
         # TODO: is you do not throw away level-0 neighbors, make sure
@@ -515,7 +544,9 @@ class BaseDataset(InMemoryDataset):
 
         # Read the NAG from HDD
         nag = NAG.load(
-            self.processed_paths[idx], keys_low=self._LEVEL0_LOAD_KEYS)
+            self.processed_paths[idx],
+            keys_low=self.point_load_keys,
+            keys=self.segment_load_keys)
 
         # Apply transforms
         nag = nag if self.transform is None else self.transform(nag)
