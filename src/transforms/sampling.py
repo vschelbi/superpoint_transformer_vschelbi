@@ -5,7 +5,7 @@ from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from src.utils import fast_randperm, sparse_sample, knn_2
+from src.utils import fast_randperm, sparse_sample
 from src.transforms import Transform
 from src.data import NAG, NAGBatch
 from src.utils.metrics import atomic_to_histogram

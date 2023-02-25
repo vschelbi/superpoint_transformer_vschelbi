@@ -121,6 +121,16 @@ class Data(PyGData):
             k for k in self.keys
             if k.startswith('edge_') and k not in ['edge_index', 'edge_attr']]
 
+    def raise_if_edge_keys(self):
+        """This is a TEMPORARY, HACKY method to be called wherever
+        edge_keys may cause an issue.
+        """
+        if len(self.edge_keys) > 0:
+            raise NotImplementedError(
+                "Edge keys are not fully supported yet, please consider "
+                "stacking all your `edge_` attributes in `edge_attr` for the "
+                "time being")
+
     @property
     def v_edge_keys(self):
         """All keys starting with `v_edge_`."""
@@ -401,13 +411,7 @@ class Data(PyGData):
         if not self.has_edges:
             self.edge_attr = None
 
-        # Make sure there are no additional edge attributes. Creating
-        # such attributes for the new edges is ambiguous, so we raise an
-        # error if there are any other `edge_` keys beyond `edge_index`
-        # and `edge_attr`
-        assert len(self.edge_keys) == 0, \
-            f"Cannot connect isolated nodes because creating " \
-            f"{self.edge_keys} values for the new edges is ambiguous."
+        self.raise_if_edge_keys()
 
         # Search for isolated nodes and exit if no node is isolated
         is_isolated = self.is_isolated()
@@ -479,6 +483,8 @@ class Data(PyGData):
         NB: returned edges are expressed with i<j by default.
         """
         assert self.has_edges
+
+        self.raise_if_edge_keys()
 
         edge_index, edge_attr = to_trimmed(
             self.edge_index, edge_attr=self.edge_attr, reduce=reduce)
@@ -660,6 +666,9 @@ class Batch(PyGBatch):
         # see: https://github.com/pyg-team/pytorch_geometric/issues/4848
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+
+            for d in data_list:
+                d.raise_if_edge_keys()
 
             # Little trick to prevent Batch.from_data_list from crashing
             # when some Data objects have edges while others don't

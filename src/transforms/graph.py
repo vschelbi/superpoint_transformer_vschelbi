@@ -190,7 +190,6 @@ def _compute_cluster_features(
         mean_keys=[],
         std_keys=[],
         strict=True):
-
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster features on level-0"
     assert nag[0].num_nodes < np.iinfo(np.uint32).max, \
@@ -349,14 +348,11 @@ class DelaunayHorizontalGraph(Transform):
         preserve its shortest edge to avoid it, even if it is larger
         than max_dist
     :param mean_off: bool
-        Whether the mean_off edge feature should be computed? If
-        true, it will be saved under the `edge_mean_off` attribute
+        Whether the mean_off edge feature should be computed
     :param std_off: bool
-        Whether the std_off edge feature should be computed? If
-        true, it will be saved under the `edge_std_off` attribute
+        Whether the std_off edge feature should be computed
     :param mean_dist: bool
-        Whether the mean_dist edge feature should be computed? If
-        true, it will be saved under the `edge_mean_dist` attribute
+        Whether the mean_dist edge feature should be computed
     """
 
     _IN_TYPE = NAG
@@ -603,9 +599,7 @@ class RadiusHorizontalGraph(Transform):
     'subedges' between the segments.
 
     By default, a series of handcrafted edge attributes are computed and
-    stored in the corresponding `Data.edge_<key>`. However, if one only
-    needs a subset of those at train time, one may make use of
-    `SelectColumns` and `NAGSelectColumns`.
+    stored in the corresponding `Data.edge_attr`.
 
     :param k_max: int, List(int)
         Maximum number of neighbors per segment
@@ -638,14 +632,11 @@ class RadiusHorizontalGraph(Transform):
         Whether the source and target subedge point pairs should be
         ordered along the same vector
     :param mean_off: bool
-        Whether the mean_off edge feature should be computed? If
-        true, it will be saved under the `edge_mean_off` attribute
+        Whether the mean_off edge feature should be computed
     :param std_off: bool
-        Whether the std_off edge feature should be computed? If
-        true, it will be saved under the `edge_std_off` attribute
+        Whether the std_off edge feature should be computed
     :param mean_dist: bool
-        Whether the mean_dist edge feature should be computed? If
-        true, it will be saved under the `edge_mean_dist` attribute
+        Whether the mean_dist edge feature should be computed
     """
 
     _IN_TYPE = NAG
@@ -871,6 +862,7 @@ def _horizontal_graph_by_radius_for_single_level(
     super_index = nag.get_super_index(i_level)
 
     # Search neighboring clusters
+    data.raise_if_edge_keys()
     edge_index, distances = cluster_radius_nn(
         nag[0].pos, super_index, k_max=k_max, gap=gap, trim=trim,
         cycles=cycles, chunk_size=chunk_size)
@@ -946,6 +938,13 @@ def _minimalistic_horizontal_edge_features(
         "segment normal vectors. See `src.utils.scatter_pca` to efficiently " \
         "compute PCA on segments"
 
+    if not mean_off or not std_off or not mean_dist:
+        raise NotImplementedError(
+            "For now, 'mean_off', 'std_off' and 'mean_dist' must all be "
+            "computed, since we must store them all into 'edge_attr'. Things"
+            "will be different once we support custom 'edge_<key>' everywhere,"
+            "but not for now.")
+
     # Direction are the pointwise source->target vectors, based on which
     # we will compute superedge descriptors
     offset = points[se_point_index[1]] - points[se_point_index[0]]
@@ -970,13 +969,15 @@ def _minimalistic_horizontal_edge_features(
     se_mean_dist = scatter_mean(dist, se_id, dim=0).sqrt()
 
     # Save superedges and superedge features in the Data object
+    f = []
     if mean_off:
-        data.egde_mean_off = se_mean_off
+        f.append(se_mean_off)
     if std_off:
-        data.egde_std_off = se_std_off
+        f.append(se_std_off)
     if mean_dist:
-        data.egde_mean_dist = se_mean_dist.view(-1, 1)
+        f.append(se_mean_dist.view(-1, 1))
     data.edge_index = se
+    data.edge_attr = torch.cat(f, dim=0)
 
     return data
 
@@ -990,7 +991,7 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
     attributes that cannot be recovered from the corresponding source
     and target node attributes (see `src.utils.to_trimmed`).
 
-    Accepts input edge_<key> to be float16, to alleviate memory use and
+    Accepts input edge_attr to be float16, to alleviate memory use and
     accelerate data loading and transforms. Output edge_<key> will,
     however, be in float32.
 
@@ -1140,25 +1141,27 @@ def _on_the_fly_horizontal_edge_features(
     # Recover the edges between the segments
     se = data.edge_index
 
+    data.raise_if_edge_keys()
+
     assert is_trimmed(se), \
         "Expects the graph to be trimmed, consider using " \
         "`src.utils.to_trimmed()` before computing the features"
-    assert not mean_off or getattr(data, 'edge_mean_off', None) is not None, \
-        "Expects input Data to have a 'edge_mean_off' attribute precomputed " \
+    assert not mean_off or getattr(data, 'edge_attr', None) is not None, \
+        "Expects input Data to have a 'edge_attr' attribute precomputed " \
         "using `_minimalistic_horizontal_edge_features`"
-    assert not std_off or getattr(data, 'edge_std_off', None) is not None, \
-        "Expects input Data to have a 'edge_std_off' attribute precomputed " \
+    assert not std_off or getattr(data, 'edge_attr', None) is not None, \
+        "Expects input Data to have a 'edge_attr' attribute precomputed " \
         "using `_minimalistic_horizontal_edge_features`"
-    assert not mean_dist or getattr(data, 'mean_dist', None) is not None, \
-        "Expects input Data to have a 'mean_dist' attribute precomputed " \
+    assert not mean_dist or getattr(data, 'edge_attr', None) is not None, \
+        "Expects input Data to have a 'edge_attr' attribute precomputed " \
         "using `_minimalistic_horizontal_edge_features`"
     assert not angle_source or getattr(data, 'normal', None) is not None and \
-           getattr(data, 'edge_mean_off', None) is not None, \
-        "Expects input Data to have a 'normal' attribute a 'edge_mean_off' " \
+           getattr(data, 'edge_attr', None) is not None, \
+        "Expects input Data to have a 'normal' attribute a 'edge_attr' " \
         "attribute precomputed using `_minimalistic_horizontal_edge_features`"
     assert not angle_target or getattr(data, 'normal', None) is not None and \
-           getattr(data, 'edge_mean_off', None) is not None, \
-        "Expects input Data to have a 'normal' attribute a 'edge_mean_off' " \
+           getattr(data, 'edge_attr', None) is not None, \
+        "Expects input Data to have a 'normal' attribute a 'edge_attr' " \
         "attribute precomputed using `_minimalistic_horizontal_edge_features`"
     assert not normal_angle or getattr(data, 'normal', None) is not None, \
         "Expects input Data to have a 'normal' attribute"
@@ -1171,22 +1174,24 @@ def _on_the_fly_horizontal_edge_features(
     assert not log_size or getattr(data, 'log_size', None) is not None, \
         "Expects input Data to have a 'log_size' attribute"
 
+    f_list = []
+
     if std_off:
         # Precomputed edge features might be expressed in float16, so we
         # convert them to float32 here
-        f = data.edge_std_off.float()
-        data.edge_std_off = torch.cat((f, f), dim=0)
+        f = data.edge_attr[:, 3:6].float()
+        f_list.append(torch.cat((f, f), dim=0))
 
     if mean_dist:
         # Precomputed edge features might be expressed in float16, so we
         # convert them to float32 here
-        f = data.edge_mean_dist.float()
-        data.edge_mean_dist = torch.cat((f, f), dim=0).view(-1, 1)
+        f = data.edge_attr[:, 6].float().view(-1, 1)
+        f_list.append(torch.cat((f, f), dim=0))
 
     if mean_off or angle_source or angle_target:
         # Precomputed edge features might be expressed in float16, so we
         # convert them to float32 here
-        se_mean_off = data.edge_mean_off.float()
+        se_mean_off = data.edge_attr[:, :3].float()
 
         # Compute the mean subedge (normalized) direction
         se_direction = se_mean_off / torch.linalg.norm(
@@ -1196,36 +1201,36 @@ def _on_the_fly_horizontal_edge_features(
         se_direction[se_direction.isnan()] = 0
         se_direction = se_direction.clip(-1, 1)
 
+        if mean_off:
+            f_list.append(torch.cat((se_mean_off, -se_mean_off), dim=0))
+
         if angle_source:
             f = (se_direction * data.normal[se[0]]).sum(dim=1).abs()
-            data.edge_angle_source = torch.cat((f, f), dim=0).view(-1, 1)
+            f_list.append(torch.cat((f, f), dim=0).view(-1, 1))
 
         if angle_target:
             f = (se_direction * data.normal[se[1]]).sum(dim=1).abs()
-            data.edge_angle_target = torch.cat((f, f), dim=0).view(-1, 1)
-
-        if mean_off:
-            data.edge_mean_off = torch.cat((se_mean_off, -se_mean_off), dim=0)
+            f_list.append(torch.cat((f, f), dim=0).view(-1, 1))
 
     if normal_angle:
         f = (data.normal[se[0]] * data.normal[se[1]]).sum(dim=1).abs()
-        data.edge_normal_angle = torch.cat((f, f), dim=0).view(-1, 1)
+        f_list.append(torch.cat((f, f), dim=0).view(-1, 1))
 
     if log_length:
         f = data.log_length[se[0]] - data.log_length[se[1]]
-        data.edge_log_length = torch.cat((f, -f), dim=0).view(-1, 1)
+        f_list.append(torch.cat((f, -f), dim=0).view(-1, 1))
 
     if log_surface:
         f = data.log_surface[se[0]] - data.log_surface[se[1]]
-        data.edge_log_surface = torch.cat((f, -f), dim=0).view(-1, 1)
+        f_list.append(torch.cat((f, -f), dim=0).view(-1, 1))
 
     if log_volume:
         f = data.log_volume[se[0]] - data.log_volume[se[1]]
-        data.edge_log_volume = torch.cat((f, -f), dim=0).view(-1, 1)
+        f_list.append(torch.cat((f, -f), dim=0).view(-1, 1))
 
     if log_size:
         f = data.log_size[se[0]] - data.log_size[se[1]]
-        data.edge_log_size = torch.cat((f, -f), dim=0).view(-1, 1)
+        f_list.append(torch.cat((f, -f), dim=0).view(-1, 1))
 
     if centroid_dir or centroid_dist:
         # Compute the distance and direction between the segments'
@@ -1240,15 +1245,19 @@ def _on_the_fly_horizontal_edge_features(
         se_centroid_dir = se_centroid_dir.clip(-1, 1)
 
         if centroid_dir:
-            data.edge_centroid_dir = torch.cat((
-                se_centroid_dir, -se_centroid_dir), dim=0)
+            f_list.append(torch.cat((se_centroid_dir, -se_centroid_dir), dim=0))
 
         if centroid_dist:
-            data.edge_centroid_dist = torch.cat((
-                se_centroid_dist, se_centroid_dist), dim=0)
+            f_list.append(torch.cat((se_centroid_dist, se_centroid_dist), dim=0))
 
-    # Update the edge_index with j->i edges too
+    # Update the edge_index with j->i edges
     data.edge_index = torch.cat((se, se.flip(0)), dim=1)
+
+    # Update all edge features into edge_attr and remove all other
+    # edge_<key> to save memory
+    for k in ['edge_attr'] + data.edge_keys:
+        data[k] = None
+    data.edge_attr = torch.cat(f_list, dim=1)
 
     return data
 
@@ -1373,6 +1382,8 @@ def _on_the_fly_vertical_edge_features(
         assert not log_size or getattr(d, 'log_size', None) is not None, \
             "Expects input Data to have a 'log_size' attribute"
 
+    f_list = []
+
     if centroid_dir or centroid_dist:
         # Compute the distance and direction between the child and
         # parent segments' centroids
@@ -1386,27 +1397,33 @@ def _on_the_fly_vertical_edge_features(
         ve_centroid_dir = ve_centroid_dir.clip(-1, 1)
 
         if centroid_dir:
-            data_child.v_edge_centroid_dir = ve_centroid_dir
+            f_list.append(ve_centroid_dir)
 
         if centroid_dist:
-            data_child.v_edge_centroid_dist = ve_centroid_dist.view(-1, 1)
+            f_list.append(ve_centroid_dist.view(-1, 1))
 
     if normal_angle:
         f = (data_child.normal * data_parent.normal[idx]).sum(dim=1).abs()
-        data_child.v_edge_normal_angle = f.view(-1, 1)
+        f_list.append(f.view(-1, 1))
 
     if log_length:
         f = data_parent.log_length[idx] - data_child.log_length
-        data_child.v_edge_log_length = f.view(-1, 1)
+        f_list.append(f.view(-1, 1))
+
     if log_surface:
         f = data_parent.log_surface[idx] - data_child.log_surface
-        data_child.v_edge_log_surface = f.view(-1, 1)
+        f_list.append(f.view(-1, 1))
+
     if log_volume:
         f = data_parent.log_volume[idx] - data_child.log_volume
-        data_child.v_edge_log_volume = f.view(-1, 1)
+        f_list.append(f.view(-1, 1))
+
     if log_size:
         f = data_parent.log_size[idx] - data_child.log_size
-        data_child.v_edge_log_size = f.view(-1, 1)
+        f_list.append(f.view(-1, 1))
+
+    # Stack all the vertical edge features into the child 'v_edge_attr'
+    data_child.v_edge_attr = torch.cat(f_list, dim=1)
 
     return data_child
 
@@ -1428,12 +1445,13 @@ class NAGAddSelfLoops(Transform):
 
             # Recover edges and attributes
             num_nodes = nag[i_level].num_nodes
-            edge_index_old = nag[i_level].edge_index
-            edge_attr = getattr(nag[i_level], 'edge_attr', None)
+            edge_index = nag[i_level].edge_index
+            edge_attr = nag[i_level].edge_attr
+            nag[i_level].raise_if_edge_keys()
 
             # Add self-loops
             edge_index, edge_attr = add_self_loops(
-                edge_index_old,
+                edge_index,
                 edge_attr=edge_attr,
                 num_nodes=num_nodes,
                 fill_value=0)
@@ -1441,14 +1459,6 @@ class NAGAddSelfLoops(Transform):
             # Update the edges and attributes
             nag[i_level].edge_index = edge_index
             nag[i_level].edge_attr = edge_attr
-
-            # Set any other 'edge_' attributes to zeros too
-            for key in nag[i_level].edge_keys:
-                nag[i_level][key] = add_self_loops(
-                    edge_index_old,
-                    edge_attr=nag[i_level][key],
-                    num_nodes=num_nodes,
-                    fill_value=0)[1]
 
         return nag
 

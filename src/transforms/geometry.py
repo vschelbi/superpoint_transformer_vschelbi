@@ -91,7 +91,7 @@ class RandomTiltAndRotate(Transform):
             # TODO: this is an ugly, hardcoded patch to deal with
             #  features assumedly created by
             #  _minimalistic_horizontal_edge_features........
-            if getattr(nag[i_level], 'edge_attr', None) is not None:
+            if nag[i_level].edge_attr is not None:
                 edge_attr = nag[i_level].edge_attr
                 edge_attr[:, 0:3] = (edge_attr[:, 0:3].float() @ R.T).half()  # mean subedge offset, float16 mm not supported on CPU
                 edge_attr[:, 3:6] = (edge_attr[:, 3:6].float() @ R.T).half()  # std subedge offset, float16 mm not supported on CPU
@@ -205,7 +205,7 @@ class RandomAxisFlip(Transform):
             # TODO: this is an ugly, hardcoded patch to deal with
             #  features assumedly created by
             #  _minimalistic_horizontal_edge_features........
-            if getattr(nag[i_level], 'edge_attr', None) is not None:
+            if nag[i_level].edge_attr is not None:
                 edge_attr = nag[i_level].edge_attr
                 edge_attr[:, 0:3][:, axis] *= -1  # mean subedge offset
                 edge_attr[:, 3:6][:, axis] *= -1  # std subedge offset
