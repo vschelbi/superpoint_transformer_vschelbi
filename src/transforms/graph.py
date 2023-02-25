@@ -977,7 +977,7 @@ def _minimalistic_horizontal_edge_features(
     if mean_dist:
         f.append(se_mean_dist.view(-1, 1))
     data.edge_index = se
-    data.edge_attr = torch.cat(f, dim=0)
+    data.edge_attr = torch.cat(f, dim=1)
 
     return data
 
