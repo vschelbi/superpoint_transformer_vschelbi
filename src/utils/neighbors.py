@@ -372,7 +372,7 @@ def cluster_radius_nn(
     #  we could accelerate things by randomly sampling in the clusters
     anchors = scatter_nearest_neighbor(
         x_points, idx, edge_index, cycles=cycles, chunk_size=chunk_size)[1]
-    d_nn = torch.linalg.norm(x_points[anchors[0]] - x_points[anchors[1]], dim=1)
+    d_nn = (x_points[anchors[0]] - x_points[anchors[1]]).norm(dim=1)
 
     # Trim edges wrt the anchor points distance
     in_gap_range = d_nn <= gap

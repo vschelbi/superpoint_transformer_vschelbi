@@ -524,8 +524,8 @@ def _horizontal_graph_by_delaunay(
     # shortest edge to avoid it, even if it is larger than max_dist
     if max_dist > 0:
         # Identify the edges that are too long
-        dist = torch.linalg.norm(
-            nag[0].pos[edges_point[1]] - nag[0].pos[edges_point[0]], dim=1)
+        dist = (
+            nag[0].pos[edges_point[1]] - nag[0].pos[edges_point[0]]).norm(dim=1)
         too_far = dist > max_dist
 
         # Recover the corresponding cluster indices for each edge
@@ -953,7 +953,7 @@ def _minimalistic_horizontal_edge_features(
     # sqrt of the metric distance. This assumes coordinates are in meter
     # and that we are mostly interested in the range [1, 100]. Might
     # want to change this if your dataset is different
-    dist = torch.linalg.norm(offset, dim=1)
+    dist = offset.norm(dim=1)
 
     # Compute mean subedge direction
     se_mean_off = scatter_mean(offset, se_id, dim=0)
@@ -1194,8 +1194,7 @@ def _on_the_fly_horizontal_edge_features(
         se_mean_off = data.edge_attr[:, :3].float()
 
         # Compute the mean subedge (normalized) direction
-        se_direction = se_mean_off / torch.linalg.norm(
-            se_mean_off, dim=1).view(-1, 1)
+        se_direction = se_mean_off / se_mean_off.norm(dim=1).view(-1, 1)
 
         # Sanity checks on normalized directions
         se_direction[se_direction.isnan()] = 0
@@ -1239,7 +1238,7 @@ def _on_the_fly_horizontal_edge_features(
         # Compute the distance and direction between the segments'
         # centroids
         se_centroid_dir = data.pos[se[1]] - data.pos[se[0]]
-        se_centroid_dist = torch.linalg.norm(se_centroid_dir, dim=1)
+        se_centroid_dist = se_centroid_dir.norm(dim=1)
         se_centroid_dir /= se_centroid_dist.view(-1, 1)
         se_centroid_dist = se_centroid_dist.sqrt()
 
@@ -1392,7 +1391,7 @@ def _on_the_fly_vertical_edge_features(
         # Compute the distance and direction between the child and
         # parent segments' centroids
         ve_centroid_dir = data_parent.pos[idx] - data_child.pos
-        ve_centroid_dist = torch.linalg.norm(ve_centroid_dir, dim=1)
+        ve_centroid_dist = ve_centroid_dir.norm(dim=1)
         ve_centroid_dir /= ve_centroid_dist.view(-1, 1)
         ve_centroid_dist = ve_centroid_dist.sqrt()
 

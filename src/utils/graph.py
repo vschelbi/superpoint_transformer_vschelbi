@@ -346,7 +346,7 @@ def subedges(
         s_mean = scatter_mean(S_points, S_uid, dim=0)
         t_min = T_points[scatter_min(T_proj, T_uid, dim=0)[1]]
         st_u = t_min - s_mean
-        st_u /= torch.linalg.norm(st_u, dim=1).view(-1, 1)
+        st_u /= st_u.norm(dim=1).view(-1, 1)
         to_flip = torch.where((s_v * t_v).sum(dim=1) <= (s_v * st_u).sum(dim=1))[0]
         t_v[to_flip] *= -1
     elif source_pc_sort:

@@ -423,7 +423,7 @@ class Data(PyGData):
         # NB: we remove the nodes themselves from their own neighborhood
         high = self.pos.max(dim=0).values
         low = self.pos.min(dim=0).values
-        r_max = torch.linalg.norm(high - low)
+        r_max = (high - low).norm()
         neighbors, distances = knn_2(
             self.pos, self.pos[is_out], k + 1, r_max=r_max)
         distances = distances[:, 1:]
@@ -448,7 +448,7 @@ class Data(PyGData):
         w = self.edge_attr
         s = edge_index_old[0]
         t = edge_index_old[1]
-        d = torch.linalg.norm(self.pos[s] - self.pos[t], dim=1)
+        d = (self.pos[s] - self.pos[t]).norm(dim=1)
         d_1 = torch.vstack((d, torch.ones_like(d))).T
 
         # Least square on d_1.x = w  (ie d.a + b = w)

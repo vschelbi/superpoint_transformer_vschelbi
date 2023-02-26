@@ -697,7 +697,7 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         idx_select_list = []
         pos = nag[i_level].pos
         for i in idx:
-            distance = torch.linalg.norm(pos - pos[i].view(1, -1), dim=1)
+            distance = (pos - pos[i].view(1, -1)).norm(dim=1)
             idx_select_list.append(torch.where(distance < self.r)[0])
         idx_select = torch.cat(idx_select_list).unique()
 
