@@ -12,6 +12,8 @@ num_classes: 13
 fold: 5
 trainval: True
 val_on_test: True
+
+# I/O parameters
 in_memory: True  # set to True to load all processed S3DIS in RAM. This may accelerate training but CAREFUL not to modify the data in place !
 
 # Features that will be computed, saved, loaded for points and segments
