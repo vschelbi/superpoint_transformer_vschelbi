@@ -183,3 +183,7 @@ on_device_val_transform:
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
+
+    # Add a `node_size` attribute to all segments, this is needed for
+    # segment-wise position normalization with UnitSphereNorm
+    - transform: NodeSize

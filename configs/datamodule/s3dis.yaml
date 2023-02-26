@@ -371,6 +371,10 @@ on_device_train_transform:
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
 
+    # Add a `node_size` attribute to all segments, this is needed for
+    # segment-wise position normalization with UnitSphereNorm
+    - transform: NodeSize
+
 # GPU-based val transforms
 on_device_val_transform:
 
@@ -432,6 +436,10 @@ on_device_val_transform:
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
+
+    # Add a `node_size` attribute to all segments, this is needed for
+    # segment-wise position normalization with UnitSphereNorm
+    - transform: NodeSize
 
 # GPU-based test transforms
 on_device_test_transform: ${datamodule.on_device_val_transform}
