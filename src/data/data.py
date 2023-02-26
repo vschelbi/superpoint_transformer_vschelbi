@@ -574,8 +574,6 @@ class Data(PyGData):
                     save_tensor((val * 255).byte(), f, k, fp_dtype=fp_dtype)
                 else:
                     save_tensor(val.byte(), f, k, fp_dtype=fp_dtype)
-            elif k == 'edge_attr':
-                save_tensor(val, f, k, fp_dtype=fp_dtype)
             elif isinstance(val, torch.Tensor):
                 save_tensor(val, f, k, fp_dtype=fp_dtype)
             else:
