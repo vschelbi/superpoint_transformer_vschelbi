@@ -9,10 +9,10 @@ v_edge_hf: ???  # vertical edge features used for training
 
 # The number of input channels for points, segments and horizontal and
 # vertical edges
-num_hf_point: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.point_hf}])'}
-num_hf_segment: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.segment_hf}])'}
-num_hf_edge: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.edge_hf}])'}
-num_hf_v_edge: ${eval:'sum([${datamodule.features}[k] for k in ${datamodule.v_edge_hf}])'}
+num_hf_point: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.point_hf}])'}
+num_hf_segment: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.segment_hf}])'}
+num_hf_edge: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.edge_hf}])'}
+num_hf_v_edge: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.v_edge_hf}])'}
 
 # List of level-0 (points) and level-1+ Data keys that need to be saved
 # or loaded from disk. This saves training time, loading only necessary
@@ -26,7 +26,7 @@ segment_load_keys: ${eval:'${datamodule.segment_basic_load_keys} + ${datamodule.
 
 # Comprehensive list of feature sizes, to be used to deduce feature size
 # from name
-features:
+feat_size:
     pos: 3
     pos_room: 3
     rgb: 3
