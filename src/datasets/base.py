@@ -8,7 +8,7 @@ from tqdm.auto import tqdm as tq
 from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.dataset import _repr
 from src.data import NAG
-from src.transforms import RemoveKeys, NAGSelectByKey, NAGRemoveKeys
+from src.transforms import NAGSelectByKey, NAGRemoveKeys
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)

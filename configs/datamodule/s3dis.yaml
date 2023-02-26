@@ -306,12 +306,12 @@ on_device_train_transform:
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${eval:'[k for k in ${datamodule.point_hf} if k is not "rgb"]'}
+        keys: ${eval:'[k for k in ${datamodule.point_hf} if k != "rgb"]'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${eval:'[k for k in ${datamodule.segment_hf} if k is not "rgb"]'}
+        keys: ${eval:'[k for k in ${datamodule.segment_hf} if k != "rgb"]'}
         to: 'x'
 
     # Add some noise and randomly some point, node and edge features

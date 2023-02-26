@@ -1070,8 +1070,6 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
 
     def _process(self, nag):
         for i_level in range(1, nag.num_levels):
-            print(f"level: {i_level}")
-            print(nag._list[i_level])
             nag._list[i_level] = _on_the_fly_horizontal_edge_features(
                 nag[i_level],
                 mean_off=self.mean_off,
