@@ -83,7 +83,6 @@ sample_point_min: 32
 sample_point_max: 128
 sample_graph_r: 7  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
-sample_graph_i_level: 1
 sample_graph_disjoint: True
 sample_edge_n_min: -1  # [5, 5, 15, 15]
 sample_edge_n_max: -1  # [10, 15, 25, 25]
@@ -236,7 +235,7 @@ on_device_train_transform:
       params:
         r: ${datamodule.sample_graph_r}
         k: ${datamodule.sample_graph_k}
-        i_level: ${datamodule.sample_graph_i_level}
+        i_level: 1
         by_size: False
         by_class: False
         disjoint: ${datamodule.sample_graph_disjoint}

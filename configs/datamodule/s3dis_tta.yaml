@@ -9,101 +9,125 @@ tta:
     sample_point_min: 128
     sample_point_max: 256
     sample_segment_ratio: 0
-    sample_edge_n_min: 10
-    sample_edge_n_max: 25
+    sample_segment_by_size: False
+    sample_segment_by_class: False
+    sample_graph_r: -1  # set to r<=0 to skip SampleRadiusSubgraphs
+    sample_graph_k: ${datamodule.sample_graph_k}
+    sample_graph_disjoint: ${datamodule.sample_graph_disjoint}
+    sample_edge_n_min: ${datamodule.sample_edge_n_min}
+    sample_edge_n_max: ${datamodule.sample_edge_n_max}
 
     # Augmentations parameterization
     pos_jitter: 0
-    tilt_n_rotate_phi: 0.2
-    tilt_n_rotate_theta: 180
-    anisotropic_scaling: 0.2
+    tilt_n_rotate_phi: ${datamodule.tilt_n_rotate_phi}
+    tilt_n_rotate_theta: ${datamodule.tilt_n_rotate_theta}
+    anisotropic_scaling: ${datamodule.anisotropic_scaling}
+    rgb_jitter: 0
+    rgb_autocontrast: ${datamodule.rgb_autocontrast}
+    rgb_drop: ${datamodule.rgb_drop}
     node_feat_jitter: 0
     h_edge_feat_jitter: 0
     v_edge_feat_jitter: 0
-    node_feat_drop: 0
+    node_feat_drop: ${datamodule.node_feat_drop}
     h_edge_feat_drop: 0
     v_edge_feat_drop: 0
 
 # GPU-based val transforms
 on_device_val_transform:
+
+    # Apply sampling transforms first to reduce the number of nodes and
+    # edges. These operations are compute-intensive and are the reason
+    # why these transforms are not performed on CPU
     - transform: SampleSubNodes
       params:
         low: 0
         high: 1
         n_min: ${datamodule.tta.sample_point_min}
         n_max: ${datamodule.tta.sample_point_max}
+    - transform: SampleRadiusSubgraphs
+      params:
+        r: ${datamodule.tta.sample_graph_r}
+        k: ${datamodule.tta.sample_graph_k}
+        i_level: 1
+        by_size: False
+        by_class: False
+        disjoint: ${datamodule.tta.sample_graph_disjoint}
     - transform: SampleSegments
       params:
         ratio: ${datamodule.tta.sample_segment_ratio}
-        by_size: False
-        by_class: False
-    - transform: NAGJitterKey  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+        by_size: ${datamodule.tta.sample_segment_by_size}
+        by_class: ${datamodule.tta.sample_segment_by_class}
+
+    # Apply geometric transforms affecting position, offsets, normals
+    # before calling transforms relying on those, such as on-the-fly
+    # edge features computation
+    - transform: NAGJitterKey
       params:
         key: 'pos'
         sigma: ${datamodule.tta.pos_jitter}
         trunc: ${datamodule.voxel}
-    - transform: RandomTiltAndRotate  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+    - transform: RandomTiltAndRotate
       params:
         phi: ${datamodule.tta.tilt_n_rotate_phi}
         theta: ${datamodule.tta.tilt_n_rotate_theta}
-    - transform: RandomAnisotropicScale  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+    - transform: RandomAnisotropicScale
       params:
         delta: ${datamodule.tta.anisotropic_scaling}
-    - transform: RandomAxisFlip  # before OnTheFlyHorizontalEdgeFeatures to affect RPEs
+    - transform: RandomAxisFlip
       params:
         p: 0.5
+
+    # Compute some horizontal and vertical edges on-the-fly. Those are
+    # only computed now since they can be deduced from point and node
+    # attributes. Besides, the OnTheFlyHorizontalEdgeFeatures transform
+    # takes a trimmed graph as input and doubles its size, creating j->i
+    # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: True
-        std_off: True
-        mean_dist: True
-        angle_source: True
-        angle_target: True
-        centroid_dir: True
-        centroid_dist: True
-        normal_angle: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        log_size: True
+        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
+        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
+        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
+        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
+        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: True
-        centroid_dist: True
-        normal_angle: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        log_size: True
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+
+    # Edge sampling is only performed after the horizontal graph is
+    # untrimmed by OnTheFlyHorizontalEdgeFeatures
     - transform: SampleEdges
       params:
         level: '1+'
         n_min: ${datamodule.tta.sample_edge_n_min}
         n_max: ${datamodule.tta.sample_edge_n_max}
-    - transform: NAGAddKeysTo  # adapt datamodule.feat_segment if modified
-      params:
-        level: '1+'
-        keys: ['log_length', 'log_surface', 'log_volume', 'normal', 'log_size']
-    - transform: NAGSelectColumns
+
+    # Move all point and segment features to 'x', except for "rgb", on
+    # which we want to apply specific transforms
+    - transform: NAGAddKeysTo
       params:
         level: 0
-        key: 'x'
-        idx: ${datamodule.select_feat_point}
-    - transform: NAGSelectColumns
+        keys: ${eval:'[k for k in ${datamodule.point_hf} if k is not "rgb"]'}
+        to: 'x'
+    - transform: NAGAddKeysTo
       params:
         level: '1+'
-        key: 'x'
-        idx: ${datamodule.select_feat_segment}
-    - transform: NAGSelectColumns
-      params:
-        level: '1+'
-        key: 'edge_attr'
-        idx: ${datamodule.select_feat_horizontal_edge}
-    - transform: NAGSelectColumns
-      params:
-        level: 'all'
-        key: 'v_edge_attr'
-        idx: ${datamodule.select_feat_v_edge}
+        keys: ${eval:'[k for k in ${datamodule.segment_hf} if k is not "rgb"]'}
+        to: 'x'
+
+    # Add some noise and randomly some point, node and edge features
     - transform: NAGJitterKey
       params:
         key: 'x'
@@ -119,24 +143,43 @@ on_device_val_transform:
         key: 'v_edge_attr'
         sigma: ${datamodule.tta.v_edge_feat_jitter}
         trunc: ${eval:'2 * ${datamodule.tta.v_edge_feat_jitter}'}
-    - transform: NAGColorAutoContrast
-      params:
-        level: all
-        p: 0.5
-        x_idx: 0
     - transform: NAGDropoutColumns
       params:
-        level: 'all'
-        p: ${datamodule.node_feat_drop}
+        p: ${datamodule.tta.node_feat_drop}
         key: 'x'
     - transform: NAGDropoutColumns
       params:
-        level: 'all'
-        p: ${datamodule.h_edge_feat_drop}
+        p: ${datamodule.tta.h_edge_feat_drop}
         key: 'edge_attr'
     - transform: NAGDropoutColumns
       params:
-        level: 'all'
-        p: ${datamodule.v_edge_feat_drop}
+        p: ${datamodule.tta.v_edge_feat_drop}
         key: 'v_edge_attr'
+
+    # RGB-specific transforms. In particular, the color dropout will
+    # switch off all three color channels together, instead of just one
+    # by one with
+#    - transform: NAGColorNormalize
+#      params:
+#        level: 'all'
+    - transform: NAGJitterKey
+      params:
+        key: 'rgb'
+        sigma: ${datamodule.tta.rgb_jitter}
+        trunc: ${eval:'2 * ${datamodule.tta.rgb_jitter}'}
+    - transform: NAGColorAutoContrast
+      params:
+        p: ${datamodule.tta.rgb_autocontrast}
+    - transform: NAGColorDrop
+      params:
+        p: ${datamodule.tta.rgb_drop}
+
+    # Finally move RGB to node and segment features, if need be
+    - transform: NAGAddKeysTo
+      params:
+        keys: 'rgb'
+        to: 'x'
+        strict: False
+
+    # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
