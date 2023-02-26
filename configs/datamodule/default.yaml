@@ -33,6 +33,6 @@ tta_val: False
 # DataLoader parameters. Would be good to have them live in another file
 dataloader:
     batch_size: 4
-    num_workers: 2
+    num_workers: 4
     pin_memory: True
     persistent_workers: True
