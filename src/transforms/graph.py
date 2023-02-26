@@ -964,6 +964,7 @@ def _minimalistic_horizontal_edge_features(
     v = (offset * base[:, 0]).sum(dim=1).view(-1, 1)
     w = (offset * base[:, 0]).sum(dim=1).view(-1, 1)
     se_std_off = scatter_std(torch.cat((u, v, w), dim=1), se_id, dim=0)
+    se_std_off = se_std_off.clip(-2, 2)
 
     # Compute mean subedge distance
     se_mean_dist = scatter_mean(dist, se_id, dim=0).sqrt()
