@@ -369,7 +369,7 @@ class Data(PyGData):
                 data[key] = item[idx]
 
             elif self.has_edges and is_tensor and is_edge_size and \
-                    key in self.edge_keys:
+                    key in ['edge_attr'] + self.edge_keys:
                 data[key] = item[idx_edge]
 
             # Slice other tensor elements containing num_nodes elements
