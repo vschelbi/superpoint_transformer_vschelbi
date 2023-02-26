@@ -15,8 +15,8 @@ num_classes: ???
 
 # I/O parameters
 save_y_to_csr: True  # save 'y' label histograms using a custom CSR format to save memory and I/O time
-save_pos_dtype: torch.float32  # dtype to which 'pos' will be saved on disk
-save_fp_dtype: torch.float16  # dtype to which all other floating point tensors will be saved to disk
+save_pos_dtype: 'float32'  # dtype to which 'pos' will be saved on disk
+save_fp_dtype: 'float16'  # dtype to which all other floating point tensors will be saved to disk
 in_memory: False
 
 # Transforms

@@ -7,7 +7,7 @@ __all__ = [
     'tensor_idx', 'is_sorted', 'has_duplicates', 'is_dense', 'is_permutation',
     'arange_interleave', 'print_tensor_info', 'cast_to_optimal_integer_type',
     'cast_numpyfy', 'numpyfy', 'torchify', 'torch_to_numpy', 'fast_randperm',
-    'fast_zeros', 'fast_repeat']
+    'fast_zeros', 'fast_repeat', 'string_to_dtype']
 
 
 def tensor_idx(idx, device=None):
@@ -124,6 +124,31 @@ def print_tensor_info(a, name):
     print(msg)
 
 
+def string_to_dtype(string):
+    if isinstance(string, torch.dtype):
+        return string
+    assert isinstance(string, str)
+    if string in ('half', 'float16'):
+        return torch.float16
+    if string in ('float', 'float32'):
+        return torch.float32
+    if string in ('double', 'float64'):
+        return torch.float64
+    if string == 'bool':
+        return torch.bool
+    if string in ('byte', 'uint8'):
+        return torch.uint8
+    if string in ('byte', 'int8'):
+        return torch.int8
+    if string in ('short', 'int16'):
+        return torch.float16
+    if string in ('int', 'int32'):
+        return torch.float32
+    if string in ('long', 'int64'):
+        return torch.float64
+    raise f"Unknown dtype='{string}'"
+
+
 def cast_to_optimal_integer_type(a):
     """Cast an integer tensor to the smallest possible integer dtype
     preserving its precision.
@@ -146,10 +171,11 @@ def cast_numpyfy(a, fp_dtype=torch.float):
     possible integer dtype preserving their precision. Floating point
     tensors will be cast to `fp_dtype`.
     """
-    assert fp_dtype in (torch.float16, torch.float32, torch.float64)
-
     if not isinstance(a, torch.Tensor):
         return numpyfy(a)
+
+    # Convert string dtype to torch dtype, if need be
+    fp_dtype = string_to_dtype(fp_dtype)
 
     # Rule out non-floating-point tensors
     if not a.is_floating_point():
