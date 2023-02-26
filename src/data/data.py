@@ -58,6 +58,11 @@ class Data(PyGData):
         """Index of the superpoint each point belongs to."""
         return self['super_index'] if 'super_index' in self._store else None
 
+    @property
+    def v_edge_attr(self):
+        """Vertical edge features."""
+        return self['v_edge_attr'] if 'v_edge_attr' in self._store else None
+
     def norm_index(self, mode='graph'):
         """Index to be used for LayerNorm.
 
