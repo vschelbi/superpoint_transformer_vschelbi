@@ -152,7 +152,7 @@ def cast_numpyfy(a, fp_dtype=torch.float):
         return numpyfy(a)
 
     # Rule out non-floating-point tensors
-    if a.is_floating_point():
+    if not a.is_floating_point():
         return numpyfy(cast_to_optimal_integer_type(a))
 
     # Cast floating point tensors
