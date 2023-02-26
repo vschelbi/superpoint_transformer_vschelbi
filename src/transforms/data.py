@@ -36,7 +36,7 @@ class NAGToData(Transform):
 class RemoveKeys(Transform):
     """Remove attributes of a Data object based on their name.
 
-    :param keys: list(str)
+    :param keys: str of list(str)
         List of attribute names
     :param strict: bool
         If True, will raise an exception if an attribute from key is
@@ -46,7 +46,7 @@ class RemoveKeys(Transform):
     _NO_REPR = ['strict']
 
     def __init__(self, keys=[], strict=False):
-        self.keys = keys
+        self.keys = [keys] if isinstance(keys, str) else keys
         self.strict = strict
 
     def _process(self, data):
@@ -66,7 +66,7 @@ class NAGRemoveKeys(Transform):
         Level at which to remove attributes. Can be an int or a str. If
         the latter, 'all' will apply on all levels, 'i+' will apply on
         level-i and above, 'i-' will apply on level-i and below
-    :param keys: list(str)
+    :param keys: str or list(str)
         List of attribute names
     :param strict: bool=False
         If True, will raise an exception if an attribute from key is
@@ -80,7 +80,7 @@ class NAGRemoveKeys(Transform):
     def __init__(self, level='all', keys=[], strict=False):
         assert isinstance(level, (int, str))
         self.level = level
-        self.keys = keys
+        self.keys = [keys] if isinstance(keys, str) else keys
         self.strict = strict
 
     def _process(self, nag):
@@ -124,7 +124,7 @@ class AddKeysTo(Transform):
     _NO_REPR = ['strict']
 
     def __init__(self, keys=None, to='x', strict=True, delete_after=True):
-        self.keys = keys
+        self.keys = [keys] if isinstance(keys, str) else keys
         self.to = to
         self.strict = strict
         self.delete_after = delete_after
@@ -205,7 +205,7 @@ class NAGAddKeysTo(Transform):
             self, level='all', keys=None, to='x', strict=True,
             delete_after=True):
         self.level = level
-        self.keys = keys
+        self.keys = [keys] if isinstance(keys, str) else keys
         self.to = to
         self.strict = strict
         self.delete_after = delete_after
