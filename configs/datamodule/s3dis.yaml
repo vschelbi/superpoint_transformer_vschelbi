@@ -3,17 +3,16 @@ defaults:
 
 _target_: src.datamodules.s3dis.S3DISDataModule
 
-fold: 5
-trainval: True
-val_on_test: True
-in_memory: True  # set to True to load all processed S3DIS in RAM. This may accelerate training but CAREFUL not to modify the data in place !
-
 dataloader:
     batch_size: 1
 
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 13
+fold: 5
+trainval: True
+val_on_test: True
+in_memory: True  # set to True to load all processed S3DIS in RAM. This may accelerate training but CAREFUL not to modify the data in place !
 
 # Features that will be computed, saved, loaded for points and segments
 partition_hf:  # point features used for the partition
