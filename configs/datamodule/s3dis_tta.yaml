@@ -58,6 +58,10 @@ on_device_val_transform:
         by_size: ${datamodule.tta.sample_segment_by_size}
         by_class: ${datamodule.tta.sample_segment_by_class}
 
+    # Cast all attributes to either float or long. Doing this only now
+    # allows speeding up disk I/O and CPU->GPU transfer
+    - transform: NAGCast
+
     # Apply geometric transforms affecting position, offsets, normals
     # before calling transforms relying on those, such as on-the-fly
     # edge features computation

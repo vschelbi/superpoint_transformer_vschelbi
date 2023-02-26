@@ -527,46 +527,64 @@ class Data(PyGData):
                 return False
         return True
 
-    def save(self, f, x32=True, y_to_csr=True, x16_edge=True):
+    def save(
+            self,
+            f,
+            y_to_csr=True,
+            pos_dtype=torch.float,
+            fp_dtype=torch.float):
         """Save Data to HDF5 file.
 
         :param f: h5 file path of h5py.File or h5py.Group
-        :param x32: bool
-            Convert 64-bit data to 32-bit before saving.
         :param y_to_csr: bool
             Convert 'y' to CSR format before saving. Only applies if
             'y' is a 2D histogram
-        :param x16_edge: bool
-            Convert edge_attr to 16-bit before saving.
+        :param pos_dtype: torch dtype
+            Data type to which 'pos' should be cast before saving. The
+            reason for this separate treatment of 'pos' is that global
+            coordinates may be too large and casting to 'fp_dtype' may
+            result in hurtful precision loss
+        :param fp_dtype: torch dtype
+            Data type to which floating point tensors should be cast
+            before saving
         :return:
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'w') as file:
-                self.save(file, x32=x32, y_to_csr=y_to_csr, x16_edge=x16_edge)
+                self.save(
+                    file,
+                    y_to_csr=y_to_csr,
+                    pos_dtype=pos_dtype,
+                    fp_dtype=fp_dtype)
             return
 
         assert isinstance(f, (h5py.File, h5py.Group))
 
         for k, val in self.items():
-            if k == 'y' and val.dim() > 1 and y_to_csr:
+            if k == 'pos':
+                save_tensor(val, f, k, fp_dtype=pos_dtype)
+            elif k == 'y' and val.dim() > 1 and y_to_csr:
                 sg = f.create_group(osp.join(f.name, '_csr_', k))
-                save_dense_to_csr(val, sg, x32=x32)
+                save_dense_to_csr(val, sg, fp_dtype=fp_dtype)
             elif isinstance(val, Cluster):
                 sg = f.create_group(osp.join(f.name, '_cluster_', 'sub'))
-                val.save(sg, x32=x32)
-            elif k == 'rgb' and val.is_floating_point():
-                save_tensor((val * 255).byte(), f, k, x32=x32)
+                val.save(sg, fp_dtype=fp_dtype)
+            elif k == 'rgb':
+                if val.is_floating_point():
+                    save_tensor((val * 255).byte(), f, k, fp_dtype=fp_dtype)
+                else:
+                    save_tensor(val.byte(), f, k, fp_dtype=fp_dtype)
             elif k == 'edge_attr':
-                save_tensor(val, f, k, x32=x32, x16=x16_edge)
+                save_tensor(val, f, k, fp_dtype=fp_dtype)
             elif isinstance(val, torch.Tensor):
-                save_tensor(val, f, k, x32=x32)
+                save_tensor(val, f, k, fp_dtype=fp_dtype)
             else:
                 raise NotImplementedError(f'Unsupported type={type(val)}')
 
     @staticmethod
     def load(
             f, idx=None, keys_idx=None, keys=None, update_sub=True,
-            verbose=False):
+            verbose=False, rgb_to_float=False):
         """Read an HDF5 file and return its content as a dictionary.
 
         :param f: h5 file path of h5py.File or h5py.Group
@@ -584,6 +602,9 @@ class Data(PyGData):
             changes to maintain consistency with lower hierarchy levels
             of a NAG.
         :param verbose: bool
+        :param rgb_to_float: bool
+            If True and an integer 'rgb' attribute is loaded, it will be
+            cast to float
         :return:
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
@@ -649,8 +670,10 @@ class Data(PyGData):
             if verbose and k in d_dict.keys():
                 print(f'Data.load {k:<22}: {time() - start:0.5f}s')
 
-        # In case RGB is among the keys, convert uint8 back to float
-        if 'rgb' in d_dict.keys() and d_dict['rgb'].dtype == torch.uint8:
+        # In case RGB is among the keys and is in integer type, convert
+        # to float
+        if rgb_to_float and 'rgb' in d_dict.keys() \
+                and not d_dict['rgb'].is_floating_point:
             d_dict['rgb'] = d_dict['rgb'].float() / 255
 
         return Data(**d_dict)

@@ -5,8 +5,9 @@ from numba import njit
 
 __all__ = [
     'tensor_idx', 'is_sorted', 'has_duplicates', 'is_dense', 'is_permutation',
-    'arange_interleave', 'print_tensor_info', 'numpyfy', 'torchify',
-    'torch_to_numpy', 'fast_randperm', 'fast_zeros', 'fast_repeat']
+    'arange_interleave', 'print_tensor_info', 'cast_to_optimal_integer_type',
+    'cast_numpyfy', 'numpyfy', 'torchify', 'torch_to_numpy', 'fast_randperm',
+    'fast_zeros', 'fast_repeat']
 
 
 def tensor_idx(idx, device=None):
@@ -123,30 +124,47 @@ def print_tensor_info(a, name):
     print(msg)
 
 
-def numpyfy(a, x32=False, x16=False):
+def cast_to_optimal_integer_type(a):
+    """Cast an integer tensor to the smallest possible integer dtype
+    preserving its precision.
+    """
+    assert isinstance(a, torch.Tensor), \
+        f"Expected an Tensor input, but received {type(a)} instead"
+    assert not a.is_floating_point(), \
+        f"Expected an integer-like input, but received dtype={a.dtype} instead"
+
+    for dtype in [torch.uint8, torch.int16, torch.int32, torch.int64]:
+        if torch.iinfo(dtype).min <= a.min() & a.max() <= torch.iinfo(dtype).max:
+            return a.to(dtype)
+
+    raise ValueError(f"Could not cast dtype={a.dtype} to integer.")
+
+
+def cast_numpyfy(a, fp_dtype=torch.float):
+    """Convert torch.Tensor to numpy while respecting some constraints
+    on output dtype. Integer tensors will be cast to the smallest
+    possible integer dtype preserving their precision. Floating point
+    tensors will be cast to `fp_dtype`.
+    """
+    assert fp_dtype in (torch.float16, torch.float32, torch.float64)
+
+    if not isinstance(a, torch.Tensor):
+        return numpyfy(a)
+
+    # Rule out non-floating-point tensors
+    if a.is_floating_point():
+        return numpyfy(cast_to_optimal_integer_type(a))
+
+    # Cast floating point tensors
+    return numpyfy(a.to(fp_dtype))
+
+
+def numpyfy(a):
     """Convert torch.Tensor to numpy while respecting some constraints
     on output dtype.
     """
     if not isinstance(a, torch.Tensor):
         return a
-
-    if x16:
-        if a.dtype in [torch.float, torch.double]:
-            a = a.half()
-        elif a.dtype in [torch.int, torch.long]:
-            assert a.abs().max() < torch.iinfo(torch.int16).max, \
-                f"Can't convert {a.dtype} tensor to int16, largest value is " \
-                f"too high"
-            a = a.short()
-
-    elif x32:
-        if a.dtype == torch.double:
-            a = a.float()
-        elif a.dtype == torch.long:
-            assert a.abs().max() < torch.iinfo(torch.int).max, \
-                f"Can't convert {a.dtype} tensor to int32, largest value is " \
-                f"too high"
-            a = a.int()
 
     return a.cpu().numpy()
 

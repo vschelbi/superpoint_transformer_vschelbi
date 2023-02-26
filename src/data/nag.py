@@ -208,23 +208,35 @@ class NAG:
 
         return nag
 
-    def save(self, path, x32=True, y_to_csr=True, x16_edge=True):
+    def save(
+            self,
+            path,
+            y_to_csr=True,
+            pos_dtype=torch.float,
+            fp_dtype=torch.float):
         """Save NAG to HDF5 file.
 
         :param path:
-        :param x32: bool
-            Convert 64-bit data to 32-bit before saving.
         :param y_to_csr: bool
             Convert 'y' to CSR format before saving. Only applies if
             'y' is a 2D histogram
-        :param x16_edge: bool
-            Convert edge_attr to 16-bit before saving.
-        :return:
+        :param pos_dtype: torch dtype
+            Data type to which 'pos' should be cast before saving. The
+            reason for this separate treatment of 'pos' is that global
+            coordinates may be too large and casting to 'fp_dtype' may
+            result in hurtful precision loss
+        :param fp_dtype: torch dtype
+            Data type to which floating point tensors should be cast
+            before saving
         """
         with h5py.File(path, 'w') as f:
             for i_level, data in enumerate(self):
                 g = f.create_group(f'partition_{i_level}')
-                data.save(g, x32=x32, y_to_csr=y_to_csr, x16_edge=x16_edge)
+                data.save(
+                    g,
+                    y_to_csr=y_to_csr,
+                    pos_dtype=pos_dtype,
+                    fp_dtype=fp_dtype)
 
     @staticmethod
     def load(

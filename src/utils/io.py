@@ -5,7 +5,7 @@ import socket
 import numpy as np
 from time import time
 from datetime import datetime
-from src.utils.tensor import tensor_idx, numpyfy
+from src.utils.tensor import tensor_idx, cast_numpyfy
 from src.utils.sparse import dense_to_csr, csr_to_dense
 
 
@@ -51,27 +51,26 @@ def host_data_root():
     return DATA_ROOT
 
 
-def save_tensor(x, f, key, x32=True, x16=False):
+def save_tensor(x, f, key, fp_dtype=torch.float):
     """Save torch.Tensor to HDF5 file.
 
     :param x: 2D torch.Tensor
     :param f: h5 file path of h5py.File or h5py.Group
     :param key: str
         h5py.Dataset key under which to save the tensor
-    :param x32: bool
-        Convert 64-bit data to 32-bit before saving.
-    :param x16: bool
-        Convert 64-bit and 32-bit data to 16-bit before saving.
+    :param fp_dtype: torch dtype
+        Data type to which floating point tensors should be cast before
+        saving
     :return:
     """
     if not isinstance(f, (h5py.File, h5py.Group)):
         with h5py.File(f, 'w') as file:
-            save_tensor(x, file, key, x32=x32, x16=x16)
+            save_tensor(x, file, key, fp_dtype=fp_dtype)
         return
 
     assert isinstance(x, torch.Tensor)
 
-    d = numpyfy(x, x32=x32, x16=x16)
+    d = cast_numpyfy(x, fp_dtype=fp_dtype)
     f.create_dataset(key, data=d, dtype=d.dtype)
 
 
@@ -111,27 +110,28 @@ def load_tensor(f, key=None, idx=None):
     return x
 
 
-def save_dense_to_csr(x, f, x32=True):
+def save_dense_to_csr(x, f, fp_dtype=torch.float):
     """Compress a 2D tensor with CSR format and save it in an
     already-open HDF5.
 
     :param x: 2D torch.Tensor
     :param f: h5 file path of h5py.File or h5py.Group
-    :param x32: bool
-        Convert 64-bit data to 32-bit before saving.
+    :param fp_dtype: torch dtype
+        Data type to which floating point tensors should be cast before
+        saving
     :return:
     """
     if not isinstance(f, (h5py.File, h5py.Group)):
         with h5py.File(f, 'w') as file:
-            save_dense_to_csr(x, file, x32=x32)
+            save_dense_to_csr(x, file, fp_dtype=fp_dtype)
         return
 
     assert isinstance(x, torch.Tensor) and x.dim() == 2
 
     pointers, columns, values = dense_to_csr(x)
-    save_tensor(pointers, f, 'pointers', x32=x32)
-    save_tensor(columns, f, 'columns', x32=x32)
-    save_tensor(values, f, 'values', x32=x32)
+    save_tensor(pointers, f, 'pointers', fp_dtype=fp_dtype)
+    save_tensor(columns, f, 'columns', fp_dtype=fp_dtype)
+    save_tensor(values, f, 'values', fp_dtype=fp_dtype)
     f.create_dataset('shape', data=np.array(x.shape))
 
 

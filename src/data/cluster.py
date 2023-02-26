@@ -119,21 +119,22 @@ class Cluster(CSRData):
             for key in ['num_clusters', 'num_points', 'device']]
         return f"{self.__class__.__name__}({', '.join(info)})"
 
-    def save(self, f, x32=True):
+    def save(self, f, fp_dtype=torch.float):
         """Save Cluster to HDF5 file.
 
         :param f: h5 file path of h5py.File or h5py.Group
-        :param x32: bool
-            Convert 64-bit data to 32-bit before saving.
+        :param fp_dtype: torch dtype
+            Data type to which floating point tensors will be cast
+            before saving
         :return:
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'w') as file:
-                self.save(file, x32=x32)
+                self.save(file, fp_dtype=fp_dtype)
             return
 
-        save_tensor(self.pointers, f, 'pointers', x32=x32)
-        save_tensor(self.points, f, 'points', x32=x32)
+        save_tensor(self.pointers, f, 'pointers', fp_dtype=fp_dtype)
+        save_tensor(self.points, f, 'points', fp_dtype=fp_dtype)
 
     @staticmethod
     def load(f, idx=None, update_sub=True, verbose=False):

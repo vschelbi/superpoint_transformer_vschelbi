@@ -116,9 +116,9 @@ class BaseDataset(InMemoryDataset):
             pre_transform=None,
             pre_filter=None,
             on_device_transform=None,
-            x32=True,
-            y_to_csr=True,
-            x16_edge=True,
+            save_y_to_csr=True,
+            save_pos_dtype=torch.float,
+            save_fp_dtype=torch.half,
             val_mixed_in_train=False,
             test_mixed_in_val=False,
             custom_hash=None,
@@ -137,9 +137,9 @@ class BaseDataset(InMemoryDataset):
         # some attributes will be needed in parent `download` and
         # `process` methods
         self._stage = stage
-        self.x32 = x32
-        self.y_to_csr = y_to_csr
-        self.x16_edge = x16_edge
+        self.save_y_to_csr = save_y_to_csr
+        self.save_pos_dtype = save_pos_dtype
+        self.save_fp_dtype = save_fp_dtype
         self.on_device_transform = on_device_transform
         self.val_mixed_in_train = val_mixed_in_train
         self.test_mixed_in_val = test_mixed_in_val
@@ -468,8 +468,10 @@ class BaseDataset(InMemoryDataset):
         #  you load them for batching, the pyg reindexing mechanism will
         #  break indices will not index update
         nag.save(
-            cloud_path, x32=self.x32, y_to_csr=self.y_to_csr,
-            x16_edge=self.x16_edge)
+            cloud_path,
+            y_to_csr=self.save_y_to_csr,
+            pos_dtype=self.save_pos_dtype,
+            fp_dtype=self.save_fp_dtype)
         del nag
 
     def read_single_raw_cloud(self, raw_cloud_path):

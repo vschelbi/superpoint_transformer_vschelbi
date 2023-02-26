@@ -4,9 +4,9 @@ defaults:
 _target_: null
 
 data_dir: ${paths.data_dir}
-x32: True
-y_to_csr: True
-x16_edge: True
+save_y_to_csr: True
+save_pos_dtype: torch.float32
+save_fp_dtype: torch.float16
 in_memory: False
 
 # Number of classes must be specified to help instantiating the model.

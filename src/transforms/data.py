@@ -7,9 +7,9 @@ from src.utils.nn import trunc_normal_
 
 
 __all__ = [
-    'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeysTo',
-    'NAGAddKeysTo', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns',
-    'DropoutColumns', 'NAGDropoutColumns', 'NAGJitterKey']
+    'DataToNAG', 'NAGToData', 'Cast', 'NAGCast', 'RemoveKeys', 'NAGRemoveKeys',
+    'AddKeysTo', 'NAGAddKeysTo', 'NAGSelectByKey', 'SelectColumns',
+    'NAGSelectColumns', 'DropoutColumns', 'NAGDropoutColumns', 'NAGJitterKey']
 
 
 class DataToNAG(Transform):
@@ -31,6 +31,63 @@ class NAGToData(Transform):
     def _process(self, nag):
         assert nag.num_levels == 1
         return NAG[0]
+
+
+class Cast(Transform):
+    """Cast Data attributes to the provided integer and floating point
+    dtypes. In case 'rgb' is found and is not a floating point tensor,
+    `rgb_to_float` will decide whether it should be cast to floats.
+    """
+
+    def __init__(
+            self,
+            fp_dtype=torch.float,
+            int_dtype=torch.long,
+            rgb_to_float=True):
+        self.fp_dtype = fp_dtype
+        self.int_dtype = int_dtype
+        self.rgb_to_float = rgb_to_float
+
+    def _process(self, data):
+        for k in data.keys:
+
+            # Special treatment for 'rgb'
+            if k == 'rgb':
+                rgb = data[k]
+                if rgb.is_floating_point():
+                    data[k] = rgb.to(self.fp_dtype)
+                elif self.rgb_to_float:
+                    data[k] = rgb.to(self.fp_dtype) / 255
+                else:
+                    data[k] = rgb.to(torch.uint8)
+
+            if data[k].is_floating_point():
+                data[k] = data[k].to(self.fp_dtype)
+            else:
+                data[k] = data[k].to(self.int_dtype)
+
+        return NAG([Data])
+
+
+class NAGCast(Transform):
+    """Cast NAG attributes to the provided integer and floating point
+    dtypes. In case 'rgb' is found and is not a floating point tensor,
+    `rgb_to_float` will decide whether it should be cast to floats.
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def _process(self, nag):
+        transform = Cast(
+            fp_dtype=self.fp_dtype,
+            int_dtype=self.int_dtype,
+            rgb_to_float=self.rgb_to_float)
+
+        for i_level in nag.num_levels:
+            nag._list[i_level] = transform(nag[i_level])
+
+        return nag
 
 
 class RemoveKeys(Transform):

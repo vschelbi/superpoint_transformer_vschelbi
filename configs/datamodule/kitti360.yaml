@@ -234,6 +234,10 @@ on_device_train_transform:
         by_size: ${datamodule.sample_segment_by_size}
         by_class: ${datamodule.sample_segment_by_class}
 
+    # Cast all attributes to either float or long. Doing this only now
+    # allows speeding up disk I/O and CPU->GPU transfer
+    - transform: NAGCast
+
     # Apply geometric transforms affecting position, offsets, normals
     # before calling transforms relying on those, such as on-the-fly
     # edge features computation
@@ -376,6 +380,10 @@ on_device_val_transform:
         high: 1
         n_min: 128
         n_max: 256
+
+    # Cast all attributes to either float or long. Doing this only now
+    # allows speeding up disk I/O and CPU->GPU transfer
+    - transform: NAGCast
 
     # Compute some horizontal and vertical edges on-the-fly. Those are
     # only computed now since they can be deduced from point and node
