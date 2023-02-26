@@ -93,18 +93,18 @@ class NAG:
         self._list = [d.detach() for d in self]
         return self
 
-    def to(self, device):
+    def to(self, device, **kwargs):
         """Move the NAG with all Data in it to device."""
-        self._list = [d.to(device) for d in self]
+        self._list = [d.to(device, **kwargs) for d in self]
         return self
 
-    def cpu(self):
+    def cpu(self, **kwargs):
         """Move the NAG with all Data in it to CPU."""
-        return self.to('cpu')
+        return self.to('cpu', **kwargs)
 
-    def cuda(self):
+    def cuda(self, **kwargs):
         """Move the NAG with all Data in it to CUDA."""
-        return self.to('cuda')
+        return self.to('cuda', **kwargs)
 
     @property
     def device(self):

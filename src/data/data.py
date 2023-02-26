@@ -170,21 +170,21 @@ class Data(PyGData):
             self.sub = self.sub.detach()
         return self
 
-    def to(self, device):
+    def to(self, device, **kwargs):
         """Extend `torch_geometric.Data.to` to handle Cluster attributes.
         """
-        self = super().to(device)
+        self = super().to(device, **kwargs)
         if self.is_super:
-            self.sub = self.sub.to(device)
+            self.sub = self.sub.to(device, **kwargs)
         return self
 
-    def cpu(self):
+    def cpu(self, **kwargs):
         """Move the NAG with all Data in it to CPU."""
-        return self.to('cpu')
+        return self.to('cpu', **kwargs)
 
-    def cuda(self):
+    def cuda(self, **kwargs):
         """Move the NAG with all Data in it to CUDA."""
-        return self.to('cuda')
+        return self.to('cuda', **kwargs)
 
     @property
     def device(self):
