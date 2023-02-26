@@ -1238,7 +1238,7 @@ def _on_the_fly_horizontal_edge_features(
         # Compute the distance and direction between the segments'
         # centroids
         se_centroid_dir = data.pos[se[1]] - data.pos[se[0]]
-        se_centroid_dist = se_centroid_dir.norm(dim=1)
+        se_centroid_dist = se_centroid_dir.norm(dim=1).view(-1, 1)
         se_centroid_dir /= se_centroid_dist.view(-1, 1)
         se_centroid_dist = se_centroid_dist.sqrt()
 

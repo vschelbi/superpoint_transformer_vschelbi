@@ -285,13 +285,13 @@ on_device_train_transform:
         log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.v_edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.v_edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.v_edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.v_edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
 
     # Edge sampling is only performed after the horizontal graph is
     # untrimmed by OnTheFlyHorizontalEdgeFeatures
@@ -405,13 +405,13 @@ on_device_val_transform:
         log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.v_edge_hf}'}
+        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.v_edge_hf}'}
+        normal_angle: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
+        log_length: ${eval:'"log_length" in ${datamodule.v_edge_hf}'}
+        log_surface: ${eval:'"log_surface" in ${datamodule.v_edge_hf}'}
+        log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
+        log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
 
     # Color transforms here before fusing all features together
 #    - transform: NAGColorNormalize
