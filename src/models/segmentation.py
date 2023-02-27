@@ -160,6 +160,7 @@ class PointSegmentationModule(LightningModule):
         logits = torch.zeros_like(y_hist, dtype=torch.float)
         seen = torch.zeros_like(y_hist[:, 0], dtype=torch.bool)
 
+        # TODO: NANO.....................................................
         for i_run in range(num_runs):
             # Apply transform
             nag_ = transform(nag.clone())
@@ -206,6 +207,7 @@ class PointSegmentationModule(LightningModule):
         # sampled points (ie sampling will affect the loss and metrics)
         # or directly from the precomputed level-1 label histograms (ie
         # true annotations)
+        #TODO: NANO.....................................................
         if self.hparams.sampling_loss:
             idx = nag[0].super_index
             y = nag[0].y

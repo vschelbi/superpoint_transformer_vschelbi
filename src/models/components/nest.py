@@ -472,13 +472,14 @@ class NeST(nn.Module):
     def forward(self, nag, return_down_outputs=False, return_up_outputs=False):
         assert isinstance(nag, NAG)
         assert nag.num_levels >= 2
+        # TODO: NANO...NOT FOR NANO..................................................
         assert nag.num_levels > self.num_down_stages
 
         # Separate small L1 nodes from the rest of the NAG. Only
         # large-enough nodes will be encoded using the UNet. Small nodes
         # will be encoded separately, and merged before the `last_stage`
         if self.small is not None:
-
+            # TODO: NANO .... NO SMALL.....................................................
             # Separate the input NAG into two sub-NAGs: one holding the
             # small L1 nodes and one carrying the large ones and their
             # hierarchy
@@ -511,6 +512,7 @@ class NeST(nn.Module):
 
         # Encode level-0 data
         # NB: no node_size for the level-0 points
+        # TODO: NANO... NO POINT STAGE.....................................................
         x, diameter = self.point_stage(
             nag[0].x,
             nag[0].pos,
@@ -518,6 +520,7 @@ class NeST(nn.Module):
             super_index=nag[0].super_index)
 
         # Append the diameter to the level-1 features
+        # TODO: NANO.....................................................
         nag[1].x = self.feature_fusion(nag[1].x, diameter)
 
         # Iteratively encode level-1 and above
@@ -534,6 +537,7 @@ class NeST(nn.Module):
 
                 # Forward on the down stage and the corresponding NAG
                 # level
+                # TODO: NANO.....................................................
                 i_level = i_stage + 1
 
                 # Process handcrafted node and edge features. We need to
@@ -548,6 +552,7 @@ class NeST(nn.Module):
                     nag[i_level].edge_attr = h_edge_mlp(
                         nag[i_level].edge_attr, batch=norm_index)
                 if v_edge_mlp is not None:
+                    # TODO: NANO....NO V-POOL ?.................................................
                     norm_index = nag[i_level - 1].norm_index(mode=self.norm_mode)
                     nag[i_level - 1].vertical_edge_attr = v_edge_mlp(
                         nag[i_level - 1].vertical_edge_attr, batch=norm_index)
@@ -575,6 +580,7 @@ class NeST(nn.Module):
 
         # Fuse L1-level features back together, if need be
         if self.small is not None:
+            # TODO: NANO....NO SMALL.................................................
             nag = nag_full
             nag[1].x = torch.empty(
                 (nag[1].num_nodes, x.shape[1]), device=x.device)
@@ -618,11 +624,13 @@ class NeST(nn.Module):
         # Recover indices for normalization, pooling, position
         # normalization and horizontal attention
         norm_index = nag[i_level].norm_index(mode=self.norm_mode)
+        # TODO: NANO.....................................................
         pool_index = nag[i_level - 1].super_index
         super_index = nag[i_level].super_index if not is_last_level \
             else None
         edge_index = nag[i_level].edge_index
         edge_attr = nag[i_level].edge_attr
+        # TODO: NANO.....................................................
         v_edge_attr = nag[i_level - 1].vertical_edge_attr
 
         # Forward pass on the stage and store output x
@@ -675,6 +683,7 @@ class NeST(nn.Module):
 
     def _forward_last_stage(self, nag, x):
         # Convert stage index to NAG index
+        # TODO: NANO.....................................................
         i_level = 1
         is_last_level = (i_level == nag.num_levels - 1)
 
