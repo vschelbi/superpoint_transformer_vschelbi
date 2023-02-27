@@ -1,0 +1,9 @@
+defaults:
+  - nest-2.yaml
+
+net:
+  nano_dim: 64
+  down_dim: ${eval:'${model._d}[:1]'}
+  down_in_mlp: ${eval:'[ [${model._d_x} + ${model.net.nano_dim}] + [${model._d}[0]] * ${model._d_r} ]'}
+  up_dim: ${eval:'${model._u}[:1]'}
+  up_in_mlp: ${eval:'[ [${model._u_x} + ${model._d}[-1] + ${model._d}[-2]] + [${model._u}[0]] * ${model._u_r} ]'}
