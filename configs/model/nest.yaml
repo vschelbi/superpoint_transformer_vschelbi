@@ -1,6 +1,7 @@
 defaults:
   - default.yaml
   - _point.yaml
+  - _nano.yaml
   - _down.yaml
   - _up.yaml
   - _last.yaml

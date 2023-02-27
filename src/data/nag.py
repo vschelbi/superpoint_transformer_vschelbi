@@ -120,16 +120,17 @@ class NAG:
                 return True
         return False
 
-    def __getitem__(self, i_level):
+    def __getitem__(self, idx):
         """Return a Data object from the hierarchy.
 
         Parameters
         ----------
-        i_level: int
+        idx: int, slice
             The hierarchy level to return
         """
-        assert 0 <= i_level < self.num_levels
-        return self._list[i_level]
+        if isinstance(idx, int):
+            return self._list[idx]
+        return NAG(self._list[idx])
 
     def select(self, i_level, idx):
         """Indexing mechanism on the NAG.

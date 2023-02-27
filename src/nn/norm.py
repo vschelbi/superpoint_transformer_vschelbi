@@ -60,15 +60,16 @@ class UnitSphereNorm(nn.Module):
         self.log_diameter = log_diameter
 
     def forward(self, pos, idx, w=None, num_super=None):
-        if w is not None:
-            assert w.ge(0).all() and w.sum() > 0, \
-                "At least one node must had a strictly positive weights"
+        # if w is not None:
+        #     assert w.ge(0).all() and w.sum() > 0, \
+        #         "At least one node must had a strictly positive weights"
 
         # Normalization
         if idx is None:
             pos, diameter = self._forward(pos, w=w)
         else:
-            pos, diameter = self._forward_scatter(pos, idx, w=w, num_super=num_super)
+            pos, diameter = self._forward_scatter(
+                pos, idx, w=w, num_super=num_super)
 
         # Log-normalize the diameter if required. This facilitates using
         # the diameter as a feature in downstream learning tasks

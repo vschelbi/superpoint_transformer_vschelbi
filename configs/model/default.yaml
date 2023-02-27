@@ -39,6 +39,9 @@ _x_ve_mlp: 64  # size of level-1+ vertical edge features after MLP, set to 'null
 _p_x: ${eval:'3 + ${datamodule.num_hf_point} + ${model.net.point_cat_diameter}'}  # size of handcrafted level-0 node features (points)
 _x_he_raw: ${datamodule.num_hf_edge}  # size of level-1+ handcrafted horizontal edge features
 _x_ve_raw: ${datamodule.num_hf_v_edge}  # size of level-1+ handcrafted vertical edge features
+_nano_x_pos: ${eval:'${model.net.nano_inject_pos} * 3'}  # size of level-0 injected position
+_nano_x_raw: ${eval:'${model.net.nano_inject_x} * (1 + ${datamodule.num_hf_segment})'}  # size of handcrafted level-0 node features
+_nano_x: ${eval:'${model._nano_x_pos} + (${model._x_n_mlp} if ${model._x_n_mlp} else ${model._nano_x_raw})'}  # size of parent level-1+ node features
 _d_x_pos: ${eval:'${model.net.down_inject_pos} * 3'}  # size of level-1+ injected position
 _d_x_raw: ${eval:'${model.net.down_inject_x} * (1 + ${datamodule.num_hf_segment})'}  # size of handcrafted level-1+ node features
 _d_x: ${eval:'${model._d_x_pos} + (${model._x_n_mlp} if ${model._x_n_mlp} else ${model._d_x_raw})'}  # size of parent level-1+ node features

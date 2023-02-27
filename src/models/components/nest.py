@@ -1,6 +1,5 @@
 import torch
 from torch import nn
-from src.data import NAG
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
     BatchNorm, CatFusion, CatInjection, MLP, LayerNorm
@@ -17,7 +16,7 @@ class NeST(nn.Module):
     def __init__(
             self,
 
-            point_mlp,
+            point_mlp=None,
             point_drop=None,
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
@@ -27,6 +26,20 @@ class NeST(nn.Module):
             small=None,
             small_point_mlp=None,
             small_down_mlp=None,
+
+            nano_dim=None,
+            nano_in_mlp=None,
+            nano_out_mlp=None,
+            nano_mlp_drop=None,
+            nano_num_heads=1,
+            nano_num_blocks=0,
+            nano_ffn_ratio=4,
+            nano_residual_drop=None,
+            nano_attn_drop=None,
+            nano_drop_path=None,
+            nano_inject_pos=True,
+            nano_inject_x=False,
+            nano_pos_injection_x_dim=None,
 
             down_dim=None,
             down_pool_dim=None,
@@ -104,6 +117,9 @@ class NeST(nn.Module):
 
         super().__init__()
 
+        self.nano = nano_dim is not None
+        self.nano_inject_pos = nano_inject_pos
+        self.nano_inject_x = nano_inject_x
         self.down_inject_pos = down_inject_pos
         self.down_inject_x = down_inject_x
         self.up_inject_pos = up_inject_pos
@@ -176,36 +192,84 @@ class NeST(nn.Module):
         needs_v_edge_hf = num_down > 0 and isinstance(
             pool_factory(pool, down_pool_dim[0]), BaseAttentivePool)
 
+        # Build MLPs that will be used to process handcrafted segment
+        # and edge features. These will be called before each
+        # DownNFuseStage and their output will be passed to
+        # DownNFuseStage and UpNFuseStage. For the special case of nano
+        # models, the first mlps will be run before the first Stage too
+        node_mlp = node_mlp if needs_node_hf else None
+        self.node_mlps = _build_mlps(
+            node_mlp,
+            num_down + self.nano,
+            mlp_activation,
+            mlp_norm,
+            share_hf_mlps)
+
+        h_edge_mlp = h_edge_mlp if needs_h_edge_hf else None
+        self.h_edge_mlps = _build_mlps(
+            h_edge_mlp,
+            num_down + self.nano,
+            mlp_activation,
+            mlp_norm,
+            share_hf_mlps)
+
+        v_edge_mlp = v_edge_mlp if needs_v_edge_hf else None
+        self.v_edge_mlps = _build_mlps(
+            v_edge_mlp,
+            num_down,
+            mlp_activation,
+            mlp_norm,
+            share_hf_mlps)
+
         # Module operating on Level-0 points in isolation
-        self.point_stage = PointStage(
-            point_mlp,
-            mlp_activation=mlp_activation,
-            mlp_norm=mlp_norm,
-            mlp_drop=point_drop,
-            pos_injection=point_pos_injection,
-            pos_injection_x_dim=point_pos_injection_x_dim,
-            cat_diameter=point_cat_diameter,
-            log_diameter=point_log_diameter)
+        if self.nano:
+            self.first_stage = Stage(
+                nano_dim,
+                num_blocks=nano_num_blocks,
+                in_mlp=nano_in_mlp,
+                out_mlp=nano_out_mlp,
+                mlp_activation=mlp_activation,
+                mlp_norm=mlp_norm,
+                mlp_drop=nano_mlp_drop,
+                num_heads=nano_num_heads,
+                qk_dim=qk_dim,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                scale_qk_by_neigh=scale_qk_by_neigh,
+                in_rpe_dim=in_rpe_dim,
+                ffn_ratio=nano_ffn_ratio,
+                residual_drop=nano_residual_drop,
+                attn_drop=nano_attn_drop,
+                drop_path=nano_drop_path,
+                activation=activation,
+                norm=norm,
+                pre_norm=pre_norm,
+                no_sa=no_sa,
+                no_ffn=no_ffn,
+                k_rpe=k_rpe,
+                q_rpe=q_rpe,
+                c_rpe=c_rpe,
+                v_rpe=v_rpe,
+                pos_injection=pos_injection,
+                pos_injection_x_dim=nano_pos_injection_x_dim,
+                cat_diameter=cat_diameter,
+                log_diameter=log_diameter,
+                blocks_share_rpe=blocks_share_rpe,
+                heads_share_rpe=heads_share_rpe)
+        else:
+            self.first_stage = PointStage(
+                point_mlp,
+                mlp_activation=mlp_activation,
+                mlp_norm=mlp_norm,
+                mlp_drop=point_drop,
+                pos_injection=point_pos_injection,
+                pos_injection_x_dim=point_pos_injection_x_dim,
+                cat_diameter=point_cat_diameter,
+                log_diameter=point_log_diameter)
 
         # Operator to append the features such as the diameter or other 
         # handcrafted features to the NAG's features
         self.feature_fusion = CatFusion()
-
-        # Build MLPs that will be used to process handcrafted segment
-        # and edge features. These will be called before each
-        # DownNFuseStage and their output will be passed to
-        # DownNFuseStage and UpNFuseStage
-        node_mlp = node_mlp if needs_node_hf else None
-        self.node_mlps = _build_mlps(
-            node_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
-
-        h_edge_mlp = h_edge_mlp if needs_h_edge_hf else None
-        self.h_edge_mlps = _build_mlps(
-            h_edge_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
-
-        v_edge_mlp = v_edge_mlp if needs_v_edge_hf else None
-        self.v_edge_mlps = _build_mlps(
-            v_edge_mlp, num_down, mlp_activation, mlp_norm, share_hf_mlps)
 
         # Transformer encoder (down) Stages operating on Level-i data
         if num_down > 0:
@@ -359,8 +423,11 @@ class NeST(nn.Module):
             self.up_stages = None
 
         assert bool(self.down_stages) != bool(self.up_stages) \
-               or self.num_down_stages > self.num_up_stages, \
-            "The number of Up stages should be lower than the number of Down " \
+               or self.num_down_stages >= self.num_up_stages, \
+            "The number of Up stages should be <= the number of Down " \
+            "stages."
+        assert self.nano or self.num_down_stages > self.num_up_stages, \
+            "The number of Up stages should be < the number of Down " \
             "stages. That is to say, we do not want to output Level-0 " \
             "features but at least Level-1."
 
@@ -375,33 +442,36 @@ class NeST(nn.Module):
             "If `small` is set, the model should have of one more Down " \
             "stages than Up stages (ie the output will be Level-1 features."
 
-        self.small = small
+        if not self.nano and small is not None:
+            self.small = small
 
-        self.point_stage_small = PointStage(
-            small_point_mlp,
-            mlp_activation=mlp_activation,
-            mlp_norm=mlp_norm,
-            mlp_drop=point_drop,
-            pos_injection=point_pos_injection,
-            pos_injection_x_dim=point_pos_injection_x_dim,
-            cat_diameter=point_cat_diameter,
-            log_diameter=point_log_diameter) \
-            if small is not None else None
+            self.first_stage_small = PointStage(
+                small_point_mlp,
+                mlp_activation=mlp_activation,
+                mlp_norm=mlp_norm,
+                mlp_drop=point_drop,
+                pos_injection=point_pos_injection,
+                pos_injection_x_dim=point_pos_injection_x_dim,
+                cat_diameter=point_cat_diameter,
+                log_diameter=point_log_diameter)
 
-        self.down_stage_small = DownNFuseStage(
-            small_down_mlp[-1],
-            num_blocks=0,
-            in_mlp=small_down_mlp,
-            mlp_activation=mlp_activation,
-            mlp_norm=mlp_norm,
-            mlp_drop=down_mlp_drop[0],
-            pool=pool,
-            fusion='cat',
-            pos_injection=pos_injection,
-            cat_diameter=cat_diameter,
-            log_diameter=log_diameter,
-            pos_injection_x_dim=down_pos_injection_x_dim[0]) \
-            if small is not None else None
+            self.down_stage_small = DownNFuseStage(
+                small_down_mlp[-1],
+                num_blocks=0,
+                in_mlp=small_down_mlp,
+                mlp_activation=mlp_activation,
+                mlp_norm=mlp_norm,
+                mlp_drop=down_mlp_drop[0],
+                pool=pool,
+                fusion='cat',
+                pos_injection=pos_injection,
+                cat_diameter=cat_diameter,
+                log_diameter=log_diameter,
+                pos_injection_x_dim=down_pos_injection_x_dim[0])
+        else:
+            self.small = None
+            self.first_stage_small = None
+            self.down_stage_small = None
 
         # Optional last transformer stage operating on Level-1 nodes.
         # In particular, allows feature propagation between large and
@@ -467,19 +537,21 @@ class NeST(nn.Module):
             return self.up_stages[-1].out_dim
         if self.down_stages is not None:
             return self.down_stages[-1].out_dim
-        return self.point_stage.out_dim
+        return self.first_stage.out_dim
 
     def forward(self, nag, return_down_outputs=False, return_up_outputs=False):
-        assert isinstance(nag, NAG)
-        assert nag.num_levels >= 2
-        # TODO: NANO...NOT FOR NANO..................................................
-        assert nag.num_levels > self.num_down_stages
+        # assert isinstance(nag, NAG)
+        # assert nag.num_levels >= 2
+        # assert nag.num_levels > self.num_down_stages
+
+        # TODO: NANO, this will need to be changed if we want TRUE NANO.........
+        if self.nano:
+            nag = nag[1:]
 
         # Separate small L1 nodes from the rest of the NAG. Only
         # large-enough nodes will be encoded using the UNet. Small nodes
         # will be encoded separately, and merged before the `last_stage`
         if self.small is not None:
-            # TODO: NANO .... NO SMALL.....................................................
             # Separate the input NAG into two sub-NAGs: one holding the
             # small L1 nodes and one carrying the large ones and their
             # hierarchy
@@ -489,11 +561,14 @@ class NeST(nn.Module):
             nag_small = nag_full.select(1, torch.where(~mask_small)[0])
 
             # Encode level-0 data for small L1 nodes
-            x_small, diameter_small = self.point_stage_small(
+            x_small, diameter_small = self.first_stage_small(
                 nag_small[0].x,
-                nag_small[0].pos,
                 nag_small[0].norm_index(mode=self.norm_mode),
-                super_index=nag_small[0].super_index)
+                pos=nag_small[0].pos,
+                node_size=getattr(nag_small[0], 'node_size', None),
+                super_index=nag_small[0].super_index,
+                edge_index=nag_small[0].edge_index,
+                edge_attr=getattr(nag_small[0], 'edge_attr', None))
 
             # Append the diameter to the level-1 features
             i_level = 1
@@ -510,34 +585,43 @@ class NeST(nn.Module):
                 nag_small[i_level + 1].x = self.feature_fusion(
                     nag_small[i_level + 1].x, diameter_small)
 
+        # Apply the first MLPs on the handcrafted features
+        if self.nano:
+            if self.node_mlps is not None:
+                norm_index = nag[0].norm_index(mode=self.norm_mode)
+                x = nag[0].x
+                diameter = torch.zeros(
+                    (nag[0].num_nodes, 1), dtype=x.dtype, device=nag.device)
+                x = self.feature_fusion(x, diameter)
+                nag[0].x = self.node_mlps[0](x, batch=norm_index)
+            if self.h_edge_mlps is not None:
+                norm_index = nag[0].norm_index(mode=self.norm_mode)
+                norm_index = norm_index[nag[0].edge_index[0]]
+                nag[0].edge_attr = self.h_edge_mlps[0](
+                    nag[0].edge_attr, batch=norm_index)
+
         # Encode level-0 data
-        # NB: no node_size for the level-0 points
-        # TODO: NANO... NO POINT STAGE.....................................................
-        x, diameter = self.point_stage(
-            nag[0].x,
-            nag[0].pos,
-            nag[0].norm_index(mode=self.norm_mode),
-            super_index=nag[0].super_index)
+        x, diameter = self._forward_first_stage(self.first_stage, nag)
 
         # Append the diameter to the level-1 features
-        # TODO: NANO.....................................................
         nag[1].x = self.feature_fusion(nag[1].x, diameter)
 
         # Iteratively encode level-1 and above
         down_outputs = []
+        if self.nano:
+            down_outputs.append(x)
         if self.down_stages is not None:
 
             enum = enumerate(zip(
                 self.down_stages,
-                self.node_mlps,
-                self.h_edge_mlps,
+                self.node_mlps[int(self.nano):],
+                self.h_edge_mlps[int(self.nano):],
                 self.v_edge_mlps))
 
             for i_stage, (stage, node_mlp, h_edge_mlp, v_edge_mlp) in enum:
 
                 # Forward on the down stage and the corresponding NAG
                 # level
-                # TODO: NANO.....................................................
                 i_level = i_stage + 1
 
                 # Process handcrafted node and edge features. We need to
@@ -552,7 +636,6 @@ class NeST(nn.Module):
                     nag[i_level].edge_attr = h_edge_mlp(
                         nag[i_level].edge_attr, batch=norm_index)
                 if v_edge_mlp is not None:
-                    # TODO: NANO....NO V-POOL ?.................................................
                     norm_index = nag[i_level - 1].norm_index(mode=self.norm_mode)
                     nag[i_level - 1].v_edge_attr = v_edge_mlp(
                         nag[i_level - 1].v_edge_attr, batch=norm_index)
@@ -580,7 +663,6 @@ class NeST(nn.Module):
 
         # Fuse L1-level features back together, if need be
         if self.small is not None:
-            # TODO: NANO....NO SMALL.................................................
             nag = nag_full
             nag[1].x = torch.empty(
                 (nag[1].num_nodes, x.shape[1]), device=x.device)
@@ -610,6 +692,27 @@ class NeST(nn.Module):
             return x, down_outputs
         return x, down_outputs, up_outputs
 
+    def _forward_first_stage(self, stage, nag):
+        x = nag[0].x
+        norm_index = nag[0].norm_index(mode=self.norm_mode)
+        pos = nag[0].pos if not self.nano or self.nano_inject_pos else None
+        node_size = getattr(nag[0], 'node_size', None) if self.nano_inject_pos \
+            else None
+        super_index = nag[0].super_index
+        edge_index = nag[0].edge_index
+        edge_attr = nag[0].edge_attr
+
+        x_out, diameter = stage(
+            x,
+            norm_index,
+            pos=pos,
+            node_size=node_size,
+            super_index=super_index,
+            edge_index=edge_index,
+            edge_attr=edge_attr)
+
+        return x_out, diameter
+
     def _forward_down_stage(self, stage, nag, i_level, x):
         # Convert stage index to NAG index
         is_last_level = (i_level == nag.num_levels - 1)
@@ -624,13 +727,11 @@ class NeST(nn.Module):
         # Recover indices for normalization, pooling, position
         # normalization and horizontal attention
         norm_index = nag[i_level].norm_index(mode=self.norm_mode)
-        # TODO: NANO.....................................................
         pool_index = nag[i_level - 1].super_index
         super_index = nag[i_level].super_index if not is_last_level \
             else None
         edge_index = nag[i_level].edge_index
         edge_attr = nag[i_level].edge_attr
-        # TODO: NANO.....................................................
         v_edge_attr = nag[i_level - 1].v_edge_attr
 
         # Forward pass on the stage and store output x
@@ -683,8 +784,7 @@ class NeST(nn.Module):
 
     def _forward_last_stage(self, nag, x):
         # Convert stage index to NAG index
-        # TODO: NANO.....................................................
-        i_level = 1
+        i_level = int(not self.nano)
         is_last_level = (i_level == nag.num_levels - 1)
 
         # Recover segment-level attributes
