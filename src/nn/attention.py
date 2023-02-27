@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
+from src.utils.nn import build_qk_scale_func
 
 
 __all__ = ['SelfAttentionBlock']
@@ -20,7 +21,6 @@ class SelfAttentionBlock(nn.Module):
     :param qkv_bias:
     :param qk_dim:
     :param qk_scale:
-    :param scale_qk_by_neigh:
     :param attn_drop:
     :param drop:
     :param k_rpe:
@@ -39,7 +39,6 @@ class SelfAttentionBlock(nn.Module):
             qkv_bias=True,
             qk_dim=8,
             qk_scale=None,
-            scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
             in_rpe_dim=18,
@@ -55,8 +54,7 @@ class SelfAttentionBlock(nn.Module):
         self.dim = dim
         self.num_heads = num_heads
         self.qk_dim = qk_dim
-        self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
-        self.scale_qk_by_neigh = scale_qk_by_neigh
+        self.qk_scale = build_qk_scale_func(dim, num_heads, qk_scale)
         self.heads_share_rpe = heads_share_rpe
 
         self.qkv = nn.Linear(dim, qk_dim * 2 * num_heads + dim, bias=qkv_bias)  # TODO: only 1 value for all heads ?
@@ -141,14 +139,8 @@ class SelfAttentionBlock(nn.Module):
         k = k[t]  # [E, H, D]
         v = v[t]  # [E, H, C // H]
 
-        # Apply scaling on the queries
-        q = q * self.qk_scale
-
-        # Apply scaling based on the number of neighbors of each node.
-        # This will induce a scaled softmax
-        if self.scale_qk_by_neigh:
-            num_neigh_scale = (s.bincount(minlength=N) ** -0.5)[s]
-            q = q * num_neigh_scale.view(-1, 1, 1)
+        # Apply scaling on the queries.
+        q = q * self.qk_scale(s)
 
         # TODO: add the relative positional encodings to the
         #  compatibilities here
