@@ -126,5 +126,17 @@ def build_qk_scale_func(dim, num_heads, qk_scale):
             return D * G
         return f
 
+    if qk_scale == 'd':
+        def f(s):
+            D = (dim // num_heads) ** -0.5
+            return D
+        return f
+
+    if qk_scale == 'g':
+        def f(s):
+            G = (s.bincount() ** -0.5)[s].view(-1, 1, 1)
+            return G
+        return f
+
     raise ValueError(
         f"Unable to build QK scaling scheme for qk_scale='{qk_scale}'")
