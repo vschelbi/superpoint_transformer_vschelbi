@@ -23,10 +23,8 @@ class Data(PyGData):
     specific needs.
     """
 
-    _INDEXABLE = [
-        'pos', 'x', 'rgb', 'y', 'pred', 'super_index', 'node_size', 'sub']
+    _NOT_INDEXABLE = ['_csr_', '_cluster_', 'edge_index', 'edge_attr']
 
-    _READABLE = _INDEXABLE + ['edge_index', 'edge_attr']
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -59,6 +57,11 @@ class Data(PyGData):
     def super_index(self):
         """Index of the superpoint each point belongs to."""
         return self['super_index'] if 'super_index' in self._store else None
+
+    @property
+    def v_edge_attr(self):
+        """Vertical edge features."""
+        return self['v_edge_attr'] if 'v_edge_attr' in self._store else None
 
     def norm_index(self, mode='graph'):
         """Index to be used for LayerNorm.
@@ -110,6 +113,35 @@ class Data(PyGData):
         return self.edge_index is not None and self.edge_index.shape[1] > 0
 
     @property
+    def has_edge_attr(self):
+        """Whether the edges have features in `edge_attr`."""
+        return self.edge_attr is not None and self.edge_attr.shape[0] > 0
+
+    @property
+    def edge_keys(self):
+        """All keys starting with `edge_`, apart from `edge_index` and
+        `edge_attr`.
+        """
+        return [
+            k for k in self.keys
+            if k.startswith('edge_') and k not in ['edge_index', 'edge_attr']]
+
+    def raise_if_edge_keys(self):
+        """This is a TEMPORARY, HACKY method to be called wherever
+        edge_keys may cause an issue.
+        """
+        if len(self.edge_keys) > 0:
+            raise NotImplementedError(
+                "Edge keys are not fully supported yet, please consider "
+                "stacking all your `edge_` attributes in `edge_attr` for the "
+                "time being")
+
+    @property
+    def v_edge_keys(self):
+        """All keys starting with `v_edge_`."""
+        return [k for k in self.keys if k.startswith('v_edge_')]
+
+    @property
     def num_edges(self):
         """Overwrite the torch_geometric initial definition, which
         somehow returns incorrect results, like:
@@ -138,21 +170,21 @@ class Data(PyGData):
             self.sub = self.sub.detach()
         return self
 
-    def to(self, device):
+    def to(self, device, **kwargs):
         """Extend `torch_geometric.Data.to` to handle Cluster attributes.
         """
-        self = super().to(device)
+        self = super().to(device, **kwargs)
         if self.is_super:
-            self.sub = self.sub.to(device)
+            self.sub = self.sub.to(device, **kwargs)
         return self
 
-    def cpu(self):
+    def cpu(self, **kwargs):
         """Move the NAG with all Data in it to CPU."""
-        return self.to('cpu')
+        return self.to('cpu', **kwargs)
 
-    def cuda(self):
+    def cuda(self, **kwargs):
         """Move the NAG with all Data in it to CUDA."""
-        return self.to('cuda')
+        return self.to('cuda', **kwargs)
 
     @property
     def device(self):
@@ -292,7 +324,7 @@ class Data(PyGData):
         # 'Data.sub' of the level above
         out_super = (None, None)
         if self.is_sub:
-            data.super_index = self.super_index[idx].clone()
+            data.super_index = self.super_index[idx]
 
         if self.is_sub and update_super:
             # Convert superpoint indices, in case some superpoints have
@@ -332,13 +364,22 @@ class Data(PyGData):
 
             # Slice tensor elements containing num_edges elements. Note
             # we deal with edges first, to rule out the case where
-            # num_edges = num_nodes
-            if self.has_edges and is_tensor and is_edge_size and 'edge' in key:
-                data[key] = item[idx_edge].clone()
+            # num_edges = num_nodes. This will deal with `edge_attr` but
+            # also any other attribute whose key starts with 'edge_' and
+            # whose first dimension size matches the number of edges in
+            # `edge_index`. An exception is made for attributes
+            # starting with 'v_edge': those are expected to be node
+            # attributes and must be treated as such
+            if is_tensor and is_node_size and key in self.v_edge_keys:
+                data[key] = item[idx]
+
+            elif self.has_edges and is_tensor and is_edge_size and \
+                    key in ['edge_attr'] + self.edge_keys:
+                data[key] = item[idx_edge]
 
             # Slice other tensor elements containing num_nodes elements
             elif is_tensor and is_node_size:
-                data[key] = item[idx].clone()
+                data[key] = item[idx]
 
             # Other Data attributes are simply copied
             else:
@@ -375,6 +416,8 @@ class Data(PyGData):
         if not self.has_edges:
             self.edge_attr = None
 
+        self.raise_if_edge_keys()
+
         # Search for isolated nodes and exit if no node is isolated
         is_isolated = self.is_isolated()
         is_out = torch.where(is_isolated)[0]
@@ -385,7 +428,7 @@ class Data(PyGData):
         # NB: we remove the nodes themselves from their own neighborhood
         high = self.pos.max(dim=0).values
         low = self.pos.min(dim=0).values
-        r_max = torch.linalg.norm(high - low)
+        r_max = (high - low).norm()
         neighbors, distances = knn_2(
             self.pos, self.pos[is_out], k + 1, r_max=r_max)
         distances = distances[:, 1:]
@@ -410,7 +453,7 @@ class Data(PyGData):
         w = self.edge_attr
         s = edge_index_old[0]
         t = edge_index_old[1]
-        d = torch.linalg.norm(self.pos[s] - self.pos[t], dim=1)
+        d = (self.pos[s] - self.pos[t]).norm(dim=1)
         d_1 = torch.vstack((d, torch.ones_like(d))).T
 
         # Least square on d_1.x = w  (ie d.a + b = w)
@@ -445,6 +488,8 @@ class Data(PyGData):
         NB: returned edges are expressed with i<j by default.
         """
         assert self.has_edges
+
+        self.raise_if_edge_keys()
 
         edge_index, edge_attr = to_trimmed(
             self.edge_index, edge_attr=self.edge_attr, reduce=reduce)
@@ -550,7 +595,7 @@ class Data(PyGData):
         if idx.shape[0] == 0:
             keys_idx = []
         elif keys_idx is None:
-            keys_idx = Data._INDEXABLE
+            keys_idx = list(set(f.keys()) - set(Data._NOT_INDEXABLE))
         if keys is None:
             all_keys = list(f.keys())
             for k in ['_csr_', '_cluster_']:
@@ -626,6 +671,9 @@ class Batch(PyGBatch):
         # see: https://github.com/pyg-team/pytorch_geometric/issues/4848
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+
+            for d in data_list:
+                d.raise_if_edge_keys()
 
             # Little trick to prevent Batch.from_data_list from crashing
             # when some Data objects have edges while others don't

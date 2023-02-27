@@ -299,7 +299,7 @@ def visualize_3d(
         trace_modes[i_unselected_point_trace]['Super sampling'] = {
             'marker.color': colors[~data_0.selected], 'hovertext': None}
 
-    # Draw a trace for the each cluster level
+    # Draw a trace for each cluster level
     for i_level, data_i in enumerate(input if is_nag else []):
 
         # Exit in case the Data has no 'super_index'
@@ -479,6 +479,7 @@ def visualize_3d(
         # for each undirected edge pair. However, this requires picking
         # one direction for the edge attributes to we ARBITRARILY TAKE
         # THE MAX EDGE FEATURE for each undirected edge
+        input[i_level + 1].raise_if_edge_keys()
         se, se_attr = to_trimmed(se, edge_attr=se_attr, reduce='max')
 
         # Recover corresponding source and target coordinates using the

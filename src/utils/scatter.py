@@ -177,7 +177,7 @@ def scatter_nearest_neighbor(
         # Compute the distance between the points and the other segment's
         # candidate and update the segment's candidate as the point with
         # the smallest distance to the candidate
-        X_dist = torch.linalg.norm(X_points - Y_candidate, dim=1)
+        X_dist = (X_points - Y_candidate).norm(dim=1)
 
         # Update the candidate as the point with the smallest distance
         # for each edge

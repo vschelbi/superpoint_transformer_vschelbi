@@ -2,7 +2,6 @@ import torch
 from src.data import NAG
 from src.transforms import Transform
 from src.utils.geometry import rodrigues_rotation_matrix
-from src.utils.nn import trunc_normal_
 
 
 __all__ = [
@@ -87,15 +86,20 @@ class RandomTiltAndRotate(Transform):
             nag[i_level].pos = nag[i_level].pos @ R.T
 
             if getattr(nag[i_level], 'normal', None) is not None:
-                nag[i_level].normal = nag[i_level].normal @ R.T
+                normal = nag[i_level].normal
+                normal = normal @ R.T
+                normal[normal[:, 2] < 0] *= -1
+                nag[i_level].normal = normal
 
             # TODO: this is an ugly, hardcoded patch to deal with
             #  features assumedly created by
             #  _minimalistic_horizontal_edge_features........
-            if getattr(nag[i_level], 'edge_attr', None) is not None:
+            if nag[i_level].edge_attr is not None:
                 edge_attr = nag[i_level].edge_attr
-                edge_attr[:, 0:3] = (edge_attr[:, 0:3].float() @ R.T).half()  # mean subedge offset, float16 mm not supported on CPU
-                edge_attr[:, 3:6] = (edge_attr[:, 3:6].float() @ R.T).half()  # std subedge offset, float16 mm not supported on CPU
+                assert edge_attr.shape[1] == 7, \
+                    "Expected exactly 7 features in `edge_attr`, generated " \
+                    "with `_minimalistic_horizontal_edge_features`"
+                edge_attr[:, :3] = (edge_attr[:, :3].float() @ R.T).half()  # `mean_off`, float16 mm not supported on CPU
                 nag[i_level].edge_attr = edge_attr
 
         return nag
@@ -158,8 +162,13 @@ class RandomAnisotropicScale(Transform):
             #  features assumedly created by
             #  _minimalistic_horizontal_edge_features........
             if getattr(nag[i_level], 'edge_attr', None) is not None:
-                nag[i_level].edge_attr[:, :6] = \
-                    nag[i_level].edge_attr[:, :6] * scale.repeat(1, 2)  # mean and std subedge offset
+                edge_attr = nag[i_level].edge_attr
+                assert edge_attr.shape[1] == 7, \
+                    "Expected exactly 7 features in `edge_attr`, generated " \
+                    "with `_minimalistic_horizontal_edge_features`"
+                edge_attr[:, :3] *= scale
+                edge_attr[:, 3:] *= scale.norm()  # std_off and mean_dist are scaled by the scaling norm, slightly incorrect for std_off...
+                nag[i_level].edge_attr = edge_attr
 
         return nag
 
@@ -206,10 +215,12 @@ class RandomAxisFlip(Transform):
             # TODO: this is an ugly, hardcoded patch to deal with
             #  features assumedly created by
             #  _minimalistic_horizontal_edge_features........
-            if getattr(nag[i_level], 'edge_attr', None) is not None:
+            if nag[i_level].edge_attr is not None:
                 edge_attr = nag[i_level].edge_attr
-                edge_attr[:, 0:3][:, axis] *= -1  # mean subedge offset
-                edge_attr[:, 3:6][:, axis] *= -1  # std subedge offset
+                assert edge_attr.shape[1] == 7, \
+                    "Expected exactly 7 features in `edge_attr`, generated " \
+                    "with `_minimalistic_horizontal_edge_features`"
+                edge_attr[:, :3][:, axis] *= -1  # mean_off
                 nag[i_level].edge_attr = edge_attr
 
         return nag

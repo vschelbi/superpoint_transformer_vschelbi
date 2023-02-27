@@ -554,8 +554,8 @@ class NeST(nn.Module):
                 if v_edge_mlp is not None:
                     # TODO: NANO....NO V-POOL ?.................................................
                     norm_index = nag[i_level - 1].norm_index(mode=self.norm_mode)
-                    nag[i_level - 1].vertical_edge_attr = v_edge_mlp(
-                        nag[i_level - 1].vertical_edge_attr, batch=norm_index)
+                    nag[i_level - 1].v_edge_attr = v_edge_mlp(
+                        nag[i_level - 1].v_edge_attr, batch=norm_index)
 
                 # Forward on the DownNFuseStage
                 x, diameter = self._forward_down_stage(stage, nag, i_level, x)
@@ -631,7 +631,7 @@ class NeST(nn.Module):
         edge_index = nag[i_level].edge_index
         edge_attr = nag[i_level].edge_attr
         # TODO: NANO.....................................................
-        v_edge_attr = nag[i_level - 1].vertical_edge_attr
+        v_edge_attr = nag[i_level - 1].v_edge_attr
 
         # Forward pass on the stage and store output x
         x_out, diameter = stage(

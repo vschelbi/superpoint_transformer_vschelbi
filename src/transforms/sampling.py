@@ -5,7 +5,7 @@ from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from src.utils import fast_randperm, sparse_sample, knn_2
+from src.utils import fast_randperm, sparse_sample
 from src.transforms import Transform
 from src.data import NAG, NAGBatch
 from src.utils.metrics import atomic_to_histogram
@@ -697,7 +697,7 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         idx_select_list = []
         pos = nag[i_level].pos
         for i in idx:
-            distance = torch.linalg.norm(pos - pos[i].view(1, -1), dim=1)
+            distance = (pos - pos[i].view(1, -1)).norm(dim=1)
             idx_select_list.append(torch.where(distance < self.r)[0])
         idx_select = torch.cat(idx_select_list).unique()
 
@@ -840,7 +840,9 @@ class SampleEdges(Transform):
 
         # Select edges and their attributes, if relevant
         data.edge_index = data.edge_index[:, idx]
-        if getattr(data, 'edge_attr', None) is not None:
+        if data.has_edge_attr:
             data.edge_attr = data.edge_attr[idx]
+        for key in data.edge_keys:
+            data[key] = data[key][idx]
 
         return data

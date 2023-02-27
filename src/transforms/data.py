@@ -7,8 +7,8 @@ from src.utils.nn import trunc_normal_
 
 
 __all__ = [
-    'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeyToX',
-    'NAGAddKeyToX', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns',
+    'DataToNAG', 'NAGToData', 'RemoveKeys', 'NAGRemoveKeys', 'AddKeysTo',
+    'NAGAddKeysTo', 'NAGSelectByKey', 'SelectColumns', 'NAGSelectColumns',
     'DropoutColumns', 'NAGDropoutColumns', 'NAGJitterKey']
 
 
@@ -36,9 +36,9 @@ class NAGToData(Transform):
 class RemoveKeys(Transform):
     """Remove attributes of a Data object based on their name.
 
-    :param keys: list(str)
+    :param keys: str of list(str)
         List of attribute names
-    :param strict: bool=False
+    :param strict: bool
         If True, will raise an exception if an attribute from key is
         not within the input Data keys
     """
@@ -46,7 +46,7 @@ class RemoveKeys(Transform):
     _NO_REPR = ['strict']
 
     def __init__(self, keys=[], strict=False):
-        self.keys = keys
+        self.keys = [keys] if isinstance(keys, str) else keys
         self.strict = strict
 
     def _process(self, data):
@@ -66,7 +66,7 @@ class NAGRemoveKeys(Transform):
         Level at which to remove attributes. Can be an int or a str. If
         the latter, 'all' will apply on all levels, 'i+' will apply on
         level-i and above, 'i-' will apply on level-i and below
-    :param keys: list(str)
+    :param keys: str or list(str)
         List of attribute names
     :param strict: bool=False
         If True, will raise an exception if an attribute from key is
@@ -80,7 +80,7 @@ class NAGRemoveKeys(Transform):
     def __init__(self, level='all', keys=[], strict=False):
         assert isinstance(level, (int, str))
         self.level = level
-        self.keys = keys
+        self.keys = [keys] if isinstance(keys, str) else keys
         self.strict = strict
 
     def _process(self, nag):
@@ -107,33 +107,37 @@ class NAGRemoveKeys(Transform):
         return nag
 
 
-class AddKeyToX(Transform):
+class AddKeysTo(Transform):
     """Get attributes from their keys and concatenate them to x.
 
     :param keys: str or list(str)
-        The feature concatenated to x
+        The feature concatenated to 'to'
+    :param to: str
+        Destination attribute where the features in 'keys' will be
+        concatenated
     :param strict: bool, optional
         Whether we want to raise an error if a key is not found
     :param delete_after: bool, optional
-        Whether the Data attributes should be removed once added to x
+        Whether the Data attributes should be removed once added to 'to'
     """
 
     _NO_REPR = ['strict']
 
-    def __init__(self, keys=None, strict=True, delete_after=True):
-        self.keys = keys
+    def __init__(self, keys=None, to='x', strict=True, delete_after=True):
+        self.keys = [keys] if isinstance(keys, str) else keys
+        self.to = to
         self.strict = strict
         self.delete_after = delete_after
 
-    def _process_single_key(self, data, key):
+    def _process_single_key(self, data, key, to):
         # Read existing features and the attribute of interest
         feat = getattr(data, key, None)
-        x = getattr(data, "x", None)
+        x = getattr(data, to, None)
 
         # Skip if the attribute is None
         if feat is None:
             if self.strict:
-                raise Exception(f"Data should contain the attribute {key}")
+                raise Exception(f"Data should contain the attribute '{key}'")
             else:
                 return data
 
@@ -144,24 +148,24 @@ class AddKeyToX(Transform):
         # In case Data has no features yet
         if x is None:
             if self.strict and data.num_nodes != feat.shape[0]:
-                raise Exception("We expected to have an attribute x")
+                raise Exception(f"Data should contain the attribute '{to}'")
             if feat.dim() == 1:
                 feat = feat.unsqueeze(-1)
-            data.x = feat
+            data[to] = feat
             return data
 
         # Make sure shapes match
         if x.shape[0] != feat.shape[0]:
             raise Exception(
-                f"The tensor x and {key} can't be concatenated, x: "
-                f"{x.shape[0]}, feat: {feat.shape[0]}")
+                f"The tensors '{to}' and '{key}' can't be concatenated, "
+                f"'{to}': {x.shape[0]}, '{key}': {feat.shape[0]}")
 
         # Concatenate x and feat
         if x.dim() == 1:
             x = x.unsqueeze(-1)
         if feat.dim() == 1:
             feat = feat.unsqueeze(-1)
-        data.x = torch.cat([x, feat], dim=-1)
+        data[to] = torch.cat([x, feat], dim=-1)
 
         return data
 
@@ -170,12 +174,12 @@ class AddKeyToX(Transform):
             return data
 
         for key in self.keys:
-            data = self._process_single_key(data, key)
+            data = self._process_single_key(data, key, self.to)
 
         return data
 
 
-class NAGAddKeyToX(Transform):
+class NAGAddKeysTo(Transform):
     """Get attributes from their keys and concatenate them to x.
 
     :param level: int or str
@@ -183,20 +187,26 @@ class NAGAddKeyToX(Transform):
         the latter, 'all' will apply on all levels, 'i+' will apply on
         level-i and above, 'i-' will apply on level-i and below
     :param keys: str or list(str)
-        The feature concatenated to x
+        The feature concatenated to 'to'
+    :param to: str
+        Destination attribute where the features in 'keys' will be
+        concatenated
     :param strict: bool, optional
         Whether we want to raise an error if a key is not found
     :param delete_after: bool, optional
-        Whether the Data attributes should be removed once added to x
+        Whether the Data attributes should be removed once added to 'to'
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
     _NO_REPR = ['strict']
 
-    def __init__(self, level='all', keys=None, strict=True, delete_after=True):
+    def __init__(
+            self, level='all', keys=None, to='x', strict=True,
+            delete_after=True):
         self.level = level
-        self.keys = keys
+        self.keys = [keys] if isinstance(keys, str) else keys
+        self.to = to
         self.strict = strict
         self.delete_after = delete_after
 
@@ -217,8 +227,9 @@ class NAGAddKeyToX(Transform):
             raise ValueError(f'Unsupported level={self.level}')
 
         transforms = [
-            AddKeyToX(
-                keys=k, strict=self.strict, delete_after=self.delete_after)
+            AddKeysTo(
+                keys=k, to=self.to, strict=self.strict,
+                delete_after=self.delete_after)
             for k in level_keys]
 
         for i_level in range(nag.num_levels):

@@ -86,20 +86,20 @@ class CSRData:
             self.values[i] = self.values[i].detach()
         return self
 
-    def to(self, device):
+    def to(self, device, **kwargs):
         """Move the CSRData to the specified device."""
-        self.pointers = self.pointers.to(device)
+        self.pointers = self.pointers.to(device, **kwargs)
         for i in range(self.num_values):
-            self.values[i] = self.values[i].to(device)
+            self.values[i] = self.values[i].to(device, **kwargs)
         return self
 
-    def cpu(self):
+    def cpu(self, **kwargs):
         """Move the CSRData to the CPU."""
-        return self.to('cpu')
+        return self.to('cpu', **kwargs)
 
-    def cuda(self):
+    def cuda(self, **kwargs):
         """Move the CSRData to the first available GPU."""
-        return self.to('cuda')
+        return self.to('cuda', **kwargs)
 
     @property
     def device(self):
@@ -325,10 +325,10 @@ class CSRBatch(CSRData):
     def num_batch_items(self):
         return len(self.__sizes__) if self.__sizes__ is not None else 0
 
-    def to(self, device):
+    def to(self, device, **kwargs):
         """Move the CSRBatch to the specified device."""
-        out = super().to(device)
-        out.__sizes__ = self.__sizes__.to(device) \
+        out = super().to(device, **kwargs)
+        out.__sizes__ = self.__sizes__.to(device, **kwargs) \
             if self.__sizes__ is not None else None
         return out
 

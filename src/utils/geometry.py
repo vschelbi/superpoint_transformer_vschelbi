@@ -40,10 +40,10 @@ def base_vectors_3d(x):
     assert x.dim() == 2
     assert x.shape[1] == 3
 
-    a = x / torch.linalg.norm(x, dim=1).view(-1, 1)
+    a = x / x.norm(dim=1).view(-1, 1)
 
     b = torch.vstack((a[:, 1] - a[:, 2], a[:, 2] - a[:, 0], a[:, 0] - a[:, 1])).T
-    b /= torch.linalg.norm(b, dim=1).view(-1, 1)
+    b /= b.norm(dim=1).view(-1, 1)
 
     c = torch.linalg.cross(a, b)
 

@@ -1,3 +1,6 @@
+defaults:
+  - _features.yaml
+
 _target_: null
 
 data_dir: ${paths.data_dir}
@@ -14,12 +17,7 @@ in_memory: False
 # config interpolation
 num_classes: ???
 
-# Similar to num_classes, the size of handcrafted features for points
-# and segments should be specified here. This facilitates model
-# parameterization with config interpolation
-feat_point: ???
-feat_segment: ???
-
+# Transforms
 pre_transform: null
 train_transform: null
 val_transform: null
@@ -35,6 +33,6 @@ tta_val: False
 # DataLoader parameters. Would be good to have them live in another file
 dataloader:
     batch_size: 4
-    num_workers: 2
+    num_workers: 4
     pin_memory: True
     persistent_workers: True
