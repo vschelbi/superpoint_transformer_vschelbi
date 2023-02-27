@@ -295,12 +295,12 @@ on_device_train_transform:
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${eval:'[k for k in ${datamodule.point_hf} if k != "rgb"]'}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${eval:'[k for k in ${datamodule.segment_hf} if k != "rgb"]'}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
         to: 'x'
 
     # Add some noise and randomly some point, node and edge features
@@ -406,22 +406,32 @@ on_device_val_transform:
         log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
         log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
 
-    # Color transforms here before fusing all features together
-#    - transform: NAGColorNormalize
-#      params:
-#        level: 'all'
-
-    # Move all point and segment features to 'x', including "rgb"
+    # Move all point and segment features to 'x', except for "rgb", on
+    # which we want to apply specific transforms
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${datamodule.point_hf}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${datamodule.segment_hf}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
         to: 'x'
+
+    # RGB-specific transforms. In particular, the color dropout will
+    # switch off all three color channels together, instead of just one
+    # by one with
+#    - transform: NAGColorNormalize
+#      params:
+#        level: 'all'
+
+    # Finally move RGB to node and segment features, if need be
+    - transform: NAGAddKeysTo
+      params:
+        keys: 'rgb'
+        to: 'x'
+        strict: False
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
