@@ -12,7 +12,6 @@ net:
     qkv_bias: ${model.net.qkv_bias}
     qk_dim: ${model.net.qk_dim}
     qk_scale: ${model.net.qk_scale}
-    scale_qk_by_neigh: ${model.net.scale_qk_by_neigh}
     attn_drop: ${model.net.down_attn_drop}
     drop: ${model.net.down_residual_drop}
     in_rpe_dim: ${eval:'${model._x_ve_mlp} if ${model._x_ve_mlp} else ${model._x_ve_raw}'}  # size of handcrafted vertical edge features

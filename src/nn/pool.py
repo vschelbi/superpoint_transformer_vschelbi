@@ -6,7 +6,7 @@ from torch_geometric.nn.aggr import MaxAggregation
 from torch_geometric.nn.aggr import MinAggregation
 from torch_scatter import scatter_sum
 from torch_geometric.utils import softmax
-from src.utils.nn import init_weights, LearnableParameter
+from src.utils.nn import init_weights, LearnableParameter, build_qk_scale_func
 
 
 __all__ = [
@@ -96,7 +96,6 @@ class BaseAttentivePool(nn.Module):
             qkv_bias=True,
             qk_dim=8,
             qk_scale=None,
-            scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
             in_rpe_dim=9,
@@ -112,8 +111,7 @@ class BaseAttentivePool(nn.Module):
         self.dim = dim
         self.num_heads = num_heads
         self.qk_dim = qk_dim
-        self.qk_scale = qk_scale or (dim // num_heads) ** -0.5
-        self.scale_qk_by_neigh = scale_qk_by_neigh
+        self.qk_scale = build_qk_scale_func(dim, num_heads, qk_scale)
         self.heads_share_rpe = heads_share_rpe
 
         self.kv = nn.Linear(dim, qk_dim * num_heads + dim, bias=qkv_bias)
@@ -184,13 +182,7 @@ class BaseAttentivePool(nn.Module):
         v = kv[:, DH:].view(Nc, H, -1)  # [Nc, H, C // H]
 
         # Apply scaling on the queries
-        q = q * self.qk_scale
-
-        # Apply scaling based on the number of neighbors of each node.
-        # This will induce a scaled softmax
-        if self.scale_qk_by_neigh:
-            num_neigh_scale = (index.bincount(minlength=Np) ** -0.5)[index]
-            q = q * num_neigh_scale.view(-1, 1, 1)
+        q = q * self.qk_scale(index)
 
         # TODO: add the relative positional encodings to the
         #  compatibilities here
@@ -266,7 +258,6 @@ class AttentivePool(BaseAttentivePool):
             qkv_bias=True,
             qk_dim=8,
             qk_scale=None,
-            scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
             in_rpe_dim=9,
@@ -283,7 +274,6 @@ class AttentivePool(BaseAttentivePool):
             qkv_bias=qkv_bias,
             qk_dim=qk_dim,
             qk_scale=qk_scale,
-            scale_qk_by_neigh=scale_qk_by_neigh,
             attn_drop=attn_drop,
             drop=drop,
             in_rpe_dim=in_rpe_dim,
@@ -318,7 +308,6 @@ class AttentivePoolWithLearntQueries(BaseAttentivePool):
             qkv_bias=True,
             qk_dim=8,
             qk_scale=None,
-            scale_qk_by_neigh=True,
             attn_drop=None,
             drop=None,
             in_rpe_dim=18,
@@ -335,7 +324,6 @@ class AttentivePoolWithLearntQueries(BaseAttentivePool):
             qkv_bias=qkv_bias,
             qk_dim=qk_dim,
             qk_scale=qk_scale,
-            scale_qk_by_neigh=scale_qk_by_neigh,
             attn_drop=attn_drop,
             drop=drop,
             in_rpe_dim=in_rpe_dim,

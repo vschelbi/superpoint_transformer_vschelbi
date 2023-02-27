@@ -85,3 +85,46 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     """
     with torch.no_grad():
         return _trunc_normal_(tensor, mean, std, a, b)
+
+
+def build_qk_scale_func(dim, num_heads, qk_scale):
+    """Builds the QK-scale function that will be used to produce
+    the qk-scale. This function follows the template:
+        f(s), where `s` is the `edge_index[0]`
+    even if it does not use it.
+    """
+    # If qk_scale provided, the default behavior will be
+    # 1/(sqrt(dim)*sqrt(num))
+    if qk_scale is None:
+        def f(s):
+            D = (dim // num_heads) ** -0.5
+            G = (s.bincount() ** -0.5)[s].view(-1, 1, 1)
+            return D * G
+        return f
+
+    # If qk_scale is provided as a scalar, it will be used as is
+    if not isinstance(qk_scale, str):
+        def f(s):
+            return qk_scale
+        return f
+
+    # Convert input str to lowercase and remove spaces before
+    # parsing
+    qk_scale = qk_scale.lower().replace(' ', '')
+
+    if qk_scale in ['d+g', 'g+d']:
+        def f(s):
+            D = (dim // num_heads) ** -0.5
+            G = (s.bincount() ** -0.5)[s].view(-1, 1, 1)
+            return D + G
+        return f
+
+    if qk_scale in ['dg', 'gd', 'd*g', 'g*d', 'd.g', 'g.d']:
+        def f(s):
+            D = (dim // num_heads) ** -0.5
+            G = (s.bincount() ** -0.5)[s].view(-1, 1, 1)
+            return D * G
+        return f
+
+    raise ValueError(
+        f"Unable to build QK scaling scheme for qk_scale='{qk_scale}'")
