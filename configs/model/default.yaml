@@ -4,6 +4,7 @@ num_classes: ${datamodule.num_classes}
 sampling_loss: False
 pointwise_loss: True
 weighted_loss: True
+multi_stage_loss_lambdas: null
 transformer_lr_scale: 0.1
 
 optimizer:

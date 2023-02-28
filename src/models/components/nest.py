@@ -112,7 +112,8 @@ class NeST(nn.Module):
             pool='max',
             unpool='index',
             fusion='cat',
-            norm_mode='graph'):
+            norm_mode='graph',
+            output_stage_wise=False):
 
         super().__init__()
 
@@ -128,6 +129,7 @@ class NeST(nn.Module):
         self.stages_share_rpe = stages_share_rpe
         self.blocks_share_rpe = blocks_share_rpe
         self.heads_share_rpe = heads_share_rpe
+        self.output_stage_wise = output_stage_wise
 
         # Convert input arguments to nested lists
         (
@@ -418,6 +420,9 @@ class NeST(nn.Module):
         else:
             self.up_stages = None
 
+        assert self.num_up_stages > 0 or not self.output_stage_wise, \
+            "At least one up stage is needed for output_stage_wise=True"
+
         assert bool(self.down_stages) != bool(self.up_stages) \
                or self.num_down_stages >= self.num_up_stages, \
             "The number of Up stages should be <= the number of Down " \
@@ -429,6 +434,11 @@ class NeST(nn.Module):
 
         # Optional pointNet-like module operating on Level-0 points in
         # for points belonging to small L1 nodes
+        # TODO: if the per-stage output is returned, need to define how to
+        #  deal with small L1 nodes
+        assert small is None or not self.output_stage_wise,\
+            "Returning per-stage output with `small` is not supported"
+
         assert small is None or small > 0 and small_point_mlp is not None \
                and small_down_mlp is not None, \
             "If specified, `small` should be an integer larger than 0 and " \
@@ -526,6 +536,12 @@ class NeST(nn.Module):
 
     @property
     def out_dim(self):
+        if self.output_stage_wise:
+            out_dim = [stage.out_dim for stage in self.up_stages][::-1]
+            if self.last_stage is not None:
+                out_dim[0] = self.last_stage.out_dim
+            out_dim += [self.down_stages[-1].out_dim]
+            return out_dim
         if self.last_stage is not None:
             return self.last_stage.out_dim
         if self.up_stages is not None:
@@ -534,12 +550,12 @@ class NeST(nn.Module):
             return self.down_stages[-1].out_dim
         return self.first_stage.out_dim
 
-    def forward(self, nag, return_down_outputs=False, return_up_outputs=False):
+    def forward(self, nag):
         # assert isinstance(nag, NAG)
         # assert nag.num_levels >= 2
         # assert nag.num_levels > self.num_down_stages
 
-        # TODO: NANO, this will need to be changed if we want TRUE NANO.........
+        # TODO: this will need to be changed if we want FAST NANO
         if self.nano:
             nag = nag[1:]
 
@@ -667,25 +683,22 @@ class NeST(nn.Module):
             if len(up_outputs) > 0:
                 up_outputs[-1] = x
 
-            # TODO: if the per-stage output is returned, need to define how to
-            # deal with small L1 nodes
-            if return_down_outputs or return_up_outputs:
-                raise NotImplementedError(
-                    "Returning per-stage output is not supported yet when "
-                    "`small` is specified")
-
         # Last spatial propagation of features
         if self.last_stage is not None:
             x, _ = self._forward_last_stage(nag, x)
 
-        # Different types of output signatures
-        if not return_down_outputs and not return_up_outputs:
+        # Different types of output signatures. For stage-wise output,
+        # return the output for each stage. For the L1 level, we must
+        # take the 'last_stage' into account and not simply the output
+        # of the last 'up_stage'. Besides, for the Lmax level, we take
+        # the output of the innermost 'down_stage'. Finally, these
+        # outputs are sorted by order of increasing NAG level (from low
+        # to high)
+        if self.output_stage_wise:
+            out = [x] + up_outputs[:0:-1] + [down_outputs[-1]]
+            return out
+        else:
             return x
-        if not return_down_outputs:
-            return x, up_outputs
-        if not return_up_outputs:
-            return x, down_outputs
-        return x, down_outputs, up_outputs
 
     def _forward_first_stage(self, stage, nag):
         x = nag[0].x

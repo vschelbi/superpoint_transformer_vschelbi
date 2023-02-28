@@ -188,7 +188,6 @@ class BaseDataset(InMemoryDataset):
 
         # Load the processed data, if the dataset must be in memory
         if self.in_memory:
-            # TODO: NANO.....................................................
             in_memory_data = [
                 NAG.load(
                     self.processed_paths[i],
@@ -544,7 +543,6 @@ class BaseDataset(InMemoryDataset):
             return self.in_memory_data[idx]
 
         # Read the NAG from HDD
-        # TODO: NANO.....................................................
         nag = NAG.load(
             self.processed_paths[idx],
             keys_low=self.point_load_keys,

@@ -1,11 +1,14 @@
 import torch
+from torch.nn import ModuleList
 import logging
+from copy import deepcopy
 from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from src.metrics import ConfusionMatrix
 from src.utils import loss_with_target_histogram, atomic_to_histogram, \
     init_weights, wandb_confusion_matrix, knn_2
 from src.nn import Classifier
+from src.loss import MultiLoss
 from src.optim.lr_scheduler import ON_PLATEAU_SCHEDULERS
 from pytorch_lightning.loggers.wandb import WandbLogger
 from src.data import NAG
@@ -22,29 +25,48 @@ class PointSegmentationModule(LightningModule):
             self, net, criterion, optimizer, scheduler, num_classes,
             class_names=None, sampling_loss=False, pointwise_loss=True,
             weighted_loss=True, custom_init=True, transformer_lr_scale=1,
-            **kwargs):
+            multi_stage_loss_lambdas=None, **kwargs):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False, ignore=['net', 'criterion'])
 
-        # Network that will do the actual computation
+        # Loss function. If `multi_stage_loss_lambdas`, a MultiLoss is
+        # built based on the input criterion
+        if isinstance(criterion, MultiLoss):
+            self.criterion = criterion
+        elif multi_stage_loss_lambdas is not None:
+            criteria = [deepcopy(criterion)
+                        for _ in range(len(multi_stage_loss_lambdas))]
+            self.criterion = MultiLoss(criteria, multi_stage_loss_lambdas)
+        else:
+            self.criterion = criterion
+
+        # Network that will do the actual computation. NB, we make sure
+        # the net returns the output from all up stages, if a multi stage
+        # loss is expected
         self.net = net
+        if self.multi_stage_loss:
+            self.net.output_stage_wise = True
+            assert len(self.net.out_dim) == len(self.criterion), \
+                f"The number of items in the multi-stage loss must match the " \
+                f"number of stages in the net. Found " \
+                f"{len(self.net.out_dim)} stages, but {len(self.criterion)} " \
+                f"criteria in the loss."
 
         # Segmentation head
-        self.head = Classifier(self.net.out_dim, num_classes)
+        if self.multi_stage_loss:
+            self.head = ModuleList([
+                Classifier(dim, num_classes) for dim in self.net.out_dim])
+        else:
+            self.head = Classifier(self.net.out_dim, num_classes)
 
         # Custom weight initialization. In particular, this applies
         # Xavier / Glorot initialization on Linear layers
         if custom_init:
             self.net.apply(init_weights)
             self.head.apply(init_weights)
-
-        # Loss function. We add `ignore_index=num_classes` to account
-        # for unclassified/ignored points, which are given num_classes
-        # labels
-        self.criterion = criterion
 
         # Metric objects for calculating and averaging accuracy across
         # batches. We add `ignore_index=num_classes` to account for
@@ -72,7 +94,13 @@ class PointSegmentationModule(LightningModule):
 
     def forward(self, nag):
         x = self.net(nag)
+        if self.multi_stage_loss:
+            return [head(x_) for head, x_ in zip(self.head, x)]
         return self.head(x)
+
+    @property
+    def multi_stage_loss(self):
+        return isinstance(self.criterion, MultiLoss)
 
     def on_fit_start(self):
         # This is a bit of a late initialization for the LightningModule
@@ -124,9 +152,20 @@ class PointSegmentationModule(LightningModule):
             logits, preds, y_hist = self.step_multi_run_inference(*batch)
 
         # Compute the loss either in a point-wise or segment-wise
-        # fashion
-        if self.hparams.pointwise_loss:
+        # fashion. Cross-Entropy with pointwise_loss is equivalent to
+        # KL-divergence
+        if self.hparams.pointwise_loss and self.multi_stage_loss:
+            loss = 0
+            enum = zip(
+                self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
+            for lamb, criterion, a, b in enum:
+                loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
+            y_hist = y_hist[0]
+        elif self.hparams.pointwise_loss:
             loss = loss_with_target_histogram(self.criterion, logits, y_hist)
+        elif self.multi_stage_loss:
+            loss = self.criterion(logits, [y.argmax(dim=1) for y in y_hist])
+            y_hist = y_hist[0]
         else:
             loss = self.criterion(logits, y_hist.argmax(dim=1))
 
@@ -137,7 +176,10 @@ class PointSegmentationModule(LightningModule):
         """
         y_hist = self.step_get_y_hist(nag)
         logits = self.forward(nag)
-        preds = torch.argmax(logits, dim=1)
+        if self.multi_stage_loss:
+            preds = torch.argmax(logits[0], dim=1)
+        else:
+            preds = torch.argmax(logits, dim=1)
         return logits, preds, y_hist
 
     def step_multi_run_inference(self, nag, transform, num_runs):
@@ -157,21 +199,30 @@ class PointSegmentationModule(LightningModule):
         # Build the global logits, in which the multi-run
         # logits will be accumulated, before computing their final
         # prediction
-        logits = torch.zeros_like(y_hist, dtype=torch.float)
+        if self.multi_stage_loss:
+            logits = [torch.zeros_like(yh, dtype=torch.float) for yh in y_hist]
+        else:
+            logits = torch.zeros_like(y_hist, dtype=torch.float)
         seen = torch.zeros_like(y_hist[:, 0], dtype=torch.bool)
 
-        # TODO: NANO.....................................................
         for i_run in range(num_runs):
             # Apply transform
             nag_ = transform(nag.clone())
 
             # Recover the node identifier that should have been
-            # implanted by `BaseDataModule.on_after_batch_transfer`
-            node_id = nag_[1][KEY]
+            # implanted by `NAGSaveNodeIndex` and forward on the
+            # augmented data and update the global logits of the node
+            if self.multi_stage_loss:
+                out = self.forward(nag_)
+                for i in range(len(out)):
+                    node_id = nag_[i + 1][KEY]
+                    logits[i][node_id] += out[i]
+            else:
+                node_id = nag_[1][KEY]
+                logits[node_id] += self.forward(nag_)
 
-            # Forward on the augmented data and update the global
-            # logits of the node
-            logits[node_id] += self.forward(nag_)
+            # Maintain the seen/unssen mask for level-1 nodes only
+            node_id = nag_[1][KEY]
             seen[node_id] = True
 
         # Restore the original transform inplace modification
@@ -195,7 +246,10 @@ class PointSegmentationModule(LightningModule):
                     f"{num_left_out}. These left out nodes will default to "
                     f"label-0 class prediction. Consider sampling less nodes "
                     f"in the augmentations, or increase the search radius")
-            logits[unseen_idx] = logits[seen_idx][neighbors]
+            if self.multi_stage_loss:
+                logits[unseen_idx] = logits[0][seen_idx][neighbors]
+            else:
+                logits[unseen_idx] = logits[seen_idx][neighbors]
 
         # Compute the global prediction
         preds = torch.argmax(logits, dim=1)
@@ -207,20 +261,33 @@ class PointSegmentationModule(LightningModule):
         # sampled points (ie sampling will affect the loss and metrics)
         # or directly from the precomputed level-1 label histograms (ie
         # true annotations)
-        #TODO: NANO.....................................................
-        if self.hparams.sampling_loss:
+        if self.hparams.sampling_loss and self.multi_stage_loss:
+            y_hist = [
+                atomic_to_histogram(
+                    nag[0].y,
+                    nag.get_super_index(i_level), n_bins=self.num_classes + 1)
+                for i_level in range(1, nag.num_levels)]
+
+        elif self.hparams.sampling_loss:
             idx = nag[0].super_index
             y = nag[0].y
 
             # Convert level-0 labels to segment-level histograms, while
             # accounting for the extra class for unlabeled/ignored points
             y_hist = atomic_to_histogram(y, idx, n_bins=self.num_classes + 1)
+
+        elif self.multi_stage_loss:
+            y_hist = [nag[i_level].y for i_level in range(1, nag.num_levels)]
+
         else:
             y_hist = nag[1].y
 
         # Remove the last bin of the histogram, accounting for
         # unlabeled/ignored points
-        y_hist = y_hist[:, :self.num_classes]
+        if self.multi_stage_loss:
+            y_hist = [yh[:, :self.num_classes] for yh in y_hist]
+        else:
+            y_hist = y_hist[:, :self.num_classes]
 
         return y_hist
 
