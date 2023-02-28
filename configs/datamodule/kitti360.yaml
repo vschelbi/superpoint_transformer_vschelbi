@@ -62,7 +62,7 @@ pcp_k_adjacency: 10
 pcp_w_adjacency: -1
 pcp_iterations: 15
 graph_k_max: 50
-graph_gap: [0, 1, 5, 10]
+graph_gap: [1, 3, 10, 30]
 
 # Batch construction parameterization
 sample_segment_ratio: 0.1
