@@ -73,6 +73,10 @@ pcp_w_adjacency: 1
 pcp_iterations: 15
 graph_k_max: 30
 graph_gap: [0.2, 0.5, 1, 5]
+graph_k_ratio: 0.2
+graph_k_min: 20
+graph_cycles: 3
+graph_margin: 0.2
 
 # Batch construction parameterization
 sample_segment_ratio: 0.1
@@ -193,10 +197,10 @@ pre_transform:
       params:
         k_max: ${datamodule.graph_k_max}
         gap: ${datamodule.graph_gap}
-        k_ratio: 0.2
-        k_min: 20
-        cycles: 3
-        margin: 0.2
+        k_ratio: ${datamodule.graph_k_ratio}
+        k_min: ${datamodule.graph_k_min}
+        cycles: ${datamodule.graph_cycles}
+        margin: ${datamodule.graph_margin}
         chunk_size: [1e6, 1e5, 1e5, 1e5]  # reduce if CUDA memory errors
         halfspace_filter: True
         bbox_filter: True
