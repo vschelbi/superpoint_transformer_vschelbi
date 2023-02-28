@@ -234,7 +234,6 @@ class NeST(nn.Module):
                 qk_dim=qk_dim,
                 qkv_bias=qkv_bias,
                 qk_scale=qk_scale,
-                scale_qk_by_neigh=scale_qk_by_neigh,
                 in_rpe_dim=in_rpe_dim,
                 ffn_ratio=nano_ffn_ratio,
                 residual_drop=nano_residual_drop,
