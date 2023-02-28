@@ -695,7 +695,7 @@ class NeST(nn.Module):
         # outputs are sorted by order of increasing NAG level (from low
         # to high)
         if self.output_stage_wise:
-            out = [x] + up_outputs[:0:-1] + [down_outputs[-1]]
+            out = [x] + up_outputs[::-1][1:] + [down_outputs[-1]]
             return out
         else:
             return x
