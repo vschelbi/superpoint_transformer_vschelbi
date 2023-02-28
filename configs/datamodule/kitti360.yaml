@@ -177,7 +177,7 @@ pre_transform:
         log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['rgb', 'elevation', 'pos_room']
+        mean_keys: ['rgb', 'elevation']
         std_keys: []
     - transform: RadiusHorizontalGraph
       params:
