@@ -855,8 +855,9 @@ def _horizontal_graph_by_radius_for_single_level(
 
     # Exit in case the i_level graph contains only one node
     if num_nodes < 2:
-        nag._list[i_level] = data
-        return nag
+        raise ValueError(
+            f"Input NAG only has 1 node at level={i_level}. Cannot compute "
+            f"radius-based horizontal graph.")
 
     # Compute the super_index for level-0 points wrt the target level
     super_index = nag.get_super_index(i_level)
