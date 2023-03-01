@@ -3,6 +3,9 @@ defaults:
 
 _target_: src.datamodules.kitti360.KITTI360DataModule
 
+dataloader:
+    batch_size: 1
+
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 15
