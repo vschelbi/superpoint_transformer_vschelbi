@@ -201,7 +201,7 @@ pre_transform:
         k_min: ${datamodule.graph_k_min}
         cycles: ${datamodule.graph_cycles}
         margin: ${datamodule.graph_margin}
-        chunk_size: [1e6, 1e5, 1e5, 1e5]  # reduce if CUDA memory errors
+        chunk_size: 1e5  # reduce if CUDA memory errors
         halfspace_filter: True
         bbox_filter: True
         target_pc_flip: True
