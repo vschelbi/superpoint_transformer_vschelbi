@@ -95,13 +95,13 @@ pos_jitter: 0.03
 tilt_n_rotate_phi: 0.1
 tilt_n_rotate_theta: 180
 anisotropic_scaling: 0.2
-rgb_jitter: 0.01
+rgb_jitter: 0
 rgb_autocontrast: 0.5
-rgb_drop: 0.3
-node_feat_jitter: 0.01
-h_edge_feat_jitter: 0.01
-v_edge_feat_jitter: 0.01
-node_feat_drop: 0.3
+rgb_drop: 0.4
+node_feat_jitter: 0
+h_edge_feat_jitter: 0
+v_edge_feat_jitter: 0
+node_feat_drop: 0
 h_edge_feat_drop: 0
 v_edge_feat_drop: 0
 
