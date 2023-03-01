@@ -67,6 +67,7 @@ graph_k_ratio: 0.2
 graph_k_min: 20
 graph_cycles: 3
 graph_margin: 0.5
+graph_chunk: [1e6, 1e5, 1e5, 1e5]  # reduce if CUDA memory errors
 
 # Batch construction parameterization
 sample_segment_ratio: 0.1
@@ -191,7 +192,7 @@ pre_transform:
         k_min: ${datamodule.graph_k_min}
         cycles: ${datamodule.graph_cycles}
         margin: ${datamodule.graph_margin}
-        chunk_size: [1e6, 1e5, 1e5, 1e5]  # reduce if CUDA memory errors
+        chunk_size: ${datamodule.graph_chunk}
         halfspace_filter: True
         bbox_filter: True
         target_pc_flip: True
