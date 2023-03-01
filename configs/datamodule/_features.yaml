@@ -44,6 +44,7 @@ feat_size:
     curvature: 1
     elevation: 1
     size: 1
+    intensity: 1
 
     log_pos: 3
     log_pos_room: 3
@@ -80,6 +81,7 @@ feat_size:
     mean_curvature: 1
     mean_elevation: 1
     mean_size: 1
+    mean_intensity: 1
 
     std_pos: 3
     std_pos_room: 3
@@ -98,6 +100,7 @@ feat_size:
     std_curvature: 1
     std_elevation: 1
     std_size: 1
+    std_intensity: 1
 
     mean_off: 3
     std_off: 3
