@@ -3,6 +3,9 @@ defaults:
 
 _target_: src.datamodules.kitti360.KITTI360DataModule
 
+dataloader:
+    batch_size: 1
+
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 15
@@ -55,6 +58,7 @@ v_edge_hf: []  # vertical edge features used for training
 # all the pre_transforms
 voxel: 0.1
 knn: 50
+knn_r: 10
 pcp_regularization: [0.04, 0.2, 0.5, 1]
 pcp_spatial_weight: [1e-2, 1e-3, 1e-4, 1e-4]
 pcp_cutoff: [10, 100, 1000, 10000]
@@ -109,7 +113,7 @@ pre_transform:
     - transform: KNN
       params:
         k: ${datamodule.knn}
-        r_max: 10
+        r_max: ${datamodule.knn_r}
         verbose: True
     - transform: DataTo
       params:

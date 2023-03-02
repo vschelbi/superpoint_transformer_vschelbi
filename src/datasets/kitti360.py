@@ -92,7 +92,7 @@ class KITTI360(BaseDataset):
         return KITTI360_NUM_CLASSES
 
     @property
-    def all_cloud_ids(self):
+    def all_base_cloud_ids(self):
         """Dictionary holding lists of paths to the clouds, for each
         stage.
 
@@ -142,6 +142,7 @@ class KITTI360(BaseDataset):
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
+        id = self.id_to_base_id(id)
         return osp.join(
             'data_3d_semantics', id.split('/')[0], 'static',
             id.split('/')[1] + '.ply')

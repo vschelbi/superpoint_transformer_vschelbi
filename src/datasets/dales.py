@@ -100,7 +100,7 @@ class DALES(BaseDataset):
         return DALES_NUM_CLASSES
 
     @property
-    def all_cloud_ids(self):
+    def all_base_cloud_ids(self):
         """Dictionary holding lists of paths to the clouds, for each
         stage.
 
@@ -165,7 +165,7 @@ class DALES(BaseDataset):
             stage = 'test'
         else:
             raise ValueError(f"Unknown tile id '{id}'")
-        return osp.join(stage, id + '.ply')
+        return osp.join(stage, self.id_to_base_id(id) + '.ply')
 
     def processed_to_raw_path(self, processed_path):
         """Return the raw cloud path corresponding to the input
@@ -179,8 +179,11 @@ class DALES(BaseDataset):
         # 'raw/train/' directory
         stage = 'train' if stage in ['trainval', 'val'] else stage
 
+        # Remove the tiling in the cloud_id, if any
+        base_cloud_id = self.id_to_base_id(cloud_id)
+
         # Read the raw cloud data
-        raw_path = osp.join(self.raw_dir, stage, cloud_id + '.ply')
+        raw_path = osp.join(self.raw_dir, stage, base_cloud_id + '.ply')
 
         return raw_path
 

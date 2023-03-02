@@ -13,8 +13,8 @@ from src.utils.metrics import atomic_to_histogram
 
 __all__ = [
     'Shuffle', 'SaveNodeIndex', 'NAGSaveNodeIndex', 'GridSampling3D',
-    'SampleSubNodes', 'SampleKHopSubgraphs', 'SampleRadiusSubgraphs',
-    'SampleSegments', 'SampleEdges']
+    'SampleXYTiling', 'SampleSubNodes', 'SampleKHopSubgraphs',
+    'SampleRadiusSubgraphs', 'SampleSegments', 'SampleEdges']
 
 
 class Shuffle(Transform):
@@ -264,6 +264,40 @@ def _group_data(
             data[key] = data[key].bool()
 
     return data
+
+
+class SampleXYTiling(Transform):
+    """Tile the input Data along the XY axes and select only a given
+    tile. This is useful to reduce the size of very large clouds at
+    preprocessing time.
+
+    :param x: int
+        x coordinate of the sample in the tiling grid
+    :param y: int
+        x coordinate of the sample in the tiling grid
+    :param tiling: int or tuple(int, int)
+        Number of tiles in the grid in each direction. If a tuple is
+        passed, each direction can be tiled independently
+    """
+
+    def __init__(self, x=0, y=0, tiling=2):
+        tiling = (tiling, tiling) if isinstance(tiling, int) else tiling
+        self.tiling = torch.as_tensor(tiling)
+        self.x = x
+        self.y = y
+
+    def _process(self, data):
+        # Compute the xy coordinates in the tiling grid, for each point
+        xy = data.pos[:, :2].clone().view(-1, 2)
+        xy -= xy.min(dim=0).values.view(1, 2)
+        xy /= xy.max(dim=0).values.view(1, 2)
+        xy = xy.clip(min=0, max=1) * self.tiling.view(1, 2)
+        xy = xy.long()
+
+        # Select only the points in the desired tile
+        idx = torch.where((xy[:, 0] == self.x) & (xy[:, 1] == self.y))[0]
+
+        return data.select(idx)[0]
 
 
 class SampleSubNodes(Transform):

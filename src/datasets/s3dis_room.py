@@ -49,7 +49,7 @@ class S3DISRoom(S3DIS):
         super().__init__(*args, **kwargs)
 
     @property
-    def all_cloud_ids(self):
+    def all_base_cloud_ids(self):
         """Dictionary holding lists of clouds ids, for each
         stage.
 
