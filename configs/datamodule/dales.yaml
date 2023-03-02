@@ -7,7 +7,7 @@ _target_: src.datamodules.dales.DALESDataModule
 # here to facilitate model parameterization with config interpolation
 num_classes: 8
 trainval: True
-tiling: 2
+tiling: 3
 
 # Features that will be computed, saved, loaded for points and segments
 partition_hf:  # point features used for the partition
@@ -97,14 +97,14 @@ v_edge_feat_drop: 0
 
 # Preprocessing
 pre_transform:
+    - transform: DataTo
+      params:
+        device: 'cuda'
     - transform: GridSampling3D
       params:
         size: ${datamodule.voxel}
         hist_key: 'y'
         hist_size: ${eval:'${datamodule.num_classes} + 1'}
-    - transform: DataTo
-      params:
-        device: 'cuda'
     - transform: KNN
       params:
         k: ${datamodule.knn}

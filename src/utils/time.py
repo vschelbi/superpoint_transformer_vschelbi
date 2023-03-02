@@ -6,6 +6,14 @@ __all__ = ['timer']
 
 
 def timer(f, *args, text='', text_size=64, **kwargs):
+    if isinstance(text, str) and len(text) > 0:
+        text = text
+    elif hasattr(f, '__name__'):
+        text = f.__name__
+    elif hasattr(f, '__class__'):
+        text = f.__class__.__name__
+    else:
+        text = ''
     torch.cuda.synchronize()
     start = time()
     out = f(*args, **kwargs)
