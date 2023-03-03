@@ -412,7 +412,7 @@ class BaseDataset(InMemoryDataset):
         """
         raise NotImplementedError
 
-    def download_warning(self):
+    def download_warning(self, interactive=False):
         # Warning message for the user about to download
         log.info(
             f"WARNING: You are about to download {self.__class__.__name__} "
@@ -421,9 +421,10 @@ class BaseDataset(InMemoryDataset):
             log.info("Files will be organized in the following structure:")
             log.info(self.raw_file_structure)
         log.info("")
-        log.info("Press any key to continue, or CTRL-C to exit.")
-        input("")
-        log.info("")
+        if interactive:
+            log.info("Press any key to continue, or CTRL-C to exit.")
+            input("")
+            log.info("")
 
     def download_message(self, msg):
         log.info(f'Downloading "{msg}" to {self.raw_dir}...')
