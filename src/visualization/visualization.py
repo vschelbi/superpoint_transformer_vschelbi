@@ -480,7 +480,10 @@ def visualize_3d(
         # one direction for the edge attributes to we ARBITRARILY TAKE
         # THE MAX EDGE FEATURE for each undirected edge
         input[i_level + 1].raise_if_edge_keys()
-        se, se_attr = to_trimmed(se, edge_attr=se_attr, reduce='max')
+        if se_attr is not None:
+            se, se_attr = to_trimmed(se, edge_attr=se_attr, reduce='max')
+        else:
+            se = to_trimmed(se)
 
         # Recover corresponding source and target coordinates using the
         # previously-computed 'super_pos' cluster centroid positions

@@ -83,7 +83,7 @@ def subedges(
         points,
         index,
         edge_index,
-        k_ratio=0.2,
+        ratio=0.2,
         k_min=20,
         cycles=3,
         pca_on_cpu=True,
@@ -109,7 +109,7 @@ def subedges(
         Index of the segment each point belongs to
     :param edge_index:
         Edges of the graph between segments
-    :param k_ratio:
+    :param ratio:
         Maximum ratio of a segment's points than can be used in a
         superedge's subedges
     :param k_min:
@@ -159,7 +159,7 @@ def subedges(
                 points,
                 index,
                 edge_index[:, start:end],
-                k_ratio=k_ratio,
+                ratio=ratio,
                 k_min=k_min,
                 cycles=cycles,
                 pca_on_cpu=pca_on_cpu,
@@ -299,12 +299,12 @@ def subedges(
 
     # Update the number of selected points in the source/target segments
     # and compute the number of points to keep for each edge. The
-    # heuristic we use here is: the top k_ratio points, with a minimum
+    # heuristic we use here is: the top ratio points, with a minimum
     # of k_min, within the limits of the cluster
     s_size = S_uid.bincount()
     t_size = T_uid.bincount()
-    s_k = (s_size * k_ratio).long().clamp(min=k_min).clamp(max=s_size)
-    t_k = (t_size * k_ratio).long().clamp(min=k_min).clamp(max=t_size)
+    s_k = (s_size * ratio).long().clamp(min=k_min).clamp(max=s_size)
+    t_k = (t_size * ratio).long().clamp(min=k_min).clamp(max=t_size)
     st_k = torch.min(s_k, t_k)
     del s_k, t_k
 

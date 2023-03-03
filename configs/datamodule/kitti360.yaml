@@ -65,10 +65,11 @@ pcp_cutoff: [10, 100, 1000, 10000]
 pcp_k_adjacency: 10
 pcp_w_adjacency: -1
 pcp_iterations: 15
+graph_k_min: 1
 graph_k_max: 50
 graph_gap: [1, 3, 10, 30]
-graph_k_ratio: 0.2
-graph_k_min: 20
+graph_se_ratio: 0.2
+graph_se_min: 20
 graph_cycles: 3
 graph_margin: 0.5
 graph_chunk: [1e6, 1e5, 1e5, 1e5]  # reduce if CUDA memory errors
@@ -190,10 +191,11 @@ pre_transform:
         std_keys: []
     - transform: RadiusHorizontalGraph
       params:
+        k_min: ${datamodule.graph_k_min}
         k_max: ${datamodule.graph_k_max}
         gap: ${datamodule.graph_gap}
-        k_ratio: ${datamodule.graph_k_ratio}
-        k_min: ${datamodule.graph_k_min}
+        se_ratio: ${datamodule.graph_se_ratio}
+        se_min: ${datamodule.graph_se_min}
         cycles: ${datamodule.graph_cycles}
         margin: ${datamodule.graph_margin}
         chunk_size: ${datamodule.graph_chunk}
