@@ -491,8 +491,12 @@ class Data(PyGData):
 
         self.raise_if_edge_keys()
 
-        edge_index, edge_attr = to_trimmed(
-            self.edge_index, edge_attr=self.edge_attr, reduce=reduce)
+        if self.edge_attr is not None:
+            edge_index, edge_attr = to_trimmed(
+                self.edge_index, edge_attr=self.edge_attr, reduce=reduce)
+        else:
+            edge_index = to_trimmed(self.edge_index)
+            edge_attr = None
 
         self.edge_index = edge_index
         self.edge_attr = edge_attr

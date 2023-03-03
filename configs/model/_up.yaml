@@ -14,5 +14,5 @@ net:
   up_attn_drop: ${model.net.down_attn_drop}
   up_drop_path: ${model.net.down_drop_path}
   up_inject_pos: ${model.net.down_inject_pos}  # appends position features = (3) or more depending on pos_injection and point_pos_injection_x_dim
-  up_inject_x: ${model.net.down_inject_x}
+  up_inject_x: ${model.net.down_inject_x}  # append handcrafted segment features
   up_pos_injection_x_dim: ${model.net.down_pos_injection_x_dim}

@@ -6,7 +6,9 @@ from src.utils.edge import edge_wise_points
 from torch_geometric.utils import coalesce
 
 
-__all__ = ['scatter_mean_weighted', 'scatter_pca', 'scatter_nearest_neighbor']
+__all__ = [
+    'scatter_mean_weighted', 'scatter_pca', 'scatter_nearest_neighbor',
+    'idx_preserving_mask']
 
 
 def scatter_mean_weighted(x, idx, w, dim_size=None):
@@ -198,3 +200,11 @@ def scatter_nearest_neighbor(
     candidate_idx = torch.vstack((s_candidate_idx, t_candidate_idx))
 
     return candidate, candidate_idx
+
+
+def idx_preserving_mask(mask, idx, dim=0):
+    """Helper to pass a boolean mask and an index, to make sure indexing
+    using the mask will not entirely discard all elements of index.
+    """
+    is_empty = scatter_add(mask.float(), idx, dim=dim) == 0
+    return mask | is_empty[idx]

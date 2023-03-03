@@ -3,6 +3,9 @@ defaults:
 
 _target_: src.datamodules.kitti360.KITTI360DataModule
 
+dataloader:
+    batch_size: 1
+
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
 num_classes: 15
@@ -55,14 +58,21 @@ v_edge_hf: []  # vertical edge features used for training
 # all the pre_transforms
 voxel: 0.1
 knn: 50
-pcp_regularization: [0.04, 0.2, 0.8, 1.4]
-pcp_spatial_weight: [1e-2, 0, 0, 0]
-pcp_cutoff: [10, 100, 1000, 10000]
+knn_r: 10
+pcp_regularization: [0.04, 0.2, 0.5]
+pcp_spatial_weight: [1e-2, 1e-3, 1e-4]
+pcp_cutoff: [10, 100, 1000]
 pcp_k_adjacency: 10
 pcp_w_adjacency: -1
 pcp_iterations: 15
+graph_k_min: 1
 graph_k_max: 50
-graph_gap: [0, 1, 5, 10]
+graph_gap: [1, 3, 10]
+graph_se_ratio: 0.2
+graph_se_min: 20
+graph_cycles: 3
+graph_margin: 0.5
+graph_chunk: [1e6, 1e5, 1e5]  # reduce if CUDA memory errors
 
 # Batch construction parameterization
 sample_segment_ratio: 0.1
@@ -73,21 +83,21 @@ sample_point_max: 128
 sample_graph_r: 20  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
 sample_graph_disjoint: True
-sample_edge_n_min: -1  # [5, 5, 15, 15]
-sample_edge_n_max: -1  # [10, 15, 25, 25]
+sample_edge_n_min: -1  # [5, 5, 15]
+sample_edge_n_max: -1  # [10, 15, 25]
 
 # Augmentations parameterization
-pos_jitter: 0.03
+pos_jitter: 0.05
 tilt_n_rotate_phi: 0.1
 tilt_n_rotate_theta: 180
 anisotropic_scaling: 0.2
-rgb_jitter: 0.01
+rgb_jitter: 0
 rgb_autocontrast: 0.5
-rgb_drop: 0.3
-node_feat_jitter: 0.01
-h_edge_feat_jitter: 0.01
-v_edge_feat_jitter: 0.01
-node_feat_drop: 0.3
+rgb_drop: 0.4
+node_feat_jitter: 0
+h_edge_feat_jitter: 0
+v_edge_feat_jitter: 0
+node_feat_drop: 0
 h_edge_feat_drop: 0
 v_edge_feat_drop: 0
 
@@ -104,8 +114,8 @@ pre_transform:
     - transform: KNN
       params:
         k: ${datamodule.knn}
-        r_max: 10
-        verbose: True
+        r_max: ${datamodule.knn_r}
+        verbose: False
     - transform: DataTo
       params:
         device: 'cpu'
@@ -155,7 +165,7 @@ pre_transform:
         cutoff: ${datamodule.pcp_cutoff}
         iterations: ${datamodule.pcp_iterations}
         parallel: True
-        verbose: True
+        verbose: False
     - transform: NAGRemoveKeys  # remove 'x' used for partition (features are still preserved under their respective Data attributes)
       params:
         level: 'all'
@@ -177,17 +187,18 @@ pre_transform:
         log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['rgb', 'elevation', 'pos_room']
+        mean_keys: ['rgb', 'elevation']
         std_keys: []
     - transform: RadiusHorizontalGraph
       params:
+        k_min: ${datamodule.graph_k_min}
         k_max: ${datamodule.graph_k_max}
         gap: ${datamodule.graph_gap}
-        k_ratio: 0.2
-        k_min: 20
-        cycles: 3
-        margin: 0.2
-        chunk_size: [1e6, 1e5, 1e5, 1e5]  # reduce if CUDA memory errors
+        se_ratio: ${datamodule.graph_se_ratio}
+        se_min: ${datamodule.graph_se_min}
+        cycles: ${datamodule.graph_cycles}
+        margin: ${datamodule.graph_margin}
+        chunk_size: ${datamodule.graph_chunk}
         halfspace_filter: True
         bbox_filter: True
         target_pc_flip: True
@@ -299,12 +310,12 @@ on_device_train_transform:
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${eval:'[k for k in ${datamodule.point_hf} if k != "rgb"]'}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${eval:'[k for k in ${datamodule.segment_hf} if k != "rgb"]'}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
         to: 'x'
 
     # Add some noise and randomly some point, node and edge features
@@ -414,22 +425,32 @@ on_device_val_transform:
         log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
         log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
 
-    # Color transforms here before fusing all features together
-#    - transform: NAGColorNormalize
-#      params:
-#        level: 'all'
-
-    # Move all point and segment features to 'x', including "rgb"
+    # Move all point and segment features to 'x', except for "rgb", on
+    # which we want to apply specific transforms
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${datamodule.point_hf}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${datamodule.segment_hf}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
         to: 'x'
+
+    # RGB-specific transforms. In particular, the color dropout will
+    # switch off all three color channels together, instead of just one
+    # by one with
+#    - transform: NAGColorNormalize
+#      params:
+#        level: 'all'
+
+    # Finally move RGB to node and segment features, if need be
+    - transform: NAGAddKeysTo
+      params:
+        keys: 'rgb'
+        to: 'x'
+        strict: False
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops

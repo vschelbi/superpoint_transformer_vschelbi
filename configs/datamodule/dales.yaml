@@ -1,40 +1,29 @@
 defaults:
   - default.yaml
 
-_target_: src.datamodules.s3dis.S3DISDataModule
-
-dataloader:
-    batch_size: 1
+_target_: src.datamodules.dales.DALESDataModule
 
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
-num_classes: 13
-fold: 5
+num_classes: 8
 trainval: True
-val_on_test: True
-
-# I/O parameters
-in_memory: True  # set to True to load all processed S3DIS in RAM. This may accelerate training but CAREFUL not to modify the data in place !
+tiling: 3
 
 # Features that will be computed, saved, loaded for points and segments
 partition_hf:  # point features used for the partition
-  - 'rgb'
   - 'linearity'
   - 'planarity'
   - 'scattering'
-  - 'verticality'
   - 'elevation'
 point_hf:  # point features used for training
-  - 'rgb'
+  - 'intensity'
   - 'linearity'
   - 'planarity'
   - 'scattering'
   - 'verticality'
   - 'elevation'
-  - 'pos_room'
 segment_hf:  # segment features used for training
-  - 'rgb'
-  - 'pos_room'
+  - 'intensity'
   - 'elevation'
   - 'linearity'
   - 'planarity'
@@ -63,25 +52,23 @@ v_edge_hf: []  # vertical edge features used for training
 
 # Parameters declared here to facilitate tuning configs without copying
 # all the pre_transforms
-
-# Based on SPG: https://arxiv.org/pdf/1711.09869.pdf
-voxel: 0.03
-knn: 45
-knn_r: 2
-pcp_regularization: [0.03, 0.1, 0.3, 0.9]
-pcp_spatial_weight: [5e-2, 5e-2, 5e-3, 5e-3]
-pcp_cutoff: [10, 10, 80, 640]
+voxel: 0.1
+knn: 50
+knn_r: 10
+pcp_regularization: [0.1, 0.3, 0.5]
+pcp_spatial_weight: [1e-2, 1e-3, 1e-4]
+pcp_cutoff: [10, 50, 100]
 pcp_k_adjacency: 10
-pcp_w_adjacency: 1
+pcp_w_adjacency: -1
 pcp_iterations: 15
 graph_k_min: 1
-graph_k_max: 30
-graph_gap: [0.2, 0.5, 1, 5]
+graph_k_max: 50
+graph_gap: [20, 100, 100]
 graph_se_ratio: 0.3
 graph_se_min: 20
 graph_cycles: 3
-graph_margin: 0.2
-graph_chunk: [1e6, 1e5, 1e5, 1e5]  # reduce if CUDA memory errors
+graph_margin: 0.5
+graph_chunk: [1e6, 1e5, 1e5]  # reduce if CUDA memory errors
 
 # Batch construction parameterization
 sample_segment_ratio: 0.1
@@ -89,20 +76,17 @@ sample_segment_by_size: True
 sample_segment_by_class: False
 sample_point_min: 32
 sample_point_max: 128
-sample_graph_r: 7  # set to r<=0 to skip SampleRadiusSubgraphs
+sample_graph_r: 20  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
 sample_graph_disjoint: True
 sample_edge_n_min: -1  # [5, 5, 15]
 sample_edge_n_max: -1  # [10, 15, 25]
 
 # Augmentations parameterization
-pos_jitter: 0.03
+pos_jitter: 0.05
 tilt_n_rotate_phi: 0.1
 tilt_n_rotate_theta: 180
 anisotropic_scaling: 0.2
-rgb_jitter: 0
-rgb_autocontrast: 0.5
-rgb_drop: 0.4
 node_feat_jitter: 0
 h_edge_feat_jitter: 0
 v_edge_feat_jitter: 0
@@ -115,7 +99,7 @@ pre_transform:
     - transform: DataTo
       params:
         device: 'cuda'
-    - transform: GridSampling3D  # might OOM on CUDA if voxel and GPU memory too small
+    - transform: GridSampling3D
       params:
         size: ${datamodule.voxel}
         hist_key: 'y'
@@ -130,11 +114,11 @@ pre_transform:
         device: 'cpu'
     - transform: GroundElevation
       params:
-        threshold: 1.5
-        scale: 4.0
+        threshold: 5
+        scale: 20
     - transform: PointFeatures
       params:
-        rgb: True
+        rgb: False
         hsv: False
         lab: False
         density: False
@@ -196,7 +180,7 @@ pre_transform:
         log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['rgb', 'elevation', 'pos_room']
+        mean_keys: ['intensity', 'elevation']
         std_keys: []
     - transform: RadiusHorizontalGraph
       params:
@@ -254,10 +238,6 @@ on_device_train_transform:
         by_size: ${datamodule.sample_segment_by_size}
         by_class: ${datamodule.sample_segment_by_class}
 
-    # Cast all attributes to either float or long. Doing this only now
-    # allows speeding up disk I/O and CPU->GPU transfer
-    - transform: NAGCast
-
     # Apply geometric transforms affecting position, offsets, normals
     # before calling transforms relying on those, such as on-the-fly
     # edge features computation
@@ -314,17 +294,16 @@ on_device_train_transform:
         n_min: ${datamodule.sample_edge_n_min}
         n_max: ${datamodule.sample_edge_n_max}
 
-    # Move all point and segment features to 'x', except for "rgb", on
-    # which we want to apply specific transforms
+    # Move all point and segment features to 'x'
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
+        keys: ${datamodule.point_hf}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
+        keys: ${datamodule.segment_hf}
         to: 'x'
 
     # Add some noise and randomly some point, node and edge features
@@ -356,31 +335,6 @@ on_device_train_transform:
         p: ${datamodule.v_edge_feat_drop}
         key: 'v_edge_attr'
 
-    # RGB-specific transforms. In particular, the color dropout will
-    # switch off all three color channels together, instead of just one
-    # by one with
-#    - transform: NAGColorNormalize
-#      params:
-#        level: 'all'
-    - transform: NAGJitterKey
-      params:
-        key: 'rgb'
-        sigma: ${datamodule.rgb_jitter}
-        trunc: ${eval:'2 * ${datamodule.rgb_jitter}'}
-    - transform: NAGColorAutoContrast
-      params:
-        p: ${datamodule.rgb_autocontrast}
-    - transform: NAGColorDrop
-      params:
-        p: ${datamodule.rgb_drop}
-
-    # Finally move RGB to node and segment features, if need be
-    - transform: NAGAddKeysTo
-      params:
-        keys: 'rgb'
-        to: 'x'
-        strict: False
-
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
 
@@ -400,10 +354,6 @@ on_device_val_transform:
         high: 1
         n_min: 128
         n_max: 256
-
-    # Cast all attributes to either float or long. Doing this only now
-    # allows speeding up disk I/O and CPU->GPU transfer
-    - transform: NAGCast
 
     # Compute some horizontal and vertical edges on-the-fly. Those are
     # only computed now since they can be deduced from point and node
@@ -434,32 +384,17 @@ on_device_val_transform:
         log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
         log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
 
-    # Move all point and segment features to 'x', except for "rgb", on
-    # which we want to apply specific transforms
+    # Move all point and segment features to 'x'
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
+        keys: ${datamodule.point_hf}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
+        keys: ${datamodule.segment_hf}
         to: 'x'
-
-    # RGB-specific transforms. In particular, the color dropout will
-    # switch off all three color channels together, instead of just one
-    # by one with
-#    - transform: NAGColorNormalize
-#      params:
-#        level: 'all'
-
-    # Finally move RGB to node and segment features, if need be
-    - transform: NAGAddKeysTo
-      params:
-        keys: 'rgb'
-        to: 'x'
-        strict: False
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops

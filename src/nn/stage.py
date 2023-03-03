@@ -220,20 +220,8 @@ class DownNFuseStage(Stage):
         x2 -- Pool --
     """
 
-    def __init__(
-            self,
-            *args,
-            pool='max',
-            fusion='cat',
-            mlp_activation=nn.LeakyReLU(),
-            mlp_norm=BatchNorm,
-            mlp_drop=None,
-            **kwargs):
-        super().__init__(
-            *args,
-            mlp_activation=mlp_activation,
-            mlp_norm=mlp_norm,
-            mlp_drop=mlp_drop, **kwargs)
+    def __init__(self, *args, pool='max', fusion='cat', **kwargs):
+        super().__init__(*args, **kwargs)
 
         # Pooling operator
         # IMPORTANT: the `down_pool_block` naming MUST MATCH the one
@@ -382,11 +370,3 @@ class PointStage(Stage):
             pos_injection_x_dim=pos_injection_x_dim,
             cat_diameter=cat_diameter,
             log_diameter=log_diameter)
-
-    def forward(self, x, pos, norm_index, node_size=None, super_index=None, **kwargs):
-        return super().forward(
-            x,
-            norm_index,
-            pos=pos,
-            node_size=node_size,
-            super_index=super_index)

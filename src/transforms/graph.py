@@ -510,7 +510,7 @@ def _horizontal_graph_by_delaunay(
     # to be duplicates. We remove duplicate point-wise graph edges at
     # this point to mitigate memory use. The symmetric edges and edge
     # features will be created at the very end
-    edges_point, _ = to_trimmed(edges_point)
+    edges_point = to_trimmed(edges_point)
 
     # Now we are only interested in the edges connecting two different
     # clusters and not in the intra-cluster connections. Select only
@@ -606,10 +606,10 @@ class RadiusHorizontalGraph(Transform):
     :param gap: float, List(float)
         Two segments A and B are considered neighbors if there is a in A
         and b in B such that dist(a, b) < gap
-    :param k_ratio: float
+    :param se_ratio: float
         Maximum ratio of a segment's points than can be used in a
         superedge's subedges
-    :param k_min: int
+    :param se_min: int
         Minimum of subedges per superedge
     :param cycles: int
         Number of iterations for nearest neighbor search between
@@ -645,10 +645,11 @@ class RadiusHorizontalGraph(Transform):
 
     def __init__(
             self,
+            k_min=1,
             k_max=100,
             gap=0,
-            k_ratio=0.2,
-            k_min=20,
+            se_ratio=0.2,
+            se_min=20,
             cycles=3,
             margin=0.2,
             chunk_size=100000,
@@ -659,10 +660,21 @@ class RadiusHorizontalGraph(Transform):
             mean_off=True,
             std_off=True,
             mean_dist=True):
+
+        if isinstance(k_min, list):
+            assert all([k > 0 for k in k_min]), \
+                "k_min must be 1 or more, to avoid any unpleasant downstream " \
+                "issues where nodes have no edge"
+        else:
+            assert k_min > 0, \
+                "k_min must be 1 or more, to avoid any unpleasant downstream " \
+                "issues where nodes have no edge"
+
         self.k_max = k_max
-        self.gap = gap
-        self.k_ratio = k_ratio
         self.k_min = k_min
+        self.gap = gap
+        self.se_ratio = se_ratio
+        self.se_min = se_min
         self.cycles = cycles
         self.margin = margin
         self.chunk_size = chunk_size
@@ -676,10 +688,10 @@ class RadiusHorizontalGraph(Transform):
 
     def _process(self, nag):
         # Convert parameters to list for each NAG level, if need be
-        k_ratio = self.k_ratio if isinstance(self.k_ratio, list) \
-            else [self.k_ratio] * (nag.num_levels - 1)
-        k_min = self.k_min if isinstance(self.k_min, list) \
-            else [self.k_min] * (nag.num_levels - 1)
+        se_ratio = self.se_ratio if isinstance(self.se_ratio, list) \
+            else [self.se_ratio] * (nag.num_levels - 1)
+        se_min = self.se_min if isinstance(self.se_min, list) \
+            else [self.se_min] * (nag.num_levels - 1)
         cycles = self.cycles if isinstance(self.cycles, list) \
             else [self.cycles] * (nag.num_levels - 1)
         margin = self.margin if isinstance(self.margin, list) \
@@ -689,18 +701,18 @@ class RadiusHorizontalGraph(Transform):
 
         # Compute the horizontal graph, without edge features
         nag = _horizontal_graph_by_radius(
-            nag, k_max=self.k_max, gap=self.gap, trim=True,
+            nag, k_min=self.k_min, k_max=self.k_max, gap=self.gap, trim=True,
             cycles=cycles, chunk_size=chunk_size)
 
         # Compute the edge features, level by level
-        for i_level, kr, km, cy, mg, cs in zip(
-                range(1, nag.num_levels), k_ratio, k_min, cycles, margin,
+        for i_level, ser, sem, cy, mg, cs in zip(
+                range(1, nag.num_levels), se_ratio, se_min, cycles, margin,
                 chunk_size):
             nag = self._process_edge_features_for_single_level(
                 nag,
                 i_level,
-                kr,
-                km,
+                ser,
+                sem,
                 cy,
                 mg,
                 cs,
@@ -714,8 +726,8 @@ class RadiusHorizontalGraph(Transform):
             self,
             nag,
             i_level,
-            k_ratio,
-            k_min,
+            se_ratio,
+            se_min,
             cycles,
             margin,
             chunk_size,
@@ -732,8 +744,8 @@ class RadiusHorizontalGraph(Transform):
             nag[0].pos,
             nag.get_super_index(i_level),
             nag[i_level].edge_index,
-            k_ratio=k_ratio,
-            k_min=k_min,
+            ratio=se_ratio,
+            k_min=se_min,
             cycles=cycles,
             pca_on_cpu=True,
             margin=margin,
@@ -768,6 +780,7 @@ class RadiusHorizontalGraph(Transform):
 
 def _horizontal_graph_by_radius(
         nag,
+        k_min=1,
         k_max=100,
         gap=0,
         trim=True,
@@ -778,6 +791,8 @@ def _horizontal_graph_by_radius(
 
     :param nag: NAG
         Hierarchical structure
+    :param k_min: int, List(int)
+        Minimum number of neighbors per segment
     :param k_max: int, List(int)
         Maximum number of neighbors per segment
     :param gap: float, List(float)
@@ -803,6 +818,8 @@ def _horizontal_graph_by_radius(
     assert isinstance(nag, NAG)
     if not isinstance(k_max, list):
         k_max = [k_max] * (nag.num_levels - 1)
+    if not isinstance(k_min, list):
+        k_min = [k_min] * (nag.num_levels - 1)
     if not isinstance(gap, list):
         gap = [gap] * (nag.num_levels - 1)
     if not isinstance(cycles, list):
@@ -810,10 +827,10 @@ def _horizontal_graph_by_radius(
     if not isinstance(chunk_size, list):
         chunk_size = [chunk_size] * (nag.num_levels - 1)
 
-    for i_level, k, g, cy, cs in zip(
-            range(1, nag.num_levels), k_max, gap, cycles, chunk_size):
+    for i_level, k_lo, k_hi, g, cy, cs in zip(
+            range(1, nag.num_levels), k_min, k_max, gap, cycles, chunk_size):
         nag = _horizontal_graph_by_radius_for_single_level(
-            nag, i_level, k_max=k, gap=g, trim=trim,
+            nag, i_level, k_min=k_lo, k_max=k_hi, gap=g, trim=trim,
             cycles=cy, chunk_size=cs)
 
     return nag
@@ -822,6 +839,7 @@ def _horizontal_graph_by_radius(
 def _horizontal_graph_by_radius_for_single_level(
         nag,
         i_level,
+        k_min=1,
         k_max=100,
         gap=0,
         trim=True,
@@ -831,6 +849,7 @@ def _horizontal_graph_by_radius_for_single_level(
 
     :param nag:
     :param i_level:
+    :param k_min:
     :param k_max:
     :param gap:
     :param trim:
@@ -855,8 +874,9 @@ def _horizontal_graph_by_radius_for_single_level(
 
     # Exit in case the i_level graph contains only one node
     if num_nodes < 2:
-        nag._list[i_level] = data
-        return nag
+        raise ValueError(
+            f"Input NAG only has 1 node at level={i_level}. Cannot compute "
+            f"radius-based horizontal graph.")
 
     # Compute the super_index for level-0 points wrt the target level
     super_index = nag.get_super_index(i_level)
@@ -869,11 +889,11 @@ def _horizontal_graph_by_radius_for_single_level(
 
     # Save the graph in the Data object
     data.edge_index = edge_index
-    data.edge_attr = distances
+    data.edge_attr = None
 
     # Search for nodes which received no edges and connect them to their
-    # nearest neighbor
-    data.connect_isolated(k=1)
+    # k_min nearest neighbor
+    data.connect_isolated(k=k_min)
 
     # Trim the graph. This is temporary, to alleviate edge features
     # computation

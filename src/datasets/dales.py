@@ -1,59 +1,62 @@
 import os
+import gdown
 import torch
+import shutil
 import logging
 from plyfile import PlyData
 from src.datasets import BaseDataset
 from src.data import Data
-from src.datasets.kitti360_config import *
-from src.utils.download import run_command
+from src.datasets.dales_config import *
+from torch_geometric.data import extract_tar
+
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
 
 
-__all__ = ['KITTI360', 'MiniKITTI360']
+__all__ = ['DALES', 'MiniDALES']
 
 
 ########################################################################
 #                                 Utils                                #
 ########################################################################
 
-def read_kitti360_window(
-        filepath, xyz=True, rgb=True, semantic=True, instance=False,
+def read_dales_tile(
+        filepath, xyz=True, intensity=True, semantic=True, instance=False,
         remap=False):
     data = Data()
+    key = 'testing'
     with open(filepath, "rb") as f:
-        window = PlyData.read(f)
-        attributes = [p.name for p in window['vertex'].properties]
+        tile = PlyData.read(f)
 
         if xyz:
             data.pos = torch.stack([
-                torch.FloatTensor(window["vertex"][axis])
+                torch.FloatTensor(tile[key][axis])
                 for axis in ["x", "y", "z"]], dim=-1)
 
-        if rgb:
-            data.rgb = torch.stack([
-                torch.FloatTensor(window["vertex"][axis])
-                for axis in ["red", "green", "blue"]], dim=-1) / 255
+        if intensity:
+            # Heuristic to bring the intensity distribution in [0, 1]
+            data.intensity = torch.FloatTensor(
+                tile[key]['intensity']).clip(min=0, max=60000) / 60000
 
-        if semantic and 'semantic' in attributes:
-            y = torch.LongTensor(window["vertex"]['semantic'])
+        if semantic:
+            y = torch.LongTensor(tile[key]['sem_class'])
             data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
-        if instance and 'instance' in attributes:
-            data.instance = torch.LongTensor(window["vertex"]['instance'])
+        if instance:
+            data.instance = torch.LongTensor(tile[key]['ins_class'])
 
     return data
 
 
 ########################################################################
-#                               KITTI360                               #
+#                                DALES                                 #
 ########################################################################
 
-class KITTI360(BaseDataset):
-    """KITTI360 dataset.
+class DALES(BaseDataset):
+    """DALES dataset.
 
-    Dataset website: http://www.cvlibs.net/datasets/kitti-360/
+    Dataset website: https://udayton.edu/engineering/research/centers/vision_lab/research/was_data_analysis_and_processing/dale.php
 
     Parameters
     ----------
@@ -73,6 +76,11 @@ class KITTI360(BaseDataset):
         want to run in CPU-based DataLoaders
     """
 
+    _download_url = OBJECTS_GDOWN_ID
+    _form_url = FORM_URL
+    _zip_name = OBJECTS_TAR_NAME
+    _unzip_name = OBJECTS_UNTAR_NAME
+
     @property
     def class_names(self):
         """List of string names for dataset classes. This list may be
@@ -89,7 +97,7 @@ class KITTI360(BaseDataset):
         being optionally used for 'unlabelled' or 'ignored' classes,
         indicated as `-1` in the dataset labels.
         """
-        return KITTI360_NUM_CLASSES
+        return DALES_NUM_CLASSES
 
     @property
     def all_base_cloud_ids(self):
@@ -99,42 +107,49 @@ class KITTI360(BaseDataset):
         The following structure is expected:
             `{'train': [...], 'val': [...], 'test': [...]}`
         """
-        return WINDOWS
+        return TILES
 
     def download_dataset(self):
-        """Download the KITTI-360 dataset.
+        """Download the DALES Objects dataset.
         """
-        # Location of the KITTI-360 download shell scripts
-        here = osp.dirname(osp.abspath(__file__))
-        scripts_dir = osp.join(here, '../../scripts')
+        # Download the whole dataset as a single zip file
+        if not osp.exists(osp.join(self.root, self._zip_name)):
+            self.download_zip()
 
-        # Accumulated 3D point clouds with annotations
-        if not all(osp.exists(osp.join(self.raw_dir, x))
-                   for x in self.raw_file_names_3d):
-            if self.stage != 'test':
-                msg = 'Accumulated Point Clouds for Train & Val (12G)'
-            else:
-                msg = 'Accumulated Point Clouds for Test (1.2G)'
-            self.download_message(msg)
-            script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
-            run_command([f'{script} {self.raw_dir} {self.stage}'])
+        # Unzip the file and rename it into the `root/raw/` directory
+        extract_tar(osp.join(self.root, self._zip_name), self.root)
+        shutil.rmtree(self.raw_dir)
+        os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
+
+    def download_zip(self):
+        """Download the DALES dataset as a single tar.gz file.
+        """
+        log.info(
+            f"Please, register yourself by filling up the form at "
+            f"{self._form_url}")
+        log.info("***")
+        log.info(
+            "Press any key to continue, or CTRL-C to exit. By continuing, "
+            "you confirm having filled up the form.")
+        input("")
+        gdown.download(
+            self._download_url, osp.join(self.root, self._zip_name), quiet=False)
 
     def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
-        return read_kitti360_window(
-            raw_cloud_path, semantic=True, instance=False, remap=True)
+        return read_dales_tile(
+            raw_cloud_path, intensity=True, semantic=True, instance=False,
+            remap=True)
 
     @property
     def raw_file_structure(self):
         return f"""
     {self.root}/
         └── raw/
-            └── data_3d_semantics/
-                └── 2013_05_28_drive_{{seq:0>4}}_sync/
-                    └── static/
-                        └── {{start_frame:0>10}}_{{end_frame:0>10}}.ply
+            └── {{train, test}}/
+                └── {{tile_name}}.ply
             """
 
     def id_to_relative_raw_path(self, id):
@@ -142,36 +157,46 @@ class KITTI360(BaseDataset):
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
-        id = self.id_to_base_id(id)
-        return osp.join(
-            'data_3d_semantics', id.split('/')[0], 'static',
-            id.split('/')[1] + '.ply')
+        if id in self.all_cloud_ids['train']:
+            stage = 'train'
+        elif id in self.all_cloud_ids['val']:
+            stage = 'train'
+        elif id in self.all_cloud_ids['test']:
+            stage = 'test'
+        else:
+            raise ValueError(f"Unknown tile id '{id}'")
+        return osp.join(stage, self.id_to_base_id(id) + '.ply')
 
     def processed_to_raw_path(self, processed_path):
         """Return the raw cloud path corresponding to the input
         processed path.
         """
         # Extract useful information from <path>
-        stage, hash_dir, sequence_name, cloud_id = \
-            osp.splitext(processed_path)[0].split('/')[-4:]
+        stage, hash_dir, cloud_id = \
+            osp.splitext(processed_path)[0].split('/')[-3:]
+
+        # Raw 'val' and 'trainval' tiles are all located in the
+        # 'raw/train/' directory
+        stage = 'train' if stage in ['trainval', 'val'] else stage
+
+        # Remove the tiling in the cloud_id, if any
+        base_cloud_id = self.id_to_base_id(cloud_id)
 
         # Read the raw cloud data
-        raw_path = osp.join(
-            self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-            cloud_id + '.ply')
+        raw_path = osp.join(self.raw_dir, stage, base_cloud_id + '.ply')
 
         return raw_path
 
 
 ########################################################################
-#                             MiniKITTI360                             #
+#                              MiniDALES                               #
 ########################################################################
 
-class MiniKITTI360(KITTI360):
-    """A mini version of KITTI360 with only a few windows for
+class MiniDALES(DALES):
+    """A mini version of DALES with only a few windows for
     experimentation.
     """
-    _NUM_MINI = 2
+    _NUM_MINI = 1
 
     @property
     def all_cloud_ids(self):

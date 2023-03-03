@@ -7,7 +7,8 @@ from src.utils.tensor import arange_interleave
 from src.utils.geometry import base_vectors_3d
 from src.utils.sparse import sizes_to_pointers, sparse_sort, \
     sparse_sort_along_direction
-from src.utils.scatter import scatter_pca, scatter_nearest_neighbor
+from src.utils.scatter import scatter_pca, scatter_nearest_neighbor, \
+    idx_preserving_mask
 from src.utils.edge import edge_wise_points
 
 __all__ = [
@@ -83,7 +84,7 @@ def subedges(
         points,
         index,
         edge_index,
-        k_ratio=0.2,
+        ratio=0.2,
         k_min=20,
         cycles=3,
         pca_on_cpu=True,
@@ -109,7 +110,7 @@ def subedges(
         Index of the segment each point belongs to
     :param edge_index:
         Edges of the graph between segments
-    :param k_ratio:
+    :param ratio:
         Maximum ratio of a segment's points than can be used in a
         superedge's subedges
     :param k_min:
@@ -142,6 +143,9 @@ def subedges(
     # Trim the graph
     edge_index = to_trimmed(edge_index)
 
+    # Number of segments
+    num_segments = index.max() + 1
+
     # Recursive call in case chunk is specified. Chunk allows limiting
     # the number of edges processed at once. This might alleviate
     # memory use
@@ -159,7 +163,7 @@ def subedges(
                 points,
                 index,
                 edge_index[:, start:end],
-                k_ratio=k_ratio,
+                ratio=ratio,
                 k_min=k_min,
                 cycles=cycles,
                 pca_on_cpu=pca_on_cpu,
@@ -194,7 +198,7 @@ def subedges(
 
     # Recover the number of points in source and target segments. 's_'
     # and 't_' indicate we are dealing with edge-wise values
-    s_size, t_size = index.bincount()[edge_index]
+    s_size, t_size = index.bincount(minlength=num_segments)[edge_index]
 
     # Expand the points to point-edge values. That is, the concatenation
     # of all the source --or target-- points for each edge. The
@@ -239,13 +243,16 @@ def subedges(
     # (ie anchor points) direction, this operation aims at dealing with
     # edges located in concave regions of the segment boundaries
     if halfspace_filter:
-        in_S_halfspace = torch.where(S_points[:, 0] <= margin)[0]
+        in_S_halfspace = S_points[:, 0] <= margin
+        in_S_halfspace = idx_preserving_mask(in_S_halfspace, S_uid)
+        in_S_halfspace = torch.where(in_S_halfspace)[0]
         S_points = S_points[in_S_halfspace]
         S_points_idx = S_points_idx[in_S_halfspace]
         S_uid = S_uid[in_S_halfspace]
         del in_S_halfspace
-
-        in_T_halfspace = torch.where(T_points[:, 0] >= -margin)[0]
+        in_T_halfspace = T_points[:, 0] >= -margin
+        in_T_halfspace = idx_preserving_mask(in_T_halfspace, T_uid)
+        in_T_halfspace = torch.where(in_T_halfspace)[0]
         T_points = T_points[in_T_halfspace]
         T_points_idx = T_points_idx[in_T_halfspace]
         T_uid = T_uid[in_T_halfspace]
@@ -273,9 +280,10 @@ def subedges(
             else:
                 X_points, X_points_idx, X_uid = T_points, T_points_idx, T_uid
 
-            in_bbox = torch.where(
-                (X_points[:, 1:] >= st_min[X_uid]).all(dim=1)
-                & (X_points[:, 1:] <= st_max[X_uid]).all(dim=1))[0]
+            in_bbox = (X_points[:, 1:] >= st_min[X_uid]).all(dim=1) & \
+                      (X_points[:, 1:] <= st_max[X_uid]).all(dim=1)
+            in_bbox = idx_preserving_mask(in_bbox, X_uid)
+            in_bbox = torch.where(in_bbox)[0]
 
             return X_points[in_bbox], X_points_idx[in_bbox], X_uid[in_bbox]
 
@@ -299,12 +307,12 @@ def subedges(
 
     # Update the number of selected points in the source/target segments
     # and compute the number of points to keep for each edge. The
-    # heuristic we use here is: the top k_ratio points, with a minimum
+    # heuristic we use here is: the top ratio points, with a minimum
     # of k_min, within the limits of the cluster
     s_size = S_uid.bincount()
     t_size = T_uid.bincount()
-    s_k = (s_size * k_ratio).long().clamp(min=k_min).clamp(max=s_size)
-    t_k = (t_size * k_ratio).long().clamp(min=k_min).clamp(max=t_size)
+    s_k = (s_size * ratio).long().clamp(min=k_min).clamp(max=s_size)
+    t_k = (t_size * ratio).long().clamp(min=k_min).clamp(max=t_size)
     st_k = torch.min(s_k, t_k)
     del s_k, t_k
 

@@ -18,6 +18,7 @@ num_hf_v_edge: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.v_e
 # or loaded from disk. This saves training time, loading only necessary
 # data
 point_save_keys: null  # level-0 keys to save on disk after preprocessing, 'null' to save all
+point_no_save_keys: ['edge_index', 'edge_attr', 'neighbor_index', 'neighbor_distance', 'node_size', 'grid_size']  # level-0 keys to NOT save on disk after preprocessing
 segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
 point_basic_load_keys: ['pos', 'y', 'super_index']  # needed point attributes, other than features
 segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index', 'edge_attr']  # needed segment attributes, other than features
@@ -44,6 +45,7 @@ feat_size:
     curvature: 1
     elevation: 1
     size: 1
+    intensity: 1
 
     log_pos: 3
     log_pos_room: 3
@@ -80,6 +82,7 @@ feat_size:
     mean_curvature: 1
     mean_elevation: 1
     mean_size: 1
+    mean_intensity: 1
 
     std_pos: 3
     std_pos_room: 3
@@ -98,6 +101,7 @@ feat_size:
     std_curvature: 1
     std_elevation: 1
     std_size: 1
+    std_intensity: 1
 
     mean_off: 3
     std_off: 3

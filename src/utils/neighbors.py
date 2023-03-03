@@ -350,7 +350,7 @@ def cluster_radius_nn(
     edge_index = edge_index[:, ~missing_point_edge]
     distances = distances[~missing_point_edge]
 
-    # Trim teh graph. This is required before computing the actual
+    # Trim the graph. This is required before computing the actual
     # nearest points between all cluster pairs. Since this operation is
     # so costly, we first built on a coarse neighborhood edge_index to
     # alleviate compute and memory cost

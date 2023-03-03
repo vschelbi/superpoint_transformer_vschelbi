@@ -273,7 +273,7 @@ class S3DIS(BaseDataset):
         return S3DIS_NUM_CLASSES
 
     @property
-    def all_cloud_ids(self):
+    def all_base_cloud_ids(self):
         """Dictionary holding lists of clouds ids, for each
         stage.
 
@@ -335,7 +335,7 @@ class S3DIS(BaseDataset):
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
-        return id
+        return self.id_to_base_id(id)
 
 
 ########################################################################
