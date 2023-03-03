@@ -157,7 +157,7 @@ pre_transform:
         cutoff: ${datamodule.pcp_cutoff}
         iterations: ${datamodule.pcp_iterations}
         parallel: True
-        verbose: True
+        verbose: False
     - transform: NAGRemoveKeys  # remove 'x' used for partition (features are still preserved under their respective Data attributes)
       params:
         level: 'all'
