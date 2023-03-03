@@ -79,8 +79,8 @@ sample_point_max: 128
 sample_graph_r: 20  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
 sample_graph_disjoint: True
-sample_edge_n_min: -1  # [5, 5, 15, 15]
-sample_edge_n_max: -1  # [10, 15, 25, 25]
+sample_edge_n_min: -1  # [5, 5, 15]
+sample_edge_n_max: -1  # [10, 15, 25]
 
 # Augmentations parameterization
 pos_jitter: 0.05
