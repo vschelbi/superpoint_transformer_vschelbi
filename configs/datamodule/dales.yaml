@@ -63,7 +63,7 @@ pcp_w_adjacency: -1
 pcp_iterations: 15
 graph_k_min: 1
 graph_k_max: 50
-graph_gap: [1, 3, 10]
+graph_gap: [20, 100, 100]
 graph_se_ratio: 0.3
 graph_se_min: 20
 graph_cycles: 3
