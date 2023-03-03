@@ -40,11 +40,29 @@ def base_vectors_3d(x):
     assert x.dim() == 2
     assert x.shape[1] == 3
 
-    a = x / x.norm(dim=1).view(-1, 1)
+    # First direction is along x
+    a = x
 
+    # If x is 0 vector (norm=0), arbitrarily put a to (1, 0, 0)
+    a[torch.where(a.norm(dim=1) == 0)[0]] = torch.tensor(
+        [[1, 0, 0]], dtype=x.dtype, device=x.device)
+
+    # Safely normalize a
+    a = a / a.norm(dim=1).view(-1, 1)
+
+    # Build a vector orthogonal to a
     b = torch.vstack((a[:, 1] - a[:, 2], a[:, 2] - a[:, 0], a[:, 0] - a[:, 1])).T
+
+    # In the same fashion as when building a, the second base vector
+    # may be 0 by construction (ie a is of type (v, v, v)). So we need
+    # to deal with this edge case by setting
+    b[torch.where(b.norm(dim=1) == 0)[0]] = torch.tensor(
+        [[2, 1, -1]], dtype=x.dtype, device=x.device)
+
+    # Safely normalize b
     b /= b.norm(dim=1).view(-1, 1)
 
+    # Cross product of a and b to build the 3rd base vector
     c = torch.linalg.cross(a, b)
 
     return torch.cat((a.unsqueeze(1), b.unsqueeze(1), c.unsqueeze(1)), dim=1)

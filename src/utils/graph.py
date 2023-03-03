@@ -7,7 +7,8 @@ from src.utils.tensor import arange_interleave
 from src.utils.geometry import base_vectors_3d
 from src.utils.sparse import sizes_to_pointers, sparse_sort, \
     sparse_sort_along_direction
-from src.utils.scatter import scatter_pca, scatter_nearest_neighbor
+from src.utils.scatter import scatter_pca, scatter_nearest_neighbor, \
+    idx_preserving_mask
 from src.utils.edge import edge_wise_points
 
 __all__ = [
@@ -142,6 +143,9 @@ def subedges(
     # Trim the graph
     edge_index = to_trimmed(edge_index)
 
+    # Number of segments
+    num_segments = index.max() + 1
+
     # Recursive call in case chunk is specified. Chunk allows limiting
     # the number of edges processed at once. This might alleviate
     # memory use
@@ -194,7 +198,7 @@ def subedges(
 
     # Recover the number of points in source and target segments. 's_'
     # and 't_' indicate we are dealing with edge-wise values
-    s_size, t_size = index.bincount()[edge_index]
+    s_size, t_size = index.bincount(minlength=num_segments)[edge_index]
 
     # Expand the points to point-edge values. That is, the concatenation
     # of all the source --or target-- points for each edge. The
@@ -239,13 +243,16 @@ def subedges(
     # (ie anchor points) direction, this operation aims at dealing with
     # edges located in concave regions of the segment boundaries
     if halfspace_filter:
-        in_S_halfspace = torch.where(S_points[:, 0] <= margin)[0]
+        in_S_halfspace = S_points[:, 0] <= margin
+        in_S_halfspace = idx_preserving_mask(in_S_halfspace, S_uid)
+        in_S_halfspace = torch.where(in_S_halfspace)[0]
         S_points = S_points[in_S_halfspace]
         S_points_idx = S_points_idx[in_S_halfspace]
         S_uid = S_uid[in_S_halfspace]
         del in_S_halfspace
-
-        in_T_halfspace = torch.where(T_points[:, 0] >= -margin)[0]
+        in_T_halfspace = T_points[:, 0] >= -margin
+        in_T_halfspace = idx_preserving_mask(in_T_halfspace, T_uid)
+        in_T_halfspace = torch.where(in_T_halfspace)[0]
         T_points = T_points[in_T_halfspace]
         T_points_idx = T_points_idx[in_T_halfspace]
         T_uid = T_uid[in_T_halfspace]
@@ -273,9 +280,10 @@ def subedges(
             else:
                 X_points, X_points_idx, X_uid = T_points, T_points_idx, T_uid
 
-            in_bbox = torch.where(
-                (X_points[:, 1:] >= st_min[X_uid]).all(dim=1)
-                & (X_points[:, 1:] <= st_max[X_uid]).all(dim=1))[0]
+            in_bbox = (X_points[:, 1:] >= st_min[X_uid]).all(dim=1) & \
+                      (X_points[:, 1:] <= st_max[X_uid]).all(dim=1)
+            in_bbox = idx_preserving_mask(in_bbox, X_uid)
+            in_bbox = torch.where(in_bbox)[0]
 
             return X_points[in_bbox], X_points_idx[in_bbox], X_uid[in_bbox]
 
