@@ -155,10 +155,13 @@ class KITTI360(BaseDataset):
         stage, hash_dir, sequence_name, cloud_id = \
             osp.splitext(processed_path)[0].split('/')[-4:]
 
+        # Remove the tiling in the cloud_id, if any
+        base_cloud_id = self.id_to_base_id(cloud_id)
+
         # Read the raw cloud data
         raw_path = osp.join(
             self.raw_dir, 'data_3d_semantics', sequence_name, 'static',
-            cloud_id + '.ply')
+            base_cloud_id + '.ply')
 
         return raw_path
 
