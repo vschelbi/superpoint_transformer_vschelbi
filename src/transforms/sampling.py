@@ -703,6 +703,11 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         self.r = r
 
     def _sample_subgraphs(self, nag, i_level, idx):
+        # Skip if r<=0. This may be useful to turn this transform into 
+        # an Identity, if need be
+        if self.r <= 0:
+            return nag
+        
         # Neighbors are searched using the node coordinates. This is not
         # the optimal search for cluster-cluster distances, but is the
         # fastest for our needs here. If need be, one could make this

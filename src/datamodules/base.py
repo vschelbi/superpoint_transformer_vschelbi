@@ -187,11 +187,11 @@ class BaseDataModule(LightningDataModule):
             return
 
         # Make sure all transforms are test-time augmentation friendly
-        transforms = self.test_transform.transforms
-        transforms += self.on_device_test_transform.transforms
+        transforms = getattr(self.test_transform, 'transforms', [])
+        transforms += getattr(self.on_device_test_transform, 'transforms', [])
         if self.hparams.tta_val:
-            transforms += self.val_transform.transforms
-            transforms += self.on_device_val_transform.transforms
+            transforms += getattr(self.val_transform, 'transforms', [])
+            transforms += getattr(self.on_device_val_transform, 'transforms', [])
         for t in transforms:
             if t in _TTA_CONFLICTS:
                 raise NotImplementedError(

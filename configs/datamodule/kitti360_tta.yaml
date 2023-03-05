@@ -5,35 +5,35 @@ defaults:
 tta_runs: 5
 tta_val: True
 tta:
-  # Batch construction parameterization
-  sample_point_min: 128
-  sample_point_max: 256
-  sample_segment_ratio: 0
-  sample_segment_by_size: False
-  sample_segment_by_class: False
-  sample_graph_r: -1  # set to r<=0 to skip SampleRadiusSubgraphs
-  sample_graph_k: ${datamodule.sample_graph_k}
-  sample_graph_disjoint: ${datamodule.sample_graph_disjoint}
-  sample_edge_n_min: ${datamodule.sample_edge_n_min}
-  sample_edge_n_max: ${datamodule.sample_edge_n_max}
+    # Batch construction parameterization
+    sample_point_min: 128
+    sample_point_max: 256
+    sample_segment_ratio: 0
+    sample_segment_by_size: False
+    sample_segment_by_class: False
+    sample_graph_r: -1  # set to r<=0 to skip SampleRadiusSubgraphs
+    sample_graph_k: ${datamodule.sample_graph_k}
+    sample_graph_disjoint: ${datamodule.sample_graph_disjoint}
+    sample_edge_n_min: ${datamodule.sample_edge_n_min}
+    sample_edge_n_max: ${datamodule.sample_edge_n_max}
 
-  # Augmentations parameterization
-  pos_jitter: 0
-  tilt_n_rotate_phi: ${datamodule.tilt_n_rotate_phi}
-  tilt_n_rotate_theta: ${datamodule.tilt_n_rotate_theta}
-  anisotropic_scaling: ${datamodule.anisotropic_scaling}
-  rgb_jitter: 0
-  rgb_autocontrast: ${datamodule.rgb_autocontrast}
-  rgb_drop: ${datamodule.rgb_drop}
-  node_feat_jitter: 0
-  h_edge_feat_jitter: 0
-  v_edge_feat_jitter: 0
-  node_feat_drop: ${datamodule.node_feat_drop}
-  h_edge_feat_drop: 0
-  v_edge_feat_drop: 0
+    # Augmentations parameterization
+    pos_jitter: 0
+    tilt_n_rotate_phi: ${datamodule.tilt_n_rotate_phi}
+    tilt_n_rotate_theta: ${datamodule.tilt_n_rotate_theta}
+    anisotropic_scaling: ${datamodule.anisotropic_scaling}
+    rgb_jitter: 0
+    rgb_autocontrast: ${datamodule.rgb_autocontrast}
+    rgb_drop: ${datamodule.rgb_drop}
+    node_feat_jitter: 0
+    h_edge_feat_jitter: 0
+    v_edge_feat_jitter: 0
+    node_feat_drop: ${datamodule.node_feat_drop}
+    h_edge_feat_drop: 0
+    v_edge_feat_drop: 0
 
-  # GPU-based val transforms
-  on_device_val_transform:
+# GPU-based val transforms
+on_device_val_transform:
 
     # Apply sampling transforms first to reduce the number of nodes and
     # edges. These operations are compute-intensive and are the reason
@@ -119,12 +119,12 @@ tta:
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k is not "rgb"])'}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k is not "rgb"])'}
+        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
         to: 'x'
 
     # Add some noise and randomly some point, node and edge features
