@@ -10,6 +10,7 @@ dataloader:
 # here to facilitate model parameterization with config interpolation
 num_classes: 15
 trainval: False
+pc_tiling: null
 
 # Features that will be computed, saved, loaded for points and segments
 partition_hf:  # point features used for the partition
