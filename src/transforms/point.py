@@ -526,21 +526,14 @@ class ColorNormalize(ColorTransform):
             std=[0.18308958, 0.18415008, 0.19252081],
             x_idx=None):
         super().__init__(x_idx=x_idx)
-        self.mean = mean.float().view(1, -1) if isinstance(mean, torch.Tensor) \
-            else torch.tensor(mean).float().view(1, -1)
-        self.std = std.float().view(1, -1) if isinstance(std, torch.Tensor) \
-            else torch.tensor(std).float().view(1, -1)
-        assert self.std.gt(0).all(), "std values must be >0"
+        assert all(x > 0 for x in std), "std values must be >0"
+        self.mean = mean
+        self.std = std
 
     def _func(self, rgb):
-        device = rgb.device
-
-        if self.mean.device != device or self.std.device != device:
-            self.mean = self.mean.to(device)
-            self.std = self.std.to(device)
-
-        rgb = (rgb - self.mean) / self.std
-
+        mean = torch.as_tensor(self.mean, device=rgb.device).view(1, -1)
+        std = torch.as_tensor(self.std, device=rgb.device).view(1, -1)
+        rgb = (rgb - mean) / std
         return rgb
 
 

@@ -333,7 +333,8 @@ class SelectColumns(Transform):
     def _process(self, data):
         if self.idx is None or getattr(data, self.key, None) is None:
             return data
-        data[self.key] = data[self.key][:, self.idx.to(device=data.device)]
+        idx = tensor_idx(torch.as_tensor(self.idx, device=data.device))
+        data[self.key] = data[self.key][:, idx]
         return data
 
 
@@ -401,7 +402,7 @@ class DropoutColumns(Transform):
         assert key is not None, f"A Data key must be specified"
         self.p = p
         self.key = key
-        self.group = tensor_idx(group).tolist() if group is not None else None
+        self.group = group
 
     def _process(self, data):
         device = data.device
@@ -421,11 +422,14 @@ class DropoutColumns(Transform):
 
         # Prepare column indexing
         if self.group is None:
-            self.group = torch.arange(num_col, device=device)
-        elif self.group.device != device:
-            self.group = self.group.to(device)
-        group = consecutive_cluster(self.group)[0]
-        assert group.shape[0] == num_col
+            group = torch.arange(num_col, device=device)
+        else:
+            group = tensor_idx(torch.as_tensor(self.group, device=device))
+        group = consecutive_cluster(group)[0]
+
+        # Would be good to check but creates CPU-GPU sync point, so we
+        # let the user be responsible
+        # assert group.shape[0] == num_col
 
         # Compute a boolean mask across the columns, indicating whether
         # they should (not) be dropped
