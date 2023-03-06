@@ -309,7 +309,25 @@ on_device_train_transform:
         n_min: ${datamodule.sample_edge_n_min}
         n_max: ${datamodule.sample_edge_n_max}
 
+    # Move all point and segment features to 'x', except for "rgb", on
+    # which we want to apply specific transforms
+    - transform: NAGAddKeysTo
+      params:
+        level: 0
+        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
+        to: 'x'
+    - transform: NAGAddKeysTo
+      params:
+        level: '1+'
+        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
+        to: 'x'
+
     # Add some noise and randomly some point, node and edge features
+    - transform: NAGJitterKey
+      params:
+        key: 'x'
+        sigma: ${datamodule.node_feat_jitter}
+        trunc: ${eval:'2 * ${datamodule.node_feat_jitter}'}
     - transform: NAGJitterKey
       params:
         key: 'edge_attr'
@@ -322,6 +340,10 @@ on_device_train_transform:
         trunc: ${eval:'2 * ${datamodule.v_edge_feat_jitter}'}
     - transform: NAGDropoutColumns
       params:
+        p: ${datamodule.node_feat_drop}
+        key: 'x'
+    - transform: NAGDropoutColumns
+      params:
         p: ${datamodule.h_edge_feat_drop}
         key: 'edge_attr'
     - transform: NAGDropoutColumns
@@ -329,12 +351,42 @@ on_device_train_transform:
         p: ${datamodule.v_edge_feat_drop}
         key: 'v_edge_attr'
 
+    # RGB-specific transforms. In particular, the color dropout will
+    # switch off all three color channels together, instead of just one
+    # by one with
+#    - transform: NAGColorNormalize
+#      params:
+#        level: 'all'
+    - transform: NAGJitterKey
+      params:
+        key: 'rgb'
+        sigma: ${datamodule.rgb_jitter}
+        trunc: ${eval:'2 * ${datamodule.rgb_jitter}'}
+    - transform: NAGColorAutoContrast
+      params:
+        p: ${datamodule.rgb_autocontrast}
+    - transform: NAGColorDrop
+      params:
+        p: ${datamodule.rgb_drop}
+
+    # Finally move RGB to node and segment features, if need be
+    - transform: NAGAddKeysTo
+      params:
+        keys: 'rgb'
+        to: 'x'
+        strict: False
+
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
 
     # Add a `node_size` attribute to all segments, this is needed for
     # segment-wise position normalization with UnitSphereNorm
     - transform: NodeSize
+
+    - transform: NAGDropoutColumns
+      params:
+        p: 1
+        key: 'x'
 
 # GPU-based val transforms
 on_device_val_transform:
@@ -411,6 +463,11 @@ on_device_val_transform:
     # Add a `node_size` attribute to all segments, this is needed for
     # segment-wise position normalization with UnitSphereNorm
     - transform: NodeSize
+
+    - transform: NAGDropoutColumns
+      params:
+        p: 1
+        key: 'x'
 
 # GPU-based test transforms
 on_device_test_transform: ${datamodule.on_device_val_transform}
