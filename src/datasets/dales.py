@@ -14,6 +14,13 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
 
 
+# Occasional Dataloader issues with DALES on some machines. Hack to
+# solve this:
+# https://stackoverflow.com/questions/73125231/pytorch-dataloaders-bad-file-descriptor-and-eof-for-workers0
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
+
 __all__ = ['DALES', 'MiniDALES']
 
 
