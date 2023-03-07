@@ -172,6 +172,51 @@ class KITTI360(BaseDataset):
 
         return raw_path
 
+    def make_submission(self, idx, pred):
+        """Prepare data for a sumbission to KITTI360 for 3D semantic
+        Segmentation on the test set.
+
+        Expected submission format is detailed here:
+        https://github.com/autonomousvision/kitti360Scripts/tree/master/kitti360scripts/evaluation/semantic_3d
+        """
+        if self.xy_tiling or self.pc_tiling:
+            raise NotImplementedError(
+                f"Submission generation not implemented for tiled KITTI360 "
+                f"datasets yet...")
+
+        # TODO:
+        #  - handle tiling
+        #  - handle geometric transformations of test data, shuffling of points and of tiles in the dataloader
+        #  - handle multiple tiles in the dataloader...
+
+        if not osp.exists(self.submission_dir):
+            os.makedirs(self.submission_dir)
+
+        # Make sure the prediction is a 1D Numpy array
+        pred = np.asarray(pred)
+        if pred.dim() != 1:
+            raise ValueError(
+                f'The submission predictions must be 1D Numpy vectors, '
+                f'received {type(pred)} of shape {pred.shape} instead.')
+
+        # Map TrainId labels to expected Ids
+        pred_remapped = TRAINID2ID[pred].astype(np.uint8)
+
+
+
+        # Recover sequence and window information from stage dataset's
+        # windows and format those to match the expected file name:
+        # {seq:0>4}_{start_frame:0>10}_{end_frame:0>10}.npy
+        sequence_name, window_name = self.id_to_base_id(self.cloud_ids[idx]).split('/')
+        seq = sequence_name.split('_')[-2]
+        start_frame, end_frame = window_name.split('_')
+        filename = f'{seq:0>4}_{start_frame:0>10}_{end_frame:0>10}.npy'
+
+        # Save the window submission
+        np.save(osp.join(self._submission_dir, filename), pred_remapped)
+
+        self.cloud_ids[idx]
+
 
 ########################################################################
 #                             MiniKITTI360                             #

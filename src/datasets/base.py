@@ -647,3 +647,10 @@ class BaseDataset(InMemoryDataset):
         nag = nag if self.transform is None else self.transform(nag)
 
         return nag
+
+    def make_submission(self, idx, pred):
+        """Implement this if your dataset needs to produce data in a
+        given format for submission. This is typically needed for
+        datasets with held-out test sets.
+        """
+        raise NotImplementedError
