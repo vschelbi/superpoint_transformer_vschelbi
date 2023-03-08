@@ -648,7 +648,14 @@ class BaseDataset(InMemoryDataset):
 
         return nag
 
-    def make_submission(self, idx, pred):
+    def make_submission(self, idx, pred, pos, submission_dir=None):
+        """Implement this if your dataset needs to produce data in a
+        given format for submission. This is typically needed for
+        datasets with held-out test sets.
+        """
+        raise NotImplementedError
+
+    def finalize_submission(self, submission_dir):
         """Implement this if your dataset needs to produce data in a
         given format for submission. This is typically needed for
         datasets with held-out test sets.

@@ -1,7 +1,7 @@
 import torch
 import logging
 from pytorch_lightning import LightningDataModule
-from src.transforms import instantiate_transforms
+from src.transforms import *
 from src.loader import DataLoader
 from src.data import NAGBatch
 
@@ -11,6 +11,24 @@ log = logging.getLogger(__name__)
 
 # List of transforms not allowed for test-time augmentation
 _TTA_CONFLICTS = []
+
+# List of transforms not allowed for test prediction submission
+_SUBMISSION_CONFLICTS = [
+    CenterPosition,
+    RandomTiltAndRotate,
+    RandomAnisotropicScale,
+    RandomAxisFlip,
+    Inliers,
+    Outliers,
+    Shuffle,
+    GridSampling3D,
+    SampleXYTiling,
+    SampleRecursiveMainXYAxisTiling,
+    SampleSubNodes,
+    SampleSegments,
+    SampleKHopSubgraphs,
+    SampleRadiusSubgraphs,
+    SampleSubNodes]
 
 
 class BaseDataModule(LightningDataModule):
@@ -58,7 +76,7 @@ class BaseDataModule(LightningDataModule):
             on_device_train_transform=None, on_device_val_transform=None,
             on_device_test_transform=None, dataloader=None, mini=False,
             trainval=False, val_on_test=False, tta_runs=None, tta_val=False,
-            **kwargs):
+            submit=False, **kwargs):
         super().__init__()
 
         # This line allows to access init params with 'self.hparams'
@@ -90,6 +108,9 @@ class BaseDataModule(LightningDataModule):
 
         # Check TTA and transforms conflicts
         self.check_tta_conflicts()
+
+        # Check test submission conflicts
+        self.check_submission_conflicts()
 
     @property
     def dataset_class(self):
@@ -197,6 +218,38 @@ class BaseDataModule(LightningDataModule):
                 raise NotImplementedError(
                     f"Cannot use {t} with test-time augmentation. The "
                     f"following transforms are not supported: {_TTA_CONFLICTS}")
+
+    def check_submission_conflicts(self):
+        """Make sure the transforms and other parameters do not prevent
+        test prediction submission.
+        """
+        # Skip if submission not needed
+        if not self.hparams.submit:
+            return
+
+        # Make sure the test dataset does not have any tiling
+        if self.test_dataset.xy_tiling is not None \
+                or self.test_dataset.pc_tiling is not None:
+            raise NotImplementedError(
+                f"Cannot run test prediction submission for test datasets "
+                f"with tiling")
+
+        # Make sure the dataloader only produces predictions for 1 cloud
+        # at a time
+        if self.hparams.dataloader.batch_size > 1:
+            raise NotImplementedError(
+                f"Cannot run test prediction submission for dataloaders "
+                f"with batch size > 1")
+
+        # Make sure all transforms are test submission friendly
+        transforms = getattr(self.test_transform, 'transforms', [])
+        transforms += getattr(self.on_device_test_transform, 'transforms', [])
+        for t in transforms:
+            if t in _SUBMISSION_CONFLICTS:
+                raise NotImplementedError(
+                    f"Cannot use {t} with test prediction submission. The "
+                    f"following transforms are not supported: "
+                    f"{_SUBMISSION_CONFLICTS}")
 
     def train_dataloader(self):
         from torch.utils.data import RandomSampler

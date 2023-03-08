@@ -1,11 +1,15 @@
 import os
 import torch
 import logging
+import glob
+from zipfile import ZipFile
 from plyfile import PlyData
 from src.datasets import BaseDataset
 from src.data import Data
 from src.datasets.kitti360_config import *
 from src.utils.download import run_command
+from src.utils.neighbors import knn_2
+
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -172,7 +176,7 @@ class KITTI360(BaseDataset):
 
         return raw_path
 
-    def make_submission(self, idx, pred):
+    def make_submission(self, idx, pred, pos, submission_dir=None):
         """Prepare data for a sumbission to KITTI360 for 3D semantic
         Segmentation on the test set.
 
@@ -184,38 +188,56 @@ class KITTI360(BaseDataset):
                 f"Submission generation not implemented for tiled KITTI360 "
                 f"datasets yet...")
 
+        # Make sure the prediction is a 1D tensor
+        if pred.dim() != 1:
+            raise ValueError(
+                f'The submission predictions must be 1D tensors, '
+                f'received {type(pred)} of shape {pred.shape} instead.')
+
         # TODO:
         #  - handle tiling
         #  - handle geometric transformations of test data, shuffling of points and of tiles in the dataloader
         #  - handle multiple tiles in the dataloader...
+        # Initialize the submission directory
+        submission_dir = submission_dir or self.submission_dir
+        if not osp.exists(submission_dir):
+            os.makedirs(submission_dir)
 
-        if not osp.exists(self.submission_dir):
-            os.makedirs(self.submission_dir)
+        # Read the raw point cloud
+        raw_path = osp.join(
+            self.raw_dir, self.id_to_relative_raw_path(self.cloud_ids[idx]))
+        data_raw = self.read_single_raw_cloud(raw_path)
 
-        # Make sure the prediction is a 1D Numpy array
-        pred = np.asarray(pred)
-        if pred.dim() != 1:
-            raise ValueError(
-                f'The submission predictions must be 1D Numpy vectors, '
-                f'received {type(pred)} of shape {pred.shape} instead.')
+        # Search the nearest neighbor of each point and apply the
+        # neighbor's class to the points
+        neighbors = knn_2(pos, data_raw.pos, 1, r_max=1)[0]
+        pred_raw = pred[neighbors]
 
         # Map TrainId labels to expected Ids
-        pred_remapped = TRAINID2ID[pred].astype(np.uint8)
-
-
+        pred_raw = np.asarray(pred_raw)
+        pred_remapped = TRAINID2ID[pred_raw].astype(np.uint8)
 
         # Recover sequence and window information from stage dataset's
         # windows and format those to match the expected file name:
         # {seq:0>4}_{start_frame:0>10}_{end_frame:0>10}.npy
-        sequence_name, window_name = self.id_to_base_id(self.cloud_ids[idx]).split('/')
+        sequence_name, window_name = self.id_to_base_id(
+            self.cloud_ids[idx]).split('/')
         seq = sequence_name.split('_')[-2]
         start_frame, end_frame = window_name.split('_')
         filename = f'{seq:0>4}_{start_frame:0>10}_{end_frame:0>10}.npy'
 
         # Save the window submission
-        np.save(osp.join(self._submission_dir, filename), pred_remapped)
+        np.save(osp.join(submission_dir, filename), pred_remapped)
 
-        self.cloud_ids[idx]
+    def finalize_submission(self, submission_dir):
+        """This should be called once all window submission files have
+        been saved using `self._make_submission`. This will zip them
+        together as expected by the KITTI360 submission server.
+        """
+        zipObj = ZipFile(f'{submission_dir}.zip', 'w')
+        for p in glob.glob(osp.join(submission_dir, '*.npy')):
+            zipObj.write(p)
+        zipObj.close()
 
 
 ########################################################################

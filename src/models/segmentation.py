@@ -25,7 +25,7 @@ class PointSegmentationModule(LightningModule):
             self, net, criterion, optimizer, scheduler, num_classes,
             class_names=None, sampling_loss=False, pointwise_loss=True,
             weighted_loss=True, custom_init=True, transformer_lr_scale=1,
-            multi_stage_loss_lambdas=None, make_submission=False, **kwargs):
+            multi_stage_loss_lambdas=None, **kwargs):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -385,6 +385,13 @@ class PointSegmentationModule(LightningModule):
 
         self.val_cm.reset()
 
+    def on_test_start(self):
+        # Initialize the submission directory based on the time of the
+        # beginning of test. This way, the test steps can all have
+        # access to the same directory, regardless of their execution
+        # time
+        self.submission_dir = self.trainer.datamodule.test_dataset.submission_dir
+
     def test_step(self, batch, batch_idx):
         loss, preds, targets = self.step(batch)
 
@@ -401,6 +408,14 @@ class PointSegmentationModule(LightningModule):
         self.log(
             "test/loss", self.test_loss, on_step=False, on_epoch=True,
             prog_bar=True)
+
+        # Prepare submission for held-out test sets
+        if self.trainer.datamodule.submit:
+            nag = batch if isinstance(batch, NAG) else batch[0]
+            l0_pos = nag[0].pos.detach().cpu()
+            l0_preds = preds[nag[0].super_index].detach().cpu()
+            self.trainer.datamodule.test_dataset.make_submission(
+                batch_idx, l0_preds, l0_pos, submission_dir=self.submission_dir)
 
         return self.sanitize_step_output({
             "loss": loss,
@@ -423,18 +438,11 @@ class PointSegmentationModule(LightningModule):
                 "test/cm": wandb_confusion_matrix(
                     self.test_cm.confmat, class_names=self.class_names)})
 
+        if self.trainer.datamodule.submit:
+            self.trainer.datamodule.test_dataset.finalize_submission(
+                self.submission_dir)
+
         self.test_cm.reset()
-
-        # Prepare submission for held-out test sets
-        if self.hparams.make_submission:
-            # TODO: deal with batch size > 1
-            if self.trainer.test_dataloader.batch_size > 1:
-                raise NotImplementedError(
-                    f"Cannot make submission for batch size larger than 1")
-
-            preds = [o["preds"] for o in outputs]
-            idx = [o["idx"] for o in outputs]
-            self.trainer.datamodule.test_dataset.make_submission(idx, preds)
 
     def configure_optimizers(self):
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
