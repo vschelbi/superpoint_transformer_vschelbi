@@ -109,7 +109,7 @@ class BaseDataModule(LightningDataModule):
         # Check TTA and transforms conflicts
         self.check_tta_conflicts()
 
-        # Check test submission conflicts
+        # Check test submission and transforms conflicts
         self.check_submission_conflicts()
 
     @property
@@ -227,12 +227,13 @@ class BaseDataModule(LightningDataModule):
         if not self.hparams.submit:
             return
 
-        # Make sure the test dataset does not have any tiling
-        if self.test_dataset.xy_tiling is not None \
-                or self.test_dataset.pc_tiling is not None:
-            raise NotImplementedError(
-                f"Cannot run test prediction submission for test datasets "
-                f"with tiling")
+        # TODO
+        # # Make sure the test dataset does not have any tiling
+        # if self.test_dataset.xy_tiling is not None \
+        #         or self.test_dataset.pc_tiling is not None:
+        #     raise NotImplementedError(
+        #         f"Cannot run test prediction submission for test datasets "
+        #         f"with tiling")
 
         # Make sure the dataloader only produces predictions for 1 cloud
         # at a time
