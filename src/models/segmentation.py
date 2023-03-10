@@ -327,11 +327,7 @@ class PointSegmentationModule(LightningModule):
         # some callback or in `training_epoch_end()` below
         # Remember to always return loss from `training_step()` or
         # backpropagation will fail!
-        return self.sanitize_step_output({
-            "loss": loss,
-            "preds": preds,
-            "targets": targets,
-            "batch_idx": batch_idx})
+        return self.sanitize_step_output({"loss": loss})
 
     def training_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `training_step()`
@@ -353,11 +349,7 @@ class PointSegmentationModule(LightningModule):
             "val/loss", self.val_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
-        return self.sanitize_step_output({
-            "loss": loss,
-            "preds": preds,
-            "targets": targets,
-            "batch_idx": batch_idx})
+        return self.sanitize_step_output({"loss": loss})
 
     def validation_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `validation_step()`
@@ -417,11 +409,7 @@ class PointSegmentationModule(LightningModule):
             self.trainer.datamodule.test_dataset.make_submission(
                 batch_idx, l0_preds, l0_pos, submission_dir=self.submission_dir)
 
-        return self.sanitize_step_output({
-            "loss": loss,
-            "preds": preds,
-            "targets": targets,
-            "batch_idx": batch_idx})
+        return self.sanitize_step_output({"loss": loss})
 
     def test_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `test_step()`
