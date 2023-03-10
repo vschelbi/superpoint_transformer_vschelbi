@@ -402,7 +402,7 @@ class PointSegmentationModule(LightningModule):
             prog_bar=True)
 
         # Prepare submission for held-out test sets
-        if self.trainer.datamodule.submit:
+        if self.trainer.datamodule.hparams.submit:
             nag = batch if isinstance(batch, NAG) else batch[0]
             l0_pos = nag[0].pos.detach().cpu()
             l0_preds = preds[nag[0].super_index].detach().cpu()
@@ -426,7 +426,7 @@ class PointSegmentationModule(LightningModule):
                 "test/cm": wandb_confusion_matrix(
                     self.test_cm.confmat, class_names=self.class_names)})
 
-        if self.trainer.datamodule.submit:
+        if self.trainer.datamodule.hparams.submit:
             self.trainer.datamodule.test_dataset.finalize_submission(
                 self.submission_dir)
 
