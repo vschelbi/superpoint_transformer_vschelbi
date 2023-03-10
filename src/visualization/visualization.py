@@ -19,46 +19,72 @@ def visualize_3d(
         class_colors=None, voxel=-1, max_points=50000, point_size=3,
         centroid_size=None, error_color=None, centroids=False, v_edge=False,
         h_edge=False, h_edge_attr=False, gap=None, select=None, alpha=0.1,
-        alpha_super=None, h_edge_width=None, v_edge_width=None, **kwargs):
+        alpha_super=None, h_edge_width=None, v_edge_width=None,
+        point_symbol='circle', centroid_symbol='circle', **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
-    :param figsize: figure dimensions will be (figsize, figsize/2) if
-      `width` and `height` are not specified
-    :param width: figure width
-    :param height: figure height
-    :param class_names: names for point labels in MMData
-    :param class_colors: colors for point labels in MMData
-    :param voxel: voxel size to subsample the point cloud to facilitate
-      visualization
-    :param max_points: maximum number of points displayed to facilitate
-      visualization
-    :param point_size: size of points
-    :param centroid_size: size of superpoints
-    :param error_color: color used to identify mis-predicted points
-    :param centroids: whether superpoint centroids should be
-      displayed
-    :param v_edge: whether vertical edges should be displayed
-      (only if centroids=True and gap is not None)
-    :param h_edge: whether horizontal edges should be displayed
-      (only if centroids=True)
-    :param h_edge_attr: whether the edges should be colored by their
-      features (only if h_edge=True)
-    :param gap: if None, the hierarchical graphs will be overlaid on the
-      points. If not None, a 3D tensor indicating the offset by which
-      the hierarchical graphs should be plotted
-    :param select: if not None, will call Data.select(slicing) or
-      NAG.select(*slicing) on the input data (depending on its nature)
-      and the coloring schemes will illustrate it
-    :param alpha: float ruling the whitening of selected points, nodes
-      and edges (only if select is not None)
-    :param alpha_super: float ruling the whitening of superpoints. If
-      None, alpha will be used as fallback (only if select is not None)
+    :param figsize: int
+        figure dimensions will be (figsize, figsize/2) if `width` and
+        `height` are not specified
+    :param width: int
+        figure width
+    :param height: int
+        figure height
+    :param class_names: List(str)
+        names for point labels found in attributes 'y' and 'pred'
+    :param class_colors: List(List(int, int, int))
+        colors palette for for point labels found in attributes 'y' and
+        'pred'
+    :param voxel: float
+        voxel size to subsample the point cloud to facilitate
+        visualization
+    :param max_points: int
+        maximum number of points displayed to facilitate visualization
+    :param point_size: int or float
+        size of point markers
+    :param centroid_size: int or float
+        size of superpoint markers
+    :param error_color: List(int, int, int)
+        color used to identify mis-predicted points
+    :param centroids: bool
+        whether superpoint centroids should be displayed
+    :param v_edge: bool
+        whether vertical edges should be displayed (only if
+        centroids=True and gap is not None)
+    :param h_edge: bool
+        whether horizontal edges should be displayed (only if
+        centroids=True)
+    :param h_edge_attr: bool
+        whether the edges should be colored by their features found in
+        'edge_attr' (only if h_edge=True)
+    :param gap: List(float, float, float)
+        if None, the hierarchical graphs will be overlaid on the points.
+        If not None, a 3D tensor indicating the offset by which the
+        hierarchical graphs should be plotted
+    :param select:
+        if not None, will call Data.select(select) or
+        NAG.select(*select) on the input data (depending on its nature)
+        and the coloring schemes will illustrate it
+    :param alpha: float
+        rules the whitening of selected points, nodes and edges (only if
+         select is not None)
+    :param alpha_super:
+        float ruling the whitening of superpoints (only if select is not
+        None). If None, alpha will be used as fallback
+    :param point_symbol: str
+        marker symbol used for points. Must be one of
+        ['circle', 'circle-open', 'square', 'square-open', 'diamond',
+        'diamond-open', 'cross', 'x']. Defaults to 'circle'
+    :param centroid_symbol: str
+        marker symbol used for centroids. Must be one of
+        ['circle', 'circle-open', 'square', 'square-open', 'diamond',
+        'diamond-open', 'cross', 'x']. Defaults to 'circle'
     :param kwargs
 
     :return:
     """
-    assert isinstance(input, (Data, NAG))
+    # assert isinstance(input, (Data, NAG))
     gap = torch.tensor(gap) if gap is not None else gap
     assert gap is None or gap.shape == torch.Size([3])
 
@@ -206,6 +232,7 @@ def visualize_3d(
             z=data_0.pos[data_0.selected, 2],
             mode='markers',
             marker=dict(
+                symbol=point_symbol,
                 size=point_size,
                 color=colors[data_0.selected]),
             hoverinfo='x+y+z+text',
@@ -223,6 +250,7 @@ def visualize_3d(
             z=data_0.pos[~data_0.selected, 2],
             mode='markers',
             marker=dict(
+                symbol=point_symbol,
                 size=point_size,
                 color=colors[~data_0.selected],
                 opacity=alpha),
@@ -368,7 +396,7 @@ def visualize_3d(
                 z=super_pos[input[i_level + 1].selected, 2],
                 mode='markers+text',
                 marker=dict(
-                    symbol='diamond',
+                    symbol=centroid_symbol,
                     size=ball_size,
                     color=colors[input[i_level + 1].selected.numpy()],
                     line_width=min(ball_size / 2, 2),
@@ -387,7 +415,7 @@ def visualize_3d(
                 z=super_pos[~input[i_level + 1].selected, 2],
                 mode='markers+text',
                 marker=dict(
-                    symbol='diamond',
+                    symbol=centroid_symbol,
                     size=ball_size,
                     color=colors[~input[i_level + 1].selected.numpy()],
                     line_width=min(ball_size / 2, 2),
@@ -566,6 +594,7 @@ def visualize_3d(
                 z=data_0.pos[indices, 2],
                 mode='markers',
                 marker=dict(
+                    symbol=point_symbol,
                     size=int(point_size * 1.5),
                     color=error_color, ),
                 showlegend=False,
