@@ -20,7 +20,8 @@ def visualize_3d(
         centroid_size=None, error_color=None, centroids=False, v_edge=False,
         h_edge=False, h_edge_attr=False, gap=None, select=None, alpha=0.1,
         alpha_super=None, h_edge_width=None, v_edge_width=None,
-        point_symbol='circle', centroid_symbol='circle', ignore=-1, **kwargs):
+        point_symbol='circle', centroid_symbol='circle', ignore=-1, keys=None,
+        **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
@@ -318,6 +319,20 @@ def visualize_3d(
             'marker.color': colors[data_0.selected], 'hovertext': None}
         trace_modes[i_unselected_point_trace]['Features 3D'] = {
             'marker.color': colors[~data_0.selected], 'hovertext': None}
+
+    # Draw a trace for each key specified in keys
+    if keys is None:
+        keys = []
+    elif isinstance(keys, str):
+        keys = [keys]
+    for key in keys:
+        if getattr(data_0, key, None) is not None:
+            colors = feats_to_rgb(data_0[key], normalize=True)
+            colors = rgb_to_plotly_rgb(colors)
+            trace_modes[i_point_trace][str(key).title()] = {
+                'marker.color': colors[data_0.selected], 'hovertext': None}
+            trace_modes[i_unselected_point_trace][str(key).title()] = {
+                'marker.color': colors[~data_0.selected], 'hovertext': None}
 
     # Draw a trace for 3D point cloud sampling (for sampling debugging)
     if 'super_sampling' in data_0.keys:
