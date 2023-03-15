@@ -20,7 +20,7 @@ def visualize_3d(
         centroid_size=None, error_color=None, centroids=False, v_edge=False,
         h_edge=False, h_edge_attr=False, gap=None, select=None, alpha=0.1,
         alpha_super=None, h_edge_width=None, v_edge_width=None,
-        point_symbol='circle', centroid_symbol='circle', **kwargs):
+        point_symbol='circle', centroid_symbol='circle', ignore=-1, **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
@@ -80,6 +80,8 @@ def visualize_3d(
         marker symbol used for centroids. Must be one of
         ['circle', 'circle-open', 'square', 'square-open', 'diamond',
         'diamond-open', 'cross', 'x']. Defaults to 'circle'
+    :param ignore: int
+        label to ignore when computing prediction error
     :param kwargs
 
     :return:
@@ -580,7 +582,7 @@ def visualize_3d(
         pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
 
         # Identify erroneous point indices
-        indices = np.where(pred != y)[0]
+        indices = np.where((pred != y) & (y != ignore))[0]
 
         # Prepare the color for erroneous points
         error_color = 'red' if error_color is None \
