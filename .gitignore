@@ -154,15 +154,10 @@ logs/
 
 # Superpoint Transformer project
 .idea
-src/partition/parallel_cut_pursuit
-src/partition/grid_graph
-src/partition/FRNN
-src/partition/build
-src/partition/utils/CmakeFiles
-src/partition/utils/cmake_install.cmake
-src/partition/utils/Makefile
-src/partition/utils/CMakeCache.txt
-src/partition/utils/CMakeFiles
+src/dependencies/parallel_cut_pursuit
+src/dependencies/grid_graph
+src/dependencies/FRNN
+src/dependencies/point_geometric_features
 *.pyc
 *DS_Store*
 *.vscode

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from sklearn.linear_model import RANSACRegressor
-import src.partition.utils.libpoint_utils as point_utils
+from src.dependencies.point_geometric_features.python.bin import pgeof
 from src.utils import rgb2hsv, rgb2lab, sizes_to_pointers
 from src.transforms import Transform
 from src.data import NAG
@@ -180,8 +180,7 @@ class PointFeatures(Transform):
             nn_ptr = np.ascontiguousarray(nn_ptr)
 
             # C++ geometric features computation on CPU
-            f = point_utils.compute_geometric_features(
-                xyz, nn, nn_ptr, self.k_min, False)
+            f = pgeof(xyz, nn, nn_ptr, self.k_min, False)
             f = torch.from_numpy(f.astype('float32'))
 
             # Keep only required features

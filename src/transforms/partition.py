@@ -8,10 +8,10 @@ from src.transforms import Transform
 from src.data import Data, Cluster, NAG
 from src.utils.cpu import available_cpu_count
 
-partition_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path.append(partition_folder)
-sys.path.append(osp.join(partition_folder, "partition/grid_graph/python/bin"))
-sys.path.append(osp.join(partition_folder, "partition/parallel_cut_pursuit/python/wrappers"))
+dependencies_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
+sys.path.append(dependencies_folder)
+sys.path.append(osp.join(dependencies_folder, "dependencies/grid_graph/python/bin"))
+sys.path.append(osp.join(dependencies_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
 
 from grid_graph import edge_list_to_forward_star
 from cp_kmpp_d0_dist import cp_kmpp_d0_dist

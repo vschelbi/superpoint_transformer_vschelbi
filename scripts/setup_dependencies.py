@@ -23,7 +23,7 @@ import re
 # Keep track of directories of interest
 WORK_DIR = osp.realpath(os.curdir)
 PROJECT_DIR = osp.realpath(osp.dirname(osp.dirname(__file__)))
-PARTITION_DIR = osp.join(PROJECT_DIR, 'src', 'partition')
+DEPENDENCIES_DIR = osp.join(PROJECT_DIR, 'src', 'dependencies')
 
 # Find the Numpy headers
 include_dirs = [numpy.get_include(), "../include"]
@@ -64,7 +64,7 @@ def purge(dir, pattern):
 ########################################################################
 
 # Move the appropriate working directory
-os.chdir(osp.join(PARTITION_DIR, 'grid_graph/python'))
+os.chdir(osp.join(DEPENDENCIES_DIR, 'grid_graph/python'))
 name = "grid_graph"
 if not osp.exists("bin"):
     os.mkdir("bin")
@@ -97,7 +97,7 @@ except FileNotFoundError:
 ########################################################################
 
 # Move the appropriate working directory
-os.chdir(osp.join(PARTITION_DIR, 'parallel_cut_pursuit/python'))
+os.chdir(osp.join(DEPENDENCIES_DIR, 'parallel_cut_pursuit/python'))
 name = "cp_kmpp_d0_dist_cpy"
 
 if not osp.exists("bin"):

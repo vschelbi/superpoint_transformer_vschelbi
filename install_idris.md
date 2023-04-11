@@ -32,7 +32,7 @@ Liste des installations :
   * [x] seaborn
   * [x] plotly>=5.9.0 
 * dependencies requiring compilation
-  * [x] https://github.com/lxxue/FRNN.git src/partition/FRNN
+  * [x] https://github.com/lxxue/FRNN.git src/dependencies/FRNN
   * [x] https://github.com/drprojects/point_geometric_features.git
   * [x] https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/partition/parallel_cut_pursuit
   * [x] https://gitlab.com/1a7r0ch3/grid-graph.git src/partition/grid_graph

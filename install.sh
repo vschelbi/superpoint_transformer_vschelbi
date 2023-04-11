@@ -10,7 +10,8 @@ PROJECT_NAME=spt
 YML_FILE=${HERE}/${PROJECT_NAME}.yml
 PYTHON=3.8
 TORCH=1.12.0
-CUDA_SUPPORTED=(10.2)
+#CUDA_SUPPORTED=(10.2)
+CUDA_SUPPORTED=(11.8)
 
 
 # Installation script for Anaconda3 environments
@@ -88,14 +89,19 @@ pip install plotly==5.9.0
 pip install "jupyterlab>=3" "ipywidgets>=7.6" jupyter-dash
 pip install "notebook>=5.3" "ipywidgets>=7.5"
 pip install ipykernel
-pip install torch==1.12.0 torchvision
-pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.12.0+cu102.html
+
+pip3 install torch torchvision
+#pip install torch==1.12.0 torchvision
+
+pip install torch_geometric pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.0.0+cu118.html
+#pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.12.0+cu102.html
+
 pip install plyfile
 pip install h5py
 pip install colorhash
 pip install seaborn
 pip3 install numba
-pip install pytorch-lightning
+pip install pytorch-lightning==1.8
 pip install pyrootutils
 pip install hydra-core --upgrade
 pip install hydra-colorlog
@@ -110,10 +116,10 @@ pip install gdown
 echo
 echo "___________________ FRNN ___________________"
 echo
-git clone --recursive https://github.com/lxxue/FRNN.git src/partition/FRNN
+git clone --recursive https://github.com/lxxue/FRNN.git src/dependencies/FRNN
 
 # install a prefix_sum routine first
-cd src/partition/FRNN/external/prefix_sum
+cd src/dependencies/FRNN/external/prefix_sum
 python setup.py install
 
 # install FRNN
@@ -123,16 +129,13 @@ cd ../../../
 
 
 echo
-echo "________________ Point Utils _______________"
+echo "__________ Point Geometric Features _________"
 echo
-conda install -c anaconda boost -y
+git clone https://github.com/drprojects/point_geometric_features.git src/dependencies/point_geometric_features
+cd src/dependencies/point_geometric_features
+conda install numpy -y
 conda install -c omnia eigen3 -y
-conda install eigen -y
-conda install -c r libiconv -y
-ln -s $CONDA_PREFIX/lib/python$PYTHON/site-packages/numpy/core/include/numpy $CONDA_PREFIX/include/numpy
-cd src/partition/utils
-cmake . -DPYTHON_LIBRARY=$CONDA_PREFIX/lib/libpython$PYTHON.so -DPYTHON_INCLUDE_DIR=$CONDA_PREFIX/include/python$PYTHON -DBOOST_INCLUDEDIR=$CONDA_PREFIX/include -DEIGEN3_INCLUDE_DIR=$CONDA_PREFIX/include/eigen3
-make
+python python/setup.py build_ext --include-dirs=$CONDA_PREFIX/include
 cd ../../..
 
 
@@ -141,9 +144,8 @@ echo "________________ Cut-Pursuit _______________"
 echo
 
 # Clone parallel-cut-pursuit and grid-graph repos
-#git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/partition/parallel_cut_pursuit
-git clone -b improve_merge https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/partition/parallel_cut_pursuit
-git clone https://gitlab.com/1a7r0ch3/grid-graph.git src/partition/grid_graph
+git clone -b improve_merge https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/dependencies/parallel_cut_pursuit
+git clone https://gitlab.com/1a7r0ch3/grid-graph.git src/dependencies/grid_graph
 
 # Compile the projects
 python scripts/setup_dependencies.py build_ext
