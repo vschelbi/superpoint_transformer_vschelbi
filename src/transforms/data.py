@@ -85,7 +85,7 @@ class NAGCast(Cast):
             int_dtype=self.int_dtype,
             rgb_to_float=self.rgb_to_float)
 
-        for i_level in nag.num_levels:
+        for i_level in range(nag.num_levels):
             nag._list[i_level] = transform(nag[i_level])
 
         return nag
