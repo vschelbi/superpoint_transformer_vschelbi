@@ -321,6 +321,10 @@ class BaseDataModule(LightningDataModule):
             on_device_transform = self.on_device_test_transform
         elif self.trainer.predicting:
             raise NotImplementedError('No on_device_predict_transform yet...')
+        elif self.trainer.evaluating:
+            on_device_transform = self.on_device_test_transform
+        elif self.trainer.sanity_checking:
+            on_device_transform = self.on_device_train_transform
         else:
             log.warning(
                 'Unsure which stage we are in, defaulting to '
