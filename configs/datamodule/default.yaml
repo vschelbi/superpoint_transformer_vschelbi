@@ -32,6 +32,9 @@ on_device_test_transform: null
 tta_runs: null
 tta_val: False
 
+# Produce submission data if test is true
+submit: False
+
 # DataLoader parameters. Would be good to have them live in another file
 dataloader:
     batch_size: 4

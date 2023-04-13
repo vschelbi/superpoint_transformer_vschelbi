@@ -4,6 +4,7 @@ from src.transforms import Transform
 from src.utils import tensor_idx
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils.nn import trunc_normal_
+from torch.nn.functional import dropout1d
 
 
 __all__ = [
@@ -390,7 +391,8 @@ class SelectColumns(Transform):
     def _process(self, data):
         if self.idx is None or getattr(data, self.key, None) is None:
             return data
-        data[self.key] = data[self.key][:, self.idx.to(device=data.device)]
+        idx = tensor_idx(torch.as_tensor(self.idx, device=data.device))
+        data[self.key] = data[self.key][:, idx]
         return data
 
 
@@ -448,21 +450,14 @@ class DropoutColumns(Transform):
         Probability of a column to be dropped
     :param key: str
         The Data attribute whose columns should be selected
-    :param group: Tensor or list
-        The indices by which columns should be grouped. If two columns
-        have the same group index, they will be always be dropped
-        together
     """
 
-    def __init__(self, p=0.5, key=None, group=None):
+    def __init__(self, p=0.5, key=None):
         assert key is not None, f"A Data key must be specified"
         self.p = p
         self.key = key
-        self.group = tensor_idx(group).tolist() if group is not None else None
 
     def _process(self, data):
-        device = data.device
-
         # Skip dropout if p <= 0
         if self.p <= 0:
             return data
@@ -471,23 +466,9 @@ class DropoutColumns(Transform):
         if getattr(data, self.key, None) is None:
             return data
 
-        # Recover the Data attribute of interest
-        if data[self.key].dim() == 1:
-            data[self.key] = data[self.key].view(-1, 1)
-        num_col = data[self.key].shape[1]
-
-        # Prepare column indexing
-        if self.group is None:
-            self.group = torch.arange(num_col, device=device)
-        elif self.group.device != device:
-            self.group = self.group.to(device)
-        group = consecutive_cluster(self.group)[0]
-        assert group.shape[0] == num_col
-
-        # Compute a boolean mask across the columns, indicating whether
-        # they should (not) be dropped
-        mask = torch.rand(num_col, device=data.device) > self.p
-        data[self.key] *= mask[group].float().view(1, -1)
+        # Apply dropout on each column, inplace
+        data[self.key] = dropout1d(
+            data[self.key], p=self.p, training=True, inplace=True)
 
         return data
 
@@ -503,43 +484,42 @@ class NAGDropoutColumns(Transform):
         Probability of a column to be dropped
     :param key: str
         The Data attribute whose columns should be selected
-    :param group: Tensor or list
-        The indices by which columns should be grouped. If two columns
-        have the same group index, they will be always be dropped
-        together
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, level='all', p=0.5, key=None, group=None):
+    def __init__(self, level='all', p=0.5, key=None):
+        assert isinstance(level, int) or level == 'all' or level.endswith('-') \
+               or level.endswith('+')
         self.level = level
         self.p = p
         self.key = key
-        self.group = group
 
     def _process(self, nag):
+        # Skip dropout if p <= 0
+        if self.p <= 0:
+            return nag
 
-        level_p = [0] * nag.num_levels
         if isinstance(self.level, int):
-            level_p[self.level] = self.p
+            levels = [self.level]
         elif self.level == 'all':
-            level_p = [self.p] * nag.num_levels
+            levels = range(0, nag.num_levels)
         elif self.level[-1] == '+':
-            i = int(self.level[:-1])
-            level_p[i:] = [self.p] * (nag.num_levels - i)
+            levels = range(int(self.level[:-1]), nag.num_levels)
         elif self.level[-1] == '-':
-            i = int(self.level[:-1])
-            level_p[:i] = [self.p] * i
+            levels = range(0, int(self.level[:-1]) + 1)
         else:
-            raise ValueError(f'Unsupported level={self.level}')
+            return nag
 
-        transforms = [
-            DropoutColumns(p=p, key=self.key, group=self.group)
-            for p in level_p]
+        for i_level in levels:
+            # Skip dropout if the attribute is not present in the Data
+            if getattr(nag[i_level], self.key, None) is None:
+                continue
 
-        for i_level in range(nag.num_levels):
-            nag._list[i_level] = transforms[i_level](nag._list[i_level])
+            # Apply dropout on each column, inplace
+            nag[i_level][self.key] = dropout1d(
+                nag[i_level][self.key], p=self.p, training=True, inplace=True)
 
         return nag
 

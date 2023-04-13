@@ -5,16 +5,17 @@ from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from src.utils import fast_randperm, sparse_sample
+from src.utils import fast_randperm, sparse_sample, scatter_pca
 from src.transforms import Transform
-from src.data import NAG, NAGBatch
+from src.data import Data, NAG, NAGBatch
 from src.utils.metrics import atomic_to_histogram
 
 
 __all__ = [
     'Shuffle', 'SaveNodeIndex', 'NAGSaveNodeIndex', 'GridSampling3D',
-    'SampleXYTiling', 'SampleSubNodes', 'SampleKHopSubgraphs',
-    'SampleRadiusSubgraphs', 'SampleSegments', 'SampleEdges']
+    'SampleXYTiling', 'SampleRecursiveMainXYAxisTiling', 'SampleSubNodes',
+    'SampleKHopSubgraphs', 'SampleRadiusSubgraphs', 'SampleSegments',
+    'SampleEdges']
 
 
 class Shuffle(Transform):
@@ -282,6 +283,8 @@ class SampleXYTiling(Transform):
 
     def __init__(self, x=0, y=0, tiling=2):
         tiling = (tiling, tiling) if isinstance(tiling, int) else tiling
+        assert 0 <= x < tiling[0]
+        assert 0 <= y < tiling[1]
         self.tiling = torch.as_tensor(tiling)
         self.x = x
         self.y = y
@@ -298,6 +301,91 @@ class SampleXYTiling(Transform):
         idx = torch.where((xy[:, 0] == self.x) & (xy[:, 1] == self.y))[0]
 
         return data.select(idx)[0]
+
+
+class SampleRecursiveMainXYAxisTiling(Transform):
+    """Tile the input Data by recursively splitting the points along
+    their principal XY direction and select only a given tile. This is
+    useful to reduce the size of very large clouds at preprocessing
+    time, when clouds are not XY-aligned or have non-trivial geometries.
+
+    :param x: int
+        x coordinate of the sample in the tiling structure. The tiles
+        are "lexicographically" ordered, with the points lying below the
+        median of each split considered before those above the median
+    :param steps: int
+        Number of splitting steps. By construction, the total number of
+        tiles is 2**tiling
+    """
+
+    def __init__(self, x=0, steps=2):
+        assert 0 <= x < 2 ** steps
+        self.steps = steps
+        self.x = x
+
+    def _process(self, data):
+        # Nothing to do if less than 1 step required
+        if self.steps <= 0:
+            return data
+
+        # Recursively split the data
+        for p in self.binary_tree_path:
+            data = self.split_by_main_xy_direction(data, left=not p, right=p)
+
+        return data
+
+    @property
+    def binary_tree_path(self):
+        # Converting x to a binary number gives the solution !
+        path = bin(self.x)[2:]
+
+        # Prepend with zeros to build path of length steps
+        path = (self.steps - len(path)) * '0' + path
+
+        # Convert string of 0 and 1 to list of booleans
+        return [bool(int(i)) for i in path]
+
+    @staticmethod
+    def split_by_main_xy_direction(data, left=True, right=True):
+        assert left or right, "At least one split must be returned"
+
+        # Find the main XY direction and orient it along the x+ halfspace,
+        # for repeatability
+        v = SampleRecursiveMainXYAxisTiling.compute_main_xy_direction(data)
+        if v[0] < 0:
+            v *= -1
+
+        # Project points along this direction and split around the median
+        proj = (data.pos[:, :2] * v.view(1, -1)).sum(dim=1)
+        mask = proj < proj.median()
+
+        if left and not right:
+            return data.select(mask)[0]
+        if right and not left:
+            return data.select(~mask)[0]
+        return data.select(mask)[0], data.select(~mask)[0]
+
+    @staticmethod
+    def compute_main_xy_direction(data):
+        # Work on local copy
+        data = Data(pos=data.pos.clone())
+
+        # Compute a voxel size to aggressively sample the data
+        xy = data.pos[:, :2]
+        xy -= xy.min(dim=0).values.view(1, -1)
+        voxel = xy.max() / 100
+
+        # Set Z to 0, we only want to compute the principal components in XY
+        data.pos[:, 2] = 0
+
+        # Voxelize
+        data = GridSampling3D(size=voxel)(data)
+
+        # Search first principal component
+        idx = torch.zeros_like(data.pos[:, 0], dtype=torch.long)
+        v = scatter_pca(data.pos, idx, on_cpu=True)[1][0][:2, -1]
+
+        return v
 
 
 class SampleSubNodes(Transform):
@@ -703,6 +791,11 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         self.r = r
 
     def _sample_subgraphs(self, nag, i_level, idx):
+        # Skip if r<=0. This may be useful to turn this transform into 
+        # an Identity, if need be
+        if self.r <= 0:
+            return nag
+        
         # Neighbors are searched using the node coordinates. This is not
         # the optimal search for cluster-cluster distances, but is the
         # fastest for our needs here. If need be, one could make this

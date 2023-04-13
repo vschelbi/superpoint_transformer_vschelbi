@@ -86,9 +86,12 @@ class S3DISRoom(S3DIS):
             osp.splitext(processed_path)[0].split('/')[-4:]
         cloud_id = osp.join(area_id, room_id)
 
+        # Remove the tiling in the cloud_id, if any
+        base_cloud_id = self.id_to_base_id(cloud_id)
+
         # Read the raw cloud data
         raw_ext = osp.splitext(self.raw_file_names_3d[0])[1]
-        raw_path = osp.join(self.raw_dir, cloud_id + raw_ext)
+        raw_path = osp.join(self.raw_dir, base_cloud_id + raw_ext)
 
         return raw_path
 

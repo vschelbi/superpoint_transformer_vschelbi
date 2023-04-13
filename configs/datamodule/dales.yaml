@@ -7,7 +7,8 @@ _target_: src.datamodules.dales.DALESDataModule
 # here to facilitate model parameterization with config interpolation
 num_classes: 8
 trainval: True
-tiling: 3
+val_on_test: True
+xy_tiling: 3
 
 # Features that will be computed, saved, loaded for points and segments
 partition_hf:  # point features used for the partition

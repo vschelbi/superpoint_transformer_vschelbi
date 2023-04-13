@@ -151,6 +151,12 @@ class PointSegmentationModule(LightningModule):
         else:
             logits, preds, y_hist = self.step_multi_run_inference(*batch)
 
+        # If the input batch does  not have any labels (eg test set with
+        # held-out labels), y_hist will be None and the loss will not be
+        # computed
+        if y_hist is None:
+            return None, preds, None
+
         # Compute the loss either in a point-wise or segment-wise
         # fashion. Cross-Entropy with pointwise_loss is equivalent to
         # KL-divergence
@@ -198,14 +204,10 @@ class PointSegmentationModule(LightningModule):
 
         # Build the global logits, in which the multi-run
         # logits will be accumulated, before computing their final
-        # prediction
-        if self.multi_stage_loss:
-            logits = [torch.zeros_like(yh, dtype=torch.float) for yh in y_hist]
-        else:
-            logits = torch.zeros_like(y_hist, dtype=torch.float)
-        seen = torch.zeros_like(y_hist[:, 0], dtype=torch.bool)
-
+        logits = None
+        seen = torch.zeros(nag.num_points[1], dtype=torch.bool)
         for i_run in range(num_runs):
+
             # Apply transform
             nag_ = transform(nag.clone())
 
@@ -214,12 +216,22 @@ class PointSegmentationModule(LightningModule):
             # augmented data and update the global logits of the node
             if self.multi_stage_loss:
                 out = self.forward(nag_)
+                if logits is None:
+                    num_classes = out[0].shape[1]
+                    logits = [
+                        torch.zeros(num_points, num_classes, device=nag.device)
+                        for num_points in nag.num_points[1:]]
                 for i in range(len(out)):
                     node_id = nag_[i + 1][KEY]
                     logits[i][node_id] += out[i]
             else:
+                out = self.forward(nag_)
+                if logits is None:
+                    num_classes = out.shape[1]
+                    logits = torch.zeros(
+                        nag.num_points[1], num_classes, device=nag.device)
                 node_id = nag_[1][KEY]
-                logits[node_id] += self.forward(nag_)
+                logits[node_id] += out
 
             # Maintain the seen/unssen mask for level-1 nodes only
             node_id = nag_[1][KEY]
@@ -247,16 +259,26 @@ class PointSegmentationModule(LightningModule):
                     f"label-0 class prediction. Consider sampling less nodes "
                     f"in the augmentations, or increase the search radius")
             if self.multi_stage_loss:
-                logits[unseen_idx] = logits[0][seen_idx][neighbors]
+                logits[0][unseen_idx] = logits[0][seen_idx][neighbors]
             else:
                 logits[unseen_idx] = logits[seen_idx][neighbors]
 
         # Compute the global prediction
-        preds = torch.argmax(logits, dim=1)
+        preds = torch.argmax(logits, dim=1) if not self.multi_stage_loss \
+            else torch.argmax(logits[0], dim=1)
 
         return logits, preds, y_hist
 
     def step_get_y_hist(self, nag):
+        # Return None if the required labels cannot be found in the NAG
+        if self.hparams.sampling_loss and nag[0].y is None:
+            return
+        elif self.multi_stage_loss and \
+                not all([nag[i].y is not None for i in range(1, nag.num_levels)]):
+            return
+        elif nag[1].y is None:
+            return
+
         # Recover level-1 label histograms, either from the level-0
         # sampled points (ie sampling will affect the loss and metrics)
         # or directly from the precomputed level-1 label histograms (ie
@@ -305,7 +327,7 @@ class PointSegmentationModule(LightningModule):
         # some callback or in `training_epoch_end()` below
         # Remember to always return loss from `training_step()` or
         # backpropagation will fail!
-        return {"loss": loss, "preds": preds, "targets": targets}
+        return self.sanitize_step_output({"loss": loss})
 
     def training_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `training_step()`
@@ -327,7 +349,7 @@ class PointSegmentationModule(LightningModule):
             "val/loss", self.val_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
-        return {"loss": loss, "preds": preds, "targets": targets}
+        return self.sanitize_step_output({"loss": loss})
 
     def validation_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `validation_step()`
@@ -355,17 +377,39 @@ class PointSegmentationModule(LightningModule):
 
         self.val_cm.reset()
 
+    def on_test_start(self):
+        # Initialize the submission directory based on the time of the
+        # beginning of test. This way, the test steps can all have
+        # access to the same directory, regardless of their execution
+        # time
+        self.submission_dir = self.trainer.datamodule.test_dataset.submission_dir
+
     def test_step(self, batch, batch_idx):
         loss, preds, targets = self.step(batch)
 
+        # If the input batch does not have any labels (eg test set with
+        # held-out labels), y_hist will be None and the loss will not be
+        # computed. In this case, we arbitrarily set the loss to 0 and
+        # do not update the confusion matrix
+        loss = 0 if loss is None else loss
+
         # update and log metrics
         self.test_loss(loss)
-        self.test_cm(preds, targets)
+        if targets is not None:
+            self.test_cm(preds, targets)
         self.log(
             "test/loss", self.test_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
-        return {"loss": loss, "preds": preds, "targets": targets}
+        # Prepare submission for held-out test sets
+        if self.trainer.datamodule.hparams.submit:
+            nag = batch if isinstance(batch, NAG) else batch[0]
+            l0_pos = nag[0].pos.detach().cpu()
+            l0_preds = preds[nag[0].super_index].detach().cpu()
+            self.trainer.datamodule.test_dataset.make_submission(
+                batch_idx, l0_preds, l0_pos, submission_dir=self.submission_dir)
+
+        return self.sanitize_step_output({"loss": loss})
 
     def test_epoch_end(self, outputs):
         # `outputs` is a list of dicts returned from `test_step()`
@@ -381,6 +425,10 @@ class PointSegmentationModule(LightningModule):
             self.logger.experiment.log({
                 "test/cm": wandb_confusion_matrix(
                     self.test_cm.confmat, class_names=self.class_names)})
+
+        if self.trainer.datamodule.hparams.submit:
+            self.trainer.datamodule.test_dataset.finalize_submission(
+                self.submission_dir)
 
         self.test_cm.reset()
 
@@ -436,6 +484,19 @@ class PointSegmentationModule(LightningModule):
             class_weight = state_dict.pop('criterion.weight', None)
             super().load_state_dict(state_dict, strict=strict)
             self.criterion.weight = class_weight
+
+    @staticmethod
+    def sanitize_step_output(out_dict):
+        """Helper to be used for cleaning up the `_step` functions.
+        Lightning expects those to return the loss (on GPU, with the
+        computation graph intact for the backward step. Any other
+        element passed in this dict will be detached and moved to CPU
+        here. This avoids memory leak.
+        """
+        return {
+            k: v if ((k == "loss") or (not isinstance(v, torch.Tensor)))
+            else v.detach().cpu()
+            for k, v in out_dict.items()}
 
 
 if __name__ == "__main__":

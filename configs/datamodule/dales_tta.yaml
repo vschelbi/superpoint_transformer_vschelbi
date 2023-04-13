@@ -1,5 +1,5 @@
 defaults:
-  - kitti360.yaml
+  - dales.yaml
 
 # Test-time augmentation
 tta_runs: 5
@@ -22,9 +22,6 @@ tta:
     tilt_n_rotate_phi: ${datamodule.tilt_n_rotate_phi}
     tilt_n_rotate_theta: ${datamodule.tilt_n_rotate_theta}
     anisotropic_scaling: ${datamodule.anisotropic_scaling}
-    rgb_jitter: 0
-    rgb_autocontrast: ${datamodule.rgb_autocontrast}
-    rgb_drop: ${datamodule.rgb_drop}
     node_feat_jitter: 0
     h_edge_feat_jitter: 0
     v_edge_feat_jitter: 0
@@ -57,10 +54,6 @@ on_device_val_transform:
         ratio: ${datamodule.tta.sample_segment_ratio}
         by_size: ${datamodule.tta.sample_segment_by_size}
         by_class: ${datamodule.tta.sample_segment_by_class}
-
-    # Cast all attributes to either float or long. Doing this only now
-    # allows speeding up disk I/O and CPU->GPU transfer
-    - transform: NAGCast
 
     # Apply geometric transforms affecting position, offsets, normals
     # before calling transforms relying on those, such as on-the-fly
@@ -118,17 +111,16 @@ on_device_val_transform:
         n_min: ${datamodule.tta.sample_edge_n_min}
         n_max: ${datamodule.tta.sample_edge_n_max}
 
-    # Move all point and segment features to 'x', except for "rgb", on
-    # which we want to apply specific transforms
+    # Move all point and segment features to 'x'
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${eval:'ListConfig([k for k in ${datamodule.point_hf} if k != "rgb"])'}
+        keys: ${datamodule.point_hf}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${eval:'ListConfig([k for k in ${datamodule.segment_hf} if k != "rgb"])'}
+        keys: ${datamodule.segment_hf}
         to: 'x'
 
     # Add some noise and randomly some point, node and edge features
@@ -159,31 +151,6 @@ on_device_val_transform:
       params:
         p: ${datamodule.tta.v_edge_feat_drop}
         key: 'v_edge_attr'
-
-    # RGB-specific transforms. In particular, the color dropout will
-    # switch off all three color channels together, instead of just one
-    # by one with
-    #    - transform: NAGColorNormalize
-    #      params:
-    #        level: 'all'
-    - transform: NAGJitterKey
-      params:
-        key: 'rgb'
-        sigma: ${datamodule.tta.rgb_jitter}
-        trunc: ${eval:'2 * ${datamodule.tta.rgb_jitter}'}
-    - transform: NAGColorAutoContrast
-      params:
-        p: ${datamodule.tta.rgb_autocontrast}
-    - transform: NAGColorDrop
-      params:
-        p: ${datamodule.tta.rgb_drop}
-
-    # Finally move RGB to node and segment features, if need be
-    - transform: NAGAddKeysTo
-      params:
-        keys: 'rgb'
-        to: 'x'
-        strict: False
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops

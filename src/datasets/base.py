@@ -10,7 +10,8 @@ from tqdm.auto import tqdm as tq
 from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.dataset import _repr
 from src.data import NAG
-from src.transforms import NAGSelectByKey, NAGRemoveKeys, SampleXYTiling
+from src.transforms import NAGSelectByKey, NAGRemoveKeys, SampleXYTiling, \
+    SampleRecursiveMainXYAxisTiling
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -121,7 +122,8 @@ class BaseDataset(InMemoryDataset):
             save_y_to_csr=True,
             save_pos_dtype=torch.float,
             save_fp_dtype=torch.half,
-            tiling=None,
+            xy_tiling=None,
+            pc_tiling=None,
             val_mixed_in_train=False,
             test_mixed_in_val=False,
             custom_hash=None,
@@ -143,7 +145,6 @@ class BaseDataset(InMemoryDataset):
         self.save_y_to_csr = save_y_to_csr
         self.save_pos_dtype = save_pos_dtype
         self.save_fp_dtype = save_fp_dtype
-        self.tiling = (tiling, tiling) if isinstance(tiling, int) else tiling
         self.on_device_transform = on_device_transform
         self.val_mixed_in_train = val_mixed_in_train
         self.test_mixed_in_val = test_mixed_in_val
@@ -155,6 +156,28 @@ class BaseDataset(InMemoryDataset):
         self.segment_save_keys = segment_save_keys
         self.segment_no_save_keys = segment_no_save_keys
         self.segment_load_keys = segment_load_keys
+
+        # Prepare tiling arguments. Can either be XY tiling of PC
+        # tiling but not both. XY tiling will apply a regular grid along
+        # the XY axes to the data, regardless of its orientation, shape
+        # or density. The value of xy_tiling indicates the number of
+        # tiles in each direction. So, if a single int is passed, each
+        # cloud will be divided into xy_tiling**2 tiles. PC tiling will
+        # recursively split the data wrt the principal component along
+        # the XY plane. Each step splits the data in 2, wrt to its
+        # geometry. The value of pc_tiling indicates the number of split
+        # steps used. Hence, 2**pc_tiling tiles will be created.
+        assert xy_tiling is None or pc_tiling is None, \
+            "Cannot apply both XY and PC tiling, please choose only one."
+        if xy_tiling is None:
+            self.xy_tiling = None
+        elif isinstance(xy_tiling, int):
+            self.xy_tiling = (xy_tiling, xy_tiling) if xy_tiling > 1 else None
+        elif xy_tiling[0] > 1 or xy_tiling[1] > 1:
+            self.xy_tiling = xy_tiling
+        else:
+            self.xy_tiling = None
+        self.pc_tiling = pc_tiling if pc_tiling and pc_tiling >= 1 else None
 
         # Sanity check on the cloud ids. Ensures cloud ids are unique
         # across all stages, unless `val_mixed_in_train` or
@@ -249,26 +272,34 @@ class BaseDataset(InMemoryDataset):
         stage. Unlike all_base_cloud_ids, these ids take into account
         the clouds tiling, if any.
         """
-        # If no tiling needed, return the all_base_cloud_ids
-        if self.tiling is None:
-            return self.all_base_cloud_ids
-
         # If clouds are tiled, expand and append all cloud names with a
         # suffix indicating which tile it corresponds to
-        tx, ty = self.tiling
-        return {
-            stage: [
-                f'{ci}__TILE_{x + 1}-{y + 1}_OF_{tx}-{ty}'
-                for ci in ids
-                for x, y in product(range(tx), range(ty))]
-            for stage, ids in self.all_base_cloud_ids.items()}
+        if self.xy_tiling is not None:
+            tx, ty = self.xy_tiling
+            return {
+                stage: [
+                    f'{ci}__TILE_{x + 1}-{y + 1}_OF_{tx}-{ty}'
+                    for ci in ids
+                    for x, y in product(range(tx), range(ty))]
+                for stage, ids in self.all_base_cloud_ids.items()}
+
+        if self.pc_tiling is not None:
+            return {
+                stage: [
+                    f'{ci}__TILE_{x + 1}_OF_{2**self.pc_tiling}'
+                    for ci in ids
+                    for x in range(2**self.pc_tiling)]
+                for stage, ids in self.all_base_cloud_ids.items()}
+
+        # If no tiling needed, return the all_base_cloud_ids
+        return self.all_base_cloud_ids
 
     def id_to_base_id(self, id):
         """Given an ID, remove the tiling indications, if any.
         """
-        if self.tiling is None:
+        if self.xy_tiling is None and self.pc_tiling is None:
             return id
-        return self.get_tile_from_path(id)[3]
+        return self.get_tile_from_path(id)[1]
 
     @property
     def cloud_ids(self):
@@ -480,9 +511,12 @@ class BaseDataset(InMemoryDataset):
             data.y[data.y == -1] = self.num_classes
 
         # If the cloud path indicates a tiling is needed, apply it here
-        if self.tiling is not None:
-            tile = self.get_tile_from_path(cloud_path)
+        if self.xy_tiling is not None:
+            tile = self.get_tile_from_path(cloud_path)[0]
             data = SampleXYTiling(x=tile[0], y=tile[1], tiling=tile[2])(data)
+        elif self.pc_tiling is not None:
+            tile = self.get_tile_from_path(cloud_path)[0]
+            data = SampleRecursiveMainXYAxisTiling(x=tile[0], steps=tile[1])(data)
 
         # Apply pre_transform
         if self.pre_transform is not None:
@@ -516,13 +550,24 @@ class BaseDataset(InMemoryDataset):
 
     @staticmethod
     def get_tile_from_path(path):
+        # Search the XY tiling suffix pattern
         out_reg = re.search('__TILE_(\d+)-(\d+)_OF_(\d+)-(\d+)', path)
-        if out_reg is None:
-            return None
-        x, y, x_tiling, y_tiling = [int(g) for g in out_reg.groups()]
-        suffix = f'__TILE_{x}-{y}_OF_{x_tiling}-{y_tiling}'
-        prefix = path.replace(suffix, '')
-        return x - 1, y - 1, (x_tiling, y_tiling), prefix, suffix
+        if out_reg is not None:
+            x, y, x_tiling, y_tiling = [int(g) for g in out_reg.groups()]
+            suffix = f'__TILE_{x}-{y}_OF_{x_tiling}-{y_tiling}'
+            prefix = path.replace(suffix, '')
+            return (x - 1, y - 1, (x_tiling, y_tiling)), prefix, suffix
+
+        # Search the PC tiling suffix pattern
+        out_reg = re.search('__TILE_(\d+)_OF_(\d+)', path)
+        if out_reg is not None:
+            x, num = [int(g) for g in out_reg.groups()]
+            suffix = f'__TILE_{x}_OF_{num}'
+            prefix = path.replace(suffix, '')
+            steps = torch.log2(torch.tensor(num)).int().item()
+            return (x - 1, steps), prefix, suffix
+
+        return None
 
     def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
@@ -604,3 +649,17 @@ class BaseDataset(InMemoryDataset):
         nag = nag if self.transform is None else self.transform(nag)
 
         return nag
+
+    def make_submission(self, idx, pred, pos, submission_dir=None):
+        """Implement this if your dataset needs to produce data in a
+        given format for submission. This is typically needed for
+        datasets with held-out test sets.
+        """
+        raise NotImplementedError
+
+    def finalize_submission(self, submission_dir):
+        """Implement this if your dataset needs to produce data in a
+        given format for submission. This is typically needed for
+        datasets with held-out test sets.
+        """
+        raise NotImplementedError

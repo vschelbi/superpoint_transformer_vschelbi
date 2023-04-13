@@ -298,17 +298,18 @@ class S3DIS(BaseDataset):
         shutil.rmtree(self.raw_dir)
         os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
 
-    def download_zip(self):
+    def download_zip(self, interactive=False):
         """Download the S3DIS dataset as a single zip file.
         """
         log.info(
             f"Please, register yourself by filling up the form at "
             f"{self._form_url}")
         log.info("***")
-        log.info(
-            "Press any key to continue, or CTRL-C to exit. By continuing, "
-            "you confirm having filled up the form.")
-        input("")
+        if interactive:
+            log.info(
+                "Press any key to continue, or CTRL-C to exit. By continuing, "
+                "you confirm having filled up the form.")
+            input("")
         gdown.download(
             self._download_url, osp.join(self.root, self._zip_name), quiet=False)
 
