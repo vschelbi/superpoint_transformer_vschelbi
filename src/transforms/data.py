@@ -70,7 +70,7 @@ class Cast(Transform):
         return NAG([Data])
 
 
-class NAGCast(Transform):
+class NAGCast(Cast):
     """Cast NAG attributes to the provided integer and floating point
     dtypes. In case 'rgb' is found and is not a floating point tensor,
     `rgb_to_float` will decide whether it should be cast to floats.
