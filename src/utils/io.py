@@ -89,7 +89,7 @@ def load_tensor(f, key=None, idx=None):
     """
     if not isinstance(f, (h5py.File, h5py.Group, h5py.Dataset)):
         with h5py.File(f, 'r') as file:
-            out = load_tensor(file, key, idx=idx)
+            out = load_tensor(file, key=key, idx=idx)
         return out
 
     if not isinstance(f, h5py.Dataset):
@@ -104,7 +104,7 @@ def load_tensor(f, key=None, idx=None):
 
     # By default, convert int16 and int32 to int64, might cause issues
     # for tensor indexing otherwise
-    if x is not None and x.dtype in [torch.int16, torch.int32]:
+    if x is not None and not x.is_floating_point():
         x = x.long()
 
     return x
@@ -151,7 +151,7 @@ def load_csr_to_dense(f, idx=None, verbose=False):
 
     if not isinstance(f, (h5py.File, h5py.Group)):
         with h5py.File(f, 'r') as file:
-            out = load_csr_to_dense(file, idx=idx)
+            out = load_csr_to_dense(file, idx=idx, verbose=verbose)
         return out
 
     assert all(k in f.keys() for k in KEYS)

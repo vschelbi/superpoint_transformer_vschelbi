@@ -72,14 +72,14 @@ def is_dense(a: torch.LongTensor):
     assert a.dim() == 1, "Only supports 1D tensors"
     assert not a.is_floating_point(), "Float tensors are not supported"
     unique = a.unique()
-    return a.min() == 0 and unique.size(0) == a.max() + 1
+    return a.min() == 0 and unique.size(0) == a.max().long() + 1
 
 
 def is_permutation(a: torch.LongTensor):
     """Checks whether a 1D tensor of indices is a permutation."""
     assert a.dim() == 1, "Only supports 1D tensors"
     assert not a.is_floating_point(), "Float tensors are not supported"
-    return a.sort().values.equal(torch.arange(a.numel(), device=a.device))
+    return a.sort().values.long().equal(torch.arange(a.numel(), device=a.device))
 
 
 def arange_interleave(width, start=None):
@@ -103,23 +103,24 @@ def arange_interleave(width, start=None):
     return torch.arange(width.sum(), device=device) + offsets
 
 
-def print_tensor_info(a, name):
+def print_tensor_info(a, name=None):
     """Print some info about a tensor. Used for debugging.
     """
     is_1d = a.dim() == 1
     is_int = not a.is_floating_point()
 
-    msg = f'{name}:'
-    msg += f'  shape={a.shape}'
-    msg += f'  dtype={a.dtype}'
-    msg += f'  min={a.min()}'
-    msg += f'  max={a.max()}'
+    msg = f'{name}:  ' if name is not None else ''
+
+    msg += f'shape={a.shape}  '
+    msg += f'dtype={a.dtype}  '
+    msg += f'min={a.min()}  '
+    msg += f'max={a.max()}  '
 
     if is_1d and is_int:
-        msg += f'  duplicates={has_duplicates(a)}'
-        msg += f'  sorted={is_sorted(a)}'
-        msg += f'  dense={is_dense(a)}'
-        msg += f'  permutation={is_permutation(a)}'
+        msg += f'duplicates={has_duplicates(a)}  '
+        msg += f'sorted={is_sorted(a)}  '
+        msg += f'dense={is_dense(a)}  '
+        msg += f'permutation={is_permutation(a)}  '
 
     print(msg)
 
@@ -146,7 +147,7 @@ def string_to_dtype(string):
         return torch.float32
     if string in ('long', 'int64'):
         return torch.float64
-    raise f"Unknown dtype='{string}'"
+    raise ValueError(f"Unknown dtype='{string}'")
 
 
 def cast_to_optimal_integer_type(a):
@@ -159,7 +160,9 @@ def cast_to_optimal_integer_type(a):
         f"Expected an integer-like input, but received dtype={a.dtype} instead"
 
     for dtype in [torch.uint8, torch.int16, torch.int32, torch.int64]:
-        if torch.iinfo(dtype).min <= a.min() & a.max() <= torch.iinfo(dtype).max:
+        low_enough = torch.iinfo(dtype).min <= a.min()
+        high_enough = a.max() <= torch.iinfo(dtype).max
+        if low_enough and high_enough:
             return a.to(dtype)
 
     raise ValueError(f"Could not cast dtype={a.dtype} to integer.")

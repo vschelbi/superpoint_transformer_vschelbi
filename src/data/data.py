@@ -611,7 +611,10 @@ class Data(PyGData):
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'r') as file:
-                out = Data.load(file, idx=idx, keys_idx=keys_idx, keys=keys)
+                out = Data.load(
+                    file, idx=idx, keys_idx=keys_idx, keys=keys,
+                    update_sub=update_sub, verbose=verbose,
+                    rgb_to_float=rgb_to_float)
             return out
 
         idx = tensor_idx(idx)
@@ -674,9 +677,20 @@ class Data(PyGData):
 
         # In case RGB is among the keys and is in integer type, convert
         # to float
-        if rgb_to_float and 'rgb' in d_dict.keys() \
-                and not d_dict['rgb'].is_floating_point:
-            d_dict['rgb'] = d_dict['rgb'].float() / 255
+        if 'rgb' in d_dict.keys():
+            rgb = d_dict['rgb']
+            if rgb_to_float:
+                if not rgb.is_floating_point():
+                    rgb = rgb.float()
+                if rgb.max() > 1:
+                    rgb /= 255
+                rgb = rgb.clamp(min=0, max=1)
+            else:
+                if rgb.is_floating_point() and rgb.max() <= 1:
+                    rgb *= 255
+                rgb = rgb.clamp(min=0, max=255)
+                rgb = rgb.byte()
+            d_dict['rgb'] = rgb
 
         return Data(**d_dict)
 

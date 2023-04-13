@@ -297,8 +297,8 @@ def _compute_cluster_features(
         print(f'nag: {nag}')
         print(f'data: {data}')
         print('\n* Sampling for superpoint features')
-        print_tensor_info(idx_samples, 'idx_samples')
-        print_tensor_info(ptr_samples, 'ptr_samples')
+        print_tensor_info(idx_samples, name='idx_samples')
+        print_tensor_info(ptr_samples, name='ptr_samples')
         print(f'all clusters have a ptr:                   '
               f'{ptr_samples.shape[0] - 1 == num_nodes}')
         print(f'all clusters received n_min+ samples:      '
@@ -480,8 +480,8 @@ def _horizontal_graph_by_delaunay(
             num_nodes, device=device).repeat_interleave(end - start)
 
         print('\n* Sampling for superedge features')
-        print_tensor_info(idx_samples, 'idx_samples')
-        print_tensor_info(ptr_samples, 'ptr_samples')
+        print_tensor_info(idx_samples, name='idx_samples')
+        print_tensor_info(ptr_samples, name='ptr_samples')
         print(f'all clusters have a ptr:                   '
               f'{ptr_samples.shape[0] - 1 == num_nodes}')
         print(f'all clusters received n_min+ samples:      '

@@ -161,7 +161,8 @@ class Cluster(CSRData):
 
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'r') as file:
-                out = Cluster.load(file, idx=idx, update_sub=update_sub)
+                out = Cluster.load(
+                    file, idx=idx, update_sub=update_sub, verbose=verbose)
             return out
 
         assert all(k in f.keys() for k in KEYS)

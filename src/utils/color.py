@@ -19,7 +19,7 @@ def rgb_to_plotly_rgb(rgb, alpha=None):
         rgb = rgb.unsqueeze(0)
     if rgb.dtype in [torch.uint8, torch.int, torch.long]:
         rgb = rgb.long().numpy()
-    elif rgb.is_floating_point and rgb.max() <= 1:
+    elif rgb.is_floating_point() and rgb.max() <= 1:
         rgb = (rgb * 255).long().numpy()
     else:
         raise ValueError(

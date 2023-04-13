@@ -72,8 +72,7 @@ def csr_to_dense(pointers, columns, values, shape=None):
     a = torch.zeros(n, m, dtype=values.dtype, device=device)
     i = torch.arange(n, device=device)
     i = fast_repeat(i, pointers[1:] - pointers[:-1])
-    j = columns
-
+    j = columns.long()
     a[i, j] = values
 
     return a
