@@ -155,7 +155,7 @@ class PointSegmentationModule(LightningModule):
         # held-out labels), y_hist will be None and the loss will not be
         # computed
         if y_hist is None:
-            return None, preds, None
+            return None, preds.detach(), None
 
         # Compute the loss either in a point-wise or segment-wise
         # fashion. Cross-Entropy with pointwise_loss is equivalent to
@@ -175,7 +175,7 @@ class PointSegmentationModule(LightningModule):
         else:
             loss = self.criterion(logits, y_hist.argmax(dim=1))
 
-        return loss, preds, y_hist
+        return loss, preds.detach(), y_hist.detach()
 
     def step_single_run_inference(self, nag):
         """Single-run inference
