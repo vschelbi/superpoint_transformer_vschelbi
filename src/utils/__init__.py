@@ -1,3 +1,4 @@
+from .color import *
 from .hydra import *
 from .list import *
 from .tensor import *
@@ -22,4 +23,3 @@ from .multiprocessing import *
 from .wandb import *
 from .parameter import *
 from .graph import *
-from .color import *

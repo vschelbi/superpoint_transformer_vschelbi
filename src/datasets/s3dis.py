@@ -10,7 +10,7 @@ from src.data import Data, Batch
 from src.datasets.s3dis_config import *
 from torch_geometric.data import extract_zip
 from src.utils import available_cpu_count, starmap_with_kwargs, \
-    rodrigues_rotation_matrix
+    rodrigues_rotation_matrix, to_float_rgb
 from src.transforms import RoomPosition
 
 
@@ -162,7 +162,7 @@ def read_s3dis_room(
 
     # Concatenate and convert to torch
     xyz_data = torch.from_numpy(np.concatenate(xyz_list, 0)) if xyz else None
-    rgb_data = torch.from_numpy(np.concatenate(rgb_list, 0)).float() / 255 \
+    rgb_data = to_float_rgb(torch.from_numpy(np.concatenate(rgb_list, 0))) \
         if rgb else None
     y_data = torch.from_numpy(np.concatenate(y_list, 0)) if semantic else None
     o_data = torch.from_numpy(np.concatenate(o_list, 0)) if instance else None

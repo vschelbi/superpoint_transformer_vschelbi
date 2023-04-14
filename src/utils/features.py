@@ -1,4 +1,5 @@
 import torch
+from src.utils.color import to_float_rgb
 
 
 __all__ = ['rgb2hsv', 'rgb2lab']
@@ -15,8 +16,8 @@ def rgb2hsv(rgb, epsilon=1e-10):
 
     rgb = rgb.clone()
 
-    if rgb.dtype in [torch.uint8, torch.int, torch.long]:
-        rgb = rgb.float() / 255
+    # Convert colors to float in [0, 1]
+    rgb = to_float_rgb(rgb)
 
     r, g, b = rgb[:, 0], rgb[:, 1], rgb[:, 2]
     max_rgb, argmax_rgb = rgb.max(1)
@@ -46,10 +47,8 @@ def rgb2lab(rgb):
     rgb = rgb.clone()
     device = rgb.device
 
-    # If RGB is in float, we assume colors to be in [0, 1], if it is an
-    # integer format, we assume to be in [0, 255]
-    if rgb.dtype in [torch.uint8, torch.int, torch.long]:
-        rgb = rgb.float() / 255
+    # Convert colors to float in [0, 1]
+    rgb = to_float_rgb(rgb)
 
     # Prepare RGB to XYZ
     mask = rgb > 0.04045

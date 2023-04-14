@@ -9,6 +9,7 @@ from src.data import Data
 from src.datasets.kitti360_config import *
 from src.utils.download import run_command
 from src.utils.neighbors import knn_2
+from src.utils.color import to_float_rgb
 
 
 DIR = os.path.dirname(os.path.realpath(__file__))
@@ -43,9 +44,9 @@ def read_kitti360_window(
                 for axis in ["x", "y", "z"]], dim=-1)
 
         if rgb:
-            data.rgb = torch.stack([
+            data.rgb = to_float_rgb(torch.stack([
                 torch.FloatTensor(window["vertex"][axis])
-                for axis in ["red", "green", "blue"]], dim=-1) / 255
+                for axis in ["red", "green", "blue"]], dim=-1))
 
         if semantic and 'semantic' in attributes:
             y = torch.LongTensor(window["vertex"]['semantic'])

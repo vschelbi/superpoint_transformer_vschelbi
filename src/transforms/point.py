@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from sklearn.linear_model import RANSACRegressor
 from src.dependencies.point_geometric_features.python.bin.pgeof import pgeof
-from src.utils import rgb2hsv, rgb2lab, sizes_to_pointers
+from src.utils import rgb2hsv, rgb2lab, sizes_to_pointers, to_float_rgb
 from src.transforms import Transform
 from src.data import NAG
 
@@ -107,10 +107,7 @@ class PointFeatures(Transform):
         # assume they are encoded in  [0, 255] and normalize them.
         # Otherwise, we assume they have already been [0, 1] normalized
         if self.rgb and data.rgb is not None:
-            f = data.rgb
-            if f.dtype in [torch.uint8, torch.int, torch.long]:
-                f = f.float() / 255
-            data.rgb = f
+            data.rgb = to_float_rgb(data.rgb)
 
         # Add HSV to the features. If colors are stored in int, we
         # assume they are encoded in  [0, 255] and normalize them.
@@ -118,12 +115,9 @@ class PointFeatures(Transform):
         # Note: for all features to live in a similar range, we
         # normalize H in [0, 1]
         if self.hsv and data.rgb is not None:
-            f = data.rgb
-            if f.dtype in [torch.uint8, torch.int, torch.long]:
-                f = f.float() / 255
-            hsv = rgb2hsv(f)
+            hsv = rgb2hsv(to_float_rgb(data.rgb))
             hsv[:, 0] /= 360.
-            data.hsv = f
+            data.hsv = hsv
 
         # Add LAB to the features. If colors are stored in int, we
         # assume they are encoded in  [0, 255] and normalize them.
@@ -131,10 +125,7 @@ class PointFeatures(Transform):
         # Note: for all features to live in a similar range, we
         # normalize L in [0, 1] and ab in [-1, 1]
         if self.lab and data.rgb is not None:
-            f = data.rgb
-            if f.dtype in [torch.uint8, torch.int, torch.long]:
-                f = f.float() / 255
-            data.lab = rgb2lab(f) / 100
+            data.lab = rgb2lab(to_float_rgb(data.rgb)) / 100
 
         # Add local surfacic density to the features. The local density
         # is approximated as K / D² where K is the number of nearest

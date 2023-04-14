@@ -71,7 +71,7 @@ def int_to_plotly_rgb(x):
 def hex_to_tensor(h):
     h = h.lstrip('#')
     rgb = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
-    return torch.tensor(rgb) / 255
+    return to_float_rgb(torch.tensor(rgb))
 
 
 def feats_to_rgb(feats, normalize=False):

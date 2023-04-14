@@ -6,7 +6,5 @@ devices: 1
 
 # mixed precision for extra speed-up
 # precision: 16
-# precision: 16-mixed
 # precision: bf16
-# precision: bf16-mixed
 precision: 32
