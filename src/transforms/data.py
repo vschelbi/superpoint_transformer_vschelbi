@@ -1,8 +1,7 @@
 import torch
-from src.data import Data, NAG
+from src.data import Data, NAG, CSRData
 from src.transforms import Transform
-from src.utils import tensor_idx
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from src.utils import tensor_idx, to_float_rgb, to_byte_rgb
 from src.utils.nn import trunc_normal_
 from torch.nn.functional import dropout1d
 
@@ -36,8 +35,8 @@ class NAGToData(Transform):
 
 class Cast(Transform):
     """Cast Data attributes to the provided integer and floating point
-    dtypes. In case 'rgb' is found and is not a floating point tensor,
-    `rgb_to_float` will decide whether it should be cast to floats.
+    dtypes. In case 'rgb' is found `rgb_to_float` will decide whether it
+    should be cast to 'fp_dtype' or 'uint8'.
     """
 
     def __init__(
@@ -52,22 +51,32 @@ class Cast(Transform):
     def _process(self, data):
         for k in data.keys:
 
-            # Special treatment for 'rgb'
+            # Recursively deal with CSRData attributes (eg Cluster for
+            # 'sub' key)
+            if isinstance(data[k], CSRData):
+                values = []
+                for v in data[k].values:
+                    values.append(self._process(Data(foo=v)).foo)
+                data[k].values = values
+                data[k].pointers = data[k].pointers.long()
+                continue
+
+            # Deal with 'rgb' attribute
             if k == 'rgb':
-                rgb = data[k]
-                if rgb.is_floating_point():
-                    data[k] = rgb.to(self.fp_dtype)
-                elif self.rgb_to_float:
-                    data[k] = rgb.to(self.fp_dtype) / 255
-                else:
-                    data[k] = rgb.to(torch.uint8)
+                data[k] = to_float_rgb(data[k]).to(self.fp_dtype)\
+                    if self.rgb_to_float else to_byte_rgb(data[k])
+                continue
 
-            if data[k].is_floating_point():
-                data[k] = data[k].to(self.fp_dtype)
-            else:
-                data[k] = data[k].to(self.int_dtype)
+            # Deal with Tensor attributes
+            if isinstance(data[k], torch.Tensor):
+                data[k] = data[k].to(self.fp_dtype) \
+                    if data[k].is_floating_point() \
+                    else data[k].to(self.int_dtype)
+                continue
 
-        return NAG([Data])
+            # Other objects are left untouched
+
+        return data
 
 
 class NAGCast(Cast):

@@ -379,6 +379,7 @@ class NAG:
             if i < self.num_levels - 1:
                 assert d.is_sub
                 assert d.num_points == self[i + 1].num_sub
+            d.debug()
 
     def get_sampling(
             self,

@@ -12,7 +12,7 @@ import src
 from src.data.cluster import Cluster, ClusterBatch
 from src.utils import tensor_idx, is_dense, has_duplicates, \
     isolated_nodes, knn_2, save_tensor, load_tensor, save_dense_to_csr, \
-    load_csr_to_dense, to_trimmed
+    load_csr_to_dense, to_trimmed, to_float_rgb, to_byte_rgb
 
 
 __all__ = ['Data', 'Batch']
@@ -650,7 +650,13 @@ class Data(PyGData):
             if verbose and k in d_dict.keys():
                 print(f'Data.load {k:<22}: {time() - start:0.5f}s')
 
-        # Special key '_csr_ holds data saved in CSR format
+        # Update the 'keys_idx' with newly-found 'csr_keys' and
+        # 'cluster_keys'
+        if idx.shape[0] != 0:
+            keys_idx = list(set(keys_idx).union(set(csr_keys)))
+            keys_idx = list(set(keys_idx).union(set(cluster_keys)))
+
+        # Special key '_csr_' holds data saved in CSR format
         for k in csr_keys:
             start = time()
             if k in keys_idx:
@@ -678,19 +684,8 @@ class Data(PyGData):
         # In case RGB is among the keys and is in integer type, convert
         # to float
         if 'rgb' in d_dict.keys():
-            rgb = d_dict['rgb']
-            if rgb_to_float:
-                if not rgb.is_floating_point():
-                    rgb = rgb.float()
-                if rgb.max() > 1:
-                    rgb /= 255
-                rgb = rgb.clamp(min=0, max=1)
-            else:
-                if rgb.is_floating_point() and rgb.max() <= 1:
-                    rgb *= 255
-                rgb = rgb.clamp(min=0, max=255)
-                rgb = rgb.byte()
-            d_dict['rgb'] = rgb
+            d_dict['rgb'] = to_float_rgb(d_dict['rgb']) if rgb_to_float \
+                else to_byte_rgb(d_dict['rgb'])
 
         return Data(**d_dict)
 

@@ -4,8 +4,23 @@ from colorhash import ColorHash
 
 
 __all__ = [
-    'rgb_to_plotly_rgb', 'int_to_plotly_rgb', 'hex_to_tensor', 'feats_to_rgb',
-    'identity_PCA']
+    'to_float_rgb', 'to_byte_rgb', 'rgb_to_plotly_rgb', 'int_to_plotly_rgb',
+    'hex_to_tensor', 'feats_to_rgb', 'identity_PCA']
+
+
+def to_float_rgb(rgb):
+    rgb = rgb.float()
+    if rgb.max() > 1:
+        rgb = rgb / 255
+    rgb = rgb.clamp(min=0, max=1)
+    return rgb
+
+
+def to_byte_rgb(rgb):
+    if rgb.is_floating_point() and rgb.max() <= 1:
+        rgb = rgb * 255
+    rgb = rgb.clamp(min=0, max=255).byte()
+    return rgb
 
 
 def rgb_to_plotly_rgb(rgb, alpha=None):
