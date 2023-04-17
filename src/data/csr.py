@@ -115,7 +115,7 @@ class CSRData:
 
     @property
     def num_items(self):
-        return self.pointers[-1].item()
+        return self.pointers[-1]
 
     @property
     def size(self):
@@ -257,8 +257,9 @@ class CSRData:
 
     def __repr__(self):
         info = [
-            f"{key}={getattr(self, key)}"
-            for key in ['num_groups', 'num_items', 'device']]
+            f"{key}={int(getattr(self, key))}"
+            for key in ['num_groups', 'num_items']]
+        info.append(f"device={self.device}")
         return f"{self.__class__.__name__}({', '.join(info)})"
 
     def __eq__(self, other):
@@ -384,7 +385,7 @@ class CSRBatch(CSRData):
                 # be no point with no cluster
                 offsets = torch.LongTensor(
                     [0] + [
-                        v.max().item() + 1 if v.shape[0] > 0 else 0
+                        v.max() + 1 if v.shape[0] > 0 else 0
                         for v in val_list[:-1]])
                 cum_offsets = torch.cumsum(offsets, dim=0).to(device)
                 val = torch.cat([

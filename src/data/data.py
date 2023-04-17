@@ -155,11 +155,11 @@ class Data(PyGData):
 
     @property
     def num_super(self):
-        return self.super_index.max().cpu().item() + 1 if self.is_sub else 0
+        return self.super_index.max() + 1 if self.is_sub else 0
 
     @property
     def num_sub(self):
-        return self.sub.points.max().cpu().item() + 1 if self.is_super else 0
+        return self.sub.points.max() + 1 if self.is_super else 0
 
     def detach(self):
         """Extend `torch_geometric.Data.detach` to handle Cluster

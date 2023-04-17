@@ -62,7 +62,7 @@ def csr_to_dense(pointers, columns, values, shape=None):
 
     device = pointers.device
 
-    shape_guess = (pointers.shape[0] - 1, columns.max().item() + 1)
+    shape_guess = (pointers.shape[0] - 1, columns.max() + 1)
     if shape is None:
         shape = shape_guess
     else:

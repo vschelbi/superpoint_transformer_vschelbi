@@ -55,7 +55,7 @@ def fourier_position_encoder(pos, dim, f_min=1e-1, f_max=1e1):
     device = pos.device
     f_min = torch.tensor([f_min], device=device)
     f_max = torch.tensor([f_max], device=device)
-    w = torch.logspace(f_max.log().item(), f_min.log().item(), D, device=device)
+    w = torch.logspace(f_max.log(), f_min.log(), D, device=device)
 
     # Compute sine and cosine encodings
     pos_enc = pos.view(N, M, 1) * w.view(1, -1)
