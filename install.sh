@@ -101,7 +101,8 @@ pip install h5py
 pip install colorhash
 pip install seaborn
 pip3 install numba
-pip install pytorch-lightning==1.8
+pip install pytorch-lightning
+#pip install pytorch-lightning==1.8
 pip install pyrootutils
 pip install hydra-core --upgrade
 pip install hydra-colorlog
