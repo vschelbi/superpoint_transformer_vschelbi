@@ -39,6 +39,7 @@ import pandas as pd
 from typing import List, Optional, Tuple
 
 import hydra
+import torch
 import pytorch_lightning as pl
 from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning import Callback, LightningDataModule, LightningModule, Trainer
@@ -100,6 +101,10 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
     if logger:
         log.info("Logging hyperparameters!")
         utils.log_hyperparameters(object_dict)
+
+    if cfg.get("compile"):
+        log.info("Compiling model!")
+        model = torch.compile(model)
 
     if cfg.get("train"):
         log.info("Starting training!")
