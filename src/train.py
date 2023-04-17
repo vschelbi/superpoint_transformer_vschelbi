@@ -90,7 +90,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
     log.info(f"Instantiating trainer <{cfg.trainer._target_}>")
     trainer: Trainer = hydra.utils.instantiate(cfg.trainer, callbacks=callbacks, logger=logger)
     if float('.'.join(torch.__version__.split('.')[:2])) >= 2.0:
-        torch.set_float32_matmul_precision(cfg.trainer.float32_matmul_precision)
+        torch.set_float32_matmul_precision(cfg.float32_matmul_precision)
 
     object_dict = {
         "cfg": cfg,
