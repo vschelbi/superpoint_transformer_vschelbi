@@ -143,7 +143,7 @@ class PointSegmentationModule(LightningModule):
         self.val_oa_best.reset()
         self.val_macc_best.reset()
 
-    def step(self, batch):
+    def model_step(self, batch):
         # Forward step on the input batch. If a (NAG, List(NAG)) is
         # passed, the multi-run inference will be triggered
         if isinstance(batch, NAG):
@@ -314,7 +314,7 @@ class PointSegmentationModule(LightningModule):
         return y_hist
 
     def training_step(self, batch, batch_idx):
-        loss, preds, targets = self.step(batch)
+        loss, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.train_loss(loss)
@@ -323,13 +323,10 @@ class PointSegmentationModule(LightningModule):
             "train/loss", self.train_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
-        # we can return here dict with any tensors and then read it in
-        # some callback or in `training_epoch_end()` below
-        # Remember to always return loss from `training_step()` or
-        # backpropagation will fail!
-        return self.sanitize_step_output({"loss": loss})
+        # return loss or backpropagation will fail
+        return loss
 
-    def training_epoch_end(self, outputs):
+    def on_train_epoch_end(self):
         # `outputs` is a list of dicts returned from `training_step()`
         self.log("train/miou", self.train_cm.miou(), prog_bar=True)
         self.log("train/oa", self.train_cm.oa(), prog_bar=True)
@@ -340,7 +337,7 @@ class PointSegmentationModule(LightningModule):
         self.train_cm.reset()
 
     def validation_step(self, batch, batch_idx):
-        loss, preds, targets = self.step(batch)
+        loss, preds, targets = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
@@ -349,9 +346,7 @@ class PointSegmentationModule(LightningModule):
             "val/loss", self.val_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
-        return self.sanitize_step_output({"loss": loss})
-
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         # `outputs` is a list of dicts returned from `validation_step()`
         miou = self.val_cm.miou()
         oa = self.val_cm.oa()
@@ -385,7 +380,7 @@ class PointSegmentationModule(LightningModule):
         self.submission_dir = self.trainer.datamodule.test_dataset.submission_dir
 
     def test_step(self, batch, batch_idx):
-        loss, preds, targets = self.step(batch)
+        loss, preds, targets = self.model_step(batch)
 
         # If the input batch does not have any labels (eg test set with
         # held-out labels), y_hist will be None and the loss will not be
@@ -409,9 +404,7 @@ class PointSegmentationModule(LightningModule):
             self.trainer.datamodule.test_dataset.make_submission(
                 batch_idx, l0_preds, l0_pos, submission_dir=self.submission_dir)
 
-        return self.sanitize_step_output({"loss": loss})
-
-    def test_epoch_end(self, outputs):
+    def on_test_epoch_end(self):
         # `outputs` is a list of dicts returned from `test_step()`
         self.log("test/miou", self.test_cm.miou(), prog_bar=True)
         self.log("test/oa", self.test_cm.oa(), prog_bar=True)
