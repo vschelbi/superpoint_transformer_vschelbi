@@ -38,6 +38,7 @@ import pandas as pd
 from typing import List, Tuple
 
 import hydra
+import torch_geometric
 from omegaconf import OmegaConf, DictConfig
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.loggers import Logger
@@ -91,6 +92,10 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
     if logger:
         log.info("Logging hyperparameters!")
         utils.log_hyperparameters(object_dict)
+    
+    if cfg.get("compile"):
+        log.info("Compiling model!")
+        model = torch_geometric.compile(model)
 
     log.info("Starting testing!")
     trainer.test(model=model, datamodule=datamodule, ckpt_path=cfg.ckpt_path)
