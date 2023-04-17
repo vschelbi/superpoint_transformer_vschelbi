@@ -155,13 +155,13 @@ class PointSegmentationModule(LightningModule):
         if num_steps % period == 0:
             garbage_collection_cuda()
 
-    def on_train_batch_start(self, batch, batch_idx):
+    def on_train_batch_start(self, *args):
         self.gc_collect
 
-    def on_validation_batch_start(self, batch, batch_idx):
+    def on_validation_batch_start(self, *args):
         self.gc_collect()
 
-    def on_test_batch_start(self, batch, batch_idx):
+    def on_test_batch_start(self, *args):
         self.gc_collect()
 
     def model_step(self, batch):
