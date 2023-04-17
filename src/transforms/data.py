@@ -1,15 +1,15 @@
 import torch
 from src.data import Data, NAG, CSRData
 from src.transforms import Transform
-from src.utils import tensor_idx, to_float_rgb, to_byte_rgb
+from src.utils import tensor_idx, to_float_rgb, to_byte_rgb, dropout
 from src.utils.nn import trunc_normal_
-from torch.nn.functional import dropout1d
 
 
 __all__ = [
     'DataToNAG', 'NAGToData', 'Cast', 'NAGCast', 'RemoveKeys', 'NAGRemoveKeys',
     'AddKeysTo', 'NAGAddKeysTo', 'NAGSelectByKey', 'SelectColumns',
-    'NAGSelectColumns', 'DropoutColumns', 'NAGDropoutColumns', 'NAGJitterKey']
+    'NAGSelectColumns', 'DropoutColumns', 'NAGDropoutColumns', 'DropoutRows',
+    'NAGDropoutRows', 'NAGJitterKey']
 
 
 class DataToNAG(Transform):
@@ -459,12 +459,16 @@ class DropoutColumns(Transform):
         Probability of a column to be dropped
     :param key: str
         The Data attribute whose columns should be selected
+    :param inplace: bool
+        Whether the dropout should be performed directly on the input
+        or on a copy of it
     """
 
-    def __init__(self, p=0.5, key=None):
+    def __init__(self, p=0.5, key=None, inplace=True):
         assert key is not None, f"A Data key must be specified"
         self.p = p
         self.key = key
+        self.inplace = inplace
 
     def _process(self, data):
         # Skip dropout if p <= 0
@@ -476,11 +480,8 @@ class DropoutColumns(Transform):
             return data
 
         # Apply dropout on each column, inplace
-        num_cols = data[self.key].shape[1]
-        to_drop = torch.rand(num_cols, device=data.device).detach() < self.p
-        data[self.key][:, to_drop] *= 0
-        # data[self.key] = dropout1d(
-        #     data[self.key], p=self.p, training=True, inplace=True)
+        data[self.key] = dropout(
+            data[self.key], p=self.p, dim=1, inplace=self.inplace)
 
         return data
 
@@ -496,17 +497,21 @@ class NAGDropoutColumns(Transform):
         Probability of a column to be dropped
     :param key: str
         The Data attribute whose columns should be selected
+    :param inplace: bool
+        Whether the dropout should be performed directly on the input
+        or on a copy of it
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, level='all', p=0.5, key=None):
+    def __init__(self, level='all', p=0.5, key=None, inplace=True):
         assert isinstance(level, int) or level == 'all' or level.endswith('-') \
                or level.endswith('+')
         self.level = level
         self.p = p
         self.key = key
+        self.inplace = inplace
 
     def _process(self, nag):
         # Skip dropout if p <= 0
@@ -530,11 +535,97 @@ class NAGDropoutColumns(Transform):
                 continue
 
             # Apply dropout on each column, inplace
-            num_cols = nag[i_level][self.key].shape[1]
-            to_drop = torch.rand(num_cols, device=nag.device).detach() < self.p
-            nag[i_level][self.key][:, to_drop] *= 0
-            # nag[i_level][self.key] = dropout1d(
-            #     nag[i_level][self.key], p=self.p, training=True, inplace=True)
+            nag[i_level][self.key] = dropout(
+                nag[i_level][self.key], p=self.p, dim=1, inplace=self.inplace)
+
+        return nag
+
+
+class DropoutRows(Transform):
+    """Randomly set a Data attribute rows to 0.
+
+    :param p: float
+        Probability of a row to be dropped
+    :param key: str
+        The Data attribute whose rows should be selected
+    :param inplace: bool
+        Whether the dropout should be performed directly on the input
+        or on a copy of it
+    """
+
+    def __init__(self, p=0.5, key=None, inplace=True):
+        assert key is not None, f"A Data key must be specified"
+        self.p = p
+        self.key = key
+        self.inplace = inplace
+
+    def _process(self, data):
+        # Skip dropout if p <= 0
+        if self.p <= 0:
+            return data
+
+        # Skip dropout if the attribute is not present in the input Data
+        if getattr(data, self.key, None) is None:
+            return data
+
+        # Apply dropout on each column, inplace
+        data[self.key] = dropout(
+            data[self.key], p=self.p, dim=0, inplace=self.inplace)
+
+        return data
+
+
+class NAGDropoutRows(Transform):
+    """Randomly set a Data attribute rows to 0.
+
+    :param level: int or str
+        Level at which to drop rows. Can be an int or a str. If
+        the latter, 'all' will apply on all levels, 'i+' will apply on
+        level-i and above, 'i-' will apply on level-i and below
+    :param p: float
+        Probability of a row to be dropped
+    :param key: str
+        The Data attribute whose rows should be selected
+    :param inplace: bool
+        Whether the dropout should be performed directly on the input
+        or on a copy of it
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, level='all', p=0.5, key=None, inplace=True):
+        assert isinstance(level, int) or level == 'all' or level.endswith('-') \
+               or level.endswith('+')
+        self.level = level
+        self.p = p
+        self.key = key
+        self.inplace = inplace
+
+    def _process(self, nag):
+        # Skip dropout if p <= 0
+        if self.p <= 0:
+            return nag
+
+        if isinstance(self.level, int):
+            levels = [self.level]
+        elif self.level == 'all':
+            levels = range(0, nag.num_levels)
+        elif self.level[-1] == '+':
+            levels = range(int(self.level[:-1]), nag.num_levels)
+        elif self.level[-1] == '-':
+            levels = range(0, int(self.level[:-1]) + 1)
+        else:
+            return nag
+
+        for i_level in levels:
+            # Skip dropout if the attribute is not present in the Data
+            if getattr(nag[i_level], self.key, None) is None:
+                continue
+
+            # Apply dropout on each column, inplace
+            nag[i_level][self.key] = dropout(
+                nag[i_level][self.key], p=self.p, dim=0, inplace=self.inplace)
 
         return nag
 
