@@ -92,6 +92,10 @@ class PointSegmentationModule(LightningModule):
         self.val_oa_best = MaxMetric()
         self.val_macc_best = MaxMetric()
 
+        # Explicitly call the garbage collector after a certain number
+        # of steps
+        self.gc_every_n_steps = int(gc_every_n_steps)
+
     def forward(self, nag):
         x = self.net(nag)
         if self.multi_stage_loss:
