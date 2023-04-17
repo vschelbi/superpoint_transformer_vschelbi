@@ -6,6 +6,7 @@ pointwise_loss: True
 weighted_loss: True
 multi_stage_loss_lambdas: null
 transformer_lr_scale: 0.1
+gc_every_n_steps: 0
 
 optimizer:
   _target_: torch.optim.AdamW

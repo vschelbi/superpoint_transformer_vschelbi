@@ -6,7 +6,7 @@ from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from src.metrics import ConfusionMatrix
 from src.utils import loss_with_target_histogram, atomic_to_histogram, \
-    init_weights, wandb_confusion_matrix, knn_2
+    init_weights, wandb_confusion_matrix, knn_2, garbage_collection_cuda
 from src.nn import Classifier
 from src.loss import MultiLoss
 from src.optim.lr_scheduler import ON_PLATEAU_SCHEDULERS
@@ -25,7 +25,7 @@ class PointSegmentationModule(LightningModule):
             self, net, criterion, optimizer, scheduler, num_classes,
             class_names=None, sampling_loss=False, pointwise_loss=True,
             weighted_loss=True, custom_init=True, transformer_lr_scale=1,
-            multi_stage_loss_lambdas=None, **kwargs):
+            multi_stage_loss_lambdas=None, gc_every_n_steps=0, **kwargs):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -142,6 +142,23 @@ class PointSegmentationModule(LightningModule):
         self.val_miou_best.reset()
         self.val_oa_best.reset()
         self.val_macc_best.reset()
+
+    def gc_collect(self):
+        num_steps = self.trainer.fit_loop.epoch_loop._batches_that_stepped + 1
+        period = self.gc_every_n_steps
+        if period is None or period < 1:
+            return
+        if num_steps % period == 0:
+            garbage_collection_cuda()
+
+    def on_train_batch_start(self, batch, batch_idx):
+        self.gc_collect
+
+    def on_validation_batch_start(self, batch, batch_idx):
+        self.gc_collect()
+
+    def on_test_batch_start(self, batch, batch_idx):
+        self.gc_collect()
 
     def model_step(self, batch):
         # Forward step on the input batch. If a (NAG, List(NAG)) is
