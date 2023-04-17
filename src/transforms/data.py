@@ -476,9 +476,9 @@ class DropoutColumns(Transform):
             return data
 
         # Apply dropout on each column, inplace
-        to_drop = torch.rand(
-            data[self.key].shape[1], device=data[self.key].device) < self.p
-        data[self.key][:, to_drop] = 0
+        num_cols = data[self.key].shape[1]
+        to_drop = torch.rand(num_cols, device=data.device).detach() < self.p
+        data[self.key][:, to_drop] *= 0
         # data[self.key] = dropout1d(
         #     data[self.key], p=self.p, training=True, inplace=True)
 
@@ -530,9 +530,9 @@ class NAGDropoutColumns(Transform):
                 continue
 
             # Apply dropout on each column, inplace
-            to_drop = torch.rand(
-                nag[i_level][self.key].shape[1], device=nag[i_level][self.key].device) < self.p
-            nag[i_level][self.key][:, to_drop] = 0
+            num_cols = nag[i_level][self.key].shape[1]
+            to_drop = torch.rand(num_cols, device=nag.device).detach() < self.p
+            nag[i_level][self.key][:, to_drop] *= 0
             # nag[i_level][self.key] = dropout1d(
             #     nag[i_level][self.key], p=self.p, training=True, inplace=True)
 
