@@ -318,7 +318,7 @@ def cluster_radius_nn(
     # each segment, the segments with at least one point within gap.
     # Obviously, the r_search may produce more neighbors than needed and
     # some subsequent pruning will be needed
-    r_search = diam.max() + gap
+    r_search = float(diam.max() + gap)
     neighbors, distances = knn_1(center, k_max, r_max=r_search)
 
     # Build the corresponding edge_index
