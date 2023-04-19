@@ -156,7 +156,7 @@ class PointSegmentationModule(LightningModule):
             garbage_collection_cuda()
 
     def on_train_batch_start(self, *args):
-        self.gc_collect
+        self.gc_collect()
 
     def on_validation_batch_start(self, *args):
         self.gc_collect()
