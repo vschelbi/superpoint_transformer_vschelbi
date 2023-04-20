@@ -94,7 +94,7 @@ node_feat_jitter: 0
 h_edge_feat_jitter: 0
 v_edge_feat_jitter: 0
 node_feat_drop: 0
-h_edge_feat_drop: 0
+h_edge_feat_drop: 0.3
 v_edge_feat_drop: 0
 
 # Preprocessing
