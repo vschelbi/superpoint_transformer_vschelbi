@@ -189,8 +189,6 @@ class PointFeatures(Transform):
                 k_min_search=self.k_min_search, verbose=False)
             f = torch.from_numpy(f.astype('float32'))
 
-            print(f[:, -1].long().unique())
-
             # Keep only required features
             if self.linearity:
                 data.linearity = f[:, 0].view(-1, 1).to(device)
