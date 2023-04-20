@@ -135,8 +135,8 @@ pre_transform:
         volume: False
         curvature: False
         k_min: 1
-        knn_step: ${datamodule.knn_step}
-        knn_min_search: ${datamodule.knn_min_search}
+        k_step: ${datamodule.knn_step}
+        k_min_search: ${datamodule.knn_min_search}
     - transform: DataTo
       params:
         device: 'cuda'
