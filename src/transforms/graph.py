@@ -220,7 +220,7 @@ def _compute_cluster_features(
     xyz = xyz + torch.rand(xyz.shape).numpy() * 1e-5
 
     # C++ geometric features computation on CPU
-    f = pgeof(xyz, nn, nn_ptr, 5, False)
+    f = pgeof(xyz, nn, nn_ptr, k_min=5, k_step=-1, verbose=False)
     f = torch.from_numpy(f.astype('float32'))
 
     # Recover length, surface and volume

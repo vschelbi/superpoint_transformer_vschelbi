@@ -59,6 +59,15 @@ class PointFeatures(Transform):
         Minimum number of neighbors to consider for geometric features
         computation. Points with less than k_min neighbors will receive
         0-features. Assumes ``Data.neighbor_index``.
+    k_step: int
+        Step size to take when searching for the optimal neighborhood
+        size following:
+        http://lareg.ensg.eu/labos/matis/pdf/articles_revues/2015/isprs_wjhm_15.pdf
+        If k_step < 1, the optimal neighborhood will be computed based
+        on all the neighbors available for each point.
+    k_min_search: int
+        Minimum neighborhood size used when searching the optimal
+        neighborhood size. It is advised to use a value of 10 or higher.
     """
 
     # TODO: augment with Rep-SURF umbrella features ?
@@ -79,7 +88,9 @@ class PointFeatures(Transform):
             surface=False,
             volume=False,
             curvature=False,
-            k_min=5):
+            k_min=5,
+            k_step=-1,
+            k_min_search=25):
         self.rgb = rgb
         self.hsv = hsv
         self.lab = lab
@@ -94,6 +105,8 @@ class PointFeatures(Transform):
         self.volume = volume
         self.curvature = curvature
         self.k_min = k_min
+        self.k_step = k_step
+        self.k_min_search = k_min_search
 
     def _process(self, data):
         assert data.has_neighbors, \
@@ -171,8 +184,12 @@ class PointFeatures(Transform):
             nn_ptr = np.ascontiguousarray(nn_ptr)
 
             # C++ geometric features computation on CPU
-            f = pgeof(xyz, nn, nn_ptr, self.k_min, False)
+            f = pgeof(
+                xyz, nn, nn_ptr, k_min=self.k_min, k_step=self.k_step,
+                k_min_search=self.k_min_search, verbose=False)
             f = torch.from_numpy(f.astype('float32'))
+
+            print(f[:, -1].long().unique())
 
             # Keep only required features
             if self.linearity:
