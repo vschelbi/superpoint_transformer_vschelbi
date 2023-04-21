@@ -15,7 +15,7 @@ __all__ = [
     'Shuffle', 'SaveNodeIndex', 'NAGSaveNodeIndex', 'GridSampling3D',
     'SampleXYTiling', 'SampleRecursiveMainXYAxisTiling', 'SampleSubNodes',
     'SampleKHopSubgraphs', 'SampleRadiusSubgraphs', 'SampleSegments',
-    'SampleEdges']
+    'SampleEdges', 'RestrictSize', 'NAGRestrictSize']
 
 
 class Shuffle(Transform):
@@ -832,60 +832,6 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         return nag.select(i_level, idx_select)
 
 
-class SampleSubNodes(Transform):
-    """Sample elements at `low`-level, based on which segment they
-    belong to at `high`-level.
-
-    The sampling operation is run without replacement and each segment
-    is sampled at least `n_min` and at most `n_max` times, within the
-    limits allowed by its actual size.
-
-    Optionally, a `mask` can be passed to filter out some `low`-level
-    points.
-
-    :param high: int
-        Partition level of the segments we want to sample. By default,
-        `high=1` to sample the level-1 segments
-    :param low: int
-        Partition level we will sample from, guided by the `high`
-        segments. By default, `high=0` to sample the level-0 points.
-        `low=-1` is accepted when level-0 has a `sub` attribute (ie
-        level-0 points are themselves segments of `-1` level absent
-        from the NAG object).
-    :param n_max: int
-        Maximum number of `low`-level elements to sample in each
-        `high`-level segment
-    :param n_min: int
-        Minimum number of `low`-level elements to sample in each
-        `high`-level segment, within the limits of its size (ie no
-        oversampling)
-    :param mask: list, np.ndarray, torch.LongTensor, torch.BoolTensor
-        Indicates a subset of `low`-level elements to consider. This
-        allows ignoring
-    """
-
-    _IN_TYPE = NAG
-    _OUT_TYPE = NAG
-
-    def __init__(
-            self, high=1, low=0, n_max=32, n_min=16, mask=None):
-        assert isinstance(high, int)
-        assert isinstance(low, int)
-        assert isinstance(n_max, int)
-        assert isinstance(n_min, int)
-        self.high = high
-        self.low = low
-        self.n_max = n_max
-        self.n_min = n_min
-        self.mask = mask
-
-    def _process(self, nag):
-        idx = nag.get_sampling(
-            high=self.high, low=self.low, n_max=self.n_max, n_min=self.n_min,
-            return_pointers=False)
-        return nag.select(self.low, idx)
-
-
 class SampleEdges(Transform):
     """Sample edges based on which source node they belong to.
 
@@ -973,3 +919,127 @@ class SampleEdges(Transform):
             data[key] = data[key][idx]
 
         return data
+
+
+class RestrictSize(Transform):
+    """Randomly sample nodes and edges to restrict their number within
+    given limits. This is useful for stabilizing memory use of the
+    model.
+
+    :param num_nodes: int
+        Maximum number of nodes. If the input has more, a subset of
+        `num_nodes` nodes will be randomly sampled. No sampling if <=0
+    :param num_edges: int
+        Maximum number of edges. If the input has more, a subset of
+        `num_edges` edges will be randomly sampled. No sampling if <=0
+    """
+
+    def __init__(self, num_nodes=0, num_edges=0):
+        self.num_nodes = num_nodes
+        self.num_edges = num_edges
+
+    def _process(self, data):
+        if data.num_nodes > self.num_nodes and self.num_nodes > 0:
+            weights = torch.ones(data.num_nodes, device=data.device)
+            idx = torch.multinomial(weights, self.num_nodes, replacement=False)
+            data = data.select(idx)
+
+        if data.num_edges > self.num_edges and self.num_edges > 0:
+            weights = torch.ones(data.num_edges, device=data.device)
+            idx = torch.multinomial(weights, self.num_edges, replacement=False)
+
+            data.edge_index = data.edge_index[:, idx]
+            if data.has_edge_attr:
+                data.edge_attr = data.edge_attr[idx]
+            for key in data.edge_keys:
+                data[key] = data[key][idx]
+
+        return data
+
+
+class NAGRestrictSize(Transform):
+    """Randomly sample nodes and edges to restrict their number within
+    given limits. This is useful for stabilizing memory use of the
+    model.
+
+    :param num_nodes: int
+        Maximum number of nodes. If the input has more, a subset of
+        `num_nodes` nodes will be randomly sampled. No sampling if <=0
+    :param num_edges: int
+        Maximum number of edges. If the input has more, a subset of
+        `num_edges` edges will be randomly sampled. No sampling if <=0
+    """
+
+    _IN_TYPE = NAG
+    _OUT_TYPE = NAG
+
+    def __init__(self, level='1+', num_nodes=0, num_edges=0):
+        assert isinstance(level, (int, str))
+        assert isinstance(num_nodes, (int, list))
+        assert isinstance(num_edges, (int, list))
+        self.level = level
+        self.num_nodes = num_nodes
+        self.num_edges = num_edges
+
+    def _process(self, nag):
+
+        # If 'level' is an int, we only need to process a single level
+        if isinstance(self.level, int):
+            return self._restrict_level(
+                nag, self.level, self.num_nodes, self.num_edges)
+
+        # If 'level' covers multiple levels, iteratively process levels
+        level_num_nodes = [-1] * nag.num_levels
+        level_num_edges = [-1] * nag.num_levels
+
+        if self.level == 'all':
+            level_num_nodes = self.num_nodes \
+                if isinstance(self.num_nodes, list) \
+                else [self.num_nodes] * nag.num_levels
+            level_num_edges = self.num_edges \
+                if isinstance(self.num_edges, list) \
+                else [self.num_edges] * nag.num_levels
+        elif self.level[-1] == '+':
+            i = int(self.level[:-1])
+            level_num_nodes[i:] = self.num_nodes \
+                if isinstance(self.num_nodes, list) \
+                else [self.num_nodes] * (nag.num_levels - i)
+            level_num_edges[i:] = self.num_edges \
+                if isinstance(self.num_edges, list) \
+                else [self.num_edges] * (nag.num_levels - i)
+        elif self.level[-1] == '-':
+            i = int(self.level[:-1])
+            level_num_nodes[:i] = self.num_nodes \
+                if isinstance(self.num_nodes, list) \
+                else [self.num_nodes] * i
+            level_num_edges[:i] = self.num_edges \
+                if isinstance(self.num_edges, list) \
+                else [self.num_edges] * i
+        else:
+            raise ValueError(f'Unsupported level={self.level}')
+
+        for i_level, (num_nodes, num_edges) in enumerate(zip(
+                level_num_nodes, level_num_edges)):
+            nag = self._restrict_level(nag, i_level, num_nodes, num_edges)
+
+        return nag
+
+    @staticmethod
+    def _restrict_level(nag, i_level, num_nodes, num_edges):
+
+        if nag[i_level].num_nodes > num_nodes and num_nodes > 0:
+            weights = torch.ones(nag[i_level].num_nodes, device=nag.device)
+            idx = torch.multinomial(weights, num_nodes, replacement=False)
+            nag = nag.select(i_level, idx)
+
+        if nag[i_level].num_edges > num_edges and num_edges > 0:
+            weights = torch.ones(nag[i_level].num_edges, device=nag.device)
+            idx = torch.multinomial(weights, num_edges, replacement=False)
+
+            nag[i_level].edge_index = nag[i_level].edge_index[:, idx]
+            if nag[i_level].has_edge_attr:
+                nag[i_level].edge_attr = nag[i_level].edge_attr[idx]
+            for key in nag[i_level].edge_keys:
+                nag[i_level][key] = nag[i_level][key][idx]
+
+        return nag

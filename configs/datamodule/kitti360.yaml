@@ -249,6 +249,10 @@ on_device_train_transform:
         ratio: ${datamodule.sample_segment_ratio}
         by_size: ${datamodule.sample_segment_by_size}
         by_class: ${datamodule.sample_segment_by_class}
+    - transform: NAGRestrictSize
+      params:
+        level: '1+'
+        num_nodes: ${datamodule.max_num_nodes}
 
     # Cast all attributes to either float or long. Doing this only now
     # allows speeding up disk I/O and CPU->GPU transfer
@@ -309,6 +313,10 @@ on_device_train_transform:
         level: '1+'
         n_min: ${datamodule.sample_edge_n_min}
         n_max: ${datamodule.sample_edge_n_max}
+    - transform: NAGRestrictSize
+      params:
+        level: '1+'
+        num_edges: ${datamodule.max_num_edges}
 
     # Move all point and segment features to 'x', except for "rgb", on
     # which we want to apply specific transforms

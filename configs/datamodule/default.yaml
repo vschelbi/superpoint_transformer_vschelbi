@@ -19,6 +19,16 @@ save_pos_dtype: 'float32'  # dtype to which 'pos' will be saved on disk
 save_fp_dtype: 'float16'  # dtype to which all other floating point tensors will be saved to disk
 in_memory: False
 
+# GPU memory
+# The following parameters are not the only ones affecting GPU memory.
+# Several strategies can be deployed to mitigate memory impact, from
+# batch construction to architecture size. However, these are good
+# safeguard settings as a last resort to prevent our base model from OOM
+# a 32G GPU at training time. May be adapted to other GPUs, models and
+# training procedures
+max_num_nodes: 50000
+max_num_edges: 1000000
+
 # Transforms
 pre_transform: null
 train_transform: null
