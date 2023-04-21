@@ -87,7 +87,8 @@ class RandomTiltAndRotate(Transform):
 
             if getattr(nag[i_level], 'normal', None) is not None:
                 normal = nag[i_level].normal
-                normal = normal @ R.T
+                dtype = normal.dtype
+                normal = (normal.float() @ R.T).to(dtype)
                 normal[normal[:, 2] < 0] *= -1
                 nag[i_level].normal = normal
 
@@ -99,7 +100,8 @@ class RandomTiltAndRotate(Transform):
                 assert edge_attr.shape[1] == 7, \
                     "Expected exactly 7 features in `edge_attr`, generated " \
                     "with `_minimalistic_horizontal_edge_features`"
-                edge_attr[:, :3] = (edge_attr[:, :3].float() @ R.T).half()  # `mean_off`, float16 mm not supported on CPU
+                dtype = edge_attr.dtype
+                edge_attr[:, :3] = (edge_attr[:, :3].float() @ R.T).to(dtype)  # `mean_off`, float16 mm not supported on CPU
                 nag[i_level].edge_attr = edge_attr
 
         return nag
