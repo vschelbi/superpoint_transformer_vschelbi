@@ -464,7 +464,7 @@ class DropoutColumns(Transform):
         or on a copy of it
     """
 
-    def __init__(self, p=0.5, key=None, inplace=True):
+    def __init__(self, p=0.5, key=None, inplace=False):
         assert key is not None, f"A Data key must be specified"
         self.p = p
         self.key = key
@@ -505,7 +505,7 @@ class NAGDropoutColumns(Transform):
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, level='all', p=0.5, key=None, inplace=True):
+    def __init__(self, level='all', p=0.5, key=None, inplace=False):
         assert isinstance(level, int) or level == 'all' or level.endswith('-') \
                or level.endswith('+')
         self.level = level
@@ -553,7 +553,7 @@ class DropoutRows(Transform):
         or on a copy of it
     """
 
-    def __init__(self, p=0.5, key=None, inplace=True):
+    def __init__(self, p=0.5, key=None, inplace=False):
         assert key is not None, f"A Data key must be specified"
         self.p = p
         self.key = key
@@ -594,7 +594,7 @@ class NAGDropoutRows(Transform):
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, level='all', p=0.5, key=None, inplace=True):
+    def __init__(self, level='all', p=0.5, key=None, inplace=False):
         assert isinstance(level, int) or level == 'all' or level.endswith('-') \
                or level.endswith('+')
         self.level = level

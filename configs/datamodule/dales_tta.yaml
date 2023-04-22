@@ -151,14 +151,17 @@ on_device_val_transform:
       params:
         p: ${datamodule.tta.node_feat_drop}
         key: 'x'
+        inplace: True
     - transform: NAGDropoutColumns
       params:
         p: ${datamodule.tta.h_edge_feat_drop}
         key: 'edge_attr'
+        inplace: True
     - transform: NAGDropoutColumns
       params:
         p: ${datamodule.tta.v_edge_feat_drop}
         key: 'v_edge_attr'
+        inplace: True
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops

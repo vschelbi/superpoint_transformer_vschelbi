@@ -347,14 +347,17 @@ on_device_train_transform:
       params:
         p: ${datamodule.node_feat_drop}
         key: 'x'
+        inplace: True
     - transform: NAGDropoutColumns
       params:
         p: ${datamodule.h_edge_feat_drop}
         key: 'edge_attr'
+        inplace: True
     - transform: NAGDropoutColumns
       params:
         p: ${datamodule.v_edge_feat_drop}
         key: 'v_edge_attr'
+        inplace: True
 
     # RGB-specific transforms. In particular, the color dropout will
     # switch off all three color channels together, instead of just one
