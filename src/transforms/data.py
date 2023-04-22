@@ -2,7 +2,6 @@ import torch
 from src.data import Data, NAG, CSRData
 from src.transforms import Transform
 from src.utils import tensor_idx, to_float_rgb, to_byte_rgb, dropout
-from src.utils.nn import trunc_normal_
 
 
 __all__ = [

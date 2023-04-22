@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 from src.utils.parameter import LearnableParameter
-from src.nn import SelfAttentionBlock
 
 
 __all__ = ['init_weights']
@@ -19,6 +18,8 @@ def init_weights(m, linear=None, rpe=None, activation='leaky_relu'):
       - 'kaiming_normal'
       - 'trunc_normal'
     """
+    from src.nn import SelfAttentionBlock
+
     linear = 'xavier_uniform' if linear is None else linear
     rpe = linear if rpe is None else rpe
 
