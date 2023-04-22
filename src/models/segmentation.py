@@ -24,8 +24,9 @@ class PointSegmentationModule(LightningModule):
     def __init__(
             self, net, criterion, optimizer, scheduler, num_classes,
             class_names=None, sampling_loss=False, pointwise_loss=True,
-            weighted_loss=True, custom_init=True, transformer_lr_scale=1,
-            multi_stage_loss_lambdas=None, gc_every_n_steps=0, **kwargs):
+            weighted_loss=True, init_linear=None, init_rpe=None,
+            transformer_lr_scale=1, multi_stage_loss_lambdas=None,
+            gc_every_n_steps=0, **kwargs):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
@@ -63,10 +64,11 @@ class PointSegmentationModule(LightningModule):
             self.head = Classifier(self.net.out_dim, num_classes)
 
         # Custom weight initialization. In particular, this applies
-        # Xavier / Glorot initialization on Linear layers
-        if custom_init:
-            self.net.apply(init_weights)
-            self.head.apply(init_weights)
+        # Xavier / Glorot initialization on Linear and RPE layers by
+        # default, but can be tuned
+        init = lambda m: init_weights(m, linear=init_linear, rpe=init_rpe)
+        self.net.apply(init)
+        self.head.apply(init)
 
         # Metric objects for calculating and averaging accuracy across
         # batches. We add `ignore_index=num_classes` to account for

@@ -60,7 +60,8 @@ class SelfAttentionBlock(nn.Module):
         self.qkv = nn.Linear(dim, qk_dim * 2 * num_heads + dim, bias=qkv_bias)  # TODO: only 1 value for all heads ?
 
         # TODO: define relative positional encoding parameters and
-        #  truncated-normal initialize them (see Swin-T implementation)
+        #  truncated-normal initialize them, see Swin-T implementation:
+        #  https://github.com/microsoft/Swin-Transformer/blob/e43ac64ce8abfe133ae582741ccaf6761eea05f7/models/swin_transformer.py#L122
 
         # TODO: k/q/v RPE, pos/edge attr/both RPE, MLP/vector attention,
         #  mlp on pos/learnable lookup table/FFN/learnable FFN...

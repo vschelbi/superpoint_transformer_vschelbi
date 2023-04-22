@@ -684,7 +684,7 @@ class NAGJitterKey(Transform):
                     continue
 
             if trunc[i_level] > 0:
-                noise = trunc_normal_(
+                noise = torch.nn.init.trunc_normal_(
                     torch.empty_like(nag[i_level][self.key]),
                     mean=0.,
                     std=sigma[i_level],
