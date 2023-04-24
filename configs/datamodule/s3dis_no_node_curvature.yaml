@@ -1,0 +1,16 @@
+defaults:
+  - s3dis.yaml
+
+segment_hf:  # segment features used for training
+  - 'rgb'
+  - 'pos_room'
+  - 'elevation'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'log_length'
+  - 'log_surface'
+  - 'log_volume'
+  - 'log_size'
+  - 'normal'
