@@ -264,20 +264,23 @@ def _compute_cluster_features(
     super_index = nag.get_super_index(i_level)
 
     # Add the mean of point attributes, identified by their key
+    # TODO f"mean_{key}" + deal with 'rgb' in augmentations + 'norm' in
+    #  geometric transformations
     for key in mean_keys:
         f = getattr(nag[0], key, None)
-        if f is not None:
-            data[key] = scatter_mean(nag[0][key], super_index, dim=0)
-        elif strict:
+        if f is None and strict:
             raise ValueError(f"Could not find key=`{key}` in the points")
+        data[key] = scatter_mean(nag[0][key], super_index, dim=0)
+        if key == 'norm':
+            data[key] = data[key] / (torch.linalg.norm(data[key], dim=1) + 1e-3)
+            data[key] = data[key].clamp(min=0, max=1)
 
     # Add the std of point attributes, identified by their key
     for key in std_keys:
         f = getattr(nag[0], key, None)
-        if f is not None:
-            data[f'std_{key}'] = scatter_std(nag[0][key], super_index, dim=0)
-        elif strict:
+        if f is None and strict:
             raise ValueError(f"Could not find key=`{key}` in the points")
+        data[f'std_{key}'] = scatter_std(nag[0][key], super_index, dim=0)
 
     # To debug sampling
     if src.is_debug_enabled():
