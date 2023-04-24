@@ -14,7 +14,7 @@ optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
   lr: 0.1
-  weight_decay: 1e-2
+  weight_decay: 1e-4
 
 scheduler:
   _target_: src.optim.CosineAnnealingLRWithWarmup
