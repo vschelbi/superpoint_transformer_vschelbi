@@ -89,7 +89,7 @@ pre_transform:
         log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['rgb', 'norm', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation']
+        mean_keys: ['rgb', 'normal', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation']
         std_keys: []
     - transform: RadiusHorizontalGraph
       params:

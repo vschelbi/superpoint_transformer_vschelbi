@@ -264,14 +264,21 @@ def _compute_cluster_features(
     super_index = nag.get_super_index(i_level)
 
     # Add the mean of point attributes, identified by their key
-    # TODO f"mean_{key}" + deal with 'rgb' in augmentations + 'norm' in
+    # TODO f"mean_{key}" + deal with 'rgb' in augmentations + 'normal' in
     #  geometric transformations
     for key in mean_keys:
         f = getattr(nag[0], key, None)
         if f is None and strict:
             raise ValueError(f"Could not find key=`{key}` in the points")
         data[key] = scatter_mean(nag[0][key], super_index, dim=0)
-        if key == 'norm':
+        if key == 'normal':
+            # TODO: this is NOT a CORRECT way of computing the mean direction
+            #  of a set of normals. Since the sense of the normal vectors may
+            #  vary, though the direction is the same, we may end up with
+            #  terrible results just because the normals are not necessarily
+            #  expressed with the appropriate sign. One way of doing this would
+            #  be to fit the normals to a line, with least squares. But this
+            #  would require a scatter implementation...
             data[key] = data[key] / (torch.linalg.norm(data[key], dim=1) + 1e-3)
             data[key] = data[key].clamp(min=0, max=1)
 
