@@ -1,6 +1,22 @@
 defaults:
   - s3dis.yaml
 
+# no room pos
+# no curvature
+# mean pointwise geof rather than segment wise geof
+
+segment_hf:  # segment features used for training
+  - 'elevation'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'log_length'
+  - 'log_surface'
+  - 'log_volume'
+  - 'log_size'
+  - 'normal'
+
 # Preprocessing
 pre_transform:
     - transform: DataTo
@@ -33,7 +49,7 @@ pre_transform:
         planarity: True
         scattering: True
         verticality: True
-        normal: True
+        normal: False
         length: False
         surface: False
         volume: False
@@ -89,7 +105,7 @@ pre_transform:
         log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['rgb', 'norm', 'elevation', 'pos_room']
+        mean_keys: ['linearity', 'planarity', 'scattering', 'verticality', 'elevation']
         std_keys: []
     - transform: RadiusHorizontalGraph
       params:
