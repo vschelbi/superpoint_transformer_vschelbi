@@ -9,7 +9,8 @@ import src
 from src.data import NAG
 from src.dependencies.point_geometric_features.python.bin.pgeof import pgeof
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    subedges, to_trimmed, cluster_radius_nn, is_trimmed, base_vectors_3d
+    subedges, to_trimmed, cluster_radius_nn, is_trimmed, base_vectors_3d,\
+    scatter_mean_orientation
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
@@ -270,17 +271,10 @@ def _compute_cluster_features(
         f = getattr(nag[0], key, None)
         if f is None and strict:
             raise ValueError(f"Could not find key=`{key}` in the points")
-        data[key] = scatter_mean(nag[0][key], super_index, dim=0)
         if key == 'normal':
-            # TODO: this is NOT a CORRECT way of computing the mean direction
-            #  of a set of normals. Since the sense of the normal vectors may
-            #  vary, though the direction is the same, we may end up with
-            #  terrible results just because the normals are not necessarily
-            #  expressed with the appropriate sign. One way of doing this would
-            #  be to fit the normals to a line, with least squares. But this
-            #  would require a scatter implementation...
-            data[key] = data[key] / (torch.linalg.norm(data[key], dim=1) + 1e-3)
-            data[key] = data[key].clamp(min=0, max=1)
+            data[key] = scatter_mean_orientation(data[key], super_index)
+        else:
+            data[key] = scatter_mean(nag[0][key], super_index, dim=0)
 
     # Add the std of point attributes, identified by their key
     for key in std_keys:

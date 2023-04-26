@@ -8,7 +8,7 @@ from torch_geometric.utils import coalesce
 
 __all__ = [
     'scatter_mean_weighted', 'scatter_pca', 'scatter_nearest_neighbor',
-    'idx_preserving_mask']
+    'idx_preserving_mask', 'idx_first_occurrence', 'scatter_mean_orientation']
 
 
 def scatter_mean_weighted(x, idx, w, dim_size=None):
@@ -37,7 +37,7 @@ def scatter_mean_weighted(x, idx, w, dim_size=None):
 def scatter_pca(x, idx, on_cpu=True):
     """Scatter implementation for PCA.
 
-    Returns aigenvalues and eigenvectors for each group in idx.
+    Returns eigenvalues and eigenvectors for each group in idx.
     If x has shape N1xD and idx covers indices in [0, N2], the
     eigenvalues will have shape N2xD and the eigenvectors will
     have shape N2xDxD. The eigenvalues and eigenvectors are
@@ -208,3 +208,63 @@ def idx_preserving_mask(mask, idx, dim=0):
     """
     is_empty = scatter_add(mask.float(), idx, dim=dim) == 0
     return mask | is_empty[idx]
+
+
+def idx_first_occurrence(idx):
+    """Helper to find the first occurrence of each element in an index.
+    """
+    unique, inverse = torch.unique(idx, return_inverse=True)
+    perm = torch.arange(inverse.shape[0])
+    inverse, perm = inverse.flip([0]), perm.flip([0])
+    idx_first = inverse.new_empty(unique.shape[0]).scatter_(0, inverse, perm)
+    return idx_first
+
+
+def scatter_mean_orientation(orientation, idx):
+    """Scatter implementation for mean normal orientation computation.
+    When dealing with normals, we care more about the orientation than
+    the sense. So normals are defined up to a sign. When computing the
+    average normal across a set of points, we may run into issues. This
+    method aims at computing the mean orientation, expressed in the Z+
+    halfspace by default.
+
+    :param orientation: (N, D) tensor
+        Orientations vectors. Do not need to be normalized but are
+        assumed to be expressed with 0 as their origin
+    :param idx: (N) LongTensor
+        Group index, for each vector
+    """
+    epsilon = 1e-4
+
+    # Work on copy of input data
+    x = orientation.detach().clone()
+
+    # Normalize the orientations
+    x /= x.norm(dim=1).view(-1, 1).add_(epsilon)
+    x = x.clamp(min=-1, max=1)
+
+    # Express v in the Z+ halfspace by convention
+    x[x[:, -1] < 0] *= -1
+
+    # Pick one value of reference for each group
+    # TODO: this is arbitrary and may cause errors. There is an inherent
+    #  ambiguity in defining the "proper" mean orientation for some edge
+    #  cases which can result in ±π/2 output errors
+    U = x[idx_first_occurrence(idx)]
+
+    # Compute the angle wrt the reference value and invert the values
+    # whose angle is larger than π/2
+    idx_to_invert = (x * U[idx]).sum(dim=1) < 0
+    x[idx_to_invert] *= -1
+
+    # Compute the average direction for each group
+    x_mean = scatter_mean(x, idx, dim=0)
+
+    # Normalize
+    x_mean /= x_mean.norm(dim=1).view(-1, 1).add_(epsilon)
+    x_mean = x_mean.clamp(min=-1, max=1)
+
+    # Express in the canonical sense, pointing towards z+
+    x_mean[x_mean[:, -1] < 0] *= -1
+
+    return x_mean

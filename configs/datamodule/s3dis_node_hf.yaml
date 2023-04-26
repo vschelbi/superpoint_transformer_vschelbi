@@ -6,7 +6,6 @@ defaults:
 # mean pointwise geof rather than segment wise geof
 
 segment_hf:  # segment features used for training
-  - 'rgb'
   - 'elevation'
   - 'linearity'
   - 'planarity'
@@ -98,7 +97,7 @@ pre_transform:
         planarity: True
         scattering: True
         verticality: True
-        curvature: True
+        curvature: False
         log_length: True
         log_surface: True
         log_volume: True
@@ -106,7 +105,7 @@ pre_transform:
         log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['rgb', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation']
+        mean_keys: ['linearity', 'planarity', 'scattering', 'verticality', 'elevation']
         std_keys: []
     - transform: RadiusHorizontalGraph
       params:
