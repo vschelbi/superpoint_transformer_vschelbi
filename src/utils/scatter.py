@@ -4,11 +4,12 @@ from torch_scatter import scatter_add, scatter_mean, scatter_min
 from itertools import combinations_with_replacement
 from src.utils.edge import edge_wise_points
 from torch_geometric.utils import coalesce
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 __all__ = [
     'scatter_mean_weighted', 'scatter_pca', 'scatter_nearest_neighbor',
-    'idx_preserving_mask', 'idx_first_occurrence', 'scatter_mean_orientation']
+    'idx_preserving_mask', 'scatter_mean_orientation']
 
 
 def scatter_mean_weighted(x, idx, w, dim_size=None):
@@ -210,19 +211,6 @@ def idx_preserving_mask(mask, idx, dim=0):
     return mask | is_empty[idx]
 
 
-def idx_first_occurrence(idx):
-    """Helper to find the first occurrence of each element in an index.
-    """
-    device = idx.device
-    unique, inverse = torch.unique(idx, return_inverse=True)
-    perm = torch.arange(inverse.shape[0], device=device)
-    inverse = inverse.flip([0])
-    perm = perm.flip([0])
-    idx_first = inverse.new_empty(unique.shape[0], device=device).scatter_(
-        0, inverse, perm)
-    return idx_first
-
-
 def scatter_mean_orientation(orientation, idx):
     """Scatter implementation for mean normal orientation computation.
     When dealing with normals, we care more about the orientation than
@@ -249,15 +237,23 @@ def scatter_mean_orientation(orientation, idx):
     # Express v in the Z+ halfspace by convention
     x[x[:, -1] < 0] *= -1
 
+    # Naively compute the average direction for each group. This
+    # solution is ok for groups whose orientations are never close to
+    # the horizontal. But for groups with horizontal and near-horizontal
+    # orientations, this will not suffice. To this end, we search for
+    # groups whose 
+    x_naive_mean = scatter_mean(x, idx, dim=0)
+
     # Pick one value of reference for each group
     # TODO: this is arbitrary and may cause errors. There is an inherent
     #  ambiguity in defining the "proper" mean orientation for some edge
     #  cases which can result in ±π/2 output errors
-    U = x[idx_first_occurrence(idx)]
+    idx_dense, idx_first_occurrence = consecutive_cluster(idx)
+    U = x[idx_first_occurrence]
 
     # Compute the angle wrt the reference value and invert the values
     # whose angle is larger than π/2
-    idx_to_invert = (x * U[idx]).sum(dim=1) < 0
+    idx_to_invert = (x * U[idx_dense]).sum(dim=1) < 0
     x[idx_to_invert] *= -1
 
     # Compute the average direction for each group
