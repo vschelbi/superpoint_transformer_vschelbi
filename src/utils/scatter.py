@@ -213,10 +213,13 @@ def idx_preserving_mask(mask, idx, dim=0):
 def idx_first_occurrence(idx):
     """Helper to find the first occurrence of each element in an index.
     """
+    device = idx.device
     unique, inverse = torch.unique(idx, return_inverse=True)
-    perm = torch.arange(inverse.shape[0])
-    inverse, perm = inverse.flip([0]), perm.flip([0])
-    idx_first = inverse.new_empty(unique.shape[0]).scatter_(0, inverse, perm)
+    perm = torch.arange(inverse.shape[0], device=device)
+    inverse = inverse.flip([0])
+    perm = perm.flip([0])
+    idx_first = inverse.new_empty(unique.shape[0], device=device).scatter_(
+        0, inverse, perm)
     return idx_first
 
 
