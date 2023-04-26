@@ -234,29 +234,25 @@ def scatter_mean_orientation(orientation, idx):
     x /= x.norm(dim=1).view(-1, 1).add_(epsilon)
     x = x.clamp(min=-1, max=1)
 
-    # Express v in the Z+ halfspace by convention
-    x[x[:, -1] < 0] *= -1
+    # Compute the phi angle in [0, π/2]
+    phi = x[:, 2].arcsin()
 
-    # Naively compute the average direction for each group. This
-    # solution is ok for groups whose orientations are never close to
-    # the horizontal. But for groups with horizontal and near-horizontal
-    # orientations, this will not suffice. To this end, we search for
-    # groups whose 
-    x_naive_mean = scatter_mean(x, idx, dim=0)
+    # The group-wise mean phi will indicate whether the group's mean
+    # normal is rather horizontal of vertical, with a simple comparison
+    # to π/4
+    phi_mean = scatter_mean(phi, idx, dim=0)
+    is_horizontal = (phi_mean < torch.pi / 4)[idx]
 
-    # Pick one value of reference for each group
-    # TODO: this is arbitrary and may cause errors. There is an inherent
-    #  ambiguity in defining the "proper" mean orientation for some edge
-    #  cases which can result in ±π/2 output errors
-    idx_dense, idx_first_occurrence = consecutive_cluster(idx)
-    U = x[idx_first_occurrence]
+    # Identify the element with the smallest phi in each group. For
+    # horizontal groups, this will help us identify the opposing vectors
+    # that will need to be flipped to compute the mean orientation
+    _, argmin = scatter_min(phi, idx, dim=0)
+    is_opposing = (x * x[argmin[idx]]).sum(dim=1) < 0
 
-    # Compute the angle wrt the reference value and invert the values
-    # whose angle is larger than π/2
-    idx_to_invert = (x * U[idx_dense]).sum(dim=1) < 0
-    x[idx_to_invert] *= -1
+    # Flip only needed orientation vectors
+    x[is_horizontal & is_opposing] *= -1
 
-    # Compute the average direction for each group
+    # Compute the mean orientation
     x_mean = scatter_mean(x, idx, dim=0)
 
     # Normalize
