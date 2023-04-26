@@ -573,7 +573,7 @@ class Data(PyGData):
             elif isinstance(val, Cluster):
                 sg = f.create_group(osp.join(f.name, '_cluster_', 'sub'))
                 val.save(sg, fp_dtype=fp_dtype)
-            elif k == 'rgb':
+            elif k in ['rgb', 'mean_rgb']:
                 if val.is_floating_point():
                     save_tensor((val * 255).byte(), f, k, fp_dtype=fp_dtype)
                 else:
@@ -605,8 +605,8 @@ class Data(PyGData):
             of a NAG.
         :param verbose: bool
         :param rgb_to_float: bool
-            If True and an integer 'rgb' attribute is loaded, it will be
-            cast to float
+            If True and an integer 'rgb' or 'mean_rgb' attribute is
+            loaded, it will be cast to float
         :return:
         """
         if not isinstance(f, (h5py.File, h5py.Group)):
@@ -683,9 +683,10 @@ class Data(PyGData):
 
         # In case RGB is among the keys and is in integer type, convert
         # to float
-        if 'rgb' in d_dict.keys():
-            d_dict['rgb'] = to_float_rgb(d_dict['rgb']) if rgb_to_float \
-                else to_byte_rgb(d_dict['rgb'])
+        for k in ['rgb', 'mean_rgb']:
+            if k in d_dict.keys():
+                d_dict[k] = to_float_rgb(d_dict[k]) if rgb_to_float \
+                    else to_byte_rgb(d_dict[k])
 
         return Data(**d_dict)
 

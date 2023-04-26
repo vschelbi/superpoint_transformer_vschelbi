@@ -332,8 +332,11 @@ class ColorTransform(Transform):
         self.x_idx = x_idx
 
     def _process(self, data):
-        if self.x_idx is None and getattr(data, 'rgb', None) is not None:
-            data.rgb = self._apply_func(data.rgb)
+        if self.x_idx is None:
+            if getattr(data, 'rgb', None) is not None:
+                data.rgb = self._apply_func(data.rgb)
+            if getattr(data, 'mean_rgb', None) is not None:
+                data.mean_rgb = self._apply_func(data.mean_rgb)
         elif self.x_idx is not None and getattr(data, 'x', None) is not None:
             data.x[:, self.x_idx:self.x_idx + 3] = self._apply_func(
                 data.x[:, self.x_idx:self.x_idx + 3])

@@ -34,8 +34,8 @@ class NAGToData(Transform):
 
 class Cast(Transform):
     """Cast Data attributes to the provided integer and floating point
-    dtypes. In case 'rgb' is found `rgb_to_float` will decide whether it
-    should be cast to 'fp_dtype' or 'uint8'.
+    dtypes. In case 'rgb' or 'mean_rgb' is found, `rgb_to_float` will
+    decide whether it should be cast to 'fp_dtype' or 'uint8'.
     """
 
     def __init__(
@@ -60,8 +60,8 @@ class Cast(Transform):
                 data[k].pointers = data[k].pointers.long()
                 continue
 
-            # Deal with 'rgb' attribute
-            if k == 'rgb':
+            # Deal with 'rgb' and 'mean_rgb' attribute
+            if k in ['rgb', 'mean_rgb']:
                 data[k] = to_float_rgb(data[k]).to(self.fp_dtype)\
                     if self.rgb_to_float else to_byte_rgb(data[k])
                 continue
@@ -80,8 +80,9 @@ class Cast(Transform):
 
 class NAGCast(Cast):
     """Cast NAG attributes to the provided integer and floating point
-    dtypes. In case 'rgb' is found and is not a floating point tensor,
-    `rgb_to_float` will decide whether it should be cast to floats.
+    dtypes. In case 'rgb' or 'mean_rgb' is found and is not a floating
+    point tensor, `rgb_to_float` will decide whether it should be cast
+    to floats.
     """
 
     _IN_TYPE = NAG

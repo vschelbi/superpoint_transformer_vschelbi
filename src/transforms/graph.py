@@ -265,16 +265,14 @@ def _compute_cluster_features(
     super_index = nag.get_super_index(i_level)
 
     # Add the mean of point attributes, identified by their key
-    # TODO f"mean_{key}" + deal with 'rgb' in augmentations + 'normal' in
-    #  geometric transformations
     for key in mean_keys:
         f = getattr(nag[0], key, None)
         if f is None and strict:
             raise ValueError(f"Could not find key=`{key}` in the points")
         if key == 'normal':
-            data[key] = scatter_mean_orientation(data[key], super_index)
+            data[f'mean_{key}'] = scatter_mean_orientation(nag[0][key], super_index)
         else:
-            data[key] = scatter_mean(nag[0][key], super_index, dim=0)
+            data[f'mean_{key}'] = scatter_mean(nag[0][key], super_index, dim=0)
 
     # Add the std of point attributes, identified by their key
     for key in std_keys:
@@ -957,10 +955,11 @@ def _minimalistic_horizontal_edge_features(
     assert is_trimmed(se), \
         "Expects the graph to be trimmed, consider using " \
         "`src.utils.to_trimmed()` before computing the features"
-    assert getattr(data, 'normal', None) is not None, \
-        "Expects input Data object to have a 'normal' attribute, holding the " \
-        "segment normal vectors. See `src.utils.scatter_pca` to efficiently " \
-        "compute PCA on segments"
+    assert getattr(data, 'normal', None) is not None or \
+           getattr(data, 'mean_normal', None) is not None, \
+        "Expects input Data object to have a 'normal' or 'mean_normal' " \
+        "attribute, holding the segment normal vectors. See " \
+        "`src.utils.scatter_pca` to efficiently compute PCA on segments"
 
     if not mean_off or not std_off or not mean_dist:
         raise NotImplementedError(
@@ -1180,16 +1179,21 @@ def _on_the_fly_horizontal_edge_features(
     assert not mean_dist or getattr(data, 'edge_attr', None) is not None, \
         "Expects input Data to have a 'edge_attr' attribute precomputed " \
         "using `_minimalistic_horizontal_edge_features`"
-    assert not angle_source or getattr(data, 'normal', None) is not None and \
+    assert not angle_source or getattr(data, 'normal', None) is not None \
+           or getattr(data, 'mean_normal', None) is not None and \
            getattr(data, 'edge_attr', None) is not None, \
-        "Expects input Data to have a 'normal' attribute a 'edge_attr' " \
-        "attribute precomputed using `_minimalistic_horizontal_edge_features`"
-    assert not angle_target or getattr(data, 'normal', None) is not None and \
+        "Expects input Data to have a 'normal' or 'mean_normal' attribute " \
+        "and an 'edge_attr' attribute precomputed using " \
+        "`_minimalistic_horizontal_edge_features`"
+    assert not angle_target or getattr(data, 'normal', None) is not None \
+           or getattr(data, 'mean_normal', None) is not None and \
            getattr(data, 'edge_attr', None) is not None, \
-        "Expects input Data to have a 'normal' attribute a 'edge_attr' " \
-        "attribute precomputed using `_minimalistic_horizontal_edge_features`"
-    assert not normal_angle or getattr(data, 'normal', None) is not None, \
-        "Expects input Data to have a 'normal' attribute"
+        "Expects input Data to have a 'normal' or 'mean_normal' attribute " \
+        "and an 'edge_attr' attribute precomputed using " \
+        "`_minimalistic_horizontal_edge_features`"
+    assert not normal_angle or getattr(data, 'normal', None) is not None \
+           or getattr(data, 'mean_normal', None) is not None, \
+        "Expects input Data to have a 'normal' or 'mean_normal' attribute"
     assert not log_length or getattr(data, 'log_length', None) is not None, \
         "Expects input Data to have a 'log_length' attribute"
     assert not log_surface or getattr(data, 'log_surface', None) is not None, \
@@ -1232,15 +1236,18 @@ def _on_the_fly_horizontal_edge_features(
             f_list = [torch.cat((se_mean_off, -se_mean_off), dim=0)] + f_list
 
         if angle_source:
-            f = (se_direction * data.normal[se[0]]).sum(dim=1).abs()
+            normal = getattr(data, 'normal', getattr(data, 'mean_normal', None))
+            f = (se_direction * normal[se[0]]).sum(dim=1).abs()
             f_list.append(torch.cat((f, f), dim=0).view(-1, 1))
 
         if angle_target:
-            f = (se_direction * data.normal[se[1]]).sum(dim=1).abs()
+            normal = getattr(data, 'normal', getattr(data, 'mean_normal', None))
+            f = (se_direction * normal[se[1]]).sum(dim=1).abs()
             f_list.append(torch.cat((f, f), dim=0).view(-1, 1))
 
     if normal_angle:
-        f = (data.normal[se[0]] * data.normal[se[1]]).sum(dim=1).abs()
+        normal = getattr(data, 'normal', getattr(data, 'mean_normal', None))
+        f = (normal[se[0]] * normal[se[1]]).sum(dim=1).abs()
         f_list.append(torch.cat((f, f), dim=0).view(-1, 1))
 
     if log_length:
@@ -1399,8 +1406,9 @@ def _on_the_fly_vertical_edge_features(
         "Expects input child Data to have a 'super_index' attribute"
 
     for d in [data_child, data_parent]:
-        assert not normal_angle or getattr(d, 'normal', None) is not None, \
-            "Expects input Data to have a 'normal' attribute"
+        assert not normal_angle or getattr(d, 'normal', None) is not None or \
+               getattr(d, 'mean_normal', None) is not None, \
+            "Expects input Data to have a 'normal' or 'mean_normal' attribute"
         assert not log_length or getattr(d, 'log_length', None) is not None, \
             "Expects input Data to have a 'log_length' attribute"
         assert not log_surface or getattr(d, 'log_surface', None) is not None, \
@@ -1431,7 +1439,11 @@ def _on_the_fly_vertical_edge_features(
             f_list.append(ve_centroid_dist.view(-1, 1))
 
     if normal_angle:
-        f = (data_child.normal * data_parent.normal[idx]).sum(dim=1).abs()
+        child_normal = getattr(
+            data_child, 'normal', getattr(data_child, 'mean_normal', None))
+        parent_normal = getattr(
+            data_parent, 'normal', getattr(data_parent, 'mean_normal', None))
+        f = (child_normal * parent_normal[idx]).sum(dim=1).abs()
         f_list.append(f.view(-1, 1))
 
     if log_length:

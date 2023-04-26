@@ -29,11 +29,11 @@ class RandomTiltAndRotate(Transform):
     angle is picked following a uniform distribution within a specified
     range.
 
-    If the nodes have a `normal` attribute, we also rotate those
-    accordingly.
+    If the nodes have a `normal` or 'mean_normal' attribute, we also
+    rotate those accordingly.
 
     Warning: any other absolute orientation-related attributes beside
-    `pos` and `normal` may be broken by this transform.
+    `pos`, `normal` and 'mean_normal' may be broken by this transform.
 
     :param phi: float (degrees)
         The random axis will have random angle wrt the z axis. This
@@ -85,12 +85,11 @@ class RandomTiltAndRotate(Transform):
                 continue
             nag[i_level].pos = nag[i_level].pos @ R.T
 
-            if getattr(nag[i_level], 'normal', None) is not None:
-                normal = nag[i_level].normal
-                dtype = normal.dtype
-                normal = (normal.float() @ R.T).to(dtype)
-                normal[normal[:, 2] < 0] *= -1
-                nag[i_level].normal = normal
+            # If the nodes have a `normal` or 'mean_normal' attribute,
+            # we also adapt their orientations accordingly
+            for k in ['normal', 'mean_normal']:
+                if getattr(nag[i_level], k, None) is not None:
+                    nag[i_level][k] = self._rotate_normal(nag[i_level][k], R)
 
             # TODO: this is an ugly, hardcoded patch to deal with
             #  features assumedly created by
@@ -105,6 +104,13 @@ class RandomTiltAndRotate(Transform):
                 nag[i_level].edge_attr = edge_attr
 
         return nag
+
+    @staticmethod
+    def _rotate_normal(normal, R):
+        dtype = normal.dtype
+        normal = (normal.float() @ R.T).to(dtype)
+        normal[normal[:, 2] < 0] *= -1
+        return normal
 
 
 class RandomAnisotropicScale(Transform):
@@ -153,12 +159,11 @@ class RandomAnisotropicScale(Transform):
         for i_level in range(nag.num_levels):
             nag[i_level].pos = nag[i_level].pos * scale
 
-            # If the nodes have a `normal` attribute, we also adapt
-            # their orientations accordingly
-            if getattr(nag[i_level], 'normal', None) is not None:
-                normal = nag[i_level].normal * scale
-                normal = torch.nn.functional.normalize(normal, dim=1)
-                nag[i_level].normal = normal
+            # If the nodes have a `normal` or 'mean_normal' attribute,
+            # we also adapt their orientations accordingly
+            for k in ['normal', 'mean_normal']:
+                if getattr(nag[i_level], k, None) is not None:
+                    nag[i_level][k] = self._scale_normal(nag[i_level][k], scale)
 
             # TODO: this is an ugly, hardcoded patch to deal with
             #  features assumedly created by
@@ -174,6 +179,10 @@ class RandomAnisotropicScale(Transform):
 
         return nag
 
+    @staticmethod
+    def _scale_normal(normal, scale):
+        return torch.nn.functional.normalize(normal * scale, dim=1)
+
 
 class RandomAxisFlip(Transform):
     """Flip the node positions wrt one of the XYZ axes, with a specified
@@ -181,11 +190,11 @@ class RandomAxisFlip(Transform):
     intended to be composed with `RandomTiltAndRotate` for richer
     geometric augmentations.
 
-    If the nodes have a `normal` attribute, we also flip those
-    accordingly.
+    If the nodes have a `normal` or 'mean_normal' attribute, we also
+    flip those accordingly.
 
     Warning: any other absolute orientation-related attributes beside
-    `pos` and `normal` may be broken by this transform.
+    `pos`, `normal` 'mean_normal' may be broken by this transform.
 
     :param p: float
         Probability of flip
@@ -208,11 +217,11 @@ class RandomAxisFlip(Transform):
         for i_level in range(nag.num_levels):
             nag[i_level].pos[:, axis] *= -1
 
-            # If the nodes have a `normal` attribute, we also adapt
-            # their orientations accordingly
-            if getattr(nag[i_level], 'normal', None) is not None:
-                nag[i_level].normal[:, axis] *= -1
-                nag[i_level].normal[nag[i_level].normal[:, 2] < 0] *= -1
+            # If the nodes have a `normal` or 'mean_normal' attribute,
+            # we also adapt their orientations accordingly
+            for k in ['normal', 'mean_normal']:
+                if getattr(nag[i_level], k, None) is not None:
+                    nag[i_level][k] = self._flip_normal(nag[i_level][k], axis)
 
             # TODO: this is an ugly, hardcoded patch to deal with
             #  features assumedly created by
@@ -226,3 +235,9 @@ class RandomAxisFlip(Transform):
                 nag[i_level].edge_attr = edge_attr
 
         return nag
+
+    @staticmethod
+    def _flip_normal(normal, axis):
+        normal[:, axis] *= -1
+        normal[normal[:, 2] < 0] *= -1
+        return normal
