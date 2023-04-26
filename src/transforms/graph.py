@@ -272,7 +272,7 @@ def _compute_cluster_features(
         if f is None and strict:
             raise ValueError(f"Could not find key=`{key}` in the points")
         if key == 'normal':
-            data[key] = scatter_mean_orientation(data[key], super_index)
+            data[key] = scatter_mean_orientation(nag[0][key], super_index)
         else:
             data[key] = scatter_mean(nag[0][key], super_index, dim=0)
 
