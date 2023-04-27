@@ -44,9 +44,10 @@ class AdjacencyGraph(Transform):
         assert data.has_neighbors, \
             "Data must have 'neighbor_index' attribute to allow adjacency " \
             "graph construction."
-        assert self.w <= 0 or getattr(data, 'neighbor_distance', None) is not None, \
-            "Data must have 'neighbor_distance' attribute to allow adjacency graph " \
-            "construction."
+        assert getattr(data, 'neighbor_distance', None) is not None \
+               or self.w <= 0, \
+            "Data must have 'neighbor_distance' attribute to allow adjacency " \
+            "graph construction."
         assert self.k <= data.neighbor_index.shape[1]
 
         # Compute source and target indices based on neighbors
@@ -233,10 +234,10 @@ def _compute_cluster_features(
         if f is None and strict:
             raise ValueError(f"No point key `{key}` to build 'mean_{key} key'")
         if f is None:
-            print(f"No point key `{key}`, ignoring 'mean_{key} key'")
             continue
         if key == 'normal':
-            data[f'mean_{key}'] = scatter_mean_orientation(nag[0][key], super_index)
+            data[f'mean_{key}'] = scatter_mean_orientation(
+                nag[0][key], super_index)
         else:
             data[f'mean_{key}'] = scatter_mean(nag[0][key], super_index, dim=0)
 
@@ -246,7 +247,6 @@ def _compute_cluster_features(
         if f is None and strict:
             raise ValueError(f"No point key `{key}` to build 'std_{key} key'")
         if f is None:
-            print(f"No point key `{key}`, ignoring 'std_{key} key'")
             continue
         data[f'std_{key}'] = scatter_std(nag[0][key], super_index, dim=0)
 
@@ -256,7 +256,8 @@ def _compute_cluster_features(
         data.node_idx_samples = idx_samples.to(device)
         data.node_xyz_samples = torch.from_numpy(xyz).to(device)
         data.node_nn_samples = torch.from_numpy(nn.astype('int64')).to(device)
-        data.node_nn_ptr_samples = torch.from_numpy(nn_ptr.astype('int64')).to(device)
+        data.node_nn_ptr_samples = torch.from_numpy(
+            nn_ptr.astype('int64')).to(device)
 
         end = ptr_samples[1:]
         start = ptr_samples[:-1]
@@ -1145,9 +1146,11 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
     edges.
 
     The supported feature keys are the following:
-      - centroid_dir: unit-normalized direction between the child centroid and the parent centroid
+      - centroid_dir: unit-normalized direction between the child
+        centroid and the parent centroid
       - centroid_dist: distance between the child and parent centroids
-      - normal_angle: cosine of the angle between the child and parent normals
+      - normal_angle: cosine of the angle between the child and parent
+        normals
       - log_length: parent/child log length ratio
       - log_surface: parent/child log surface ratio
       - log_volume: parent/child log volume ratio
