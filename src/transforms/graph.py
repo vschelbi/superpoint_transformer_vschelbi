@@ -11,6 +11,7 @@ from src.dependencies.point_geometric_features.python.bin.pgeof import pgeof
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
     subedges, to_trimmed, cluster_radius_nn, is_trimmed, base_vectors_3d, \
     scatter_mean_orientation
+from src.transforms.point import _POINT_FEATURES
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
@@ -156,15 +157,17 @@ class SegmentFeatures(Transform):
             n_max=32,
             n_min=5,
             keys=_SEGMENT_BASE_FEATURES,
-            mean_keys=[],
-            std_keys=[],
+            mean_keys=_POINT_FEATURES,
+            std_keys=_POINT_FEATURES,
             strict=True):
         self.n_max = n_max
         self.n_min = n_min
         self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
             if isinstance(keys, str) else _SEGMENT_BASE_FEATURES
-        self.mean_keys = mean_keys
-        self.std_keys = std_keys
+        self.mean_keys = sorted(mean_keys) if isinstance(mean_keys, list) \
+            else [mean_keys] if isinstance(mean_keys, str) else _POINT_FEATURES
+        self.std_keys = sorted(std_keys) if isinstance(std_keys, list) \
+            else [std_keys] if isinstance(std_keys, str) else _POINT_FEATURES
         self.strict = strict
 
     def _process(self, nag):
@@ -187,8 +190,8 @@ def _compute_cluster_features(
         n_max=32,
         n_min=5,
         keys=_SEGMENT_BASE_FEATURES,
-        mean_keys=[],
-        std_keys=[],
+        mean_keys=_POINT_FEATURES,
+        std_keys=_POINT_FEATURES,
         strict=True):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster features on level-0"
