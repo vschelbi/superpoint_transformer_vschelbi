@@ -12,6 +12,21 @@ __all__ = [
     'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop', 'ColorNormalize',
     'NAGColorNormalize']
 
+_POINT_FEATURES = [
+        'rgb',
+        'hsv',
+        'lab',
+        'density',
+        'linearity',
+        'planarity',
+        'scattering',
+        'verticality',
+        'normal',
+        'length',
+        'surface',
+        'volume',
+        'curvature']
+
 
 class PointFeatures(Transform):
     """Compute pointwise features based on what is already available in
@@ -23,49 +38,38 @@ class PointFeatures(Transform):
     computation, unless some are missing (indicated by -1 indices). If
     the latter, only positive indices will be used.
 
-    Parameters
-    ----------
-    rgb: bool
-        Use rgb color. Assumes Data.rgb holds either [0, 1] floats or
+    The supported feature keys are the following:
+      - rgb: RGB color. Assumes Data.rgb holds either [0, 1] floats or
         [0, 255] integers
-    hsv: bool
-        Use HSV color. Assumes Data.rgb holds either [0, 1] floats or
+      - hsv: HSV color. Assumes Data.rgb holds either [0, 1] floats or
         [0, 255] integers
-    lab: bool
-        Use LAB color. Assumes Data.rgb holds either [0, 1] floats or
+      - lab: LAB color. Assumes Data.rgb holds either [0, 1] floats or
         [0, 255] integers
-    density: bool
-        Use local density. Assumes ``Data.neighbor_index`` and
-        ``Data.neighbor_distance``.
-    linearity: bool
-        Use local linearity. Assumes ``Data.neighbor_index``.
-    planarity: bool
-        Use local planarity. Assumes ``Data.neighbor_index``.
-    scattering: bool
-        Use local scattering. Assumes ``Data.neighbor_index``.
-    verticality: bool
-        Use local verticality. Assumes ``Data.neighbor_index``.
-    normal: bool
-        Use local normal. Assumes ``Data.neighbor_index``.
-    length: bool
-        Use local length. Assumes ``Data.neighbor_index``.
-    surface: bool
-        Use local surface. Assumes ``Data.neighbor_index``.
-    volume: bool
-        Use local volume. Assumes ``Data.neighbor_index``.
-    curvature: bool
-        Use local curvature. Assumes ``Data.neighbor_index``.
-    k_min: int
+      - density: local density. Assumes ``Data.neighbor_index`` and
+        ``Data.neighbor_distance``
+      - linearity: local linearity. Assumes ``Data.neighbor_index``
+      - planarity: local planarity. Assumes ``Data.neighbor_index``
+      - scattering: local scattering. Assumes ``Data.neighbor_index``
+      - verticality: local verticality. Assumes ``Data.neighbor_index``
+      - normal: local normal. Assumes ``Data.neighbor_index``
+      - length: local length. Assumes ``Data.neighbor_index``
+      - surface: local surface. Assumes ``Data.neighbor_index``
+      - volume: local volume. Assumes ``Data.neighbor_index``
+      - curvature: local curvature. Assumes ``Data.neighbor_index``
+
+    :param keys: List(str)
+        Features to be computed. Attributes will be saved under `<key>`
+    :param k_min: int
         Minimum number of neighbors to consider for geometric features
         computation. Points with less than k_min neighbors will receive
         0-features. Assumes ``Data.neighbor_index``.
-    k_step: int
+    :param k_step: int
         Step size to take when searching for the optimal neighborhood
         size following:
         http://lareg.ensg.eu/labos/matis/pdf/articles_revues/2015/isprs_wjhm_15.pdf
         If k_step < 1, the optimal neighborhood will be computed based
         on all the neighbors available for each point.
-    k_min_search: int
+    :param k_min_search: int
         Minimum neighborhood size used when searching the optimal
         neighborhood size. It is advised to use a value of 10 or higher.
     """
@@ -74,36 +78,8 @@ class PointFeatures(Transform):
     # TODO: Random PointNet + PCA features ?
 
     def __init__(
-            self,
-            rgb=False,
-            hsv=False,
-            lab=False,
-            density=False,
-            linearity=False,
-            planarity=False,
-            scattering=False,
-            verticality=False,
-            normal=False,
-            length=False,
-            surface=False,
-            volume=False,
-            curvature=False,
-            k_min=5,
-            k_step=-1,
-            k_min_search=25):
-        self.rgb = rgb
-        self.hsv = hsv
-        self.lab = lab
-        self.density = density
-        self.linearity = linearity
-        self.planarity = planarity
-        self.scattering = scattering
-        self.verticality = verticality
-        self.normal = normal
-        self.length = length
-        self.surface = surface
-        self.volume = volume
-        self.curvature = curvature
+            self, keys=_POINT_FEATURES, k_min=5, k_step=-1, k_min_search=25):
+        self.keys = keys
         self.k_min = k_min
         self.k_step = k_step
         self.k_min_search = k_min_search
@@ -119,7 +95,7 @@ class PointFeatures(Transform):
         # Add RGB to the features. If colors are stored in int, we
         # assume they are encoded in  [0, 255] and normalize them.
         # Otherwise, we assume they have already been [0, 1] normalized
-        if self.rgb and data.rgb is not None:
+        if 'rgb' in self.keys and data.rgb is not None:
             data.rgb = to_float_rgb(data.rgb)
 
         # Add HSV to the features. If colors are stored in int, we
@@ -127,7 +103,7 @@ class PointFeatures(Transform):
         # Otherwise, we assume they have already been [0, 1] normalized.
         # Note: for all features to live in a similar range, we
         # normalize H in [0, 1]
-        if self.hsv and data.rgb is not None:
+        if 'hsv' in self.keys and data.rgb is not None:
             hsv = rgb2hsv(to_float_rgb(data.rgb))
             hsv[:, 0] /= 360.
             data.hsv = hsv
@@ -137,7 +113,7 @@ class PointFeatures(Transform):
         # Otherwise, we assume they have already been [0, 1] normalized.
         # Note: for all features to live in a similar range, we
         # normalize L in [0, 1] and ab in [-1, 1]
-        if self.lab and data.rgb is not None:
+        if 'lab' in self.keys and data.rgb is not None:
             data.lab = rgb2lab(to_float_rgb(data.rgb)) / 100
 
         # Add local surfacic density to the features. The local density
@@ -146,15 +122,18 @@ class PointFeatures(Transform):
         # normalize by D² since points roughly lie on a 2D manifold.
         # Note that this takes into account partial neighborhoods where
         # -1 indicates absent neighbors
-        if self.density:
+        if 'density' in self.keys:
             dmax = data.neighbor_distance.max(dim=1).values
             k = data.neighbor_index.ge(0).sum(dim=1)
             data.density = (k / dmax ** 2).view(-1, 1)
 
         # Add local geometric features
         needs_geof = any((
-            self.linearity, self.planarity, self.scattering, self.verticality,
-            self.normal))
+            'linearity' in self.keys,
+            'planarity' in self.keys,
+            'scattering' in self.keys,
+            'verticality' in self.keys,
+            'normal' in self.keys))
         if needs_geof and data.pos is not None:
 
             # Prepare data for numpy boost interface. Note: we add each
@@ -190,36 +169,36 @@ class PointFeatures(Transform):
             f = torch.from_numpy(f.astype('float32'))
 
             # Keep only required features
-            if self.linearity:
+            if 'linearity' in self.keys:
                 data.linearity = f[:, 0].view(-1, 1).to(device)
 
-            if self.planarity:
+            if 'planarity' in self.keys:
                 data.planarity = f[:, 1].view(-1, 1).to(device)
 
-            if self.scattering:
+            if 'scattering' in self.keys:
                 data.scattering = f[:, 2].view(-1, 1).to(device)
 
             # Heuristic to increase importance of verticality in
             # partition
-            if self.verticality:
+            if 'verticality' in self.keys:
                 data.verticality = f[:, 3].view(-1, 1).to(device)
                 data.verticality *= 2
 
-            if self.curvature:
+            if 'curvature' in self.keys:
                 data.curvature = f[:, 10].t.view(-1, 1).to(device)
 
-            if self.length:
+            if 'length' in self.keys:
                 data.length = f[:, 7].view(-1, 1).to(device)
 
-            if self.surface:
+            if 'surface' in self.keys:
                 data.surface = f[:, 8].view(-1, 1).to(device)
 
-            if self.volume:
+            if 'volume' in self.keys:
                 data.volume = f[:, 9].view(-1, 1).to(device)
 
             # As a way to "stabilize" the normals' orientation, we
             # choose to express them as oriented in the z+ half-space
-            if self.normal:
+            if 'normal' in self.keys:
                 data.normal = f[:, 4:7].view(-1, 3).to(device)
                 data.normal[data.normal[:, 2] < 0] *= -1
 

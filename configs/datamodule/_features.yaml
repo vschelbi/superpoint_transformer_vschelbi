@@ -3,9 +3,18 @@
 # will use these to interpolate other important values
 partition_hf: ???  # point features used for the partition
 point_hf: ???  # point features used for training
-segment_hf: ???  # segment features used for training
+segment_base_hf: ???   # segment-wise features computed at preprocessing
+segment_mean_hf: ???  # segment features computed as the mean of point feature in each segment, saved with "mean_" prefix
+segment_std_hf: ???  # segment features computed as the std of point feature in each segment, saved with "std_" prefix
 edge_hf: ???  # horizontal edge features used for training
 v_edge_hf: ???  # vertical edge features used for training
+
+# complete list of segment features used for training, as named in the
+# attributes after preprocessing
+segment_hf: ${eval:'${datamodule.segment_base_hf} + ["mean_" + x for x in ${datamodule.segment_mean_hf}] + ["std_" + x for x in ${datamodule.segment_std_hf}]'}
+
+# point features that will need to be computed at preprocessing time
+point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf}))}
 
 # The number of input channels for points, segments and horizontal and
 # vertical edges
