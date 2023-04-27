@@ -186,7 +186,7 @@ class PointFeatures(Transform):
                 data.verticality *= 2
 
             if 'curvature' in self.keys:
-                data.curvature = f[:, 10].t.view(-1, 1).to(device)
+                data.curvature = f[:, 10].view(-1, 1).to(device)
 
             if 'length' in self.keys:
                 data.length = f[:, 7].view(-1, 1).to(device)
