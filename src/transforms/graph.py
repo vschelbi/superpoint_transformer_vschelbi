@@ -161,7 +161,8 @@ class SegmentFeatures(Transform):
             strict=True):
         self.n_max = n_max
         self.n_min = n_min
-        self.keys = sorted(keys)  # sorted keys for stable hashing
+        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
+            if isinstance(keys, str) else []
         self.mean_keys = mean_keys
         self.std_keys = std_keys
         self.strict = strict
@@ -364,7 +365,8 @@ class DelaunayHorizontalGraph(Transform):
         self.n_max_edge = n_max_edge
         self.n_min = n_min
         self.max_dist = max_dist
-        self.keys = sorted(keys)  # sorted keys for stable hashing
+        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
+            if isinstance(keys, str) else []
 
     def _process(self, nag):
         assert isinstance(self.max_dist, (int, float, list)), \
@@ -663,7 +665,8 @@ class RadiusHorizontalGraph(Transform):
         self.bbox_filter = bbox_filter
         self.target_pc_flip = target_pc_flip
         self.source_pc_sort = source_pc_sort
-        self.keys = sorted(keys)  # sorted keys for stable hashing
+        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
+            if isinstance(keys, str) else []
 
     def _process(self, nag):
         # Convert parameters to list for each NAG level, if need be
@@ -1004,7 +1007,8 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
 
     def __init__(
             self, keys=_ON_THE_FLY_HORIZONTAL_FEATURES, use_mean_normal=False):
-        self.keys = sorted(keys)  # sorted keys for stable hashing
+        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
+            if isinstance(keys, str) else []
         self.use_mean_normal = use_mean_normal
 
     def _process(self, nag):
@@ -1191,7 +1195,8 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
 
     def __init__(
             self, keys=_ON_THE_FLY_VERTICAL_FEATURES, use_mean_normal=False):
-        self.keys = sorted(keys)  # sorted keys for stable hashing
+        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
+            if isinstance(keys, str) else []
         self.use_mean_normal = use_mean_normal
 
     def _process(self, nag):

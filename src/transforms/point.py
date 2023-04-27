@@ -79,7 +79,8 @@ class PointFeatures(Transform):
 
     def __init__(
             self, keys=_POINT_FEATURES, k_min=5, k_step=-1, k_min_search=25):
-        self.keys = sorted(keys)  # sorted keys for stable hashing
+        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
+            if isinstance(keys, str) else []
         self.k_min = k_min
         self.k_step = k_step
         self.k_min_search = k_min_search
