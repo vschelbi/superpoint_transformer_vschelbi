@@ -10,54 +10,15 @@ from src.data import NAG
 from src.dependencies.point_geometric_features.python.bin.pgeof import pgeof
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
     subedges, to_trimmed, cluster_radius_nn, is_trimmed, base_vectors_3d, \
-    scatter_mean_orientation
-from src.transforms.point import _POINT_FEATURES
+    scatter_mean_orientation, POINT_FEATURES, SEGMENT_BASE_FEATURES, \
+    SUBEDGE_FEATURES, ON_THE_FLY_HORIZONTAL_FEATURES, \
+    ON_THE_FLY_VERTICAL_FEATURES
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
     'RadiusHorizontalGraph', 'OnTheFlyHorizontalEdgeFeatures',
     'OnTheFlyVerticalEdgeFeatures', 'NAGAddSelfLoops', 'ConnectIsolated',
     'NodeSize']
-
-_SEGMENT_BASE_FEATURES = [
-    'linearity',
-    'planarity',
-    'scattering',
-    'verticality',
-    'curvature',
-    'log_length',
-    'log_surface',
-    'log_volume',
-    'normal',
-    'log_size']
-
-_SUBEDGE_FEATURES = [
-    'mean_off',
-    'std_off',
-    'mean_dist']
-
-_ON_THE_FLY_HORIZONTAL_FEATURES = [
-    'mean_off',
-    'std_off',
-    'mean_dist',
-    'angle_source',
-    'angle_target',
-    'centroid_dir',
-    'centroid_dist',
-    'normal_angle',
-    'log_length',
-    'log_surface',
-    'log_volume',
-    'log_size']
-
-_ON_THE_FLY_VERTICAL_FEATURES = [
-    'centroid_dir',
-    'centroid_dist',
-    'normal_angle',
-    'log_length',
-    'log_surface',
-    'log_volume',
-    'log_size']
 
 
 class AdjacencyGraph(Transform):
@@ -156,18 +117,18 @@ class SegmentFeatures(Transform):
             self,
             n_max=32,
             n_min=5,
-            keys=_SEGMENT_BASE_FEATURES,
-            mean_keys=_POINT_FEATURES,
-            std_keys=_POINT_FEATURES,
+            keys=SEGMENT_BASE_FEATURES,
+            mean_keys=POINT_FEATURES,
+            std_keys=POINT_FEATURES,
             strict=True):
         self.n_max = n_max
         self.n_min = n_min
         self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else _SEGMENT_BASE_FEATURES
+            if isinstance(keys, str) else SEGMENT_BASE_FEATURES
         self.mean_keys = sorted(mean_keys) if isinstance(mean_keys, list) \
-            else [mean_keys] if isinstance(mean_keys, str) else _POINT_FEATURES
+            else [mean_keys] if isinstance(mean_keys, str) else POINT_FEATURES
         self.std_keys = sorted(std_keys) if isinstance(std_keys, list) \
-            else [std_keys] if isinstance(std_keys, str) else _POINT_FEATURES
+            else [std_keys] if isinstance(std_keys, str) else POINT_FEATURES
         self.strict = strict
 
     def _process(self, nag):
@@ -189,9 +150,9 @@ def _compute_cluster_features(
         nag,
         n_max=32,
         n_min=5,
-        keys=_SEGMENT_BASE_FEATURES,
-        mean_keys=_POINT_FEATURES,
-        std_keys=_POINT_FEATURES,
+        keys=SEGMENT_BASE_FEATURES,
+        mean_keys=POINT_FEATURES,
+        std_keys=POINT_FEATURES,
         strict=True):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster features on level-0"
@@ -273,6 +234,7 @@ def _compute_cluster_features(
             raise ValueError(f"No point key `{key}` to build 'mean_{key} key'")
         if f is None:
             print(f"No point key `{key}`, ignoring 'mean_{key} key'")
+            continue
         if key == 'normal':
             data[f'mean_{key}'] = scatter_mean_orientation(nag[0][key], super_index)
         else:
@@ -285,6 +247,7 @@ def _compute_cluster_features(
             raise ValueError(f"No point key `{key}` to build 'std_{key} key'")
         if f is None:
             print(f"No point key `{key}`, ignoring 'std_{key} key'")
+            continue
         data[f'std_{key}'] = scatter_std(nag[0][key], super_index, dim=0)
 
     # To debug sampling
@@ -368,12 +331,12 @@ class DelaunayHorizontalGraph(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, n_max_edge=64, n_min=5, max_dist=-1, keys=_SUBEDGE_FEATURES):
+            self, n_max_edge=64, n_min=5, max_dist=-1, keys=SUBEDGE_FEATURES):
         self.n_max_edge = n_max_edge
         self.n_min = n_min
         self.max_dist = max_dist
         self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else _SUBEDGE_FEATURES
+            if isinstance(keys, str) else SUBEDGE_FEATURES
 
     def _process(self, nag):
         assert isinstance(self.max_dist, (int, float, list)), \
@@ -400,7 +363,7 @@ def _horizontal_graph_by_delaunay(
         n_max_edge=64,
         n_min=5,
         max_dist=-1,
-        keys=_SUBEDGE_FEATURES):
+        keys=SUBEDGE_FEATURES):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster graph on level 0"
     assert nag[0].has_edges, \
@@ -649,7 +612,7 @@ class RadiusHorizontalGraph(Transform):
             bbox_filter=True,
             target_pc_flip=True,
             source_pc_sort=False,
-            keys=_SUBEDGE_FEATURES):
+            keys=SUBEDGE_FEATURES):
 
         if isinstance(k_min, list):
             assert all([k > 0 for k in k_min]), \
@@ -673,7 +636,7 @@ class RadiusHorizontalGraph(Transform):
         self.target_pc_flip = target_pc_flip
         self.source_pc_sort = source_pc_sort
         self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else _SUBEDGE_FEATURES
+            if isinstance(keys, str) else SUBEDGE_FEATURES
 
     def _process(self, nag):
         # Convert parameters to list for each NAG level, if need be
@@ -875,7 +838,7 @@ def _minimalistic_horizontal_edge_features(
         points,
         se_point_index,
         se_id,
-        keys=_SUBEDGE_FEATURES):
+        keys=SUBEDGE_FEATURES):
     """Compute the features for horizontal edges, given the edge graph
     and the level-0 'subedges' making up each edge.
 
@@ -1013,9 +976,9 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, keys=_ON_THE_FLY_HORIZONTAL_FEATURES, use_mean_normal=False):
+            self, keys=ON_THE_FLY_HORIZONTAL_FEATURES, use_mean_normal=False):
         self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else _ON_THE_FLY_HORIZONTAL_FEATURES
+            if isinstance(keys, str) else ON_THE_FLY_HORIZONTAL_FEATURES
         self.use_mean_normal = use_mean_normal
 
     def _process(self, nag):
@@ -1028,7 +991,7 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
 
 
 def _on_the_fly_horizontal_edge_features(
-        data, keys=_ON_THE_FLY_HORIZONTAL_FEATURES, use_mean_normal=False):
+        data, keys=ON_THE_FLY_HORIZONTAL_FEATURES, use_mean_normal=False):
     """Compute all edges and edge features for a horizontal graph, given
     a trimmed graph and some precomputed edge attributes.
     """
@@ -1201,9 +1164,9 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, keys=_ON_THE_FLY_VERTICAL_FEATURES, use_mean_normal=False):
+            self, keys=ON_THE_FLY_VERTICAL_FEATURES, use_mean_normal=False):
         self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else _ON_THE_FLY_VERTICAL_FEATURES
+            if isinstance(keys, str) else ON_THE_FLY_VERTICAL_FEATURES
         self.use_mean_normal = use_mean_normal
 
     def _process(self, nag):
@@ -1217,7 +1180,7 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
 
 
 def _on_the_fly_vertical_edge_features(
-        data_child, data_parent, keys=_ON_THE_FLY_VERTICAL_FEATURES,
+        data_child, data_parent, keys=ON_THE_FLY_VERTICAL_FEATURES,
         use_mean_normal=False):
     """Compute edge features for a vertical graph, given child and
     parent nodes.
