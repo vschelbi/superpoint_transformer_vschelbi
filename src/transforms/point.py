@@ -12,20 +12,20 @@ __all__ = [
     'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop', 'ColorNormalize',
     'NAGColorNormalize']
 
-_POINT_FEATURES = [
-        'rgb',
-        'hsv',
-        'lab',
-        'density',
-        'linearity',
-        'planarity',
-        'scattering',
-        'verticality',
-        'normal',
-        'length',
-        'surface',
-        'volume',
-        'curvature']
+_POINT_FEATURES = (
+    'rgb',
+    'hsv',
+    'lab',
+    'density',
+    'linearity',
+    'planarity',
+    'scattering',
+    'verticality',
+    'normal',
+    'length',
+    'surface',
+    'volume',
+    'curvature')
 
 
 class PointFeatures(Transform):
@@ -79,7 +79,7 @@ class PointFeatures(Transform):
 
     def __init__(
             self, keys=_POINT_FEATURES, k_min=5, k_step=-1, k_min_search=25):
-        self.keys = keys
+        self.keys = sorted(keys)  # sorted keys for stable hashing
         self.k_min = k_min
         self.k_step = k_step
         self.k_min_search = k_min_search
