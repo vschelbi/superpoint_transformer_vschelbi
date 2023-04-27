@@ -14,7 +14,7 @@ v_edge_hf: ???  # vertical edge features used for training
 segment_hf: ${eval:'${datamodule.segment_base_hf} + ["mean_" + x for x in ${datamodule.segment_mean_hf}] + ["std_" + x for x in ${datamodule.segment_std_hf}]'}
 
 # point features that will need to be computed at preprocessing time
-point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf}))}
+point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf}))'}
 
 # The number of input channels for points, segments and horizontal and
 # vertical edges

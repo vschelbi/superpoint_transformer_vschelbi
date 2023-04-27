@@ -208,9 +208,7 @@ pre_transform:
         bbox_filter: True
         target_pc_flip: True
         source_pc_sort: False
-        mean_off: True
-        std_off: True
-        mean_dist: True
+        keys: ['mean_off', 'std_off', 'mean_dist' ]
     - transform: NAGTo
       params:
         device: 'cpu'
