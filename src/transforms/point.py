@@ -2,7 +2,8 @@ import torch
 import numpy as np
 from sklearn.linear_model import RANSACRegressor
 from src.dependencies.point_geometric_features.python.bin.pgeof import pgeof
-from src.utils import rgb2hsv, rgb2lab, sizes_to_pointers, to_float_rgb
+from src.utils import rgb2hsv, rgb2lab, sizes_to_pointers, to_float_rgb, \
+    POINT_FEATURES
 from src.transforms import Transform
 from src.data import NAG
 
@@ -11,8 +12,6 @@ __all__ = [
     'PointFeatures', 'GroundElevation', 'RoomPosition', 'ColorAutoContrast',
     'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop', 'ColorNormalize',
     'NAGColorNormalize']
-
-
 
 
 class PointFeatures(Transform):
