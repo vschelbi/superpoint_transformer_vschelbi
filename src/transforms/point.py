@@ -12,7 +12,7 @@ __all__ = [
     'NAGColorAutoContrast', 'ColorDrop', 'NAGColorDrop', 'ColorNormalize',
     'NAGColorNormalize']
 
-_POINT_FEATURES = (
+_POINT_FEATURES = [
     'rgb',
     'hsv',
     'lab',
@@ -21,11 +21,13 @@ _POINT_FEATURES = (
     'planarity',
     'scattering',
     'verticality',
+    'elevation',
     'normal',
     'length',
     'surface',
     'volume',
-    'curvature')
+    'curvature',
+    'intensity']
 
 
 class PointFeatures(Transform):

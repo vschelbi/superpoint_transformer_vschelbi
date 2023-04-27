@@ -197,6 +197,7 @@ pre_transform:
         keys: ${datamodule.segment_base_hf_preprocess}
         mean_keys: ${datamodule.segment_mean_hf_preprocess}
         std_keys: ${datamodule.segment_std_hf_preprocess}
+        strict: False  # will not raise error if a mean or std key is missing
     - transform: RadiusHorizontalGraph
       params:
         k_min: ${datamodule.graph_k_min}

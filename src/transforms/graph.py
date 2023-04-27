@@ -270,7 +270,9 @@ def _compute_cluster_features(
     for key in mean_keys:
         f = getattr(nag[0], key, None)
         if f is None and strict:
-            raise ValueError(f"Could not find key=`{key}` in the points")
+            raise ValueError(f"No point key `{key}` to build 'mean_{key} key'")
+        if f is None:
+            print(f"No point key `{key}`, ignoring 'mean_{key} key'")
         if key == 'normal':
             data[f'mean_{key}'] = scatter_mean_orientation(nag[0][key], super_index)
         else:
@@ -280,7 +282,9 @@ def _compute_cluster_features(
     for key in std_keys:
         f = getattr(nag[0], key, None)
         if f is None and strict:
-            raise ValueError(f"Could not find key=`{key}` in the points")
+            raise ValueError(f"No point key `{key}` to build 'std_{key} key'")
+        if f is None:
+            print(f"No point key `{key}`, ignoring 'std_{key} key'")
         data[f'std_{key}'] = scatter_std(nag[0][key], super_index, dim=0)
 
     # To debug sampling
