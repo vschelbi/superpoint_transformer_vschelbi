@@ -16,14 +16,18 @@ pc_tiling: null
 in_memory: True  # set to True to load all processed S3DIS in RAM. This may accelerate training but CAREFUL not to modify the data in place !
 
 # Features that will be computed, saved, loaded for points and segments
-partition_hf:  # point features used for the partition
+
+# point features used for the partition
+partition_hf:
   - 'rgb'
   - 'linearity'
   - 'planarity'
   - 'scattering'
   - 'verticality'
   - 'elevation'
-point_hf:  # point features used for training
+
+# point features used for training
+point_hf:
   - 'rgb'
   - 'linearity'
   - 'planarity'
@@ -31,21 +35,30 @@ point_hf:  # point features used for training
   - 'verticality'
   - 'elevation'
   - 'pos_room'
-segment_hf:  # segment features used for training
-  - 'rgb'
-  - 'pos_room'
-  - 'elevation'
-  - 'linearity'
-  - 'planarity'
-  - 'scattering'
-  - 'verticality'
-  - 'curvature'
+
+# segment-wise features computed at preprocessing
+segment_base_hf:
   - 'log_length'
   - 'log_surface'
   - 'log_volume'
   - 'log_size'
+
+# segment features computed as the mean of point feature in each
+# segment, saved with "mean_" prefix
+segment_mean_hf:
+  - 'elevation'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
   - 'normal'
-edge_hf:  # horizontal edge features used for training
+
+# segment features computed as the std of point feature in each segment,
+# saved with "std_" prefix
+segment_std_hf: []
+
+# horizontal edge features used for training
+edge_hf:
   - 'mean_off'
   - 'std_off'
   - 'mean_dist'
@@ -58,6 +71,7 @@ edge_hf:  # horizontal edge features used for training
   - 'log_surface'
   - 'log_volume'
   - 'log_size'
+
 v_edge_hf: []  # vertical edge features used for training
 
 # Parameters declared here to facilitate tuning configs without copying
@@ -103,15 +117,18 @@ tilt_n_rotate_theta: 180
 anisotropic_scaling: 0.2
 rgb_jitter: 0
 rgb_autocontrast: 0.5
-rgb_drop: 0.4
+rgb_drop: 0.2
 node_feat_jitter: 0.01
 h_edge_feat_jitter: 0.01
 v_edge_feat_jitter: 0
 node_feat_drop: 0.1
 h_edge_feat_drop: 0
 v_edge_feat_drop: 0
+node_row_drop: 0
+h_edge_row_drop: 0
+v_edge_row_drop: 0
 
-# Preprocessing
+# Preprocessng
 pre_transform:
     - transform: DataTo
       params:
@@ -135,19 +152,7 @@ pre_transform:
         scale: 4.0
     - transform: PointFeatures
       params:
-        rgb: True
-        hsv: False
-        lab: False
-        density: False
-        linearity: True
-        planarity: True
-        scattering: True
-        verticality: True
-        normal: False
-        length: False
-        surface: False
-        volume: False
-        curvature: False
+        keys: ${datamodule.point_hf_preprocess}
         k_min: 1
         k_step: ${datamodule.knn_step}
         k_min_search: ${datamodule.knn_min_search}
@@ -187,20 +192,11 @@ pre_transform:
         device: 'cuda'
     - transform: SegmentFeatures
       params:
-        linearity: True
-        planarity: True
-        scattering: True
-        verticality: True
-        curvature: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        normal: True
-        log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['rgb', 'elevation', 'pos_room']
-        std_keys: []
+        keys: ${datamodule.segment_base_hf_preprocess}
+        mean_keys: ${datamodule.segment_mean_hf_preprocess}
+        std_keys: ${datamodule.segment_std_hf_preprocess}
     - transform: RadiusHorizontalGraph
       params:
         k_min: ${datamodule.graph_k_min}
@@ -215,9 +211,7 @@ pre_transform:
         bbox_filter: True
         target_pc_flip: True
         source_pc_sort: False
-        mean_off: True
-        std_off: True
-        mean_dist: True
+        keys: ['mean_off', 'std_off', 'mean_dist' ]
     - transform: NAGTo
       params:
         device: 'cpu'
@@ -291,27 +285,12 @@ on_device_train_transform:
     # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
-        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
-        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
-        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
-        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+        keys: ${datamodule.edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.v_edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.v_edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.v_edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.v_edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
+        keys: ${datamodule.v_edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
 
     # Edge sampling is only performed after the horizontal graph is
     # untrimmed by OnTheFlyHorizontalEdgeFeatures
@@ -369,6 +348,18 @@ on_device_train_transform:
         p: ${datamodule.v_edge_feat_drop}
         key: 'v_edge_attr'
         inplace: True
+    - transform: NAGDropoutRows
+      params:
+        p: ${datamodule.node_row_drop}
+        key: 'x'
+    - transform: NAGDropoutRows
+      params:
+        p: ${datamodule.h_edge_row_drop}
+        key: 'edge_attr'
+    - transform: NAGDropoutRows
+      params:
+        p: ${datamodule.v_edge_row_drop}
+        key: 'v_edge_attr'
 
     # RGB-specific transforms. In particular, the color dropout will
     # switch off all three color channels together, instead of just one
@@ -426,27 +417,12 @@ on_device_val_transform:
     # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
-        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
-        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
-        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
-        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+        keys: ${datamodule.edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.v_edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.v_edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.v_edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.v_edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
+        keys: ${datamodule.v_edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
 
     # Move all point and segment features to 'x', except for "rgb", on
     # which we want to apply specific transforms

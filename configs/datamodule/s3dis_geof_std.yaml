@@ -1,0 +1,12 @@
+defaults:
+  - s3dis.yaml
+
+# segment features computed as the std of point feature in each segment,
+# saved with "std_" prefix
+segment_std_hf:
+  - 'elevation'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'normal'

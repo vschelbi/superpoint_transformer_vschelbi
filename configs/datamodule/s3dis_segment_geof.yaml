@@ -1,0 +1,17 @@
+defaults:
+  - s3dis.yaml
+
+# segment-wise features computed at preprocessing
+segment_base_hf:
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+
+# segment features computed as the mean of point feature in each
+# segment, saved with "mean_" prefix
+segment_mean_hf: []
+
+# segment features computed as the std of point feature in each segment,
+# saved with "std_" prefix
+segment_std_hf: []

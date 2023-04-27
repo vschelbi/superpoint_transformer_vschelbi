@@ -92,27 +92,12 @@ on_device_val_transform:
     # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
-        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
-        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
-        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
-        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+        keys: ${datamodule.edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.v_edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.v_edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.v_edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.v_edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
+        keys: ${datamodule.v_edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
 
     # Edge sampling is only performed after the horizontal graph is
     # untrimmed by OnTheFlyHorizontalEdgeFeatures

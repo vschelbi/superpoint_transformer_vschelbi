@@ -10,11 +10,25 @@ edge_hf: ???  # horizontal edge features used for training
 v_edge_hf: ???  # vertical edge features used for training
 
 # complete list of segment features used for training, as named in the
-# attributes after preprocessing
+# attributes after preprocessing. Even if more segment features were
+# computed at preprocessing time, only the features required by
+# 'segment_hf' will be loaded at training time
 segment_hf: ${eval:'${datamodule.segment_base_hf} + ["mean_" + x for x in ${datamodule.segment_mean_hf}] + ["std_" + x for x in ${datamodule.segment_std_hf}]'}
 
-# point features that will need to be computed at preprocessing time
-point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf}))'}
+# features that will need to be computed at preprocessing time
+# and saved to disk. If set to 'null', all supported features will be
+# computed and saved to disk. This may be useful when you are
+# experimenting with various feature combinations and do not want
+# preprocessing to be restarted for each new combination. Even if
+# more features that needed are preprocessed, only features required by
+# 'point_hf', 'segment_base_hf', 'segment_mean_hf', and 'segment_std_hf'
+# will actually be loaded at train time. Use 'lite_preprocessing' to
+# choose to only preprocess the strictly-required features if you do not
+# intend to experiment with handcrafted feature combinations a lot
+point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf})) if ${datamodule.lite_preprocessing} else None'}
+segment_base_hf_preprocess: ${eval:'${datamodule.segment_base_hf} if ${datamodule.lite_preprocessing} else None'}
+segment_mean_hf_preprocess: ${eval:'${datamodule.segment_mean_hf} if ${datamodule.lite_preprocessing} else None'}
+segment_std_hf_preprocess: ${eval:'${datamodule.segment_std_hf} if ${datamodule.lite_preprocessing} else None'}
 
 # The number of input channels for points, segments and horizontal and
 # vertical edges

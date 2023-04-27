@@ -19,6 +19,14 @@ save_pos_dtype: 'float32'  # dtype to which 'pos' will be saved on disk
 save_fp_dtype: 'float16'  # dtype to which all other floating point tensors will be saved to disk
 in_memory: False
 
+# Disk memory
+# Set lite_preprocessing to only preprocess and save to disk features
+# strictly needed for training, to save disk memory. If False, all
+# supported point, segment features will be computed. This can be useful
+# if you are experimenting with various feature combinations and do not
+# want preprocessing to start over whenever testing a new combination
+lite_preprocessing: False
+
 # GPU memory
 # The following parameters are not the only ones affecting GPU memory.
 # Several strategies can be deployed to mitigate memory impact, from
