@@ -25,6 +25,8 @@ in_memory: False
 # supported point, segment features will be computed. This can be useful
 # if you are experimenting with various feature combinations and do not
 # want preprocessing to start over whenever testing a new combination
+# If True, lite_preprocessing alleviate disk memory use and makes I/O
+# faster, hence faster training and inference
 lite_preprocessing: False
 
 # GPU memory
