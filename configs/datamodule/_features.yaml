@@ -39,17 +39,17 @@ segment_hf: ${eval:'${datamodule.segment_base_hf} + ["mean_" + x for x in ${data
 # will actually be loaded at train time. Use 'lite_preprocessing' to
 # choose to only preprocess the strictly-required features if you do not
 # intend to experiment with handcrafted feature combinations a lot
-point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf} + ${datamodule.extra_point_hf})) if ${datamodule.lite_preprocessing} else None'}
-segment_base_hf_preprocess: ${eval:'list(set(${datamodule.segment_base_hf} + ${datamodule.extra_segment_hf})) if ${datamodule.lite_preprocessing} else None'}
+point_hf_preprocess: ${eval:'list(set( ${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf} + ${datamodule.extra_point_hf} )) if ${datamodule.lite_preprocessing} else None'}
+segment_base_hf_preprocess: ${eval:'list(set( ${datamodule.segment_base_hf} + ${datamodule.extra_segment_hf} )) if ${datamodule.lite_preprocessing} else None'}
 segment_mean_hf_preprocess: ${eval:'${datamodule.segment_mean_hf} if ${datamodule.lite_preprocessing} else None'}
 segment_std_hf_preprocess: ${eval:'${datamodule.segment_std_hf} if ${datamodule.lite_preprocessing} else None'}
 
 # The number of input channels for points, segments and horizontal and
 # vertical edges
-num_hf_point: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.point_hf}])'}
-num_hf_segment: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.segment_hf}])'}
-num_hf_edge: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.edge_hf}])'}
-num_hf_v_edge: ${eval:'sum([${datamodule.feat_size}[k] for k in ${datamodule.v_edge_hf}])'}
+num_hf_point: ${eval:'sum([ ${datamodule.feat_size}[k] for k in ${datamodule.point_hf} ])'}
+num_hf_segment: ${eval:'sum([ ${datamodule.feat_size}[k] for k in ${datamodule.segment_hf} ])'}
+num_hf_edge: ${eval:'sum([ ${datamodule.feat_size}[k] for k in ${datamodule.edge_hf} ])'}
+num_hf_v_edge: ${eval:'sum([ ${datamodule.feat_size}[k] for k in ${datamodule.v_edge_hf} ])'}
 
 # List of level-0 (points) and level-1+ Data keys that need to be saved
 # or loaded from disk. This saves training time, loading only necessary
@@ -59,8 +59,8 @@ point_no_save_keys: ['edge_index', 'edge_attr', 'neighbor_index', 'neighbor_dist
 segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
 point_basic_load_keys: ['pos', 'y', 'super_index']  # needed point attributes, other than features
 segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index', 'edge_attr']  # needed segment attributes, other than features
-point_load_keys: ${eval:'list(set(${datamodule.point_basic_load_keys} + ${datamodule.point_hf} + ${datamodule.extra_point_hf}))'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
-segment_load_keys: ${eval:'list(set${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf} + ${datamodule.extra_segment_hf}))'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
+point_load_keys: ${eval:'list(set( ${datamodule.point_basic_load_keys} + ${datamodule.point_hf} + ${datamodule.extra_point_hf} ))'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
+segment_load_keys: ${eval:'list(set( ${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf} + ${datamodule.extra_segment_hf} ))'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
 
 # Comprehensive list of feature sizes, to be used to deduce feature size
 # from name
