@@ -14,7 +14,7 @@ v_edge_hf: ???  # vertical edge features used for training
 # and segment do not need but will still need to be computed, saved and
 # loaded when relevant. These features are listed in 'extra_point_hf'
 # and 'extra_segment_hf'
-h_edge_hf_need_normal: ${eval:'("normal_angle" in ${datamodule.edge_hf}}) or ("angle_source" in ${datamodule.edge_hf}) or ("angle_target" in ${datamodule.edge_hf})'}
+h_edge_hf_need_normal: ${eval:'("normal_angle" in ${datamodule.edge_hf}) or ("angle_source" in ${datamodule.edge_hf}) or ("angle_target" in ${datamodule.edge_hf})'}
 v_edge_hf_need_normal: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
 edge_hf_need_log_length: ${eval:'"log_length" in ${datamodule.edge_hf} + ${datamodule.v_edge_hf}'}
 edge_hf_need_log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf} + ${datamodule.v_edge_hf}'}
