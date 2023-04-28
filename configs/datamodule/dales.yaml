@@ -11,32 +11,47 @@ val_on_test: True
 xy_tiling: 3
 
 # Features that will be computed, saved, loaded for points and segments
-partition_hf:  # point features used for the partition
+
+# point features used for the partition
+partition_hf:
   - 'linearity'
   - 'planarity'
   - 'scattering'
   - 'elevation'
-point_hf:  # point features used for training
+
+# point features used for training
+point_hf:
   - 'intensity'
   - 'linearity'
   - 'planarity'
   - 'scattering'
   - 'verticality'
   - 'elevation'
-segment_hf:  # segment features used for training
-  - 'intensity'
-  - 'elevation'
-  - 'linearity'
-  - 'planarity'
-  - 'scattering'
-  - 'verticality'
-  - 'curvature'
+
+# segment-wise features computed at preprocessing
+segment_base_hf:
   - 'log_length'
   - 'log_surface'
   - 'log_volume'
   - 'log_size'
+
+# segment features computed as the mean of point feature in each
+# segment, saved with "mean_" prefix
+segment_mean_hf:
+  - 'intensity'
+  - 'elevation'
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
   - 'normal'
-edge_hf:  # horizontal edge features used for training
+
+# segment features computed as the std of point feature in each segment,
+# saved with "std_" prefix
+segment_std_hf: []
+
+# horizontal edge features used for training
+edge_hf:
   - 'mean_off'
   - 'std_off'
   - 'mean_dist'
@@ -49,6 +64,7 @@ edge_hf:  # horizontal edge features used for training
   - 'log_surface'
   - 'log_volume'
   - 'log_size'
+
 v_edge_hf: []  # vertical edge features used for training
 
 # Parameters declared here to facilitate tuning configs without copying
@@ -62,7 +78,7 @@ pcp_regularization: [0.1, 0.3, 0.5]
 pcp_spatial_weight: [1e-2, 1e-3, 1e-4]
 pcp_cutoff: [10, 50, 100]
 pcp_k_adjacency: 10
-pcp_w_adjacency: -1
+pcp_w_adjacency: 1
 pcp_iterations: 15
 graph_k_min: 1
 graph_k_max: 50
@@ -96,6 +112,9 @@ v_edge_feat_jitter: 0
 node_feat_drop: 0
 h_edge_feat_drop: 0.3
 v_edge_feat_drop: 0
+node_row_drop: 0
+h_edge_row_drop: 0
+v_edge_row_drop: 0
 
 # Preprocessing
 pre_transform:
@@ -121,19 +140,7 @@ pre_transform:
         scale: 20
     - transform: PointFeatures
       params:
-        rgb: False
-        hsv: False
-        lab: False
-        density: False
-        linearity: True
-        planarity: True
-        scattering: True
-        verticality: True
-        normal: False
-        length: False
-        surface: False
-        volume: False
-        curvature: False
+        keys: ${datamodule.point_hf_preprocess}
         k_min: 1
         k_step: ${datamodule.knn_step}
         k_min_search: ${datamodule.knn_min_search}
@@ -173,20 +180,12 @@ pre_transform:
         device: 'cuda'
     - transform: SegmentFeatures
       params:
-        linearity: True
-        planarity: True
-        scattering: True
-        verticality: True
-        curvature: True
-        log_length: True
-        log_surface: True
-        log_volume: True
-        normal: True
-        log_size: True
         n_min: 32
         n_max: 128
-        mean_keys: ['intensity', 'elevation']
-        std_keys: []
+        keys: ${datamodule.segment_base_hf_preprocess}
+        mean_keys: ${datamodule.segment_mean_hf_preprocess}
+        std_keys: ${datamodule.segment_std_hf_preprocess}
+        strict: False  # will not raise error if a mean or std key is missing
     - transform: RadiusHorizontalGraph
       params:
         k_min: ${datamodule.graph_k_min}
@@ -201,9 +200,7 @@ pre_transform:
         bbox_filter: True
         target_pc_flip: True
         source_pc_sort: False
-        mean_off: True
-        std_off: True
-        mean_dist: True
+        keys: ['mean_off', 'std_off', 'mean_dist' ]
     - transform: NAGTo
       params:
         device: 'cpu'
@@ -247,6 +244,10 @@ on_device_train_transform:
         level: '1+'
         num_nodes: ${datamodule.max_num_nodes}
 
+    # Cast all attributes to either float or long. Doing this only now
+    # allows speeding up disk I/O and CPU->GPU transfer
+    - transform: NAGCast
+
     # Apply geometric transforms affecting position, offsets, normals
     # before calling transforms relying on those, such as on-the-fly
     # edge features computation
@@ -273,27 +274,12 @@ on_device_train_transform:
     # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
-        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
-        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
-        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
-        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+        keys: ${datamodule.edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.v_edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.v_edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.v_edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.v_edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
+        keys: ${datamodule.v_edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
 
     # Edge sampling is only performed after the horizontal graph is
     # untrimmed by OnTheFlyHorizontalEdgeFeatures
@@ -350,6 +336,18 @@ on_device_train_transform:
         p: ${datamodule.v_edge_feat_drop}
         key: 'v_edge_attr'
         inplace: True
+    - transform: NAGDropoutRows
+      params:
+        p: ${datamodule.node_row_drop}
+        key: 'x'
+    - transform: NAGDropoutRows
+      params:
+        p: ${datamodule.h_edge_row_drop}
+        key: 'edge_attr'
+    - transform: NAGDropoutRows
+      params:
+        p: ${datamodule.v_edge_row_drop}
+        key: 'v_edge_attr'
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
@@ -371,6 +369,10 @@ on_device_val_transform:
         n_min: 128
         n_max: 256
 
+    # Cast all attributes to either float or long. Doing this only now
+    # allows speeding up disk I/O and CPU->GPU transfer
+    - transform: NAGCast
+
     # Compute some horizontal and vertical edges on-the-fly. Those are
     # only computed now since they can be deduced from point and node
     # attributes. Besides, the OnTheFlyHorizontalEdgeFeatures transform
@@ -378,27 +380,12 @@ on_device_val_transform:
     # for each input i->j edge
     - transform: OnTheFlyHorizontalEdgeFeatures
       params:
-        mean_off: ${eval:'"mean_off" in ${datamodule.edge_hf}'}
-        std_off: ${eval:'"std_off" in ${datamodule.edge_hf}'}
-        mean_dist: ${eval:'"mean_dist" in ${datamodule.edge_hf}'}
-        angle_source: ${eval:'"angle_source" in ${datamodule.edge_hf}'}
-        angle_target: ${eval:'"angle_target" in ${datamodule.edge_hf}'}
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.edge_hf}'}
+        keys: ${datamodule.edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
     - transform: OnTheFlyVerticalEdgeFeatures
       params:
-        centroid_dir: ${eval:'"centroid_dir" in ${datamodule.v_edge_hf}'}
-        centroid_dist: ${eval:'"centroid_dist" in ${datamodule.v_edge_hf}'}
-        normal_angle: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
-        log_length: ${eval:'"log_length" in ${datamodule.v_edge_hf}'}
-        log_surface: ${eval:'"log_surface" in ${datamodule.v_edge_hf}'}
-        log_volume: ${eval:'"log_volume" in ${datamodule.v_edge_hf}'}
-        log_size: ${eval:'"log_size" in ${datamodule.v_edge_hf}'}
+        keys: ${datamodule.v_edge_hf}
+        use_mean_normal: ${eval:'"normal" in ${datamodule.segment_mean_hf}'}
 
     # Move all point and segment features to 'x'
     - transform: NAGAddKeysTo
