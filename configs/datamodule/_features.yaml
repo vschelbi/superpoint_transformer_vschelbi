@@ -9,6 +9,20 @@ segment_std_hf: ???  # segment features computed as the std of point feature in 
 edge_hf: ???  # horizontal edge features used for training
 v_edge_hf: ???  # vertical edge features used for training
 
+# helpers to track if the on-the-fly horizontal and vertical edge
+# features computation requires features (e.g. the normal) that point
+# and segment do not need but will still need to be computed, saved and
+# loaded when relevant. These features are listed in 'extra_point_hf'
+# and 'extra_segment_hf'
+h_edge_hf_need_normal: ${eval:'("normal_angle" in ${datamodule.edge_hf}}) or ("angle_source" in ${datamodule.edge_hf}) or ("angle_target" in ${datamodule.edge_hf})'}
+v_edge_hf_need_normal: ${eval:'"normal_angle" in ${datamodule.v_edge_hf}'}
+edge_hf_need_log_length: ${eval:'"log_length" in ${datamodule.edge_hf} + ${datamodule.v_edge_hf}'}
+edge_hf_need_log_surface: ${eval:'"log_surface" in ${datamodule.edge_hf} + ${datamodule.v_edge_hf}'}
+edge_hf_need_log_volume: ${eval:'"log_volume" in ${datamodule.edge_hf} + ${datamodule.v_edge_hf}'}
+edge_hf_need_log_size: ${eval:'"log_size" in ${datamodule.edge_hf} + ${datamodule.v_edge_hf}'}
+extra_point_hf: ${eval:'["normal"] * ${datamodule.v_edge_hf_need_normal}'}
+extra_segment_hf: ${eval:'["normal"] * (${datamodule.h_edge_hf_need_normal} + ${datamodule.v_edge_hf_need_normal}) + ["log_length"] * ${datamodule.edge_hf_need_log_length} + ["log_surface"] * ${datamodule.edge_hf_need_log_surface} + ["log_volume"] * ${datamodule.edge_hf_need_log_volume} + ["log_size"] * ${datamodule.edge_hf_need_log_size}'}
+
 # complete list of segment features used for training, as named in the
 # attributes after preprocessing. Even if more segment features were
 # computed at preprocessing time, only the features required by
@@ -25,8 +39,8 @@ segment_hf: ${eval:'${datamodule.segment_base_hf} + ["mean_" + x for x in ${data
 # will actually be loaded at train time. Use 'lite_preprocessing' to
 # choose to only preprocess the strictly-required features if you do not
 # intend to experiment with handcrafted feature combinations a lot
-point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf})) if ${datamodule.lite_preprocessing} else None'}
-segment_base_hf_preprocess: ${eval:'${datamodule.segment_base_hf} if ${datamodule.lite_preprocessing} else None'}
+point_hf_preprocess: ${eval:'list(set(${datamodule.partition_hf} + ${datamodule.point_hf} + ${datamodule.segment_mean_hf} + ${datamodule.segment_std_hf} + ${datamodule.extra_point_hf})) if ${datamodule.lite_preprocessing} else None'}
+segment_base_hf_preprocess: ${eval:'list(set(${datamodule.segment_base_hf} + ${datamodule.extra_segment_hf})) if ${datamodule.lite_preprocessing} else None'}
 segment_mean_hf_preprocess: ${eval:'${datamodule.segment_mean_hf} if ${datamodule.lite_preprocessing} else None'}
 segment_std_hf_preprocess: ${eval:'${datamodule.segment_std_hf} if ${datamodule.lite_preprocessing} else None'}
 
@@ -45,8 +59,8 @@ point_no_save_keys: ['edge_index', 'edge_attr', 'neighbor_index', 'neighbor_dist
 segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
 point_basic_load_keys: ['pos', 'y', 'super_index']  # needed point attributes, other than features
 segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index', 'edge_attr']  # needed segment attributes, other than features
-point_load_keys: ${eval:'${datamodule.point_basic_load_keys} + ${datamodule.point_hf}'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
-segment_load_keys: ${eval:'${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf}'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
+point_load_keys: ${eval:'list(set(${datamodule.point_basic_load_keys} + ${datamodule.point_hf} + ${datamodule.extra_point_hf}))'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
+segment_load_keys: ${eval:'list(set${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf} + ${datamodule.extra_segment_hf}))'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
 
 # Comprehensive list of feature sizes, to be used to deduce feature size
 # from name

@@ -1174,9 +1174,18 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
 
     def _process(self, nag):
         for i_level in range(1, nag.num_levels):
+            data_child = nag[i_level - 1]
+            data_parent = nag[i_level]
+
+            # For level-0 points, we artificially set 'mean_normal' from
+            # 'normal', if need be
+            if self.use_mean_normal and i_level == 1:
+                if getattr(data_child, 'mean_normal', None):
+                    data_child.mean_normal = getattr(data_child, 'normal', None)
+
             nag._list[i_level - 1] = _on_the_fly_vertical_edge_features(
-                nag[i_level - 1],
-                nag[i_level],
+                data_child,
+                data_parent,
                 keys=self.keys,
                 use_mean_normal=self.use_mean_normal)
         return nag
