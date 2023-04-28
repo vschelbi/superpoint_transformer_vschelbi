@@ -5,7 +5,7 @@ from torch_geometric.utils import k_hop_subgraph, to_undirected
 from torch_cluster import grid_cluster
 from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from src.utils import fast_randperm, sparse_sample, scatter_pca
+from src.utils import fast_randperm, sparse_sample, scatter_pca, sanitize_keys
 from src.transforms import Transform
 from src.data import Data, NAG, NAGBatch
 from src.utils.metrics import atomic_to_histogram
@@ -162,8 +162,8 @@ class GridSampling3D(Transform):
 
 
 def _group_data(
-        data, cluster=None, unique_pos_indices=None, mode="mean", skip_keys=[],
-        bins={}):
+        data, cluster=None, unique_pos_indices=None, mode="mean",
+        skip_keys=None, bins={}):
     """Group data based on indices in cluster. The option ``mode``
     controls how data gets aggregated within each cluster.
 
@@ -191,6 +191,7 @@ def _group_data(
         point labels without losing the distribution, as opposed to
         majority voting.
     """
+    skip_keys = sanitize_keys(skip_keys, default=[])
 
     # Keys for which voxel aggregation will be based on majority voting
     _VOTING_KEYS = ['y', 'instance_labels', 'super_index', 'is_val']

@@ -12,7 +12,7 @@ from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
     subedges, to_trimmed, cluster_radius_nn, is_trimmed, base_vectors_3d, \
     scatter_mean_orientation, POINT_FEATURES, SEGMENT_BASE_FEATURES, \
     SUBEDGE_FEATURES, ON_THE_FLY_HORIZONTAL_FEATURES, \
-    ON_THE_FLY_VERTICAL_FEATURES
+    ON_THE_FLY_VERTICAL_FEATURES, sanitize_keys
 
 __all__ = [
     'AdjacencyGraph', 'SegmentFeatures', 'DelaunayHorizontalGraph',
@@ -97,14 +97,17 @@ class SegmentFeatures(Transform):
     :param n_min: int
         Minimum number of level-0 points to sample in each cluster,
         unless it contains fewer points
-    :param keys: List(str)
-        Attributes will be computed segment-wise and saved under `<key>`
-    :param mean_keys: List(str)
-        Attributes will be taken from the points and the segment-wise
-        mean aggregation will be saved under `mean_<key>`
-    :param std_keys: List(str)
-        Attributes will be taken from the points and the segment-wise
-        std aggregation will be saved under `std_<key>`
+    :param keys: List(str), str, or None
+        Features to be computed segment-wise and saved under `<key>`.
+        If None, all supported features will be computed
+    :param mean_keys: List(str), str, or None
+        Features to be computed from the points and the segment-wise
+        mean aggregation will be saved under `mean_<key>`. If None, all
+        supported features will be computed
+    :param std_keys: List(str), str, or None
+        Features to be computed from the points and the segment-wise
+        std aggregation will be saved under `std_<key>`. If None, all
+        supported features will be computed
     :param strict: bool
         If True, will raise an exception if an attribute from key is
         not within the input point Data keys
@@ -118,18 +121,15 @@ class SegmentFeatures(Transform):
             self,
             n_max=32,
             n_min=5,
-            keys=SEGMENT_BASE_FEATURES,
-            mean_keys=POINT_FEATURES,
-            std_keys=POINT_FEATURES,
+            keys=None,
+            mean_keys=None,
+            std_keys=None,
             strict=True):
         self.n_max = n_max
         self.n_min = n_min
-        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else SEGMENT_BASE_FEATURES
-        self.mean_keys = sorted(mean_keys) if isinstance(mean_keys, list) \
-            else [mean_keys] if isinstance(mean_keys, str) else POINT_FEATURES
-        self.std_keys = sorted(std_keys) if isinstance(std_keys, list) \
-            else [std_keys] if isinstance(std_keys, str) else POINT_FEATURES
+        self.keys = sanitize_keys(keys, default=SEGMENT_BASE_FEATURES)
+        self.mean_keys = sanitize_keys(mean_keys, default=POINT_FEATURES)
+        self.std_keys = sanitize_keys(std_keys, default=POINT_FEATURES)
         self.strict = strict
 
     def _process(self, nag):
@@ -151,14 +151,18 @@ def _compute_cluster_features(
         nag,
         n_max=32,
         n_min=5,
-        keys=SEGMENT_BASE_FEATURES,
-        mean_keys=POINT_FEATURES,
-        std_keys=POINT_FEATURES,
+        keys=None,
+        mean_keys=None,
+        std_keys=None,
         strict=True):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster features on level-0"
     assert nag[0].num_nodes < np.iinfo(np.uint32).max, \
         "Too many nodes for `uint32` indices"
+
+    keys = sanitize_keys(keys, default=SEGMENT_BASE_FEATURES)
+    mean_keys = sanitize_keys(mean_keys, default=POINT_FEATURES)
+    std_keys = sanitize_keys(std_keys, default=POINT_FEATURES)
 
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
@@ -331,13 +335,11 @@ class DelaunayHorizontalGraph(Transform):
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(
-            self, n_max_edge=64, n_min=5, max_dist=-1, keys=SUBEDGE_FEATURES):
+    def __init__(self, n_max_edge=64, n_min=5, max_dist=-1, keys=None):
         self.n_max_edge = n_max_edge
         self.n_min = n_min
         self.max_dist = max_dist
-        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else SUBEDGE_FEATURES
+        self.keys = sanitize_keys(keys, default=SUBEDGE_FEATURES)
 
     def _process(self, nag):
         assert isinstance(self.max_dist, (int, float, list)), \
@@ -364,7 +366,7 @@ def _horizontal_graph_by_delaunay(
         n_max_edge=64,
         n_min=5,
         max_dist=-1,
-        keys=SUBEDGE_FEATURES):
+        keys=None):
     assert isinstance(nag, NAG)
     assert i_level > 0, "Cannot compute cluster graph on level 0"
     assert nag[0].has_edges, \
@@ -374,6 +376,8 @@ def _horizontal_graph_by_delaunay(
         "Too many nodes for `uint32` indices"
     assert nag[0].num_edges < np.iinfo(np.uint32).max, \
         "Too many edges for `uint32` indices"
+
+    keys = sanitize_keys(keys, default=SUBEDGE_FEATURES)
 
     # Recover the i_level Data object we will be working on
     data = nag[i_level]
@@ -613,7 +617,7 @@ class RadiusHorizontalGraph(Transform):
             bbox_filter=True,
             target_pc_flip=True,
             source_pc_sort=False,
-            keys=SUBEDGE_FEATURES):
+            keys=None):
 
         if isinstance(k_min, list):
             assert all([k > 0 for k in k_min]), \
@@ -636,8 +640,7 @@ class RadiusHorizontalGraph(Transform):
         self.bbox_filter = bbox_filter
         self.target_pc_flip = target_pc_flip
         self.source_pc_sort = source_pc_sort
-        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else SUBEDGE_FEATURES
+        self.keys = sanitize_keys(keys, default=SUBEDGE_FEATURES)
 
     def _process(self, nag):
         # Convert parameters to list for each NAG level, if need be
@@ -835,11 +838,7 @@ def _horizontal_graph_by_radius_for_single_level(
 
 
 def _minimalistic_horizontal_edge_features(
-        data,
-        points,
-        se_point_index,
-        se_id,
-        keys=SUBEDGE_FEATURES):
+        data, points, se_point_index, se_id, keys=None):
     """Compute the features for horizontal edges, given the edge graph
     and the level-0 'subedges' making up each edge.
 
@@ -869,6 +868,8 @@ def _minimalistic_horizontal_edge_features(
     #    border ?)
     #  - mean dist of S->T along S/T normal (offset along the objects
     #    normals, eg offsets between steps)
+
+    keys = sanitize_keys(keys, default=SUBEDGE_FEATURES)
 
     # Recover the edges between the segments
     se = data.edge_index
@@ -977,9 +978,8 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
     _OUT_TYPE = NAG
 
     def __init__(
-            self, keys=ON_THE_FLY_HORIZONTAL_FEATURES, use_mean_normal=False):
-        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else ON_THE_FLY_HORIZONTAL_FEATURES
+            self, keys=None, use_mean_normal=False):
+        self.keys = sanitize_keys(keys, default=ON_THE_FLY_HORIZONTAL_FEATURES)
         self.use_mean_normal = use_mean_normal
 
     def _process(self, nag):
@@ -992,10 +992,12 @@ class OnTheFlyHorizontalEdgeFeatures(Transform):
 
 
 def _on_the_fly_horizontal_edge_features(
-        data, keys=ON_THE_FLY_HORIZONTAL_FEATURES, use_mean_normal=False):
+        data, keys=None, use_mean_normal=False):
     """Compute all edges and edge features for a horizontal graph, given
     a trimmed graph and some precomputed edge attributes.
     """
+    keys = sanitize_keys(keys, default=ON_THE_FLY_HORIZONTAL_FEATURES)
+
     # Recover the edges between the segments
     se = data.edge_index
 
@@ -1166,10 +1168,8 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(
-            self, keys=ON_THE_FLY_VERTICAL_FEATURES, use_mean_normal=False):
-        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else ON_THE_FLY_VERTICAL_FEATURES
+    def __init__(self, keys=None, use_mean_normal=False):
+        self.keys = sanitize_keys(keys, default=ON_THE_FLY_VERTICAL_FEATURES)
         self.use_mean_normal = use_mean_normal
 
     def _process(self, nag):
@@ -1183,11 +1183,11 @@ class OnTheFlyVerticalEdgeFeatures(Transform):
 
 
 def _on_the_fly_vertical_edge_features(
-        data_child, data_parent, keys=ON_THE_FLY_VERTICAL_FEATURES,
-        use_mean_normal=False):
+        data_child, data_parent, keys=None, use_mean_normal=False):
     """Compute edge features for a vertical graph, given child and
     parent nodes.
     """
+    keys = sanitize_keys(keys, default=ON_THE_FLY_VERTICAL_FEATURES)
 
     if len(keys) == 0:
         return data_child

@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.linear_model import RANSACRegressor
 from src.dependencies.point_geometric_features.python.bin.pgeof import pgeof
 from src.utils import rgb2hsv, rgb2lab, sizes_to_pointers, to_float_rgb, \
-    POINT_FEATURES
+    POINT_FEATURES, sanitize_keys
 from src.transforms import Transform
 from src.data import NAG
 
@@ -64,9 +64,8 @@ class PointFeatures(Transform):
     # TODO: Random PointNet + PCA features ?
 
     def __init__(
-            self, keys=POINT_FEATURES, k_min=5, k_step=-1, k_min_search=25):
-        self.keys = sorted(keys) if isinstance(keys, list) else [keys] \
-            if isinstance(keys, str) else POINT_FEATURES
+            self, keys=None, k_min=5, k_step=-1, k_min_search=25):
+        self.keys = sanitize_keys(keys, default=POINT_FEATURES)
         self.k_min = k_min
         self.k_step = k_step
         self.k_min_search = k_min_search

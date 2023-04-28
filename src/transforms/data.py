@@ -1,7 +1,8 @@
 import torch
 from src.data import Data, NAG, CSRData
 from src.transforms import Transform
-from src.utils import tensor_idx, to_float_rgb, to_byte_rgb, dropout
+from src.utils import tensor_idx, to_float_rgb, to_byte_rgb, dropout, \
+    sanitize_keys
 
 
 __all__ = [
@@ -29,7 +30,7 @@ class NAGToData(Transform):
 
     def _process(self, nag):
         assert nag.num_levels == 1
-        return NAG[0]
+        return nag[0]
 
 
 class Cast(Transform):
@@ -112,8 +113,8 @@ class RemoveKeys(Transform):
 
     _NO_REPR = ['strict']
 
-    def __init__(self, keys=[], strict=False):
-        self.keys = [keys] if isinstance(keys, str) else keys
+    def __init__(self, keys=None, strict=False):
+        self.keys = sanitize_keys(keys, default=[])
         self.strict = strict
 
     def _process(self, data):
@@ -144,10 +145,10 @@ class NAGRemoveKeys(Transform):
     _OUT_TYPE = NAG
     _NO_REPR = ['strict']
 
-    def __init__(self, level='all', keys=[], strict=False):
+    def __init__(self, level='all', keys=None, strict=False):
         assert isinstance(level, (int, str))
         self.level = level
-        self.keys = [keys] if isinstance(keys, str) else keys
+        self.keys = sanitize_keys(keys, default=[])
         self.strict = strict
 
     def _process(self, nag):

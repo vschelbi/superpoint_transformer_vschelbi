@@ -1,3 +1,12 @@
+from collections.abc import Iterable
+
+
+__all__ = [
+    'POINT_FEATURES', 'SEGMENT_BASE_FEATURES', 'SUBEDGE_FEATURES',
+    'ON_THE_FLY_HORIZONTAL_FEATURES', 'ON_THE_FLY_VERTICAL_FEATURES',
+    'sanitize_keys']
+
+
 POINT_FEATURES = [
     'rgb',
     'hsv',
@@ -54,3 +63,26 @@ ON_THE_FLY_VERTICAL_FEATURES = [
     'log_surface',
     'log_volume',
     'log_size']
+
+
+def sanitize_keys(keys, default=[]):
+    """Sanitize an iterable of string key into a sorted list of unique
+    keys. This is necessary for consistently hashing key list arguments
+    of some transforms.
+    """
+    # Convert to list of keys
+    if isinstance(keys, str):
+        out = [keys]
+    elif isinstance(keys, Iterable):
+        out = list(keys)
+    else:
+        out = list(default)
+
+    assert all(isinstance(x, str) for x in out), \
+        f"Input 'keys' must be a string or an iterable of strings, but some " \
+        f"non-string elements were found in '{keys}'"
+
+    # Remove duplicates and sort elements
+    out = list(set(out))
+
+    return out
