@@ -83,6 +83,6 @@ def sanitize_keys(keys, default=[]):
         f"non-string elements were found in '{keys}'"
 
     # Remove duplicates and sort elements
-    out = list(set(out))
+    out = tuple(sorted(list(set(out))))
 
     return out
