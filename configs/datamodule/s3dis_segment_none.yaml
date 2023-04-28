@@ -1,15 +1,8 @@
 defaults:
   - s3dis.yaml
 
-# point features used for training
-point_hf: []
-
 # segment-wise features computed at preprocessing
-segment_base_hf:
-  - 'linearity'
-  - 'planarity'
-  - 'scattering'
-  - 'verticality'
+segment_base_hf: []
 
 # segment features computed as the mean of point feature in each
 # segment, saved with "mean_" prefix
