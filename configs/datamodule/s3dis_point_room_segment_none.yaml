@@ -1,6 +1,6 @@
 defaults:
-  - s3dis_point_Ø_segment_Ø.yaml
+  - s3dis_point_none_segment_none.yaml
 
 # point features used for training
 point_hf:
-  - 'curvature'
+  - 'pos_room'
