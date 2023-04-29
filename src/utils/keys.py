@@ -22,7 +22,8 @@ POINT_FEATURES = [
     'surface',
     'volume',
     'curvature',
-    'intensity']
+    'intensity',
+    'pos_room']
 
 SEGMENT_BASE_FEATURES = [
     'linearity',
