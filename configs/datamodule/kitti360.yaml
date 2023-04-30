@@ -118,6 +118,7 @@ v_edge_feat_drop: 0
 node_row_drop: 0
 h_edge_row_drop: 0
 v_edge_row_drop: 0
+drop_to_mean: False
 
 # Preprocessing
 pre_transform:
@@ -330,28 +331,34 @@ on_device_train_transform:
         p: ${datamodule.node_feat_drop}
         key: 'x'
         inplace: True
+        to_mean: ${datamodule.drop_to_mean}
     - transform: NAGDropoutColumns
       params:
         p: ${datamodule.h_edge_feat_drop}
         key: 'edge_attr'
         inplace: True
+        to_mean: ${datamodule.drop_to_mean}
     - transform: NAGDropoutColumns
       params:
         p: ${datamodule.v_edge_feat_drop}
         key: 'v_edge_attr'
         inplace: True
+        to_mean: ${datamodule.drop_to_mean}
     - transform: NAGDropoutRows
       params:
         p: ${datamodule.node_row_drop}
         key: 'x'
+        to_mean: ${datamodule.drop_to_mean}
     - transform: NAGDropoutRows
       params:
         p: ${datamodule.h_edge_row_drop}
         key: 'edge_attr'
+        to_mean: ${datamodule.drop_to_mean}
     - transform: NAGDropoutRows
       params:
         p: ${datamodule.v_edge_row_drop}
         key: 'v_edge_attr'
+        to_mean: ${datamodule.drop_to_mean}
 
     # RGB-specific transforms. In particular, the color dropout will
     # switch off all three color channels together, instead of just one
