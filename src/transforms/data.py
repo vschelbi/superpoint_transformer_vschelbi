@@ -463,13 +463,17 @@ class DropoutColumns(Transform):
     :param inplace: bool
         Whether the dropout should be performed directly on the input
         or on a copy of it
+    :param to_mean: bool
+        Whether the dropped values should be set to the mean of their
+        corresponding column (dim=1) or to zero (default)
     """
 
-    def __init__(self, p=0.5, key=None, inplace=False):
+    def __init__(self, p=0.5, key=None, inplace=False, to_mean=False):
         assert key is not None, f"A Data key must be specified"
         self.p = p
         self.key = key
         self.inplace = inplace
+        self.to_mean = to_mean
 
     def _process(self, data):
         # Skip dropout if p <= 0
@@ -482,7 +486,8 @@ class DropoutColumns(Transform):
 
         # Apply dropout on each column, inplace
         data[self.key] = dropout(
-            data[self.key], p=self.p, dim=1, inplace=self.inplace)
+            data[self.key], p=self.p, dim=1, inplace=self.inplace,
+            to_mean=self.to_mean)
 
         return data
 
@@ -501,18 +506,23 @@ class NAGDropoutColumns(Transform):
     :param inplace: bool
         Whether the dropout should be performed directly on the input
         or on a copy of it
+    :param to_mean: bool
+        Whether the dropped values should be set to the mean of their
+        corresponding column (dim=1) or to zero (default)
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, level='all', p=0.5, key=None, inplace=False):
+    def __init__(
+            self, level='all', p=0.5, key=None, inplace=False, to_mean=False):
         assert isinstance(level, int) or level == 'all' or level.endswith('-') \
                or level.endswith('+')
         self.level = level
         self.p = p
         self.key = key
         self.inplace = inplace
+        self.to_mean = to_mean
 
     def _process(self, nag):
         # Skip dropout if p <= 0
@@ -537,7 +547,8 @@ class NAGDropoutColumns(Transform):
 
             # Apply dropout on each column, inplace
             nag[i_level][self.key] = dropout(
-                nag[i_level][self.key], p=self.p, dim=1, inplace=self.inplace)
+                nag[i_level][self.key], p=self.p, dim=1, inplace=self.inplace,
+                to_mean=self.to_mean)
 
         return nag
 
@@ -552,13 +563,18 @@ class DropoutRows(Transform):
     :param inplace: bool
         Whether the dropout should be performed directly on the input
         or on a copy of it
+    :param to_mean: bool
+        Whether the dropped values should be set to the mean of their
+        corresponding column (dim=1) or to zero (default)
     """
 
-    def __init__(self, p=0.5, key=None, inplace=False):
+    def __init__(self, p=0.5, key=None, inplace=False, to_mean=False):
         assert key is not None, f"A Data key must be specified"
         self.p = p
         self.key = key
         self.inplace = inplace
+        self.to_mean = to_mean
+
 
     def _process(self, data):
         # Skip dropout if p <= 0
@@ -571,7 +587,8 @@ class DropoutRows(Transform):
 
         # Apply dropout on each column, inplace
         data[self.key] = dropout(
-            data[self.key], p=self.p, dim=0, inplace=self.inplace)
+            data[self.key], p=self.p, dim=0, inplace=self.inplace,
+            to_mean=self.to_mean)
 
         return data
 
@@ -590,18 +607,23 @@ class NAGDropoutRows(Transform):
     :param inplace: bool
         Whether the dropout should be performed directly on the input
         or on a copy of it
+    :param to_mean: bool
+        Whether the dropped values should be set to the mean of their
+        corresponding column (dim=1) or to zero (default)
     """
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
 
-    def __init__(self, level='all', p=0.5, key=None, inplace=False):
+    def __init__(
+            self, level='all', p=0.5, key=None, inplace=False, to_mean=False):
         assert isinstance(level, int) or level == 'all' or level.endswith('-') \
                or level.endswith('+')
         self.level = level
         self.p = p
         self.key = key
         self.inplace = inplace
+        self.to_mean = to_mean
 
     def _process(self, nag):
         # Skip dropout if p <= 0
@@ -626,7 +648,8 @@ class NAGDropoutRows(Transform):
 
             # Apply dropout on each column, inplace
             nag[i_level][self.key] = dropout(
-                nag[i_level][self.key], p=self.p, dim=0, inplace=self.inplace)
+                nag[i_level][self.key], p=self.p, dim=0, inplace=self.inplace,
+                to_mean=self.to_mean)
 
         return nag
 
