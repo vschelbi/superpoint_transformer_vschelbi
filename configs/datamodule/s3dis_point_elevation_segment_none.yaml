@@ -1,0 +1,7 @@
+defaults:
+  - s3dis_point_none_segment_none.yaml
+
+# point features used for training
+point_hf:
+  - 'elevation'
+  - 'rgb'
