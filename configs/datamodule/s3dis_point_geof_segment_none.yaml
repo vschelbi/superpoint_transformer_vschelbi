@@ -1,5 +1,5 @@
 defaults:
-  - s3dis_point_rgb_segment_none.yaml
+  - s3dis_point_none_segment_none.yaml
 
 # point features used for training
 point_hf:
@@ -8,3 +8,4 @@ point_hf:
   - 'scattering'
   - 'verticality'
   - 'elevation'
+  - 'rgb'
