@@ -1,5 +1,5 @@
 defaults:
-  - s3dis_point_rgb-lps_segment_none.yaml
+  - s3dis_point_rgblps_segment_none.yaml
 
 # segment features computed as the mean of point feature in each
 # segment, saved with "mean_" prefix
