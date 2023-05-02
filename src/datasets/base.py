@@ -188,6 +188,11 @@ class BaseDataset(InMemoryDataset):
         root = osp.join(root, self.data_subdir_name)
         super().__init__(root, transform, pre_transform, pre_filter)
 
+        # Display the dataset pre_transform_hash and full path
+        path = osp.join(self.processed_dir, "<stage>", self.pre_transform_hash)
+        log.info(f'Dataset hash: "{self.pre_transform_hash}"')
+        log.info(f'Preprocessed data can be found at: "{path}"')
+
         # If `val_mixed_in_train` or `test_mixed_in_val`, we will need
         # to separate some stage-related data at reading time.
         # Since this operation can be computationally-costly, we prefer
