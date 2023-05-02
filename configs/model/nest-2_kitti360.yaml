@@ -1,0 +1,15 @@
+defaults:
+  - nest-2.yaml
+
+optimizer:
+  lr: 0.01
+  weight_decay: 1e-4
+
+_d: [128, 128, 128, 128]
+_u: [128, 128, 128]
+_x_n_mlp: 32
+_x_he_mlp: 32
+
+net:
+  no_ffn: False
+  down_ffn_ratio: 1
