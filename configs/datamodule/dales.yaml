@@ -298,12 +298,12 @@ on_device_train_transform:
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${datamodule.point_hf}
+        keys: ${eval:'ListConfig(${datamodule.point_hf})'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${datamodule.segment_hf}
+        keys: ${eval:'ListConfig(${datamodule.segment_hf})'}
         to: 'x'
 
     # Add some noise and randomly some point, node and edge features
@@ -398,12 +398,12 @@ on_device_val_transform:
     - transform: NAGAddKeysTo
       params:
         level: 0
-        keys: ${datamodule.point_hf}
+        keys: ${eval:'ListConfig(${datamodule.point_hf})'}
         to: 'x'
     - transform: NAGAddKeysTo
       params:
         level: '1+'
-        keys: ${datamodule.segment_hf}
+        keys: ${eval:'ListConfig(${datamodule.segment_hf})'}
         to: 'x'
 
     # Add self-loops in the horizontal graph
