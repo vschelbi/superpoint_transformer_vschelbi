@@ -150,7 +150,7 @@ class SelfAttentionBlock(nn.Module):
         #  - with/out edge attributes
         #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
         #  - scalar rpe, vector rpe (see Stratified Transformer)
-        if self.k_rpe is not None:
+        if self.k_rpe is not None and edge_attr is not None:
             rpe = self.k_rpe(edge_attr)
 
             # Expand RPE to all heads if heads share the RPE encoder
@@ -159,7 +159,7 @@ class SelfAttentionBlock(nn.Module):
 
             k = k + rpe.view(E, H, -1)
 
-        if self.q_rpe is not None:
+        if self.q_rpe is not None and edge_attr is not None:
             rpe = self.q_rpe(edge_attr)
 
             # Expand RPE to all heads if heads share the RPE encoder
