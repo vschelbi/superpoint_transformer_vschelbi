@@ -6,11 +6,11 @@ from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
 from src.nn.pool import BaseAttentivePool
 from src.nn.pool import pool_factory
 
-__all__ = ['NeST']
+__all__ = ['SPT']
 
 
-class NeST(nn.Module):
-    """Nested Set Transformer. A UNet-like architecture processing NAG.
+class SPT(nn.Module):
+    """Superpoint Transformer. A UNet-like architecture processing NAG.
     """
 
     def __init__(
@@ -827,7 +827,7 @@ class NeST(nn.Module):
 
 def _build_shared_rpe_encoders(
         rpe, num_stages, in_dim, out_dim, stages_share):
-    """Local helper to build RPE encoders for NEST. The main goal is to
+    """Local helper to build RPE encoders for spt. The main goal is to
     make shared encoders construction easier.
 
     Note that setting stages_share=True will make all stages, blocks and

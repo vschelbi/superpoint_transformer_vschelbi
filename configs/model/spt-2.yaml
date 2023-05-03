@@ -1,5 +1,5 @@
 defaults:
-  - nest.yaml
+  - spt.yaml
 
 net:
   down_dim: ${eval:'${model._d}[:2]'}

@@ -16,7 +16,7 @@ __all__ = [
 
 def pool_factory(pool, *args, **kwargs):
     """Build a Pool module from string or from an existing module. This
-    helper is intended to be used as a helper in NEST and Stage
+    helper is intended to be used as a helper in spt and Stage
     constructors.
     """
     if isinstance(pool, (AggregationPoolMixIn, BaseAttentivePool)):

@@ -1,7 +1,7 @@
 defaults:
   - default.yaml
 
-# Partial NEST config specifically for the 'last' modules after the
+# Partial spt config specifically for the 'last' modules after the
 # 'small' nodes branch merge
 net:
   last_dim: ${eval:'${model._u}[-1]'}

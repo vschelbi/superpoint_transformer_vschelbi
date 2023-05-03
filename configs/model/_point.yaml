@@ -1,7 +1,7 @@
 defaults:
   - default.yaml
 
-# Partial NEST config specifically for the point encoder
+# Partial spt config specifically for the point encoder
 net:
   point_mlp: ${eval:'[${model._p_x}] + ${model._p}'}
   point_drop: null

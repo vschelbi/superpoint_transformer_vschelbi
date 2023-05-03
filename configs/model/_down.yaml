@@ -1,7 +1,7 @@
 defaults:
   - default.yaml
 
-# Partial NEST config specifically for the encoder
+# Partial spt config specifically for the encoder
 net:
   down_dim: ${model._d}
   down_pool_dim: ${eval:'[${model._p}[-1]] + ${model._d}[:-1]'}

@@ -1,12 +1,12 @@
 from torch import nn
 from src.nn import BatchNorm, CatInjection
-from src.models.components import NeST
+from src.models.components import SPT
 
 
 __all__ = ['PointNet']
 
 
-class PointNet(NeST):
+class PointNet(SPT):
     """Simple architecture encoding Level-1 segments à la PointNet.
 
     :param point_mlp:

@@ -1,5 +1,5 @@
 defaults:
-  - nest-3.yaml
+  - spt-3.yaml
 
 net:
   nano_dim: 64

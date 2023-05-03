@@ -1,7 +1,7 @@
 defaults:
   - default.yaml
 
-# Partial NEST config specifically for the point encoder
+# Partial spt config specifically for the point encoder
 net:
   nano_dim: null
   nano_in_mlp: ${eval:'[${model._nano_x}] + [${model.net.nano_dim}] * ${model._d_r} if ${model.net.nano_dim} else None'}

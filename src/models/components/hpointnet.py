@@ -1,12 +1,12 @@
 from torch import nn
 from src.nn import BatchNorm, CatInjection
-from src.models.components import NeST
+from src.models.components import SPT
 
 
 __all__ = ['HPointNet']
 
 
-class HPointNet(NeST):
+class HPointNet(SPT):
     """Hierarchical PointNet. This UNet-like architecture encodes nested
     segments with a simple PointNet approach: the features of a
     point/segment are only aggregated and passed to the parent segment.
