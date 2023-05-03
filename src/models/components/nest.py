@@ -644,12 +644,16 @@ class NeST(nn.Module):
                 if h_edge_mlp is not None:
                     norm_index = nag[i_level].norm_index(mode=self.norm_mode)
                     norm_index = norm_index[nag[i_level].edge_index[0]]
-                    nag[i_level].edge_attr = h_edge_mlp(
-                        nag[i_level].edge_attr, batch=norm_index)
+                    edge_attr = getattr(nag[i_level], 'edge_attr', None)
+                    if edge_attr is not None:
+                        nag[i_level].edge_attr = h_edge_mlp(
+                            edge_attr, batch=norm_index)
                 if v_edge_mlp is not None:
                     norm_index = nag[i_level - 1].norm_index(mode=self.norm_mode)
-                    nag[i_level - 1].v_edge_attr = v_edge_mlp(
-                        nag[i_level - 1].v_edge_attr, batch=norm_index)
+                    v_edge_attr = getattr(nag[i_level], 'v_edge_attr', None)
+                    if v_edge_attr is not None:
+                        nag[i_level - 1].v_edge_attr = v_edge_mlp(
+                            v_edge_attr, batch=norm_index)
 
                 # Forward on the DownNFuseStage
                 x, diameter = self._forward_down_stage(stage, nag, i_level, x)
