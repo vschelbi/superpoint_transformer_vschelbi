@@ -186,7 +186,7 @@ class SelfAttentionBlock(nn.Module):
             q = q + rpe.view(E, H, -1)
 
         if self.k_delta_rpe is not None:
-            rpe = self.k_delta_rpe(x)
+            rpe = self.k_delta_rpe(x[edge_index[1]] - x[edge_index[0]])
 
             # Expand RPE to all heads if heads share the RPE encoder
             if self.heads_share_rpe:
@@ -195,7 +195,7 @@ class SelfAttentionBlock(nn.Module):
             k = k + rpe.view(E, H, -1)
 
         if self.q_delta_rpe is not None:
-            rpe = self.q_delta_rpe(x)
+            rpe = self.q_delta_rpe(x[edge_index[1]] - x[edge_index[0]])
 
             # Expand RPE to all heads if heads share the RPE encoder
             if self.heads_share_rpe:
