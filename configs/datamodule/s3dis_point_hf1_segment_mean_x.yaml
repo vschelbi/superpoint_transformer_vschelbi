@@ -1,0 +1,11 @@
+defaults:
+  - s3dis_point_hf1_segment_none.yaml
+
+# segment features computed as the mean of point feature in each
+# segment, saved with "mean_" prefix
+segment_mean_hf:
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'elevation'
