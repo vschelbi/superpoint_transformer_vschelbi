@@ -300,7 +300,7 @@ class ColorTransform(Transform):
     def _process(self, data):
         if self.x_idx is None:
             for key in self.KEYS:
-                mean_key = f'mean_{self.key}'
+                mean_key = f'mean_{key}'
                 if getattr(data, key, None) is not None:
                     data[key] = self._apply_func(data[key])
                 if getattr(data, mean_key, None) is not None:
