@@ -19,4 +19,6 @@ net:
     q_rpe: ${model.net.q_rpe}
     c_rpe: ${model.net.c_rpe}
     v_rpe: ${model.net.v_rpe}
+    k_delta_rpe: ${model.net.k_delta_rpe}
+    q_delta_rpe: ${model.net.q_delta_rpe}
     heads_share_rpe: ${model.net.heads_share_rpe}

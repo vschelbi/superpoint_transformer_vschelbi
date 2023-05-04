@@ -23,10 +23,13 @@ class SelfAttentionBlock(nn.Module):
     :param qk_scale:
     :param attn_drop:
     :param drop:
+    :param in_rpe_dim:
     :param k_rpe:
     :param q_rpe:
     :param c_rpe:
     :param v_rpe:
+    :param k_delta_rpe:
+    :param q_delta_rpe:
     :param heads_share_rpe:
     """
 
@@ -46,6 +49,8 @@ class SelfAttentionBlock(nn.Module):
             q_rpe=False,
             c_rpe=False,
             v_rpe=False,
+            k_delta_rpe=False,
+            q_delta_rpe=False,
             heads_share_rpe=False):
         super().__init__()
 
@@ -85,6 +90,18 @@ class SelfAttentionBlock(nn.Module):
 
         if v_rpe:
             raise NotImplementedError
+
+        if not isinstance(k_delta_rpe, bool):
+            self.k_delta_rpe = k_delta_rpe
+        else:
+            self.k_delta_rpe = nn.Linear(dim, rpe_dim) if k_delta_rpe \
+                else None
+
+        if not isinstance(q_delta_rpe, bool):
+            self.q_delta_rpe = q_delta_rpe
+        else:
+            self.q_delta_rpe = nn.Linear(dim, rpe_dim) if q_delta_rpe \
+                else None
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
         self.out_proj = nn.Linear(dim, out_dim) if out_dim is not None else None
@@ -161,6 +178,24 @@ class SelfAttentionBlock(nn.Module):
 
         if self.q_rpe is not None and edge_attr is not None:
             rpe = self.q_rpe(edge_attr)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            q = q + rpe.view(E, H, -1)
+
+        if self.k_delta_rpe is not None:
+            rpe = self.k_delta_rpe(x)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            k = k + rpe.view(E, H, -1)
+
+        if self.q_delta_rpe is not None:
+            rpe = self.q_delta_rpe(x)
 
             # Expand RPE to all heads if heads share the RPE encoder
             if self.heads_share_rpe:

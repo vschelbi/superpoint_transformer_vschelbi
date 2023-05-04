@@ -59,6 +59,8 @@ class Stage(nn.Module):
             qk_dim=8,
             k_rpe=False,
             q_rpe=False,
+            k_delta_rpe=False,
+            q_delta_rpe=False,
             blocks_share_rpe=False,
             heads_share_rpe=False,
             **transformer_kwargs):
@@ -97,12 +99,20 @@ class Stage(nn.Module):
         if num_blocks > 0:
 
             # Build the RPE encoders here if shared across all blocks
-            blocks_k_rpe = _build_shared_rpe_encoders(
+            k_rpe_blocks = _build_shared_rpe_encoders(
                 k_rpe, num_blocks, num_heads, 18, qk_dim, blocks_share_rpe,
                 heads_share_rpe)
 
-            blocks_q_rpe = _build_shared_rpe_encoders(
+            q_rpe_blocks = _build_shared_rpe_encoders(
                 q_rpe, num_blocks, num_heads, 18, qk_dim, blocks_share_rpe,
+                heads_share_rpe)
+
+            k_delta_rpe_blocks = _build_shared_rpe_encoders(
+                k_delta_rpe, num_blocks, num_heads, dim, qk_dim, blocks_share_rpe,
+                heads_share_rpe)
+
+            q_delta_rpe_blocks = _build_shared_rpe_encoders(
+                q_delta_rpe, num_blocks, num_heads, dim, qk_dim, blocks_share_rpe,
                 heads_share_rpe)
 
             self.transformer_blocks = nn.ModuleList(
@@ -110,11 +120,14 @@ class Stage(nn.Module):
                     dim,
                     num_heads=num_heads,
                     qk_dim=qk_dim,
-                    k_rpe=block_k_rpe,
-                    q_rpe=block_q_rpe,
+                    k_rpe=k_rpe_block,
+                    q_rpe=k_rpe_block,
+                    k_delta_rpe=k_delta_rpe_block,
+                    q_delta_rpe=q_delta_rpe_block,
                     heads_share_rpe=heads_share_rpe,
                     **transformer_kwargs)
-                for block_k_rpe, block_q_rpe in zip(blocks_k_rpe, blocks_q_rpe))
+                for k_rpe_block, q_rpe_block, k_delta_rpe_block, q_delta_rpe_block
+                in zip(k_rpe_blocks, q_rpe_blocks, k_delta_rpe_blocks, q_delta_rpe_blocks))
         else:
             self.transformer_blocks = None
 
