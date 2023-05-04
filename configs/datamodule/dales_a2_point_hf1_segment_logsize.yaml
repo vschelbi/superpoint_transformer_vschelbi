@@ -1,0 +1,6 @@
+defaults:
+  - dales_a2_point_hf1_segment_none.yaml
+
+# segment-wise features computed at preprocessing
+segment_base_hf:
+  - 'log_size'
