@@ -292,34 +292,27 @@ class ColorTransform(Transform):
         If specified, the colors will be searched in
         `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
     """
+    KEYS = ['rgb', 'lab', 'hsv']
 
     def __init__(self, x_idx=None):
         self.x_idx = x_idx
 
     def _process(self, data):
         if self.x_idx is None:
-            if getattr(data, 'rgb', None) is not None:
-                data.rgb = self._apply_func(data.rgb)
-            if getattr(data, 'mean_rgb', None) is not None:
-                data.mean_rgb = self._apply_func(data.mean_rgb)
+            for key in self.KEYS:
+                mean_key = f'mean_{self.key}'
+                if getattr(data, key, None) is not None:
+                    data[key] = self._apply_func(data[key])
+                if getattr(data, mean_key, None) is not None:
+                    data[mean_key] = self._apply_func(data[mean_key])
+
         elif self.x_idx is not None and getattr(data, 'x', None) is not None:
             data.x[:, self.x_idx:self.x_idx + 3] = self._apply_func(
                 data.x[:, self.x_idx:self.x_idx + 3])
+
         return data
 
     def _apply_func(self, rgb):
-        #if rgb.dtype != torch.float:
-        #    print(
-        #        f'WARNING: received rgb.dtype{rgb.dtype}, expected float '
-        #        f'colors in [0, 1]')
-        #if rgb.min() < 0:
-        #    print(
-        #        f'WARNING: received rgb.min()={rgb.min()}, expected float '
-        #        f'colors in [0, 1]')
-        #if rgb.max() > 1:
-        #    print(
-        #        f'WARNING: received rgb.max()={rgb.max()}, expected float '
-        #        f'colors in [0, 1]')
         return self._func(rgb)
 
     def _func(self, rgb):
@@ -339,6 +332,7 @@ class ColorAutoContrast(ColorTransform):
         If specified, the colors will be searched in
         `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
     """
+    KEYS = ['rgb']
 
     def __init__(self, p=0.2, blend=None, x_idx=None):
         super().__init__(x_idx=x_idx)
@@ -383,6 +377,7 @@ class NAGColorAutoContrast(ColorAutoContrast):
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    KEYS = ['rgb']
 
     def __init__(self, *args, level='all', **kwargs):
         super().__init__(*args, **kwargs)
@@ -492,6 +487,7 @@ class ColorNormalize(ColorTransform):
         If specified, the colors will be searched in
         `data.x[:, x_idx:x_idx + 3]` instead of `data.rgb`
     """
+    KEYS = ['rgb']
 
     def __init__(
             self,
@@ -530,6 +526,7 @@ class NAGColorNormalize(ColorNormalize):
 
     _IN_TYPE = NAG
     _OUT_TYPE = NAG
+    KEYS = ['rgb']
 
     def __init__(self, *args, level='all', **kwargs):
         super().__init__(*args, **kwargs)
