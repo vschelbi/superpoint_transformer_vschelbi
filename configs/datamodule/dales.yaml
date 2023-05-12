@@ -74,6 +74,8 @@ knn: 50
 knn_r: 10
 knn_step: -1
 knn_min_search: 10
+ground_threshold: 5
+ground_scale: 20
 pcp_regularization: [0.1, 0.3, 0.5]
 pcp_spatial_weight: [1e-2, 1e-3, 1e-4]
 pcp_cutoff: [10, 50, 100]
@@ -137,8 +139,8 @@ pre_transform:
         device: 'cpu'
     - transform: GroundElevation
       params:
-        threshold: 5
-        scale: 20
+        threshold: ${datamodule.ground_threshold}
+        scale: ${datamodule.ground_scale}
     - transform: PointFeatures
       params:
         keys: ${datamodule.point_hf_preprocess}
