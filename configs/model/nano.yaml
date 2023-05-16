@@ -2,6 +2,4 @@ defaults:
   - spt-3.yaml
 
 net:
-  nano_dim: 64
-  down_dim: ${eval:'${model._d}[:3]'}
-  down_in_mlp: ${eval:'[ [${model._d_x} + ${model.net.nano_dim}] + [${model._d}[0]] * ${model._d_r}, [${model._d_x} + ${model._d}[0]] + [${model._d}[1]] * ${model._d_r}, [${model._d_x} + ${model._d}[1]] + [${model._d}[2]] * ${model._d_r} ]'}
+  nano: True

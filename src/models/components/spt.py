@@ -27,19 +27,7 @@ class SPT(nn.Module):
             small_point_mlp=None,
             small_down_mlp=None,
 
-            nano_dim=None,
-            nano_in_mlp=None,
-            nano_out_mlp=None,
-            nano_mlp_drop=None,
-            nano_num_heads=1,
-            nano_num_blocks=0,
-            nano_ffn_ratio=4,
-            nano_residual_drop=None,
-            nano_attn_drop=None,
-            nano_drop_path=None,
-            nano_inject_pos=True,
-            nano_inject_x=False,
-            nano_pos_injection_x_dim=None,
+            nano=False,
 
             down_dim=None,
             down_pool_dim=None,
@@ -119,9 +107,7 @@ class SPT(nn.Module):
 
         super().__init__()
 
-        self.nano = nano_dim is not None
-        self.nano_inject_pos = nano_inject_pos
-        self.nano_inject_x = nano_inject_x
+        self.nano = nano
         self.down_inject_pos = down_inject_pos
         self.down_inject_x = down_inject_x
         self.up_inject_pos = up_inject_pos
@@ -187,7 +173,7 @@ class SPT(nn.Module):
             up_pos_injection_x_dim)
 
         # Local helper variables describing the architecture
-        num_down = len(down_dim)
+        num_down = len(down_dim) - self.nano
         num_up = len(up_dim)
         needs_node_hf = down_inject_x or up_inject_x
         needs_h_edge_hf = any(
@@ -227,22 +213,22 @@ class SPT(nn.Module):
         # Module operating on Level-0 points in isolation
         if self.nano:
             self.first_stage = Stage(
-                nano_dim,
-                num_blocks=nano_num_blocks,
-                in_mlp=nano_in_mlp,
-                out_mlp=nano_out_mlp,
+                down_dim[0],
+                num_blocks=down_num_blocks[0],
+                in_mlp=down_in_mlp[0],
+                out_mlp=down_out_mlp[0],
                 mlp_activation=mlp_activation,
                 mlp_norm=mlp_norm,
-                mlp_drop=nano_mlp_drop,
-                num_heads=nano_num_heads,
+                mlp_drop=down_mlp_drop[0],
+                num_heads=down_num_heads[0],
                 qk_dim=qk_dim,
                 qkv_bias=qkv_bias,
                 qk_scale=qk_scale,
                 in_rpe_dim=in_rpe_dim,
-                ffn_ratio=nano_ffn_ratio,
-                residual_drop=nano_residual_drop,
-                attn_drop=nano_attn_drop,
-                drop_path=nano_drop_path,
+                ffn_ratio=down_ffn_ratio[0],
+                residual_drop=down_residual_drop[0],
+                attn_drop=down_attn_drop[0],
+                drop_path=down_drop_path[0],
                 activation=activation,
                 norm=norm,
                 pre_norm=pre_norm,
@@ -255,7 +241,7 @@ class SPT(nn.Module):
                 k_delta_rpe=k_delta_rpe,
                 q_delta_rpe=q_delta_rpe,
                 pos_injection=pos_injection,
-                pos_injection_x_dim=nano_pos_injection_x_dim,
+                pos_injection_x_dim=down_pos_injection_x_dim[0],
                 cat_diameter=cat_diameter,
                 log_diameter=log_diameter,
                 blocks_share_rpe=blocks_share_rpe,
@@ -284,6 +270,14 @@ class SPT(nn.Module):
 
             down_q_rpe = _build_shared_rpe_encoders(
                 q_rpe, num_down, 18, qk_dim, stages_share_rpe)
+
+            # Since the first value of each down_ parameter is used for
+            # the nano Stage (if self.nano=True), we artificially
+            # prepend None values to the rpe lists, so they have the
+            # same length as other down_ parameters
+            if self.nano:
+                down_k_rpe = [None] + down_k_rpe
+                down_q_rpe = [None] + down_q_rpe
 
             self.down_stages = nn.ModuleList([
                 DownNFuseStage(
@@ -322,7 +316,9 @@ class SPT(nn.Module):
                     log_diameter=log_diameter,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
-                for dim,
+                for
+                    i_down,
+                    (dim,
                     num_blocks,
                     in_mlp,
                     out_mlp,
@@ -335,8 +331,8 @@ class SPT(nn.Module):
                     stage_k_rpe,
                     stage_q_rpe,
                     pool_dim,
-                    pos_injection_x_dim
-                in zip(
+                    pos_injection_x_dim)
+                in enumerate(zip(
                     down_dim,
                     down_num_blocks,
                     down_in_mlp,
@@ -350,7 +346,8 @@ class SPT(nn.Module):
                     down_k_rpe,
                     down_q_rpe,
                     down_pool_dim,
-                    down_pos_injection_x_dim)])
+                    down_pos_injection_x_dim))
+                if i_down >= self.nano])
         else:
             self.down_stages = None
 
@@ -717,8 +714,8 @@ class SPT(nn.Module):
     def _forward_first_stage(self, stage, nag):
         x = nag[0].x
         norm_index = nag[0].norm_index(mode=self.norm_mode)
-        pos = nag[0].pos if not self.nano or self.nano_inject_pos else None
-        node_size = getattr(nag[0], 'node_size', None) if self.nano_inject_pos \
+        pos = nag[0].pos if not self.nano or self.down_inject_pos else None
+        node_size = getattr(nag[0], 'node_size', None) if self.down_inject_pos \
             else None
         super_index = nag[0].super_index
         edge_index = nag[0].edge_index
