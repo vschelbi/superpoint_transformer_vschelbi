@@ -1,4 +1,0 @@
-defaults:
-  - s3dis.yaml
-
-lite_preprocessing: True

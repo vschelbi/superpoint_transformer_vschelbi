@@ -29,22 +29,11 @@ point_hf:
   - 'elevation'
 
 # segment-wise features computed at preprocessing
-segment_base_hf:
-  - 'log_length'
-  - 'log_surface'
-  - 'log_volume'
-  - 'log_size'
+segment_base_hf: []
 
 # segment features computed as the mean of point feature in each
 # segment, saved with "mean_" prefix
-segment_mean_hf:
-  - 'intensity'
-  - 'elevation'
-  - 'linearity'
-  - 'planarity'
-  - 'scattering'
-  - 'verticality'
-  - 'normal'
+segment_mean_hf: []
 
 # segment features computed as the std of point feature in each segment,
 # saved with "std_" prefix
@@ -92,12 +81,12 @@ graph_margin: 0.5
 graph_chunk: [1e6, 1e5, 1e5]  # reduce if CUDA memory errors
 
 # Batch construction parameterization
-sample_segment_ratio: 0.1
+sample_segment_ratio: 0.2
 sample_segment_by_size: True
 sample_segment_by_class: False
 sample_point_min: 32
 sample_point_max: 128
-sample_graph_r: 40  # set to r<=0 to skip SampleRadiusSubgraphs
+sample_graph_r: 50  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
 sample_graph_disjoint: True
 sample_edge_n_min: -1  # [5, 5, 15]

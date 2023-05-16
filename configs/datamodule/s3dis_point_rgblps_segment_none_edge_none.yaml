@@ -1,5 +1,0 @@
-defaults:
-  - s3dis_point_rgblps_segment_none.yaml
-
-# horizontal edge features used for training
-edge_hf: []

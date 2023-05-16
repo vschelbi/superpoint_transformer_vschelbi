@@ -1,8 +1,0 @@
-defaults:
-  - s3dis_point_rgblps_segment_none.yaml
-
-# segment-wise features computed at preprocessing
-segment_base_hf:
-  - 'log_length'
-  - 'log_surface'
-  - 'log_volume'

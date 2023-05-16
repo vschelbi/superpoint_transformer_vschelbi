@@ -1,0 +1,6 @@
+defaults:
+  - s3dis.yaml
+
+pcp_regularization: [0.01, 0.1, 0.5]
+pcp_spatial_weight: [1e-1, 1e-1, 1e-1]
+pcp_cutoff: [10, 10, 10]

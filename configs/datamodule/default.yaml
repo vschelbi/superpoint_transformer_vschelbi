@@ -27,7 +27,7 @@ in_memory: False
 # want preprocessing to start over whenever testing a new combination
 # If True, lite_preprocessing alleviate disk memory use and makes I/O
 # faster, hence faster training and inference
-lite_preprocessing: False
+lite_preprocessing: True
 
 # GPU memory
 # The following parameters are not the only ones affecting GPU memory.

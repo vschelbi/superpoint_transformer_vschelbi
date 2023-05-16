@@ -1,0 +1,4 @@
+defaults:
+  - kitti360.yaml
+
+pcp_spatial_weight: [1, 1e-1, 1e-2]

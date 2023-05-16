@@ -4,8 +4,5 @@ defaults:
 # A : /10 /500 /1500 ratios
 # H 1: 30, 30, 30 edges
 knn: 25
-pcp_regularization: [0.1, 0.2, 0.3]
-pcp_spatial_weight: [1e-1, 1e-2, 1e-3]
 pcp_cutoff: [10, 30, 30]
-graph_gap: [3, 10, 30]
 pc_tiling: 2
