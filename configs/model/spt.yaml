@@ -1,7 +1,6 @@
 defaults:
   - default.yaml
   - _point.yaml
-  - _nano.yaml
   - _down.yaml
   - _up.yaml
   - _last.yaml
@@ -11,6 +10,7 @@ defaults:
 net:
   _target_: src.models.components.spt.SPT
 
+  nano: False
   node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_n_mlp}] * ${model._d_r} if ${model._x_n_mlp} and ${model.net.down_inject_x} else None'}
   h_edge_mlp: ${eval:'[${model._x_he_raw}] + [${model._x_he_mlp}] * ${model._d_r} if ${model._x_he_mlp} else None'}
   v_edge_mlp: ${eval:'[${model._x_ve_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
