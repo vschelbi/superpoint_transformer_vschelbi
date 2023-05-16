@@ -44,10 +44,10 @@ _p_x: ${eval:'3 + ${datamodule.num_hf_point} + ${model.net.point_cat_diameter}'}
 _x_he_raw: ${datamodule.num_hf_edge}  # size of level-1+ handcrafted horizontal edge features
 _x_ve_raw: ${datamodule.num_hf_v_edge}  # size of level-1+ handcrafted vertical edge features
 _d_x_pos: ${eval:'${model.net.down_inject_pos} * 3'}  # size of level-1+ injected position
-_d_x_raw: ${eval:'${model.net.down_inject_x} * (1 + ${datamodule.num_hf_segment})'}  # size of handcrafted level-1+ node features
-_d_x: ${eval:'${model._d_x_pos} + (${model._x_n_mlp} if ${model._x_n_mlp} else ${model._d_x_raw})'}  # size of parent level-1+ node features
+_d_x_raw: ${eval:'${model.net.down_inject_x} * (1 + ${datamodule.num_hf_segment})'}  # size of handcrafted level-1+ node features before node MLP (+1 for the normalization diameter)
+_d_x: ${eval:'${model._d_x_pos} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.down_inject_x} else ${model._d_x_raw})'}  # size of parent level-1+ node features at injection time
 _u_x_pos: ${eval:'${model.net.up_inject_pos} * 3'}  # size of level-1+ injected position
-_u_x_raw: ${eval:'${model.net.up_inject_x} * (1 + ${datamodule.num_hf_segment})'}  # size of handcrafted level-1+ node features
-_u_x: ${eval:'${model._u_x_pos} + (${model._x_n_mlp} if ${model._x_n_mlp} else ${model._u_x_raw})'}  # size of parent level-1+ node features
+_u_x_raw: ${eval:'${model.net.up_inject_x} * (1 + ${datamodule.num_hf_segment})'}  # size of handcrafted level-1+ node features before node MLP (+1 for the normalization diameter)
+_u_x: ${eval:'${model._u_x_pos} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.up_inject_x} else ${model._u_x_raw})'}  # size of parent level-1+ node features at injection time
 
 net: ???

@@ -605,7 +605,7 @@ class SPT(nn.Module):
 
         # Apply the first MLPs on the handcrafted features
         if self.nano:
-            if self.node_mlps is not None:
+            if self.node_mlps is not None and self.node_mlps[0] is not None:
                 norm_index = nag[0].norm_index(mode=self.norm_mode)
                 x = nag[0].x
                 diameter = torch.zeros(

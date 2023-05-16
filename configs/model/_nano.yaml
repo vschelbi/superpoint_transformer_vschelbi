@@ -1,6 +1,0 @@
-defaults:
-  - default.yaml
-
-# Partial spt config specifically for the point encoder
-net:
-  nano: False
