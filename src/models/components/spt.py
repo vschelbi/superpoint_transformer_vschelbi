@@ -608,9 +608,17 @@ class SPT(nn.Module):
             if self.node_mlps is not None and self.node_mlps[0] is not None:
                 norm_index = nag[0].norm_index(mode=self.norm_mode)
                 x = nag[0].x
-                diameter = torch.zeros(
-                    (nag[0].num_nodes, 1), dtype=x.dtype, device=nag.device)
-                x = self.feature_fusion(x, diameter)
+
+                # The first node_mlp may expect a diameter to be passed
+                # from the UnitSphereNorm. In the specific case of Nano,
+                # the first stage does not have a UnitSphereNorm to
+                # produce such diameter, so we artificially create it
+                # here
+                if self.down_inject_pos:
+                    diameter = torch.zeros(
+                        (nag[0].num_nodes, 1), dtype=x.dtype, device=x.device)
+                    x = self.feature_fusion(x, diameter)
+
                 nag[0].x = self.node_mlps[0](x, batch=norm_index)
             if self.h_edge_mlps is not None:
                 norm_index = nag[0].norm_index(mode=self.norm_mode)
@@ -622,7 +630,8 @@ class SPT(nn.Module):
         x, diameter = self._forward_first_stage(self.first_stage, nag)
 
         # Append the diameter to the level-1 features
-        nag[1].x = self.feature_fusion(nag[1].x, diameter)
+        if self.down_inject_pos:
+            nag[1].x = self.feature_fusion(nag[1].x, diameter)
 
         # Iteratively encode level-1 and above
         down_outputs = []
