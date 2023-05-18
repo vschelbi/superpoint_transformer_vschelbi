@@ -420,7 +420,8 @@ class SPT(nn.Module):
                     up_residual_drop,
                     up_attn_drop,
                     up_drop_path,
-                    up_k_rpe, up_q_rpe,
+                    up_k_rpe,
+                    up_q_rpe,
                     up_pos_injection_x_dim)])
         else:
             self.up_stages = None

@@ -121,7 +121,7 @@ class Stage(nn.Module):
                     num_heads=num_heads,
                     qk_dim=qk_dim,
                     k_rpe=k_rpe_block,
-                    q_rpe=k_rpe_block,
+                    q_rpe=q_rpe_block,
                     k_delta_rpe=k_delta_rpe_block,
                     q_delta_rpe=q_delta_rpe_block,
                     heads_share_rpe=heads_share_rpe,
