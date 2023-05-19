@@ -91,6 +91,8 @@ class SPT(nn.Module):
             v_rpe=False,
             k_delta_rpe=False,
             q_delta_rpe=False,
+            qk_share_rpe=False,
+            q_on_minus_rpe=False,
             share_hf_mlps=False,
             stages_share_rpe=False,
             blocks_share_rpe=False,
@@ -240,6 +242,8 @@ class SPT(nn.Module):
                 v_rpe=v_rpe,
                 k_delta_rpe=k_delta_rpe,
                 q_delta_rpe=q_delta_rpe,
+                qk_share_rpe=qk_share_rpe,
+                q_on_minus_rpe=q_on_minus_rpe,
                 pos_injection=pos_injection,
                 pos_injection_x_dim=down_pos_injection_x_dim[0],
                 cat_diameter=cat_diameter,
@@ -268,8 +272,11 @@ class SPT(nn.Module):
             down_k_rpe = _build_shared_rpe_encoders(
                 k_rpe, num_down, 18, qk_dim, stages_share_rpe)
 
+            # If key and query RPEs share the same MLP, only the key MLP
+            # is preserved, to limit the number of model parameters
             down_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, num_down, 18, qk_dim, stages_share_rpe)
+                q_rpe and not (k_rpe and qk_share_rpe), num_down, 18, qk_dim,
+                stages_share_rpe)
 
             # Since the first value of each down_ parameter is used for
             # the nano Stage (if self.nano=True), we artificially
@@ -308,6 +315,8 @@ class SPT(nn.Module):
                     v_rpe=v_rpe,
                     k_delta_rpe=k_delta_rpe,
                     q_delta_rpe=q_delta_rpe,
+                    qk_share_rpe=qk_share_rpe,
+                    q_on_minus_rpe=q_on_minus_rpe,
                     pool=pool_factory(pool, pool_dim),
                     fusion=fusion,
                     pos_injection=pos_injection,
@@ -358,8 +367,11 @@ class SPT(nn.Module):
             up_k_rpe = _build_shared_rpe_encoders(
                 k_rpe, num_up, 18, qk_dim, stages_share_rpe)
 
+            # If key and query RPEs share the same MLP, only the key MLP
+            # is preserved, to limit the number of model parameters
             up_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, num_up, 18, qk_dim, stages_share_rpe)
+                q_rpe and not (k_rpe and qk_share_rpe), num_up, 18, qk_dim,
+                stages_share_rpe)
 
             self.up_stages = nn.ModuleList([
                 UpNFuseStage(
@@ -390,6 +402,8 @@ class SPT(nn.Module):
                     v_rpe=v_rpe,
                     k_delta_rpe=k_delta_rpe,
                     q_delta_rpe=q_delta_rpe,
+                    qk_share_rpe=qk_share_rpe,
+                    q_on_minus_rpe=q_on_minus_rpe,
                     unpool=unpool,
                     fusion=fusion,
                     pos_injection=pos_injection,
@@ -494,8 +508,11 @@ class SPT(nn.Module):
             last_k_rpe = _build_shared_rpe_encoders(
                 k_rpe, 1, 18, qk_dim, stages_share_rpe)[0]
 
+            # If key and query RPEs share the same MLP, only the key MLP
+            # is preserved, to limit the number of model parameters
             last_q_rpe = _build_shared_rpe_encoders(
-                q_rpe, 1, 18, qk_dim, stages_share_rpe)[0]
+                q_rpe and not (k_rpe and qk_share_rpe), 1, 18, qk_dim,
+                stages_share_rpe)[0]
 
             self.last_stage = Stage(
                 last_dim,
@@ -525,6 +542,8 @@ class SPT(nn.Module):
                 v_rpe=v_rpe,
                 k_delta_rpe=k_delta_rpe,
                 q_delta_rpe=q_delta_rpe,
+                qk_share_rpe=qk_share_rpe,
+                q_on_minus_rpe=q_on_minus_rpe,
                 pos_injection=pos_injection,
                 cat_diameter=cat_diameter,
                 log_diameter=log_diameter,

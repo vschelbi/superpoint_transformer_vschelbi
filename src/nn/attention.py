@@ -30,6 +30,8 @@ class SelfAttentionBlock(nn.Module):
     :param v_rpe:
     :param k_delta_rpe:
     :param q_delta_rpe:
+    :param qk_share_rpe:
+    :param q_on_minus_rpe:
     :param heads_share_rpe:
     """
 
@@ -51,6 +53,8 @@ class SelfAttentionBlock(nn.Module):
             v_rpe=False,
             k_delta_rpe=False,
             q_delta_rpe=False,
+            qk_share_rpe=False,
+            q_on_minus_rpe=False,
             heads_share_rpe=False):
         super().__init__()
 
@@ -83,7 +87,8 @@ class SelfAttentionBlock(nn.Module):
         if not isinstance(q_rpe, bool):
             self.q_rpe = q_rpe
         else:
-            self.q_rpe = nn.Linear(in_rpe_dim, rpe_dim) if q_rpe else None
+            self.q_rpe = nn.Linear(in_rpe_dim, rpe_dim) if \
+                q_rpe and not (k_rpe and qk_share_rpe) else None
 
         if c_rpe:
             raise NotImplementedError
@@ -100,8 +105,12 @@ class SelfAttentionBlock(nn.Module):
         if not isinstance(q_delta_rpe, bool):
             self.q_delta_rpe = q_delta_rpe
         else:
-            self.q_delta_rpe = nn.Linear(dim, rpe_dim) if q_delta_rpe \
+            self.q_delta_rpe = nn.Linear(dim, rpe_dim) if \
+                q_delta_rpe and not (k_delta_rpe and qk_share_rpe) \
                 else None
+
+        self.qk_share_rpe = qk_share_rpe
+        self.q_on_minus_rpe = q_on_minus_rpe
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
         self.out_proj = nn.Linear(dim, out_dim) if out_dim is not None else None
@@ -177,7 +186,21 @@ class SelfAttentionBlock(nn.Module):
             k = k + rpe.view(E, H, -1)
 
         if self.q_rpe is not None and edge_attr is not None:
-            rpe = self.q_rpe(edge_attr)
+            if self.q_on_minus_rpe:
+                rpe = self.q_rpe(-edge_attr)
+            else:
+                rpe = self.q_rpe(edge_attr)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            q = q + rpe.view(E, H, -1)
+        elif self.k_rpe is not None and self.qk_share_rpe and edge_attr is not None:
+            if self.q_on_minus_rpe:
+                rpe = self.k_rpe(-edge_attr)
+            else:
+                rpe = self.k_rpe(edge_attr)
 
             # Expand RPE to all heads if heads share the RPE encoder
             if self.heads_share_rpe:
@@ -195,7 +218,21 @@ class SelfAttentionBlock(nn.Module):
             k = k + rpe.view(E, H, -1)
 
         if self.q_delta_rpe is not None:
-            rpe = self.q_delta_rpe(x[edge_index[1]] - x[edge_index[0]])
+            if self.q_on_minus_rpe:
+                rpe = self.q_delta_rpe(x[edge_index[0]] - x[edge_index[1]])
+            else:
+                rpe = self.q_delta_rpe(x[edge_index[1]] - x[edge_index[0]])
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            q = q + rpe.view(E, H, -1)
+        elif self.k_delta_rpe is not None and self.qk_share_rpe and edge_attr is not None:
+            if self.q_on_minus_rpe:
+                rpe = self.k_delta_rpe(x[edge_index[0]] - x[edge_index[1]])
+            else:
+                rpe = self.k_delta_rpe(x[edge_index[1]] - x[edge_index[0]])
 
             # Expand RPE to all heads if heads share the RPE encoder
             if self.heads_share_rpe:

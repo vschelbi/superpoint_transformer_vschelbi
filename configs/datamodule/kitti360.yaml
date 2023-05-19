@@ -90,7 +90,7 @@ sample_segment_by_size: True
 sample_segment_by_class: False
 sample_point_min: 32
 sample_point_max: 128
-sample_graph_r: 40  # set to r<=0 to skip SampleRadiusSubgraphs
+sample_graph_r: 50  # set to r<=0 to skip SampleRadiusSubgraphs
 sample_graph_k: 4
 sample_graph_disjoint: True
 sample_edge_n_min: -1  # [5, 5, 15]

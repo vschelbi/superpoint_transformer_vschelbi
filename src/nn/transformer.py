@@ -48,6 +48,8 @@ class TransformerBlock(nn.Module):
             v_rpe=False,
             k_delta_rpe=False,
             q_delta_rpe=False,
+            qk_share_rpe=False,
+            q_on_minus_rpe=False,
             heads_share_rpe=False):
         super().__init__()
 
@@ -75,6 +77,8 @@ class TransformerBlock(nn.Module):
                 v_rpe=v_rpe,
                 k_delta_rpe=k_delta_rpe,
                 q_delta_rpe=q_delta_rpe,
+                qk_share_rpe=qk_share_rpe,
+                q_on_minus_rpe=q_on_minus_rpe,
                 heads_share_rpe=heads_share_rpe)
 
         # Feed-Forward Network residual branch

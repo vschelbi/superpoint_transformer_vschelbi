@@ -61,6 +61,8 @@ class Stage(nn.Module):
             q_rpe=False,
             k_delta_rpe=False,
             q_delta_rpe=False,
+            qk_share_rpe=False,
+            q_on_minus_rpe=False,
             blocks_share_rpe=False,
             heads_share_rpe=False,
             **transformer_kwargs):
@@ -103,16 +105,19 @@ class Stage(nn.Module):
                 k_rpe, num_blocks, num_heads, 18, qk_dim, blocks_share_rpe,
                 heads_share_rpe)
 
-            q_rpe_blocks = _build_shared_rpe_encoders(
-                q_rpe, num_blocks, num_heads, 18, qk_dim, blocks_share_rpe,
-                heads_share_rpe)
-
             k_delta_rpe_blocks = _build_shared_rpe_encoders(
                 k_delta_rpe, num_blocks, num_heads, dim, qk_dim, blocks_share_rpe,
                 heads_share_rpe)
 
+            # If key and query RPEs share the same MLP, only the key MLP
+            # is preserved, to limit the number of model parameters
+            q_rpe_blocks = _build_shared_rpe_encoders(
+                q_rpe and not (k_rpe and qk_share_rpe), num_blocks, num_heads,
+                18, qk_dim, blocks_share_rpe, heads_share_rpe)
+
             q_delta_rpe_blocks = _build_shared_rpe_encoders(
-                q_delta_rpe, num_blocks, num_heads, dim, qk_dim, blocks_share_rpe,
+                q_delta_rpe and not (k_delta_rpe and qk_share_rpe),
+                num_blocks, num_heads, dim, qk_dim, blocks_share_rpe,
                 heads_share_rpe)
 
             self.transformer_blocks = nn.ModuleList(
@@ -124,6 +129,8 @@ class Stage(nn.Module):
                     q_rpe=q_rpe_block,
                     k_delta_rpe=k_delta_rpe_block,
                     q_delta_rpe=q_delta_rpe_block,
+                    qk_share_rpe=qk_share_rpe,
+                    q_on_minus_rpe=q_on_minus_rpe,
                     heads_share_rpe=heads_share_rpe,
                     **transformer_kwargs)
                 for k_rpe_block, q_rpe_block, k_delta_rpe_block, q_delta_rpe_block
