@@ -17,7 +17,6 @@ net:
     in_rpe_dim: ${eval:'${model._x_ve_mlp} if ${model._x_ve_mlp} else ${model._x_ve_raw}'}  # size of handcrafted vertical edge features
     k_rpe: ${model.net.k_rpe}
     q_rpe: ${model.net.q_rpe}
-    c_rpe: ${model.net.c_rpe}
     v_rpe: ${model.net.v_rpe}
     k_delta_rpe: ${model.net.k_delta_rpe}
     q_delta_rpe: ${model.net.q_delta_rpe}

@@ -101,7 +101,6 @@ class BaseAttentivePool(nn.Module):
             in_rpe_dim=9,
             k_rpe=False,
             q_rpe=False,
-            c_rpe=False,
             v_rpe=False,
             heads_share_rpe=False):
         super().__init__()
@@ -129,9 +128,6 @@ class BaseAttentivePool(nn.Module):
             self.q_rpe = q_rpe
         else:
             self.q_rpe = nn.Linear(in_rpe_dim, rpe_dim) if q_rpe else None
-
-        if c_rpe:
-            raise NotImplementedError
 
         if v_rpe:
             raise NotImplementedError
@@ -186,7 +182,7 @@ class BaseAttentivePool(nn.Module):
 
         # TODO: add the relative positional encodings to the
         #  compatibilities here
-        #  - k_rpe, q_rpe, c_rpe, v_rpe
+        #  - k_rpe, q_rpe, v_rpe
         #  - pos difference, absolute distance, squared distance, centroid distance, edge distance, ...
         #  - with/out edge attributes
         #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
@@ -263,7 +259,6 @@ class AttentivePool(BaseAttentivePool):
             in_rpe_dim=9,
             k_rpe=False,
             q_rpe=False,
-            c_rpe=False,
             v_rpe=False,
             heads_share_rpe=False):
         super().__init__(
@@ -279,7 +274,6 @@ class AttentivePool(BaseAttentivePool):
             in_rpe_dim=in_rpe_dim,
             k_rpe=k_rpe,
             q_rpe=q_rpe,
-            c_rpe=c_rpe,
             v_rpe=v_rpe,
             heads_share_rpe=heads_share_rpe)
 
@@ -313,7 +307,6 @@ class AttentivePoolWithLearntQueries(BaseAttentivePool):
             in_rpe_dim=18,
             k_rpe=False,
             q_rpe=False,
-            c_rpe=False,
             v_rpe=False,
             heads_share_rpe=False):
         super().__init__(
@@ -329,7 +322,6 @@ class AttentivePoolWithLearntQueries(BaseAttentivePool):
             in_rpe_dim=in_rpe_dim,
             k_rpe=k_rpe,
             q_rpe=q_rpe,
-            c_rpe=c_rpe,
             v_rpe=v_rpe,
             heads_share_rpe=heads_share_rpe)
 

@@ -26,7 +26,6 @@ class SelfAttentionBlock(nn.Module):
     :param in_rpe_dim:
     :param k_rpe:
     :param q_rpe:
-    :param c_rpe:
     :param v_rpe:
     :param k_delta_rpe:
     :param q_delta_rpe:
@@ -49,7 +48,6 @@ class SelfAttentionBlock(nn.Module):
             in_rpe_dim=18,
             k_rpe=False,
             q_rpe=False,
-            c_rpe=False,
             v_rpe=False,
             k_delta_rpe=False,
             q_delta_rpe=False,
@@ -77,40 +75,40 @@ class SelfAttentionBlock(nn.Module):
 
         # Build the RPE encoders, with the option of sharing weights
         # across all heads
-        rpe_dim = qk_dim if heads_share_rpe else qk_dim * num_heads
+        qk_rpe_dim = qk_dim if heads_share_rpe else qk_dim * num_heads
+        v_rpe_dim = dim // num_heads if heads_share_rpe else dim
 
         if not isinstance(k_rpe, bool):
             self.k_rpe = k_rpe
         else:
-            self.k_rpe = nn.Linear(in_rpe_dim, rpe_dim) if k_rpe else None
+            self.k_rpe = nn.Linear(in_rpe_dim, qk_rpe_dim) if k_rpe else None
 
         if not isinstance(q_rpe, bool):
             self.q_rpe = q_rpe
         else:
-            self.q_rpe = nn.Linear(in_rpe_dim, rpe_dim) if \
+            self.q_rpe = nn.Linear(in_rpe_dim, qk_rpe_dim) if \
                 q_rpe and not (k_rpe and qk_share_rpe) else None
-
-        if c_rpe:
-            raise NotImplementedError
-
-        if v_rpe:
-            raise NotImplementedError
 
         if not isinstance(k_delta_rpe, bool):
             self.k_delta_rpe = k_delta_rpe
         else:
-            self.k_delta_rpe = nn.Linear(dim, rpe_dim) if k_delta_rpe \
+            self.k_delta_rpe = nn.Linear(dim, qk_rpe_dim) if k_delta_rpe \
                 else None
 
         if not isinstance(q_delta_rpe, bool):
             self.q_delta_rpe = q_delta_rpe
         else:
-            self.q_delta_rpe = nn.Linear(dim, rpe_dim) if \
+            self.q_delta_rpe = nn.Linear(dim, qk_rpe_dim) if \
                 q_delta_rpe and not (k_delta_rpe and qk_share_rpe) \
                 else None
 
         self.qk_share_rpe = qk_share_rpe
         self.q_on_minus_rpe = q_on_minus_rpe
+
+        if not isinstance(v_rpe, bool):
+            self.v_rpe = v_rpe
+        else:
+            self.v_rpe = nn.Linear(in_rpe_dim, v_rpe_dim) if v_rpe else None
 
         self.in_proj = nn.Linear(in_dim, dim) if in_dim is not None else None
         self.out_proj = nn.Linear(dim, out_dim) if out_dim is not None else None
@@ -171,7 +169,7 @@ class SelfAttentionBlock(nn.Module):
 
         # TODO: add the relative positional encodings to the
         #  compatibilities here
-        #  - k_rpe, q_rpe, c_rpe, v_rpe
+        #  - k_rpe, q_rpe, v_rpe
         #  - pos difference, absolute distance, squared distance, centroid distance, edge distance, ...
         #  - with/out edge attributes
         #  - mlp (L-LN-A-L), learnable lookup table (see Stratified Transformer)
@@ -239,6 +237,15 @@ class SelfAttentionBlock(nn.Module):
                 rpe = rpe.repeat(1, H)
 
             q = q + rpe.view(E, H, -1)
+
+        if self.v_rpe is not None and edge_attr is not None:
+            rpe = self.v_rpe(edge_attr)
+
+            # Expand RPE to all heads if heads share the RPE encoder
+            if self.heads_share_rpe:
+                rpe = rpe.repeat(1, H)
+
+            v = v + rpe.view(E, H, -1)
 
         # Compute compatibility scores from the query-key products
         compat = torch.einsum('ehd, ehd -> eh', q, k)  # [E, H]
