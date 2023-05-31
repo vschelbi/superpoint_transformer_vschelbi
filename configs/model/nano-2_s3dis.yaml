@@ -1,0 +1,5 @@
+defaults:
+  - spt-2_s3dis.yaml
+
+net:
+  nano: True

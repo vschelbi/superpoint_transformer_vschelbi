@@ -1,0 +1,5 @@
+defaults:
+  - spt-2_dales.yaml
+
+net:
+  nano: True

@@ -16,8 +16,8 @@ net:
   qk_scale: null
   in_rpe_dim: ${eval:'${model._x_he_mlp} if ${model._x_he_mlp} else ${model._x_he_raw}'}
   k_rpe: True
-  q_rpe: False
-  v_rpe: False
+  q_rpe: True
+  v_rpe: True
   k_delta_rpe: False
   q_delta_rpe: False
   qk_share_rpe: False

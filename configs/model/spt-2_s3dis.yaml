@@ -1,0 +1,9 @@
+defaults:
+  - spt-2.yaml
+
+optimizer:
+  lr: 0.1
+  weight_decay: 1e-2
+
+_x_n_mlp: 32
+_x_he_mlp: 32

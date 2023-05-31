@@ -1,0 +1,5 @@
+defaults:
+  - spt-2_kitti360.yaml
+
+net:
+  nano: True
