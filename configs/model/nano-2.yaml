@@ -1,5 +1,11 @@
 defaults:
   - spt-2.yaml
 
+_d: [16, 16, 16, 16]
+_u: [16, 16, 16]
+_x_n_ml: 16
+_x_he_mlp: 16
+
 net:
   nano: True
+  qk_dim: 2
