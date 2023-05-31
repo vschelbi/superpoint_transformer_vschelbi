@@ -1,5 +1,6 @@
 defaults:
-  - spt-2_dales.yaml
+  - nano-2.yaml
 
-net:
-  nano: True
+optimizer:
+  lr: 0.01
+  weight_decay: 1e-4

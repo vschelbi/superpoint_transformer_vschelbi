@@ -13,7 +13,7 @@ gc_every_n_steps: 0
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: True
-  lr: 0.1
+  lr: 0.01
   weight_decay: 1e-4
 
 scheduler:
@@ -36,9 +36,9 @@ _d: [64, 64, 64, 64]  # encoder stage dimensions
 _u: [64, 64, 64]  # decoder stage dimensions
 _d_r: 2  # number of repeated dim layers in the encoder MLPs
 _u_r: 2  # number of repeated dim layers in the decoder MLPs
-_x_n_mlp: 64  # size of level-1+ node features after MLP, set to 'null' to use directly the raw features
-_x_he_mlp: 64  # size of level-1+ horizontal edge features after MLP, set to 'null' to use directly the raw features
-_x_ve_mlp: 64  # size of level-1+ vertical edge features after MLP, set to 'null' to use directly the raw features
+_x_n_mlp: 32  # size of level-1+ node features after MLP, set to 'null' to use directly the raw features
+_x_he_mlp: 32  # size of level-1+ horizontal edge features after MLP, set to 'null' to use directly the raw features
+_x_ve_mlp: 32  # size of level-1+ vertical edge features after MLP, set to 'null' to use directly the raw features
 
 _p_x: ${eval:'3 + ${datamodule.num_hf_point} + ${model.net.point_cat_diameter}'}  # size of handcrafted level-0 node features (points)
 _x_he_raw: ${datamodule.num_hf_edge}  # size of level-1+ handcrafted horizontal edge features

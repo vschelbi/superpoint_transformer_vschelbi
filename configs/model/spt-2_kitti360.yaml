@@ -7,8 +7,6 @@ optimizer:
 
 _d: [128, 128, 128, 128]
 _u: [128, 128, 128]
-_x_n_mlp: 32
-_x_he_mlp: 32
 
 net:
   no_ffn: False
