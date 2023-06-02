@@ -407,8 +407,6 @@ class SPT(nn.Module):
             "stages. That is to say, we do not want to output Level-0 " \
             "features but at least Level-1."
 
-        print(self)
-
     @property
     def num_down_stages(self):
         return len(self.down_stages) if self.down_stages is not None else 0
