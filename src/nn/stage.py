@@ -1,9 +1,9 @@
+import torch
 from torch import nn
 from src.nn import MLP, TransformerBlock, BatchNorm, UnitSphereNorm
 from src.nn.pool import pool_factory
 from src.nn.unpool import *
-from src.nn.fusion import fusion_factory
-from src.nn.position_encoding import *
+from src.nn.fusion import CatFusion, fusion_factory
 
 
 __all__ = ['Stage', 'DownNFuseStage', 'UpNFuseStage', 'PointStage']
@@ -21,6 +21,8 @@ class Stage(nn.Module):
         Number of channels for the TransformerBlock
     :param num_blocks: int
         Number of TransformerBlocks in the Stage
+    :param num_heads: int
+        Number of heads in the TransformerBlocks
     :param in_mlp: List, optional
         Channels for the input MLP. The last channel must match
         `dim`
@@ -33,11 +35,25 @@ class Stage(nn.Module):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
-    :param pos_injection: BasePositionalInjection
-        Child class of BasePositionalInjection
-    :param pos_injection_x_dim: int
-        Dimension of point features x, to be linearly projected to ’dim’
-        before the PositionalInjection
+    :param pos: int
+        Whether the node's normalized position should be concatenated to
+        the features before in_mlp
+    :param diameter: bool
+        Whether the node's diameter should be concatenated to the
+        features before in_mlp (assumes diameter to be passed in the
+        forward)
+    :param diameter_parent: bool
+        Whether the node's parent diameter should be concatenated to the
+        features before in_mlp (only if pos is passed in the forward)
+    :param qk_dim:
+    :param k_rpe:
+    :param q_rpe:
+    :param k_delta_rpe:
+    :param q_delta_rpe:
+    :param qk_share_rpe:
+    :param q_on_minus_rpe:
+    :param blocks_share_rpe:
+    :param heads_share_rpe:
     :param transformer_kwargs:
         Keyword arguments for the TransformerBlock
     """
@@ -52,9 +68,9 @@ class Stage(nn.Module):
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=BatchNorm,
             mlp_drop=None,
-            pos_injection=CatInjection,
-            pos_injection_x_dim=None,
-            cat_diameter=False,
+            pos=True,
+            diameter=False,
+            diameter_parent=False,
             qk_dim=8,
             k_rpe=False,
             q_rpe=False,
@@ -144,10 +160,10 @@ class Stage(nn.Module):
         self.pos_norm = UnitSphereNorm()
 
         # Fusion operator to combine node positions with node features
-        self.pos_injection = fusion_factory('second') if pos_injection is None \
-            else pos_injection(dim=in_dim, x_dim=pos_injection_x_dim)
-
-        self.diam_injection = fusion_factory('cat') if cat_diameter else None
+        self.feature_fusion = CatFusion()
+        self.pos = pos
+        self.diameter = diameter
+        self.diameter_parent = diameter_parent
 
     @property
     def out_dim(self):
@@ -164,6 +180,7 @@ class Stage(nn.Module):
             x,
             norm_index,
             pos=None,
+            diameter=None,
             node_size=None,
             super_index=None,
             edge_index=None,
@@ -171,18 +188,28 @@ class Stage(nn.Module):
 
         # Append normalized coordinates to the node features
         if pos is not None:
-            pos, diameter = self.pos_norm(pos, super_index, w=node_size)
-            x = self.pos_injection(pos, x)
+            pos, diameter_parent = self.pos_norm(pos, super_index, w=node_size)
+            if self.pos:
+                x = self.feature_fusion(pos, x)
         else:
-            diameter = None
+            diameter_parent = None
 
         # Inject the parent segment diameter to the node features if
         # need be
-        if self.diam_injection is not None and diameter is not None:
-            if super_index is None:
-                x = self.diam_injection(diameter.repeat(x.shape[0], 1), x)
+        if self.diameter:
+            diam = diameter if diameter is not None else \
+                torch.zeros((x.shape[0], 1), dtype=x.dtype, device=x.device)
+            x = self.feature_fusion(diam, x)
+
+        if self.diameter_parent:
+            if diameter_parent is None:
+                diam = torch.zeros(
+                    (x.shape[0], 1), dtype=x.dtype, device=x.device)
+            elif super_index is None:
+                diam = diameter_parent.repeat(x.shape[0], 1)
             else:
-                x = self.diam_injection(diameter[super_index], x)
+                diam = diameter_parent[super_index]
+            x = self.feature_fusion(diam, x)
 
         # MLP on input features to change channel size
         if self.in_mlp is not None:
@@ -198,7 +225,7 @@ class Stage(nn.Module):
         if self.out_mlp is not None:
             x = self.out_mlp(x, batch=norm_index)
 
-        return x, diameter
+        return x, diameter_parent
 
 
 def _build_shared_rpe_encoders(
@@ -258,6 +285,7 @@ class DownNFuseStage(Stage):
             norm_index,
             pool_index,
             pos=None,
+            diameter=None,
             node_size=None,
             super_index=None,
             edge_index=None,
@@ -316,6 +344,7 @@ class UpNFuseStage(Stage):
             norm_index,
             unpool_index,
             pos=None,
+            diameter=None,
             node_size=None,
             super_index=None,
             edge_index=None,
@@ -356,11 +385,16 @@ class PointStage(Stage):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
-    :param pos_injection: BasePositionalInjection
-        Child class of BasePositionalInjection
-    :param pos_injection_x_dim: int
-        Dimension of point features x, to be linearly projected to ’dim’
-        before the PositionalInjection
+    :param pos: int
+        Whether the node's normalized position should be concatenated to
+        the features before in_mlp
+    :param diameter: bool
+        Whether the node's diameter should be concatenated to the
+        features before in_mlp (assumes diameter to be passed in the
+        forward)
+    :param diameter_parent: bool
+        Whether the node's parent diameter should be concatenated to the
+        features before in_mlp (only if pos is passed in the forward)
     """
 
     def __init__(
@@ -369,9 +403,8 @@ class PointStage(Stage):
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=BatchNorm,
             mlp_drop=None,
-            pos_injection=CatInjection,
-            pos_injection_x_dim=None,
-            cat_diameter=False):
+            pos=True,
+            diameter_parent=False):
 
         assert len(in_mlp) > 1, \
             'in_mlp should be a list of channels of length >= 2'
@@ -384,6 +417,6 @@ class PointStage(Stage):
             mlp_activation=mlp_activation,
             mlp_norm=mlp_norm,
             mlp_drop=mlp_drop,
-            pos_injection=pos_injection,
-            pos_injection_x_dim=pos_injection_x_dim,
-            cat_diameter=cat_diameter)
+            pos=pos,
+            diameter=False,
+            diameter_parent=diameter_parent)

@@ -19,10 +19,9 @@ net:
     _target_: src.nn.GraphNorm
     _partial_: True
 
-  pos_injection:
-    _target_: src.nn.CatInjection
-    _partial_: True
-  cat_diameter: False
+  pos: True
+  diameter: False
+  diameter_parent: False
   pool: 'max'
   unpool: 'index'
   fusion: 'cat'

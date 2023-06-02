@@ -14,6 +14,4 @@ net:
   down_residual_drop: null
   down_attn_drop: null
   down_drop_path: null
-  down_inject_pos: True  # append segment position features (or more depending on pos_injection and point_pos_injection_x_dim)
   down_inject_x: True  # append handcrafted segment features
-  down_pos_injection_x_dim: null

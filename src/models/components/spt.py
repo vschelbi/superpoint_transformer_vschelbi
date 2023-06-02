@@ -18,9 +18,6 @@ class SPT(nn.Module):
 
             point_mlp=None,
             point_drop=None,
-            point_pos_injection=CatInjection,
-            point_pos_injection_x_dim=None,
-            point_cat_diameter=False,
 
             nano=False,
 
@@ -35,9 +32,7 @@ class SPT(nn.Module):
             down_residual_drop=None,
             down_attn_drop=None,
             down_drop_path=None,
-            down_inject_pos=True,
             down_inject_x=False,
-            down_pos_injection_x_dim=None,
 
             up_dim=None,
             up_in_mlp=None,
@@ -49,9 +44,7 @@ class SPT(nn.Module):
             up_residual_drop=None,
             up_attn_drop=None,
             up_drop_path=None,
-            up_inject_pos=True,
             up_inject_x=False,
-            up_pos_injection_x_dim=None,
 
             node_mlp=None,
             h_edge_mlp=None,
@@ -79,8 +72,9 @@ class SPT(nn.Module):
             blocks_share_rpe=False,
             heads_share_rpe=False,
 
-            pos_injection=CatInjection,
-            cat_diameter=False,
+            pos=True,
+            diameter=False,
+            diameter_parent=False,
             pool='max',
             unpool='index',
             fusion='cat',
@@ -90,9 +84,10 @@ class SPT(nn.Module):
         super().__init__()
 
         self.nano = nano
-        self.down_inject_pos = down_inject_pos
+        self.pos = pos
+        self.diameter = diameter
+        self.diameter_parent = diameter_parent
         self.down_inject_x = down_inject_x
-        self.up_inject_pos = up_inject_pos
         self.up_inject_x = up_inject_x
         self.norm_mode = norm_mode
         self.stages_share_rpe = stages_share_rpe
@@ -112,8 +107,7 @@ class SPT(nn.Module):
             down_ffn_ratio,
             down_residual_drop,
             down_attn_drop,
-            down_drop_path,
-            down_pos_injection_x_dim
+            down_drop_path
         ) = listify_with_reference(
             down_dim,
             down_pool_dim,
@@ -125,8 +119,7 @@ class SPT(nn.Module):
             down_ffn_ratio,
             down_residual_drop,
             down_attn_drop,
-            down_drop_path,
-            down_pos_injection_x_dim)
+            down_drop_path)
 
         (
             up_dim,
@@ -138,8 +131,7 @@ class SPT(nn.Module):
             up_ffn_ratio,
             up_residual_drop,
             up_attn_drop,
-            up_drop_path,
-            up_pos_injection_x_dim
+            up_drop_path
         ) = listify_with_reference(
             up_dim,
             up_in_mlp,
@@ -150,8 +142,7 @@ class SPT(nn.Module):
             up_ffn_ratio,
             up_residual_drop,
             up_attn_drop,
-            up_drop_path,
-            up_pos_injection_x_dim)
+            up_drop_path)
 
         # Local helper variables describing the architecture
         num_down = len(down_dim) - self.nano
@@ -221,9 +212,9 @@ class SPT(nn.Module):
                 q_delta_rpe=q_delta_rpe,
                 qk_share_rpe=qk_share_rpe,
                 q_on_minus_rpe=q_on_minus_rpe,
-                pos_injection=pos_injection,
-                pos_injection_x_dim=down_pos_injection_x_dim[0],
-                cat_diameter=cat_diameter,
+                pos=pos,
+                diameter=diameter,
+                diameter_parent=diameter_parent,
                 blocks_share_rpe=blocks_share_rpe,
                 heads_share_rpe=heads_share_rpe)
         else:
@@ -232,9 +223,8 @@ class SPT(nn.Module):
                 mlp_activation=mlp_activation,
                 mlp_norm=mlp_norm,
                 mlp_drop=point_drop,
-                pos_injection=point_pos_injection,
-                pos_injection_x_dim=point_pos_injection_x_dim,
-                cat_diameter=point_cat_diameter)
+                pos=pos,
+                diameter_parent=diameter_parent)
 
         # Operator to append the features such as the diameter or other 
         # handcrafted features to the NAG's features
@@ -293,9 +283,9 @@ class SPT(nn.Module):
                     q_on_minus_rpe=q_on_minus_rpe,
                     pool=pool_factory(pool, pool_dim),
                     fusion=fusion,
-                    pos_injection=pos_injection,
-                    pos_injection_x_dim=pos_injection_x_dim,
-                    cat_diameter=cat_diameter,
+                    pos=pos,
+                    diameter=diameter,
+                    diameter_parent=diameter_parent,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
                 for
@@ -312,8 +302,7 @@ class SPT(nn.Module):
                     drop_path,
                     stage_k_rpe,
                     stage_q_rpe,
-                    pool_dim,
-                    pos_injection_x_dim)
+                    pool_dim)
                 in enumerate(zip(
                     down_dim,
                     down_num_blocks,
@@ -327,8 +316,7 @@ class SPT(nn.Module):
                     down_drop_path,
                     down_k_rpe,
                     down_q_rpe,
-                    down_pool_dim,
-                    down_pos_injection_x_dim))
+                    down_pool_dim))
                 if i_down >= self.nano])
         else:
             self.down_stages = None
@@ -378,8 +366,9 @@ class SPT(nn.Module):
                     q_on_minus_rpe=q_on_minus_rpe,
                     unpool=unpool,
                     fusion=fusion,
-                    pos_injection=pos_injection,
-                    pos_injection_x_dim=pos_injection_x_dim,
+                    pos=pos,
+                    diameter=diameter,
+                    diameter_parent=diameter_parent,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
                 for dim,
@@ -393,8 +382,7 @@ class SPT(nn.Module):
                     attn_drop,
                     drop_path,
                     stage_k_rpe,
-                    stage_q_rpe,
-                    pos_injection_x_dim
+                    stage_q_rpe
                 in zip(
                     up_dim,
                     up_num_blocks,
@@ -407,8 +395,7 @@ class SPT(nn.Module):
                     up_attn_drop,
                     up_drop_path,
                     up_k_rpe,
-                    up_q_rpe,
-                    up_pos_injection_x_dim)])
+                    up_q_rpe)])
         else:
             self.up_stages = None
 
@@ -457,19 +444,7 @@ class SPT(nn.Module):
         if self.nano:
             if self.node_mlps is not None and self.node_mlps[0] is not None:
                 norm_index = nag[0].norm_index(mode=self.norm_mode)
-                x = nag[0].x
-
-                # The first node_mlp may expect a diameter to be passed
-                # from the UnitSphereNorm. In the specific case of Nano,
-                # the first stage does not have a UnitSphereNorm to
-                # produce such diameter, so we artificially create it
-                # here
-                if self.down_inject_pos:
-                    diameter = torch.zeros(
-                        (nag[0].num_nodes, 1), dtype=x.dtype, device=x.device)
-                    x = self.feature_fusion(x, diameter)
-
-                nag[0].x = self.node_mlps[0](x, batch=norm_index)
+                nag[0].x = self.node_mlps[0](nag[0].x, batch=norm_index)
             if self.h_edge_mlps is not None:
                 norm_index = nag[0].norm_index(mode=self.norm_mode)
                 norm_index = norm_index[nag[0].edge_index[0]]
@@ -477,11 +452,18 @@ class SPT(nn.Module):
                     nag[0].edge_attr, batch=norm_index)
 
         # Encode level-0 data
-        x, diameter = self._forward_first_stage(self.first_stage, nag)
+        x, diameter = self.first_stage(
+            nag[0].x,
+            nag[0].norm_index(mode=self.norm_mode),
+            pos=nag[0].pos,
+            diameter=None,
+            node_size=getattr(nag[0], 'node_size', None),
+            super_index=nag[0].super_index,
+            edge_index=nag[0].edge_index,
+            edge_attr=nag[0].edge_attr)
 
-        # Append the diameter to the level-1 features
-        if self.down_inject_pos:
-            nag[1].x = self.feature_fusion(nag[1].x, diameter)
+        # Add the diameter to the next level's attributes
+        nag[1].diameter = diameter
 
         # Iteratively encode level-1 and above
         down_outputs = []
@@ -529,9 +511,8 @@ class SPT(nn.Module):
                 if i_level == nag.num_levels - 1:
                     continue
 
-                # Append the diameter to the next level's features
-                nag[i_level + 1].x = self.feature_fusion(
-                    nag[i_level + 1].x, diameter)
+                # Add the diameter to the next level's attributes
+                nag[i_level + 1].diameter = diameter
 
         # Iteratively decode level-num_down_stages and below
         up_outputs = []
@@ -550,98 +531,54 @@ class SPT(nn.Module):
         if self.output_stage_wise:
             out = [x] + up_outputs[::-1][1:] + [down_outputs[-1]]
             return out
-        else:
-            return x
 
-    def _forward_first_stage(self, stage, nag):
-        x = nag[0].x
-        norm_index = nag[0].norm_index(mode=self.norm_mode)
-        pos = nag[0].pos if not self.nano or self.down_inject_pos else None
-        node_size = getattr(nag[0], 'node_size', None) if self.down_inject_pos \
-            else None
-        super_index = nag[0].super_index
-        edge_index = nag[0].edge_index
-        edge_attr = nag[0].edge_attr
-
-        x_out, diameter = stage(
-            x,
-            norm_index,
-            pos=pos,
-            node_size=node_size,
-            super_index=super_index,
-            edge_index=edge_index,
-            edge_attr=edge_attr)
-
-        return x_out, diameter
+        return x
 
     def _forward_down_stage(self, stage, nag, i_level, x):
         # Convert stage index to NAG index
         is_last_level = (i_level == nag.num_levels - 1)
 
         # Recover segment-level attributes
-        x_handcrafted = nag[i_level].x if self.down_inject_x else None
-        pos = nag[i_level].pos if self.down_inject_pos else None
-        node_size = nag[i_level].node_size if self.down_inject_pos \
-            else None
-        num_nodes = nag[i_level].num_nodes
-
-        # Recover indices for normalization, pooling, position
-        # normalization and horizontal attention
-        norm_index = nag[i_level].norm_index(mode=self.norm_mode)
-        pool_index = nag[i_level - 1].super_index
-        super_index = nag[i_level].super_index if not is_last_level \
-            else None
-        edge_index = nag[i_level].edge_index
-        edge_attr = nag[i_level].edge_attr
-        v_edge_attr = nag[i_level - 1].v_edge_attr
+        x_handcrafted = nag[i_level].x if self.pos else None
 
         # Forward pass on the stage and store output x
-        x_out, diameter = stage(
+        x_out, diameter_parent = stage(
             x_handcrafted,
             x,
-            norm_index,
-            pool_index,
-            pos=pos,
-            node_size=node_size,
-            super_index=super_index,
-            edge_index=edge_index,
-            edge_attr=edge_attr,
-            v_edge_attr=v_edge_attr,
-            num_super=num_nodes)
+            nag[i_level].norm_index(mode=self.norm_mode),
+            nag[i_level - 1].super_index,
+            pos=nag[i_level].pos,
+            diameter=nag[i_level].diameter,
+            node_size=nag[i_level].node_size,
+            super_index=nag[i_level].super_index if not is_last_level else None,
+            edge_index=nag[i_level].edge_index,
+            edge_attr=nag[i_level].edge_attr,
+            v_edge_attr=nag[i_level - 1].v_edge_attr,
+            num_super=nag[i_level].num_nodes)
 
-        return x_out, diameter
+        return x_out, diameter_parent
 
     def _forward_up_stage(self, stage, nag, i_level, x, x_skip):
         # Recover segment-level attributes
-        x_handcrafted = nag[i_level].x if self.up_inject_x else None
-        pos = nag[i_level].pos if self.up_inject_pos else None
-        node_size = nag[i_level].node_size if self.up_inject_pos \
-            else None
+        x_handcrafted = nag[i_level].x if self.pos else None
 
         # Append the handcrafted features to the x_skip. Has no
         # effect if 'x_handcrafted' is None
         x_skip = self.feature_fusion(x_skip, x_handcrafted)
 
-        # Recover indices for normalization, unpooling, position
-        # normalization and horizontal attention
-        norm_index = nag[i_level].norm_index(mode=self.norm_mode)
-        unpool_index = nag[i_level].super_index
-        super_index = nag[i_level].super_index
-        edge_index = nag[i_level].edge_index
-        edge_attr = nag[i_level].edge_attr
-
-        x_out, diameter = stage(
+        x_out, diameter_parent = stage(
             x_skip,
             x,
-            norm_index,
-            unpool_index,
-            pos=pos,
-            node_size=node_size,
-            super_index=super_index,
-            edge_index=edge_index,
-            edge_attr=edge_attr)
+            nag[i_level].norm_index(mode=self.norm_mode),
+            nag[i_level].super_index,
+            pos=nag[i_level].pos,
+            diameter=nag[i_level - self.nano].diameter,
+            node_size=nag[i_level].node_size,
+            super_index=nag[i_level].super_index,
+            edge_index=nag[i_level].edge_index,
+            edge_attr=nag[i_level].edge_attr)
 
-        return x_out, diameter
+        return x_out, diameter_parent
 
 
 def _build_shared_rpe_encoders(
