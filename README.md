@@ -86,15 +86,12 @@ log_dir: /path/to/your/logs/
 
 ## 🚀  Reproducing our results
 
-<details>
-<summary><b>What will next commands do for you ?</b></summary>
-
-- Download the dataset to your `data/` 
+The following commands will:
+- Download the dataset to your `data/` (if automatic download is permitted, else a prompt will indicate how to proceed manually)
 - Place the raw dataset files in `data/<dataset_name>/raw/`
 - Preprocess the dataset and save the output to `data/<dataset_name>/processed/`
 - Training a model and log the results
 
-</details>
 
 
 ```bash
@@ -102,6 +99,7 @@ log_dir: /path/to/your/logs/
 python src/train.py trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
 
 # Train SPT on KITTI-360 Val
+# ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
 python src/train.py trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
 
 # Train SPT on DALES
@@ -116,9 +114,10 @@ by adding the adequate argument:
 python src/train.py logger=wandb_s3dis ...
 
 # Log KITTI-360 experiments to W&B
+# ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
 python src/train.py logger=wandb_kitti360 ...
 
-# Log DALEs experiments to W&B
+# Log DALES experiments to W&B
 python src/train.py logger=wandb_dales ...
 ```
 
