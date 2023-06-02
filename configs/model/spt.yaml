@@ -9,7 +9,7 @@ net:
   _target_: src.models.components.spt.SPT
 
   nano: False
-  node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_n_mlp}] * ${model._d_r} if ${model._x_n_mlp} and ${model.net.down_inject_x} and ${model._d_x_raw} > 0 else None'}
+  node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_n_mlp}] * ${model._d_r} if ${model._x_n_mlp} and ${model.net.use_node_hf} and ${model._d_x_raw} > 0 else None'}
   h_edge_mlp: ${eval:'[${model._x_he_raw}] + [${model._x_he_mlp}] * ${model._d_r} if ${model._x_he_mlp} else None'}
   v_edge_mlp: ${eval:'[${model._x_ve_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
   share_hf_mlps: False
@@ -19,9 +19,10 @@ net:
     _target_: src.nn.GraphNorm
     _partial_: True
 
-  pos: True  # whether (sphere-normalized) position should be concatenated to the features
-  diameter: True  # whether superpoint diameter (from sphere-normalization) should be concatenated to the features
-  diameter_parent: False  # whether superpoint diameter of the parent (from sphere-normalization) should be concatenated to the features
+  use_pos: True  # whether features should include (sphere-normalized) position
+  use_node_hf: True  # whether features should include node handcrafted features (after optional node_mlp)
+  use_diameter: True  # whether features should include superpoint diameter (from sphere-normalization)
+  use_diameter_parent: False  # whether features should include superpoint diameter of the parent (from sphere-normalization)
   pool: 'max'  # pooling across the cluster, supports 'max', 'mean', 'min'
   unpool: 'index'
   fusion: 'cat'

@@ -31,7 +31,6 @@ class SPT(nn.Module):
             down_residual_drop=None,
             down_attn_drop=None,
             down_drop_path=None,
-            down_inject_x=False,
 
             up_dim=None,
             up_in_mlp=None,
@@ -43,7 +42,6 @@ class SPT(nn.Module):
             up_residual_drop=None,
             up_attn_drop=None,
             up_drop_path=None,
-            up_inject_x=False,
 
             node_mlp=None,
             h_edge_mlp=None,
@@ -71,9 +69,10 @@ class SPT(nn.Module):
             blocks_share_rpe=False,
             heads_share_rpe=False,
 
-            pos=True,
-            diameter=False,
-            diameter_parent=False,
+            use_pos=True,
+            use_node_hf=True,
+            use_diameter=False,
+            use_diameter_parent=False,
             pool='max',
             unpool='index',
             fusion='cat',
@@ -83,11 +82,10 @@ class SPT(nn.Module):
         super().__init__()
 
         self.nano = nano
-        self.pos = pos
-        self.diameter = diameter
-        self.diameter_parent = diameter_parent
-        self.down_inject_x = down_inject_x
-        self.up_inject_x = up_inject_x
+        self.use_pos = use_pos
+        self.use_node_hf = use_node_hf
+        self.use_diameter = use_diameter
+        self.use_diameter_parent = use_diameter_parent
         self.norm_mode = norm_mode
         self.stages_share_rpe = stages_share_rpe
         self.blocks_share_rpe = blocks_share_rpe
@@ -146,7 +144,6 @@ class SPT(nn.Module):
         # Local helper variables describing the architecture
         num_down = len(down_dim) - self.nano
         num_up = len(up_dim)
-        needs_node_hf = down_inject_x or up_inject_x
         needs_h_edge_hf = any(x > 0 for x in down_num_blocks + up_num_blocks)
         needs_v_edge_hf = num_down > 0 and isinstance(
             pool_factory(pool, down_pool_dim[0]), BaseAttentivePool)
@@ -156,7 +153,7 @@ class SPT(nn.Module):
         # DownNFuseStage and their output will be passed to
         # DownNFuseStage and UpNFuseStage. For the special case of nano
         # models, the first mlps will be run before the first Stage too
-        node_mlp = node_mlp if needs_node_hf else None
+        node_mlp = node_mlp if use_node_hf else None
         self.node_mlps = _build_mlps(
             node_mlp,
             num_down + self.nano,
@@ -211,9 +208,9 @@ class SPT(nn.Module):
                 q_delta_rpe=q_delta_rpe,
                 qk_share_rpe=qk_share_rpe,
                 q_on_minus_rpe=q_on_minus_rpe,
-                pos=pos,
-                diameter=diameter,
-                diameter_parent=diameter_parent,
+                use_pos=use_pos,
+                use_diameter=use_diameter,
+                use_diameter_parent=use_diameter_parent,
                 blocks_share_rpe=blocks_share_rpe,
                 heads_share_rpe=heads_share_rpe)
         else:
@@ -222,8 +219,8 @@ class SPT(nn.Module):
                 mlp_activation=mlp_activation,
                 mlp_norm=mlp_norm,
                 mlp_drop=point_drop,
-                pos=pos,
-                diameter_parent=diameter_parent)
+                use_pos=use_pos,
+                use_diameter_parent=use_diameter_parent)
 
         # Operator to append the features such as the diameter or other 
         # handcrafted features to the NAG's features
@@ -282,9 +279,9 @@ class SPT(nn.Module):
                     q_on_minus_rpe=q_on_minus_rpe,
                     pool=pool_factory(pool, pool_dim),
                     fusion=fusion,
-                    pos=pos,
-                    diameter=diameter,
-                    diameter_parent=diameter_parent,
+                    use_pos=use_pos,
+                    use_diameter=use_diameter,
+                    use_diameter_parent=use_diameter_parent,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
                 for
@@ -365,9 +362,9 @@ class SPT(nn.Module):
                     q_on_minus_rpe=q_on_minus_rpe,
                     unpool=unpool,
                     fusion=fusion,
-                    pos=pos,
-                    diameter=diameter,
-                    diameter_parent=diameter_parent,
+                    use_pos=use_pos,
+                    use_diameter=use_diameter,
+                    use_diameter_parent=use_diameter_parent,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
                 for dim,
@@ -409,6 +406,8 @@ class SPT(nn.Module):
             "The number of Up stages should be < the number of Down " \
             "stages. That is to say, we do not want to output Level-0 " \
             "features but at least Level-1."
+
+        print(self)
 
     @property
     def num_down_stages(self):
@@ -452,7 +451,7 @@ class SPT(nn.Module):
 
         # Encode level-0 data
         x, diameter = self.first_stage(
-            nag[0].x,
+            nag[0].x if self.use_node_hf else None,
             nag[0].norm_index(mode=self.norm_mode),
             pos=nag[0].pos,
             diameter=None,
@@ -535,8 +534,9 @@ class SPT(nn.Module):
 
     def _forward_down_stage(self, stage, nag, i_level, x):
         is_last_level = (i_level == nag.num_levels - 1)
+        x_handcrafted = nag[i_level].x if self.use_node_hf else None
         return stage(
-            nag[i_level].x,
+            x_handcrafted,
             x,
             nag[i_level].norm_index(mode=self.norm_mode),
             nag[i_level - 1].super_index,
@@ -550,8 +550,9 @@ class SPT(nn.Module):
             num_super=nag[i_level].num_nodes)
 
     def _forward_up_stage(self, stage, nag, i_level, x, x_skip):
+        x_handcrafted = nag[i_level].x if self.use_node_hf else None
         return stage(
-            self.feature_fusion(x_skip, nag[i_level].x),
+            self.feature_fusion(x_skip, x_handcrafted),
             x,
             nag[i_level].norm_index(mode=self.norm_mode),
             nag[i_level].super_index,

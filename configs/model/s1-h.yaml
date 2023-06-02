@@ -6,6 +6,6 @@ _d: [64]
 
 net:
   down_pool_dim: ${eval:'[${model._p}[-1]]'}
-  down_in_mlp: ${eval:'[ [${model._d_x} + ${model._p}[-1] * (not ${model.net.nano}) + ${datamodule.num_hf_segment} * (${model.net.nano} and not ${model.net.down_inject_x})] + ${model._d} * ${model._d_r} ]'}
+  down_in_mlp: ${eval:'[ [${model._d_x} + ${model._p}[-1] * (not ${model.net.nano}) + ${datamodule.num_hf_segment} * (${model.net.nano} and not ${model.net.use_node_hf})] + ${model._d} * ${model._d_r} ]'}
   up_dim: null  # no decoder
   up_in_mlp: null

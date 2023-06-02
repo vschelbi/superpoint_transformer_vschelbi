@@ -35,14 +35,14 @@ class Stage(nn.Module):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
-    :param pos: int
+    :param use_pos: int
         Whether the node's normalized position should be concatenated to
         the features before in_mlp
-    :param diameter: bool
+    :param use_diameter: bool
         Whether the node's diameter should be concatenated to the
         features before in_mlp (assumes diameter to be passed in the
         forward)
-    :param diameter_parent: bool
+    :param use_diameter_parent: bool
         Whether the node's parent diameter should be concatenated to the
         features before in_mlp (only if pos is passed in the forward)
     :param qk_dim:
@@ -68,9 +68,9 @@ class Stage(nn.Module):
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=BatchNorm,
             mlp_drop=None,
-            pos=True,
-            diameter=False,
-            diameter_parent=False,
+            use_pos=True,
+            use_diameter=False,
+            use_diameter_parent=False,
             qk_dim=8,
             k_rpe=False,
             q_rpe=False,
@@ -96,10 +96,8 @@ class Stage(nn.Module):
                 activation=mlp_activation,
                 norm=mlp_norm,
                 drop=mlp_drop)
-            in_dim = in_mlp[0]
         else:
             self.in_mlp = None
-            in_dim = dim
 
         # MLP to change output channel size
         if out_mlp is not None:
@@ -161,9 +159,9 @@ class Stage(nn.Module):
 
         # Fusion operator to combine node positions with node features
         self.feature_fusion = CatFusion()
-        self.pos = pos
-        self.diameter = diameter
-        self.diameter_parent = diameter_parent
+        self.use_pos = use_pos
+        self.use_diameter = use_diameter
+        self.use_diameter_parent = use_diameter_parent
 
     @property
     def out_dim(self):
@@ -186,27 +184,46 @@ class Stage(nn.Module):
             edge_index=None,
             edge_attr=None):
 
+        # Recover info from the input
+        if x is not None:
+            N = x.shape[0]
+            dtype = x.dtype
+            device = x.device
+        elif pos is not None:
+            N = pos.shape[0]
+            dtype = pos.dtype
+            device = pos.device
+        elif diameter is not None:
+            N = diameter.shape[0]
+            dtype = diameter.dtype
+            device = diameter.device
+        elif super_index is not None:
+            N = super_index.shape[0]
+            dtype = edge_attr.dtype if edge_attr is not None else torch.float
+            device = super_index.device
+        else:
+            raise ValueError("Could not infer basic info from input arguments")
+
         # Append normalized coordinates to the node features
         if pos is not None:
             pos, diameter_parent = self.pos_norm(pos, super_index, w=node_size)
-            if self.pos:
+            if self.use_pos:
                 x = self.feature_fusion(pos, x)
         else:
             diameter_parent = None
 
         # Inject the parent segment diameter to the node features if
         # need be
-        if self.diameter:
+        if self.use_diameter:
             diam = diameter if diameter is not None else \
-                torch.zeros((x.shape[0], 1), dtype=x.dtype, device=x.device)
+                torch.zeros((N, 1), dtype=dtype, device=device)
             x = self.feature_fusion(diam, x)
 
-        if self.diameter_parent:
+        if self.use_diameter_parent:
             if diameter_parent is None:
-                diam = torch.zeros(
-                    (x.shape[0], 1), dtype=x.dtype, device=x.device)
+                diam = torch.zeros((N, 1), dtype=dtype, device=device)
             elif super_index is None:
-                diam = diameter_parent.repeat(x.shape[0], 1)
+                diam = diameter_parent.repeat(N, 1)
             else:
                 diam = diameter_parent[super_index]
             x = self.feature_fusion(diam, x)
@@ -385,14 +402,10 @@ class PointStage(Stage):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
-    :param pos: int
+    :param use_pos: int
         Whether the node's normalized position should be concatenated to
         the features before in_mlp
-    :param diameter: bool
-        Whether the node's diameter should be concatenated to the
-        features before in_mlp (assumes diameter to be passed in the
-        forward)
-    :param diameter_parent: bool
+    :param use_diameter_parent: bool
         Whether the node's parent diameter should be concatenated to the
         features before in_mlp (only if pos is passed in the forward)
     """
@@ -403,8 +416,8 @@ class PointStage(Stage):
             mlp_activation=nn.LeakyReLU(),
             mlp_norm=BatchNorm,
             mlp_drop=None,
-            pos=True,
-            diameter_parent=False):
+            use_pos=True,
+            use_diameter_parent=False):
 
         assert len(in_mlp) > 1, \
             'in_mlp should be a list of channels of length >= 2'
@@ -417,6 +430,6 @@ class PointStage(Stage):
             mlp_activation=mlp_activation,
             mlp_norm=mlp_norm,
             mlp_drop=mlp_drop,
-            pos=pos,
-            diameter=False,
-            diameter_parent=diameter_parent)
+            use_pos=use_pos,
+            use_diameter=False,
+            use_diameter_parent=use_diameter_parent)

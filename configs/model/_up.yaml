@@ -13,4 +13,3 @@ net:
   up_residual_drop: ${model.net.down_residual_drop}
   up_attn_drop: ${model.net.down_attn_drop}
   up_drop_path: ${model.net.down_drop_path}
-  up_inject_x: ${model.net.down_inject_x}  # append handcrafted segment features

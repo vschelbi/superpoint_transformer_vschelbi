@@ -40,12 +40,12 @@ _x_n_mlp: 32  # size of level-1+ node features after MLP, set to 'null' to use d
 _x_he_mlp: 32  # size of level-1+ horizontal edge features after MLP, set to 'null' to use directly the raw features
 _x_ve_mlp: 32  # size of level-1+ vertical edge features after MLP, set to 'null' to use directly the raw features
 
-_p_x: ${eval:'${model.net.pos} * 3 + ${datamodule.num_hf_point} + ${model.net.diameter_parent}'}  # size of handcrafted level-0 node features (points)
+_p_x: ${eval:'${model.net.use_pos} * 3 + ${datamodule.num_hf_point} + ${model.net.use_diameter_parent}'}  # size of handcrafted level-0 node features (points)
 _x_he_raw: ${datamodule.num_hf_edge}  # size of level-1+ handcrafted horizontal edge features
 _x_ve_raw: ${datamodule.num_hf_v_edge}  # size of level-1+ handcrafted vertical edge features
-_d_x_raw: ${eval:'${model.net.down_inject_x} * ${datamodule.num_hf_segment}'}  # size of handcrafted level-1+ node features before node MLP
-_d_x: ${eval:'${model.net.pos} * 3 + ${model.net.diameter} + ${model.net.diameter_parent} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.down_inject_x} and ${model._d_x_raw} > 0 else ${model._d_x_raw})'}  # size of parent level-1+ node features at injection time
-_u_x_raw: ${eval:'${model.net.up_inject_x} * ${datamodule.num_hf_segment}'}  # size of handcrafted level-1+ node features before node MLP
-_u_x: ${eval:'${model.net.pos} * 3 + ${model.net.diameter} + ${model.net.diameter_parent} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.up_inject_x} and ${model._d_x_raw} > 0 else ${model._u_x_raw})'}  # size of parent level-1+ node features at injection time
+_d_x_raw: ${eval:'${model.net.use_node_hf} * ${datamodule.num_hf_segment}'}  # size of handcrafted level-1+ node features before node MLP
+_d_x: ${eval:'${model.net.use_pos} * 3 + ${model.net.use_diameter} + ${model.net.use_diameter_parent} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.use_node_hf} and ${model._d_x_raw} > 0 else ${model._d_x_raw})'}  # size of parent level-1+ node features at injection time
+_u_x_raw: ${eval:'${model.net.use_node_hf} * ${datamodule.num_hf_segment}'}  # size of handcrafted level-1+ node features before node MLP
+_u_x: ${eval:'${model.net.use_pos} * 3 + ${model.net.use_diameter} + ${model.net.use_diameter_parent} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.use_node_hf} and ${model._d_x_raw} > 0 else ${model._u_x_raw})'}  # size of parent level-1+ node features at injection time
 
 net: ???
