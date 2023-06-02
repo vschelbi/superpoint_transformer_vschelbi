@@ -15,9 +15,6 @@ class PointNet(SPT):
     :param point_pos_injection:
     :param point_pos_injection_x_dim:
     :param point_cat_diameter:
-    :param small:
-    :param small_point_mlp:
-    :param small_down_mlp:
     :param down_drop:
     :param activation:
     :param norm:
@@ -30,19 +27,12 @@ class PointNet(SPT):
 
             point_mlp,
             down_mlp,
-
             point_drop=None,
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
             point_cat_diameter=False,
             point_log_diameter=False,
-
-            small=None,
-            small_point_mlp=None,
-            small_down_mlp=None,
-
             down_drop=None,
-
             activation=nn.LeakyReLU(),
             norm=BatchNorm,
             pool='max',
@@ -55,16 +45,10 @@ class PointNet(SPT):
             point_pos_injection_x_dim=point_pos_injection_x_dim,
             point_cat_diameter=point_cat_diameter,
             point_log_diameter=point_log_diameter,
-
-            small=small,
-            small_point_mlp=small_point_mlp,
-            small_down_mlp=small_down_mlp,
-
             down_dim=down_mlp[-1],
             down_in_mlp=down_mlp,
             down_mlp_drop=down_drop,
             down_num_blocks=0,
-
             pos_injection=pos_injection,
             mlp_activation=activation,
             mlp_norm=norm,

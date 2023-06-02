@@ -4,5 +4,3 @@ defaults:
 net:
   down_num_blocks: 0
   up_num_blocks: 0
-  small: null  # no branch for 'small' L1 nodes
-  last_dim: null  # no modules after the 'small' nodes branch merge

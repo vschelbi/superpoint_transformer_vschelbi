@@ -3,8 +3,6 @@ defaults:
   - _point.yaml
   - _down.yaml
   - _up.yaml
-  - _last.yaml
-  - _small.yaml
   - _attention.yaml
 
 net:
@@ -30,6 +28,3 @@ net:
   unpool: 'index'
   fusion: 'cat'
   norm_mode: 'graph'
-
-  small: null  # no branch for 'small' L1 nodes
-  last_dim: null  # no modules after the 'small' nodes branch merge

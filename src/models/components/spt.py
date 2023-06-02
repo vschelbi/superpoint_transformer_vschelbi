@@ -23,10 +23,6 @@ class SPT(nn.Module):
             point_cat_diameter=False,
             point_log_diameter=False,
 
-            small=None,
-            small_point_mlp=None,
-            small_down_mlp=None,
-
             nano=False,
 
             down_dim=None,
@@ -57,19 +53,6 @@ class SPT(nn.Module):
             up_inject_pos=True,
             up_inject_x=False,
             up_pos_injection_x_dim=None,
-
-            last_dim=None,
-            last_in_mlp=None,
-            last_out_mlp=None,
-            last_mlp_drop=None,
-            last_num_heads=1,
-            last_num_blocks=0,
-            last_ffn_ratio=4,
-            last_residual_drop=None,
-            last_attn_drop=None,
-            last_drop_path=None,
-            last_inject_pos=True,
-            last_pos_injection_x_dim=None,
 
             node_mlp=None,
             h_edge_mlp=None,
@@ -113,7 +96,6 @@ class SPT(nn.Module):
         self.down_inject_x = down_inject_x
         self.up_inject_pos = up_inject_pos
         self.up_inject_x = up_inject_x
-        self.last_inject_pos = last_inject_pos
         self.norm_mode = norm_mode
         self.stages_share_rpe = stages_share_rpe
         self.blocks_share_rpe = blocks_share_rpe
@@ -177,8 +159,7 @@ class SPT(nn.Module):
         num_down = len(down_dim) - self.nano
         num_up = len(up_dim)
         needs_node_hf = down_inject_x or up_inject_x
-        needs_h_edge_hf = any(
-            x > 0 for x in down_num_blocks + up_num_blocks + [last_num_blocks])
+        needs_h_edge_hf = any(x > 0 for x in down_num_blocks + up_num_blocks)
         needs_v_edge_hf = num_down > 0 and isinstance(
             pool_factory(pool, down_pool_dim[0]), BaseAttentivePool)
 
@@ -448,106 +429,6 @@ class SPT(nn.Module):
             "stages. That is to say, we do not want to output Level-0 " \
             "features but at least Level-1."
 
-        # Optional pointNet-like module operating on Level-0 points in
-        # for points belonging to small L1 nodes
-        # TODO: if the per-stage output is returned, need to define how to
-        #  deal with small L1 nodes
-        assert small is None or not self.output_stage_wise,\
-            "Returning per-stage output with `small` is not supported"
-
-        assert small is None or small > 0 and small_point_mlp is not None \
-               and small_down_mlp is not None, \
-            "If specified, `small` should be an integer larger than 0 and " \
-            "`small_point_mlp` and `small_down_mlp` should also be specified"
-
-        assert small is None or self.num_down_stages == self.num_up_stages + 1, \
-            "If `small` is set, the model should have of one more Down " \
-            "stages than Up stages (ie the output will be Level-1 features."
-
-        if not self.nano and small is not None:
-            self.small = small
-
-            self.first_stage_small = PointStage(
-                small_point_mlp,
-                mlp_activation=mlp_activation,
-                mlp_norm=mlp_norm,
-                mlp_drop=point_drop,
-                pos_injection=point_pos_injection,
-                pos_injection_x_dim=point_pos_injection_x_dim,
-                cat_diameter=point_cat_diameter,
-                log_diameter=point_log_diameter)
-
-            self.down_stage_small = DownNFuseStage(
-                small_down_mlp[-1],
-                num_blocks=0,
-                in_mlp=small_down_mlp,
-                mlp_activation=mlp_activation,
-                mlp_norm=mlp_norm,
-                mlp_drop=down_mlp_drop[0],
-                pool=pool,
-                fusion='cat',
-                pos_injection=pos_injection,
-                cat_diameter=cat_diameter,
-                log_diameter=log_diameter,
-                pos_injection_x_dim=down_pos_injection_x_dim[0])
-        else:
-            self.small = None
-            self.first_stage_small = None
-            self.down_stage_small = None
-
-        # Optional last transformer stage operating on Level-1 nodes.
-        # In particular, allows feature propagation between large and
-        # small nodes when `self.small` is not None
-        if last_dim is not None:
-
-            # Build the RPE encoder here if shared across all stages
-            last_k_rpe = _build_shared_rpe_encoders(
-                k_rpe, 1, 18, qk_dim, stages_share_rpe)[0]
-
-            # If key and query RPEs share the same MLP, only the key MLP
-            # is preserved, to limit the number of model parameters
-            last_q_rpe = _build_shared_rpe_encoders(
-                q_rpe and not (k_rpe and qk_share_rpe), 1, 18, qk_dim,
-                stages_share_rpe)[0]
-
-            self.last_stage = Stage(
-                last_dim,
-                num_blocks=last_num_blocks,
-                in_mlp=last_in_mlp,
-                out_mlp=last_out_mlp,
-                mlp_activation=mlp_activation,
-                mlp_norm=mlp_norm,
-                mlp_drop=last_mlp_drop,
-                num_heads=last_num_heads,
-                qk_dim=qk_dim,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                in_rpe_dim=in_rpe_dim,
-                ffn_ratio=last_ffn_ratio,
-                residual_drop=last_residual_drop,
-                attn_drop=last_attn_drop,
-                drop_path=last_drop_path,
-                activation=activation,
-                norm=norm,
-                pre_norm=pre_norm,
-                no_sa=no_sa,
-                no_ffn=no_ffn,
-                k_rpe=last_k_rpe,
-                q_rpe=last_q_rpe,
-                v_rpe=v_rpe,
-                k_delta_rpe=k_delta_rpe,
-                q_delta_rpe=q_delta_rpe,
-                qk_share_rpe=qk_share_rpe,
-                q_on_minus_rpe=q_on_minus_rpe,
-                pos_injection=pos_injection,
-                cat_diameter=cat_diameter,
-                log_diameter=log_diameter,
-                blocks_share_rpe=blocks_share_rpe,
-                heads_share_rpe=heads_share_rpe,
-                pos_injection_x_dim=last_pos_injection_x_dim)
-        else:
-            self.last_stage = None
-
     @property
     def num_down_stages(self):
         return len(self.down_stages) if self.down_stages is not None else 0
@@ -560,12 +441,8 @@ class SPT(nn.Module):
     def out_dim(self):
         if self.output_stage_wise:
             out_dim = [stage.out_dim for stage in self.up_stages][::-1]
-            if self.last_stage is not None:
-                out_dim[0] = self.last_stage.out_dim
             out_dim += [self.down_stages[-1].out_dim]
             return out_dim
-        if self.last_stage is not None:
-            return self.last_stage.out_dim
         if self.up_stages is not None:
             return self.up_stages[-1].out_dim
         if self.down_stages is not None:
@@ -580,43 +457,6 @@ class SPT(nn.Module):
         # TODO: this will need to be changed if we want FAST NANO
         if self.nano:
             nag = nag[1:]
-
-        # Separate small L1 nodes from the rest of the NAG. Only
-        # large-enough nodes will be encoded using the UNet. Small nodes
-        # will be encoded separately, and merged before the `last_stage`
-        if self.small is not None:
-            # Separate the input NAG into two sub-NAGs: one holding the
-            # small L1 nodes and one carrying the large ones and their
-            # hierarchy
-            mask_small = self.small < nag[1].node_size
-            nag_full = nag
-            nag = nag_full.select(1, torch.where(mask_small)[0])
-            nag_small = nag_full.select(1, torch.where(~mask_small)[0])
-
-            # Encode level-0 data for small L1 nodes
-            x_small, diameter_small = self.first_stage_small(
-                nag_small[0].x,
-                nag_small[0].norm_index(mode=self.norm_mode),
-                pos=nag_small[0].pos,
-                node_size=getattr(nag_small[0], 'node_size', None),
-                super_index=nag_small[0].super_index,
-                edge_index=nag_small[0].edge_index,
-                edge_attr=getattr(nag_small[0], 'edge_attr', None))
-
-            # Append the diameter to the level-1 features
-            i_level = 1
-            nag_small[i_level].x = self.feature_fusion(
-                nag_small[i_level].x, diameter_small)
-
-            # Forward on the down stage and the corresponding NAG
-            # level
-            x_small, diameter_small = self._forward_down_stage(
-                self.down_stage_small, nag_small, i_level, x_small)
-
-            # Append the diameter to the next level's features
-            if i_level < nag_small.num_levels - 1:
-                nag_small[i_level + 1].x = self.feature_fusion(
-                    nag_small[i_level + 1].x, diameter_small)
 
         # Apply the first MLPs on the handcrafted features
         if self.nano:
@@ -707,25 +547,8 @@ class SPT(nn.Module):
                 x, _ = self._forward_up_stage(stage, nag, i_level, x, x_skip)
                 up_outputs.append(x)
 
-        # Fuse L1-level features back together, if need be
-        if self.small is not None:
-            nag = nag_full
-            nag[1].x = torch.empty(
-                (nag[1].num_nodes, x.shape[1]), device=x.device)
-            nag[1].x[torch.where(mask_small)] = x
-            nag[1].x[torch.where(~mask_small)] = x_small
-            x = nag[1].x
-            if len(up_outputs) > 0:
-                up_outputs[-1] = x
-
-        # Last spatial propagation of features
-        if self.last_stage is not None:
-            x, _ = self._forward_last_stage(nag, x)
-
         # Different types of output signatures. For stage-wise output,
-        # return the output for each stage. For the L1 level, we must
-        # take the 'last_stage' into account and not simply the output
-        # of the last 'up_stage'. Besides, for the Lmax level, we take
+        # return the output for each stage. For the Lmax level, we take
         # the output of the innermost 'down_stage'. Finally, these
         # outputs are sorted by order of increasing NAG level (from low
         # to high)
@@ -817,36 +640,6 @@ class SPT(nn.Module):
             x,
             norm_index,
             unpool_index,
-            pos=pos,
-            node_size=node_size,
-            super_index=super_index,
-            edge_index=edge_index,
-            edge_attr=edge_attr)
-
-        return x_out, diameter
-
-    def _forward_last_stage(self, nag, x):
-        # Convert stage index to NAG index
-        i_level = int(not self.nano)
-        is_last_level = (i_level == nag.num_levels - 1)
-
-        # Recover segment-level attributes
-        pos = nag[i_level].pos if self.last_inject_pos else None
-        node_size = nag[i_level].node_size if self.last_inject_pos \
-            else None
-
-        # Recover indices for normalization, pooling, position
-        # normalization and horizontal attention
-        norm_index = nag[i_level].norm_index(mode=self.norm_mode)
-        super_index = nag[i_level].super_index if not is_last_level \
-            else None
-        edge_index = nag[i_level].edge_index
-        edge_attr = nag[i_level].edge_attr
-
-        # Forward pass on the stage and store output x
-        x_out, diameter = self.last_stage(
-            x,
-            norm_index,
             pos=pos,
             node_size=node_size,
             super_index=super_index,
