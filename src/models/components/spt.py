@@ -1,8 +1,7 @@
-import torch
 from torch import nn
 from src.utils import listify_with_reference
 from src.nn import Stage, PointStage, DownNFuseStage, UpNFuseStage, \
-    BatchNorm, CatFusion, CatInjection, MLP, LayerNorm
+    BatchNorm, CatFusion, MLP, LayerNorm
 from src.nn.pool import BaseAttentivePool
 from src.nn.pool import pool_factory
 
@@ -535,15 +534,9 @@ class SPT(nn.Module):
         return x
 
     def _forward_down_stage(self, stage, nag, i_level, x):
-        # Convert stage index to NAG index
         is_last_level = (i_level == nag.num_levels - 1)
-
-        # Recover segment-level attributes
-        x_handcrafted = nag[i_level].x if self.pos else None
-
-        # Forward pass on the stage and store output x
-        x_out, diameter_parent = stage(
-            x_handcrafted,
+        return stage(
+            nag[i_level].x,
             x,
             nag[i_level].norm_index(mode=self.norm_mode),
             nag[i_level - 1].super_index,
@@ -556,18 +549,9 @@ class SPT(nn.Module):
             v_edge_attr=nag[i_level - 1].v_edge_attr,
             num_super=nag[i_level].num_nodes)
 
-        return x_out, diameter_parent
-
     def _forward_up_stage(self, stage, nag, i_level, x, x_skip):
-        # Recover segment-level attributes
-        x_handcrafted = nag[i_level].x if self.pos else None
-
-        # Append the handcrafted features to the x_skip. Has no
-        # effect if 'x_handcrafted' is None
-        x_skip = self.feature_fusion(x_skip, x_handcrafted)
-
-        x_out, diameter_parent = stage(
-            x_skip,
+        return stage(
+            self.feature_fusion(x_skip, nag[i_level].x),
             x,
             nag[i_level].norm_index(mode=self.norm_mode),
             nag[i_level].super_index,
@@ -577,8 +561,6 @@ class SPT(nn.Module):
             super_index=nag[i_level].super_index,
             edge_index=nag[i_level].edge_index,
             edge_attr=nag[i_level].edge_attr)
-
-        return x_out, diameter_parent
 
 
 def _build_shared_rpe_encoders(

@@ -19,10 +19,10 @@ net:
     _target_: src.nn.GraphNorm
     _partial_: True
 
-  pos: True
-  diameter: False
-  diameter_parent: False
-  pool: 'max'
+  pos: True  # whether (sphere-normalized) position should be concatenated to the features
+  diameter: True  # whether superpoint diameter (from sphere-normalization) should be concatenated to the features
+  diameter_parent: False  # whether superpoint diameter of the parent (from sphere-normalization) should be concatenated to the features
+  pool: 'max'  # pooling across the cluster, supports 'max', 'mean', 'min'
   unpool: 'index'
   fusion: 'cat'
   norm_mode: 'graph'
