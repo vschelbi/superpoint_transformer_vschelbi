@@ -27,7 +27,7 @@ Official implementation for _Efficient 3D Semantic Segmentation with Superpoint 
 
 ## 📌  Description
 
-HiST is a superpoint-based transformer architecture that efficiently performs 
+SPT is a superpoint-based transformer architecture that efficiently performs 
 semantic segmentation on large-scale 3D scenes. This method includes a fast 
 algorithm that partitions point clouds into a hierarchical superpoint structure, 
 as well as a self-attention mechanism to exploit the relationships between 
@@ -98,14 +98,14 @@ log_dir: /path/to/your/logs/
 
 
 ```bash
-# Train HiST on S3DIS Fold 5
-python src/train.py trainer=gpu model=hist_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
+# Train SPT on S3DIS Fold 5
+python src/train.py trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
 
-# Train HiST on KITTI-360 Val
-python src/train.py trainer=gpu model=hist_kitti360 datamodule=kitti360 trainer.max_epochs=200 
+# Train SPT on KITTI-360 Val
+python src/train.py trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
 
-# Train HiST on DALES
-python src/train.py trainer=gpu model=hist_dales datamodule=dales trainer.max_epochs=400
+# Train SPT on DALES
+python src/train.py trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
 ```
 
 You may use [Weights and Biases](https://wandb.ai) to track your experiments, 
@@ -134,7 +134,7 @@ python src/train.py logger=wandb_dales ...
 
 ## License
 
-HiST is licensed under the MIT License.
+SPT is licensed under the MIT License.
 
 ```
 MIT License
