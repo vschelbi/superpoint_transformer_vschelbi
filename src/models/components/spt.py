@@ -21,7 +21,6 @@ class SPT(nn.Module):
             point_pos_injection=CatInjection,
             point_pos_injection_x_dim=None,
             point_cat_diameter=False,
-            point_log_diameter=False,
 
             nano=False,
 
@@ -82,7 +81,6 @@ class SPT(nn.Module):
 
             pos_injection=CatInjection,
             cat_diameter=False,
-            log_diameter=False,
             pool='max',
             unpool='index',
             fusion='cat',
@@ -226,7 +224,6 @@ class SPT(nn.Module):
                 pos_injection=pos_injection,
                 pos_injection_x_dim=down_pos_injection_x_dim[0],
                 cat_diameter=cat_diameter,
-                log_diameter=log_diameter,
                 blocks_share_rpe=blocks_share_rpe,
                 heads_share_rpe=heads_share_rpe)
         else:
@@ -237,8 +234,7 @@ class SPT(nn.Module):
                 mlp_drop=point_drop,
                 pos_injection=point_pos_injection,
                 pos_injection_x_dim=point_pos_injection_x_dim,
-                cat_diameter=point_cat_diameter,
-                log_diameter=point_log_diameter)
+                cat_diameter=point_cat_diameter)
 
         # Operator to append the features such as the diameter or other 
         # handcrafted features to the NAG's features
@@ -300,7 +296,6 @@ class SPT(nn.Module):
                     pos_injection=pos_injection,
                     pos_injection_x_dim=pos_injection_x_dim,
                     cat_diameter=cat_diameter,
-                    log_diameter=log_diameter,
                     blocks_share_rpe=blocks_share_rpe,
                     heads_share_rpe=heads_share_rpe)
                 for

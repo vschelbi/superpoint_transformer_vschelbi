@@ -55,7 +55,6 @@ class Stage(nn.Module):
             pos_injection=CatInjection,
             pos_injection_x_dim=None,
             cat_diameter=False,
-            log_diameter=False,
             qk_dim=8,
             k_rpe=False,
             q_rpe=False,
@@ -142,7 +141,7 @@ class Stage(nn.Module):
         # segment-level coordinates expressed in a unit-sphere. The
         # corresponding scaling factor (diameter) is returned, to be
         # used in potential subsequent stages
-        self.pos_norm = UnitSphereNorm(log_diameter=log_diameter)
+        self.pos_norm = UnitSphereNorm()
 
         # Fusion operator to combine node positions with node features
         self.pos_injection = fusion_factory('second') if pos_injection is None \
@@ -372,8 +371,7 @@ class PointStage(Stage):
             mlp_drop=None,
             pos_injection=CatInjection,
             pos_injection_x_dim=None,
-            cat_diameter=False,
-            log_diameter=False):
+            cat_diameter=False):
 
         assert len(in_mlp) > 1, \
             'in_mlp should be a list of channels of length >= 2'
@@ -388,5 +386,4 @@ class PointStage(Stage):
             mlp_drop=mlp_drop,
             pos_injection=pos_injection,
             pos_injection_x_dim=pos_injection_x_dim,
-            cat_diameter=cat_diameter,
-            log_diameter=log_diameter)
+            cat_diameter=cat_diameter)

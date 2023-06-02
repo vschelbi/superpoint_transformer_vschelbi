@@ -10,4 +10,3 @@ net:
     _partial_: True
   point_pos_injection_x_dim: null
   point_cat_diameter: False
-  point_log_diameter: ${model.net.log_diameter}

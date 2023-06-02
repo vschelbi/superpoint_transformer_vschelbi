@@ -23,7 +23,6 @@ net:
     _target_: src.nn.CatInjection
     _partial_: True
   cat_diameter: False
-  log_diameter: False
   pool: 'max'
   unpool: 'index'
   fusion: 'cat'
