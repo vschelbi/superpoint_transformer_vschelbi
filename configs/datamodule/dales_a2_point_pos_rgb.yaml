@@ -1,0 +1,6 @@
+defaults:
+  - dales_a2.yaml
+
+# point features used for training
+point_hf:
+  - 'intensity'
