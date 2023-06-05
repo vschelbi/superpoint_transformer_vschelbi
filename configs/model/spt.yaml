@@ -9,9 +9,9 @@ net:
   _target_: src.models.components.spt.SPT
 
   nano: False
-  node_mlp: ${eval:'[${model._d_x_raw}] + [${model._x_n_mlp}] * ${model._d_r} if ${model._x_n_mlp} and ${model.net.use_node_hf} and ${model._d_x_raw} > 0 else None'}
-  h_edge_mlp: ${eval:'[${model._x_he_raw}] + [${model._x_he_mlp}] * ${model._d_r} if ${model._x_he_mlp} else None'}
-  v_edge_mlp: ${eval:'[${model._x_ve_raw}] + [${model._x_ve_mlp}] * ${model._d_r} if ${model._x_ve_mlp} else None'}
+  node_mlp: ${eval:'[${model._node_hf_dim}] + [${model._node_mlp_out}] * ${model._mlp_depth} if ${model._node_mlp_out} and ${model.net.use_node_hf} and ${model._node_hf_dim} > 0 else None'}
+  h_edge_mlp: ${eval:'[${model._h_edge_hf_dim}] + [${model._h_edge_mlp_out}] * ${model._mlp_depth} if ${model._h_edge_mlp_out} else None'}
+  v_edge_mlp: ${eval:'[${model._v_edge_hf_dim}] + [${model._v_edge_mlp_out}] * ${model._mlp_depth} if ${model._v_edge_mlp_out} else None'}
   share_hf_mlps: False
   mlp_activation:
     _target_: torch.nn.LeakyReLU

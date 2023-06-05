@@ -31,21 +31,19 @@ criterion:
 # Parameters declared here to facilitate tuning configs. Those are only
 # used here for config interpolation but will/should actually fall in
 # the ignored kwargs of the PointSegmentationModule
-_p: [32, 64, 128]  # point encoder layers
-_d: [64, 64, 64, 64]  # encoder stage dimensions
-_u: [64, 64, 64]  # decoder stage dimensions
-_d_r: 2  # number of repeated dim layers in the encoder MLPs
-_u_r: 2  # number of repeated dim layers in the decoder MLPs
-_x_n_mlp: 32  # size of level-1+ node features after MLP, set to 'null' to use directly the raw features
-_x_he_mlp: 32  # size of level-1+ horizontal edge features after MLP, set to 'null' to use directly the raw features
-_x_ve_mlp: 32  # size of level-1+ vertical edge features after MLP, set to 'null' to use directly the raw features
+_point_mlp: [32, 64, 128]  # point encoder layers
+_node_mlp_out: 32  # size of level-1+ handcrafted node features after MLP, set to 'null' to use directly the raw features
+_h_edge_mlp_out: 32  # size of level-1+ handcrafted horizontal edge features after MLP, set to 'null' to use directly the raw features
+_v_edge_mlp_out: 32  # size of level-1+ handcrafted vertical edge features after MLP, set to 'null' to use directly the raw features
 
-_p_x: ${eval:'${model.net.use_pos} * 3 + ${datamodule.num_hf_point} + ${model.net.use_diameter_parent}'}  # size of handcrafted level-0 node features (points)
-_x_he_raw: ${datamodule.num_hf_edge}  # size of level-1+ handcrafted horizontal edge features
-_x_ve_raw: ${datamodule.num_hf_v_edge}  # size of level-1+ handcrafted vertical edge features
-_d_x_raw: ${eval:'${model.net.use_node_hf} * ${datamodule.num_hf_segment}'}  # size of handcrafted level-1+ node features before node MLP
-_d_x: ${eval:'${model.net.use_pos} * 3 + ${model.net.use_diameter} + ${model.net.use_diameter_parent} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.use_node_hf} and ${model._d_x_raw} > 0 else ${model._d_x_raw})'}  # size of parent level-1+ node features at injection time
-_u_x_raw: ${eval:'${model.net.use_node_hf} * ${datamodule.num_hf_segment}'}  # size of handcrafted level-1+ node features before node MLP
-_u_x: ${eval:'${model.net.use_pos} * 3 + ${model.net.use_diameter} + ${model.net.use_diameter_parent} + (${model._x_n_mlp} if ${model._x_n_mlp} and ${model.net.use_node_hf} and ${model._d_x_raw} > 0 else ${model._u_x_raw})'}  # size of parent level-1+ node features at injection time
+_point_hf_dim: ${eval:'${model.net.use_pos} * 3 + ${datamodule.num_hf_point} + ${model.net.use_diameter_parent}'}  # size of handcrafted level-0 node features (points)
+_node_hf_dim: ${eval:'${model.net.use_node_hf} * ${datamodule.num_hf_segment}'}  # size of handcrafted level-1+ node features before node MLP
+_node_injection_dim: ${eval:'${model.net.use_pos} * 3 + ${model.net.use_diameter} + ${model.net.use_diameter_parent} + (${model._node_mlp_out} if ${model._node_mlp_out} and ${model.net.use_node_hf} and ${model._node_hf_dim} > 0 else ${model._node_hf_dim})'}  # size of parent level-1+ node features for Stage injection input
+_h_edge_hf_dim: ${datamodule.num_hf_edge}  # size of level-1+ handcrafted horizontal edge features
+_v_edge_hf_dim: ${datamodule.num_hf_v_edge}  # size of level-1+ handcrafted vertical edge features
+
+_down_dim: [64, 64, 64, 64]  # encoder stage dimensions
+_up_dim: [64, 64, 64]  # decoder stage dimensions
+_mlp_depth: 2  # default nb of layers in all MLPs (ie MLP depth)
 
 net: ???

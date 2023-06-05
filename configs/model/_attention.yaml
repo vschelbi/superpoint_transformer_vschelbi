@@ -14,7 +14,7 @@ net:
   qk_dim: 4
   qkv_bias: True
   qk_scale: null
-  in_rpe_dim: ${eval:'${model._x_he_mlp} if ${model._x_he_mlp} else ${model._x_he_raw}'}
+  in_rpe_dim: ${eval:'${model._h_edge_mlp_out} if ${model._h_edge_mlp_out} else ${model._h_edge_hf_dim}'}
   k_rpe: True
   q_rpe: True
   v_rpe: True

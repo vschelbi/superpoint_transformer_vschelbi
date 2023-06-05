@@ -7,5 +7,5 @@ optimizer:
 
 _d: [32, 32, 32, 32]
 _u: [32, 32, 32]
-_x_n_mlp: 32
-_x_he_mlp: 32
+_node_mlp_out: 32
+_h_edge_mlp_out: 32
