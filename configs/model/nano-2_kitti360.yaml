@@ -4,3 +4,8 @@ defaults:
 optimizer:
   lr: 0.01
   weight_decay: 1e-4
+
+_d: [32, 32, 32, 32]
+_u: [32, 32, 32]
+_x_n_mlp: 32
+_x_he_mlp: 32

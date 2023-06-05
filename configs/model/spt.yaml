@@ -21,8 +21,8 @@ net:
 
   use_pos: True  # whether features should include (sphere-normalized) position
   use_node_hf: True  # whether features should include node handcrafted features (after optional node_mlp)
-  use_diameter: True  # whether features should include superpoint diameter (from sphere-normalization)
-  use_diameter_parent: False  # whether features should include superpoint diameter of the parent (from sphere-normalization)
+  use_diameter: False  # whether features should include the superpoint's diameter (from sphere-normalization)
+  use_diameter_parent: True  # whether features should include diameter of the superpoint's parent (from sphere-normalization)
   pool: 'max'  # pooling across the cluster, supports 'max', 'mean', 'min'
   unpool: 'index'
   fusion: 'cat'

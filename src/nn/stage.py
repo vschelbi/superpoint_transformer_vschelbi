@@ -35,7 +35,7 @@ class Stage(nn.Module):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
-    :param use_pos: int
+    :param use_pos: bool
         Whether the node's normalized position should be concatenated to
         the features before in_mlp
     :param use_diameter: bool
@@ -402,7 +402,7 @@ class PointStage(Stage):
         Normalization for the input and output MLPs
     :param mlp_drop: float, optional
         Dropout rate for the last layer of the input and output MLPs
-    :param use_pos: int
+    :param use_pos: bool
         Whether the node's normalized position should be concatenated to
         the features before in_mlp
     :param use_diameter_parent: bool
