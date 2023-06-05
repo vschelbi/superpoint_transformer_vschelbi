@@ -1,0 +1,4 @@
+defaults:
+  - s3dis_b.yaml
+
+graph_gap: [0.1, 0.2, 0.3]
