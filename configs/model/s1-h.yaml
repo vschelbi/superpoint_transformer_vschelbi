@@ -2,7 +2,7 @@ defaults:
   - spt.yaml
 
 # Size of output features
-_d: [64]
+_down_dim: [64]
 
 net:
   down_pool_dim: ${eval:'[${model._point_mlp}[-1]]'}
