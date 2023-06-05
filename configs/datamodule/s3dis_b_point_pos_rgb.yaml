@@ -1,0 +1,6 @@
+defaults:
+  - s3dis_b.yaml
+
+# point features used for training
+point_hf:
+  - 'rgb'

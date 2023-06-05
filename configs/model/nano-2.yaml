@@ -1,10 +1,10 @@
 defaults:
   - spt-2.yaml
 
-_d: [16, 16, 16, 16]
-_u: [16, 16, 16]
-_x_n_mlp: 16
-_x_he_mlp: 16
+_down_dim: [16, 16, 16, 16]
+_up_dim: [16, 16, 16]
+_node_mlp_out: 16
+_h_edge_mlp_out: 16
 
 net:
   nano: True

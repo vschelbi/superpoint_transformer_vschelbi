@@ -1,0 +1,14 @@
+defaults:
+  - s3dis_b.yaml
+
+# horizontal edge features used for training
+edge_hf:
+  - 'angle_source'
+  - 'angle_target'
+  - 'centroid_dir'
+  - 'centroid_dist'
+  - 'normal_angle'
+  - 'log_length'
+  - 'log_surface'
+  - 'log_volume'
+  - 'log_size'
