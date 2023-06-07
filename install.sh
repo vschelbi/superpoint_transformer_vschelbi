@@ -5,13 +5,13 @@ PROJECT_NAME=spt
 PYTHON=3.8
 
 
-# Installation script for Anaconda3 environments
-echo "#############################################"
-echo "#                                           #" 
-echo "#          Superpoint Transformer           #"
-echo "#                 Installer                 #"
-echo "#                                           #" 
-echo "#############################################"
+# Installation of Superpoint Transformer in a conda environment
+echo "_____________________________________________"
+echo
+echo "         ☁ Superpoint Transformer 🤖         "
+echo "                  Installer                  "
+echo
+echo "_____________________________________________"
 echo
 echo
 echo "⭐ Searching for installed conda"
