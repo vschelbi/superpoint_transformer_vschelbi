@@ -1,0 +1,10 @@
+defaults:
+  - kitti360_a.yaml
+
+# point features used for training
+point_hf:
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'elevation'

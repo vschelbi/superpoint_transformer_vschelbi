@@ -1,0 +1,12 @@
+defaults:
+  -     dales_a2.yaml
+
+# horizontal edge features used for training
+edge_hf:
+  - 'mean_off'
+  - 'std_off'
+  - 'mean_dist'
+  - 'log_length'
+  - 'log_surface'
+  - 'log_volume'
+  - 'log_size'
