@@ -1,17 +1,8 @@
 #!/bin/bash
 
-# Recover the project directory from the position of the install.sh script
-HERE=`dirname $0`
-HERE=`realpath $HERE`
-
-
 # Local variables
 PROJECT_NAME=spt
-YML_FILE=${HERE}/${PROJECT_NAME}.yml
 PYTHON=3.8
-TORCH=1.12.0
-#CUDA_SUPPORTED=(10.2)
-CUDA_SUPPORTED=(11.8)
 
 
 # Installation script for Anaconda3 environments
@@ -23,20 +14,16 @@ echo "#                                           #"
 echo "#############################################"
 echo
 echo
-
-
-echo "_______________ Prerequisites _______________"
-echo "  - conda"
-echo "  - cuda >= 10.2 (tested with `echo ${CUDA_SUPPORTED[*]}`)"
-echo "  - 8.0 >= gcc >= 7"
-echo
-echo
-
-
-echo "____________ Pick conda install _____________"
+echo "⭐ Searching for installed conda"
 echo
 # Recover the path to conda on your machine
-CONDA_DIR=`realpath ~/anaconda3`
+# First search the default '~/miniconda3' and '~/anaconda3' paths. If
+# those do not exist, ask for user input
+CONDA_DIR=`realpath ~/miniconda3`
+if (test -z $CONDA_DIR) || [ ! -d $CONDA_DIR ]
+then
+  CONDA_DIR=`realpath ~/anaconda3`
+fi
 
 while (test -z $CONDA_DIR) || [ ! -d $CONDA_DIR ]
 do
@@ -47,55 +34,33 @@ done
 
 echo "Using conda conda found at: ${CONDA_DIR}/etc/profile.d/conda.sh"
 source ${CONDA_DIR}/etc/profile.d/conda.sh
+
 echo
 echo
-
-
-echo "_____________ Pick CUDA version _____________"
-echo
-
-CUDA_VERSION=`nvcc --version | grep release | sed 's/.* release //' | sed 's/, .*//'`
-
-# If CUDA version not supported, ask whether to proceed
-if [[ ! " ${CUDA_SUPPORTED[*]} " =~ " ${CUDA_VERSION} " ]]
-then
-    echo "Found CUDA ${CUDA_VERSION} installed, is not among tested versions: "`echo ${CUDA_SUPPORTED[*]}`
-    echo "This may cause downstream errors when installing PyTorch and PyTorch Geometric dependencies, which you might solve by manually modifying setting the wheels in this script."
-    read -p "Proceed anyways ? [y/n] " -n 1 -r; echo
-    if !(test -z $REPLY) && [[ ! $REPLY =~ ^[Yy]$ ]]
-    then
-        exit 1
-    fi
-fi
-
-
-echo "________________ Installation _______________"
+echo "⭐ Creating conda environment '${PROJECT_NAME}'"
 echo
 
 # Create deep_view_aggregation environment from yml
-#conda env create -f ${YML_FILE}  #********************************* CREATE YML FILE
-conda create --name $PROJECT_NAME python=$PYTHON -y
+conda create --name ${PROJECT_NAME} python=${PYTHON} -y
 
 # Activate the env
 source ${CONDA_DIR}/etc/profile.d/conda.sh  
 conda activate ${PROJECT_NAME}
 
-
-#*********************************
-
+echo
+echo
+echo "⭐ Installing conda and pip dependencies"
+echo
 conda install pip nb_conda_kernels -y
 pip install matplotlib
 pip install plotly==5.9.0
 pip install "jupyterlab>=3" "ipywidgets>=7.6" jupyter-dash
 pip install "notebook>=5.3" "ipywidgets>=7.5"
 pip install ipykernel
-
 pip3 install torch torchvision
 #pip install torch==1.12.0 torchvision
-
 pip install torch_geometric pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.0.0+cu118.html
 #pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.12.0+cu102.html
-
 pip install plyfile
 pip install h5py
 pip install colorhash
@@ -115,7 +80,8 @@ pip install gdown
 #*********************************
 
 echo
-echo "___________________ FRNN ___________________"
+echo
+echo "⭐ Installing FRNN"
 echo
 git clone --recursive https://github.com/lxxue/FRNN.git src/dependencies/FRNN
 
@@ -128,25 +94,27 @@ cd ../../ # back to the {FRNN} directory
 python setup.py install
 cd ../../../
 
-
 echo
-echo "__________ Point Geometric Features _________"
+echo
+echo "⭐ Installing Point Geometric Features"
 echo
 git clone https://github.com/drprojects/point_geometric_features.git src/dependencies/point_geometric_features
 cd src/dependencies/point_geometric_features
-conda install numpy -y
 conda install -c omnia eigen3 -y
 python python/setup.py build_ext --include-dirs=$CONDA_PREFIX/include
 cd ../../..
 
-
 echo
-echo "________________ Cut-Pursuit _______________"
 echo
-
+echo "⭐ Installing Parallel Cut-Pursuit"
+echo
 # Clone parallel-cut-pursuit and grid-graph repos
 git clone -b improve_merge https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/dependencies/parallel_cut_pursuit
 git clone https://gitlab.com/1a7r0ch3/grid-graph.git src/dependencies/grid_graph
 
 # Compile the projects
 python scripts/setup_dependencies.py build_ext
+
+echo
+echo
+echo "🚀 Successfully installed SPT"
