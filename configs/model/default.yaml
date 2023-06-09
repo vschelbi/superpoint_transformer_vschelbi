@@ -2,7 +2,7 @@ _target_: src.models.segmentation.PointSegmentationModule
 
 num_classes: ${datamodule.num_classes}
 sampling_loss: False
-pointwise_loss: True
+loss_type: 'kl'  # supports 'ce', 'wce', 'kl', 'ce_kl', 'wce_kl'
 weighted_loss: True
 init_linear: null  # defaults to xavier_uniform initialization
 init_rpe: null  # defaults to xavier_uniform initialization

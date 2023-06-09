@@ -23,7 +23,7 @@ class PointSegmentationModule(LightningModule):
 
     def __init__(
             self, net, criterion, optimizer, scheduler, num_classes,
-            class_names=None, sampling_loss=False, pointwise_loss=True,
+            class_names=None, sampling_loss=False, loss_type=True,
             weighted_loss=True, init_linear=None, init_rpe=None,
             transformer_lr_scale=1, multi_stage_loss_lambdas=None,
             gc_every_n_steps=0, **kwargs):
@@ -183,20 +183,62 @@ class PointSegmentationModule(LightningModule):
         # Compute the loss either in a point-wise or segment-wise
         # fashion. Cross-Entropy with pointwise_loss is equivalent to
         # KL-divergence
-        if self.hparams.pointwise_loss and self.multi_stage_loss:
-            loss = 0
-            enum = zip(
-                self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
-            for lamb, criterion, a, b in enum:
-                loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
-            y_hist = y_hist[0]
-        elif self.hparams.pointwise_loss:
-            loss = loss_with_target_histogram(self.criterion, logits, y_hist)
-        elif self.multi_stage_loss:
-            loss = self.criterion(logits, [y.argmax(dim=1) for y in y_hist])
-            y_hist = y_hist[0]
+        if self.multi_stage_loss:
+            if self.hparams.loss_type == 'ce':
+                loss = self.criterion(logits, [y.argmax(dim=1) for y in y_hist])
+                y_hist = y_hist[0]
+            elif self.hparams._loss == 'wce':
+                y_hist_dominant = []
+                for y in y_hist:
+                    y_dominant = y.argmax(dim=1)
+                    y_hist_dominant_ = torch.zeros_like(y)
+                    y_hist_dominant_[:, y_dominant] = y.sum(dim=1)
+                    y_hist_dominant.append(y_hist_dominant_)
+                loss = loss_with_target_histogram(self.criterion, logits, y_hist_dominant)
+            elif self.hparams.loss_type == 'ce_kl':
+                loss = 0
+                enum = zip(
+                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
+                for i, (lamb, criterion, a, b) in enumerate(enum):
+                    if i == 0:
+                        loss = loss + criterion(a, b.argmax(dim=1))
+                        continue
+                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
+                y_hist = y_hist[0]
+            elif self.hparams.loss_type == 'wce_kl':
+                loss = 0
+                enum = zip(
+                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
+                for i, (lamb, criterion, a, b) in enumerate(enum):
+                    if i == 0:
+                        y_dominant = b.argmax(dim=1)
+                        y_hist_dominant = torch.zeros_like(b)
+                        y_hist_dominant[:, y_dominant] = b.sum(dim=1)
+                        loss = loss + loss_with_target_histogram(criterion, a, y_hist_dominant)
+                        continue
+                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
+                y_hist = y_hist[0]
+            elif self.hparams.loss_type == 'kl':
+                loss = 0
+                enum = zip(
+                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
+                for lamb, criterion, a, b in enum:
+                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
+                y_hist = y_hist[0]
+            else:
+                raise ValueError(f"Unknown multi-stage loss '{self.hparams.loss_type}'")
         else:
-            loss = self.criterion(logits, y_hist.argmax(dim=1))
+            if self.hparams.loss_type == 'ce':
+                loss = self.criterion(logits, y_hist.argmax(dim=1))
+            elif self.hparams._loss == 'wce':
+                y_dominant = y_hist.argmax(dim=1)
+                y_hist_dominant = torch.zeros_like(y_hist)
+                y_hist_dominant[:, y_dominant] = y_hist.sum(dim=1)
+                loss = loss_with_target_histogram(self.criterion, logits, y_hist_dominant)
+            elif self.hparams.loss_type == 'kl':
+                loss = loss_with_target_histogram(self.criterion, logits, y_hist)
+            else:
+                raise ValueError(f"Unknown single-stage loss '{self.hparams.loss_type}'")
 
         return loss, preds.detach(), y_hist.detach()
 
