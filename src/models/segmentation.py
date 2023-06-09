@@ -187,14 +187,19 @@ class PointSegmentationModule(LightningModule):
             if self.hparams.loss_type == 'ce':
                 loss = self.criterion(logits, [y.argmax(dim=1) for y in y_hist])
                 y_hist = y_hist[0]
-            elif self.hparams._loss == 'wce':
+            elif self.hparams.loss_type == 'wce':
                 y_hist_dominant = []
                 for y in y_hist:
                     y_dominant = y.argmax(dim=1)
                     y_hist_dominant_ = torch.zeros_like(y)
                     y_hist_dominant_[:, y_dominant] = y.sum(dim=1)
                     y_hist_dominant.append(y_hist_dominant_)
-                loss = loss_with_target_histogram(self.criterion, logits, y_hist_dominant)
+                loss = 0
+                enum = zip(
+                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist_dominant)
+                for lamb, criterion, a, b in enum:
+                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
+                y_hist = y_hist[0]
             elif self.hparams.loss_type == 'ce_kl':
                 loss = 0
                 enum = zip(
@@ -230,7 +235,7 @@ class PointSegmentationModule(LightningModule):
         else:
             if self.hparams.loss_type == 'ce':
                 loss = self.criterion(logits, y_hist.argmax(dim=1))
-            elif self.hparams._loss == 'wce':
+            elif self.hparams.loss_type == 'wce':
                 y_dominant = y_hist.argmax(dim=1)
                 y_hist_dominant = torch.zeros_like(y_hist)
                 y_hist_dominant[:, y_dominant] = y_hist.sum(dim=1)
