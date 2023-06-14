@@ -13,7 +13,7 @@ __all__ = ['NAG', 'NAGBatch']
 
 
 class NAG:
-    """Holder for a Nested Asymmetric Graph, containing a list of
+    """Holder for a Nested Acyclic Graph, containing a list of
     nested partitions of the same point cloud.
     """
 
