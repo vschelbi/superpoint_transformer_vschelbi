@@ -45,53 +45,8 @@ named `spt`.
 # Creates a conda env named 'spt' env and installs dependencies
 ./install.sh
 ```
-
-## 🚀  Reproducing our results
 See the [Datasets page](docs/dataset.md) for further details on supported 
 datasets and the data structure. 
-
-### Training SPT
-Use the following commands to train SPT:
-```bash
-# Train SPT on S3DIS Fold 5
-python src/train.py trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
-
-# Train SPT on KITTI-360 Val
-# ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
-python src/train.py trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
-
-# Train SPT on DALES
-python src/train.py trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
-```
-
-You may use [Weights and Biases](https://wandb.ai) to track your experiments, 
-by adding the adequate argument:
-
-```bash
-# Log S3DIS experiments to W&B
-python src/train.py logger=wandb_s3dis ...
-
-# Log KITTI-360 experiments to W&B
-python src/train.py logger=wandb_kitti360 ...
-
-# Log DALES experiments to W&B
-python src/train.py logger=wandb_dales ...
-```
-
-### Evaluating SPT
-Use the following commands to evaluate SPT from a checkpoint file 
-`checkpoint.ckpt`. 
-```bash
-# Train SPT on S3DIS Fold 5
-python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
-
-# Train SPT on KITTI-360 Val
-# ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
-python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
-
-# Train SPT on DALES
-python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
-```
 
 ### 🔩  Project structure
 ```
@@ -178,6 +133,54 @@ See the [Datasets page](docs/dataset.md) for further details.
 
 ### Structure of `logs/` 
 See the [Logs page](docs/logs.md) for further details.
+
+## 🚀  Reproducing our results
+See the [Datasets page](docs/dataset.md) for further details on supported 
+datasets and the data structure. 
+
+### Training SPT
+Use the following commands to train SPT:
+```bash
+# Train SPT on S3DIS Fold 5
+python src/train.py trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
+
+# Train SPT on KITTI-360 Val
+# ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
+python src/train.py trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
+
+# Train SPT on DALES
+python src/train.py trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
+```
+
+You may use [Weights and Biases](https://wandb.ai) to track your experiments, 
+by adding the adequate argument:
+
+```bash
+# Log S3DIS experiments to W&B
+python src/train.py logger=wandb_s3dis ...
+
+# Log KITTI-360 experiments to W&B
+python src/train.py logger=wandb_kitti360 ...
+
+# Log DALES experiments to W&B
+python src/train.py logger=wandb_dales ...
+```
+
+### Evaluating SPT
+Use the following commands to evaluate SPT from a checkpoint file 
+`checkpoint.ckpt`. 
+```bash
+# Train SPT on S3DIS Fold 5
+python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
+
+# Train SPT on KITTI-360 Val
+# ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
+python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
+
+# Train SPT on DALES
+python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
+```
+
 
 ## 💳  Credits
 - This project was built using [Lightning-Hydra template](https://github.com/ashleve/lightning-hydra-template).

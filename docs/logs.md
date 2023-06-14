@@ -28,3 +28,22 @@ Your logs will be saved under the following structure:
         └── ...
 
 ```
+
+## Setting up `data/` and `logs/`
+The `data/` and `logs/` directories will store all your datasets and training 
+logs. By default, these are placed in the repository directory. 
+
+Since this may take some space, or your heavy data may be stored elsewhere, you 
+may specify other paths for these directories by creating a 
+`configs/local/defaults.yaml` file containing the following:
+
+```yaml
+# @package paths
+
+# path to data directory
+data_dir: /path/to/your/data/
+
+# path to logging directory
+log_dir: /path/to/your/logs/
+```
+
