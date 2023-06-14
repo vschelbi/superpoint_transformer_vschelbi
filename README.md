@@ -38,14 +38,14 @@ between superpoints at multiple scales.
 
 <div align="center">
 
-SPT in numbers |
-:-------------------------------------------- |
-**📊 SOTA on S3DIS 6-Fold (76.0 mIoU)** |
-**📊 SOTA on KITTI-360 Val (63.5 mIoU)** |
-**📊 Near SOTA on DALES (79.6 mIoU)** | 
-**🦋 212k parameters** | 
-**⚡ S3DIS training in 3h on 1 GPU** | 
-**⚡ Preprocessing x7 faster than [SPG](https://github.com/loicland/superpoint_graph)** |
+| SPT in numbers |
+| :---: |
+| **📊 SOTA on S3DIS 6-Fold (76.0 mIoU)** |
+| **📊 SOTA on KITTI-360 Val (63.5 mIoU)** |
+| **📊 Near SOTA on DALES (79.6 mIoU)** | 
+| **🦋 212k parameters** | 
+| **⚡ S3DIS training in 3h on 1 GPU** | 
+| **⚡ Preprocessing x7 faster than [SPG](https://github.com/loicland/superpoint_graph)** |
 
 </div>
 
