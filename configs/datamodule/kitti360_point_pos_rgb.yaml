@@ -1,5 +1,5 @@
 defaults:
-  - kitti360_a.yaml
+  - kitti360.yaml
 
 # point features used for training
 point_hf:

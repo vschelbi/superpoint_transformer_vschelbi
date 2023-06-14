@@ -1,8 +1,0 @@
-defaults:
-  - kitti360.yaml
-
-# A : /10 /500 /1500 ratios
-# H 1: 30, 30, 30 edges
-knn: 25
-pcp_cutoff: [10, 30, 30]
-pc_tiling: 2

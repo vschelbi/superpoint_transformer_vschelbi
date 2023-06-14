@@ -1,5 +1,5 @@
 defaults:
-  - kitti360_a.yaml
+  - kitti360.yaml
 
 # horizontal edge features used for training
 edge_hf:

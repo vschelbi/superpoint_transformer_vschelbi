@@ -1,12 +1,8 @@
 defaults:
-  - kitti360_a.yaml
+  - kitti360.yaml
 
 # point features used for training
-point_hf: []
-
-# segment-wise features computed at preprocessing
-segment_mean_hf:
-  - 'hsv'
+point_hf:
   - 'linearity'
   - 'planarity'
   - 'scattering'
