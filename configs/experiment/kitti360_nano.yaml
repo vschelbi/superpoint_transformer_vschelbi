@@ -4,7 +4,7 @@
 # python train.py experiment=example
 
 defaults:
-  - override /datamodule: kitti360.yaml
+  - override /datamodule: kitti360_nano.yaml
   - override /model: nano-2.yaml
   - override /trainer: gpu.yaml
 
