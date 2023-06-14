@@ -26,6 +26,8 @@ _Efficient 3D Semantic Segmentation with Superpoint Transformer_
     <img width="90%" src="./media/teaser.jpg">
 </p>
 
+<br>
+
 ## 📌  Description
 
 SPT is a superpoint-based transformer 🤖 architecture that efficiently ⚡ 
@@ -34,9 +36,13 @@ fast algorithm that partitions 🧩 point clouds into a hierarchical superpoint
 structure, as well as a self-attention mechanism to exploit the relationships 
 between superpoints at multiple scales. 
 
+<br>
+
 ## 📰  Updates
 
 - **15.06.2023 Official release** 🌱
+
+<br>
 
 ## 🏗  Installation
 Simply run `install.sh` to install all dependencies in a new conda environment 
@@ -45,8 +51,11 @@ named `spt`.
 # Creates a conda env named 'spt' env and installs dependencies
 ./install.sh
 ```
-See the [Datasets page](docs/dataset.md) for further details on supported 
-datasets and the data structure. 
+
+> **Note**: See the [Datasets page](docs/dataset.md) for setting up your dataset
+> path and file structure.
+
+<br>
 
 ### 🔩  Project structure
 ```
@@ -110,32 +119,15 @@ datasets and the data structure.
 
 ```
 
-### Setting up `data/` and `logs/`
-The `data/` and `logs/` directories will store all your datasets and training 
-logs. By default, these are placed in the repository directory. 
+> **Note**: See the [Datasets page](docs/dataset.md) for further details on `data/``. 
 
-Since this may take some space, or your heavy data may be stored elsewhere, you 
-may specify other paths for these directories by creating a 
-`configs/local/defaults.yaml` file containing the following:
+> **Note**: See the [Logs page](docs/logs.md) for further details on `logs/``. 
 
-```yaml
-# @package paths
-
-# path to data directory
-data_dir: /path/to/your/data/
-
-# path to logging directory
-log_dir: /path/to/your/logs/
-```
-
-### Structure of `data/` 
-See the [Datasets page](docs/dataset.md) for further details. 
-
-### Structure of `logs/` 
-See the [Logs page](docs/logs.md) for further details.
+<br>
 
 ## 🚀  Reproducing our results
-See the [Datasets page](docs/dataset.md) for further details on supported 
+
+> **Note**: See the [Datasets page](docs/dataset.md) for further details on supported 
 datasets and the data structure. 
 
 ### Training SPT
@@ -181,6 +173,7 @@ python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_kitti360 data
 python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
 ```
 
+<br>
 
 ## 💳  Credits
 - This project was built using [Lightning-Hydra template](https://github.com/ashleve/lightning-hydra-template).
@@ -189,6 +182,8 @@ python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_dales datamod
 - For the KITTI-360 dataset, some code from the official [KITTI-360](https://github.com/autonomousvision/kitti360Scripts) was used.
 - Some superpoint-graph-related operations were inspired from [Superpoint Graph](https://github.com/loicland/superpoint_graph)
 - The hierarchical superpoint partition is computed using [Parallel Cut-Pursuit](https://gitlab.com/1a7r0ch3/parallel-cut-pursuit)
+
+<br>
 
 ## Citing our work
 If your work uses all or part of the present code, please include the following a citation:

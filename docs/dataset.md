@@ -56,9 +56,9 @@ Datasets are stored under the following structure:
 ```
 </details>
 
-💾❓**Already have the dataset on your machine** ? Save memory by simply 
-symlinking or copying the files to `data/<dataset_name>/raw/`, following the 
-above structure.
+> **Note**: Already have the dataset on your machine? Save memory 💾 by 
+> simply symlinking or copying the files to `data/<dataset_name>/raw/`, following the 
+> above structure.
 
 ## Automatic download
 Following `torch_geometric`'s `Dataset` behaviour:
