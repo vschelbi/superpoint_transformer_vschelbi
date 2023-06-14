@@ -5,7 +5,12 @@ automated download (when allowed), preprocessing and inference-time transforms.
 See the [official documentation](https://pytorch-geometric.readthedocs.io/en/latest/tutorial/create_dataset.html)
 for more details. 
 
-## `data/` structure 
+## Supported datasets
+- [S3DIS](http://buildingparser.stanford.edu/dataset.html)
+- [KITTI-360](https://www.cvlibs.net/datasets/kitti-360/index.php)
+- [DALES](https://udayton.edu/engineering/research/centers/vision_lab/research/was_data_analysis_and_processing/dale.php)
+
+## Structure of the `data/` directory 
 <details>
 <summary><b>Data directory structure.</b></summary>
 
@@ -47,6 +52,7 @@ Datasets are stored under the following structure:
             └── {{train, val, test}}                      # Dataset splits
                 └── {{preprocessing_hash}}                  # Preprocessing folder
                     └── Area_{{1, 2, 3, 4, 5, 6}}.h5          # Preprocessed Area file
+
 ```
 </details>
 
@@ -88,3 +94,23 @@ partition regularization).
 
 Modifications of the transforms and on-device 
 transforms will not affect your preprocessing hash.
+
+## Mini datasets
+Each dataset has a "mini" version which only processes a portion of the data, to
+speedup experimentation. To use it, set your dataset config:
+```yaml
+mini: True
+```
+
+## Creating your own dataset
+To create your own dataset, you will need to do the following:
+- create `YourDataset` class inheriting from `src.datasets.BaseDataset`
+- create `YourDataModule` class inheriting from `src.datamodules.DataModule`
+- create `configs/datamodule/your_dataset.yaml` config 
+ 
+Instructions are provided in the docstrings of those classes and you can get
+inspiration from our code for S3DIS, KITTI-360 and DALES to get started. 
+
+We suggest that your config inherits from `configs/datamodule/default.yaml`. See
+`configs/datamodule/s3dis.yaml`, `configs/datamodule/kitti360.yaml`, and 
+`configs/datamodule/dales.yaml` for inspiration.
