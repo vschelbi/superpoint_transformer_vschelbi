@@ -143,29 +143,21 @@ named `spt`.
 Use the following commands to train SPT:
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
+python src/train.py experiment=s3dis datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
 # ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
-python src/train.py trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
+python src/train.py experiment=kitti360 
 
 # Train SPT on DALES
-python src/train.py trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
+python src/train.py experiment=dales
 ```
 
-You may use [Weights and Biases](https://wandb.ai) to track your experiments, 
-by adding the adequate argument:
-
-```bash
-# Log S3DIS experiments to W&B
-python src/train.py logger=wandb_s3dis ...
-
-# Log KITTI-360 experiments to W&B
-python src/train.py logger=wandb_kitti360 ...
-
-# Log DALES experiments to W&B
-python src/train.py logger=wandb_dales ...
-```
+> **Note**: By default, your logs will automatically be uploaded to 
+>[Weights and Biases](https://wandb.ai), from where you can track and compare 
+>your experiments. Other loggers are available in `configs/logger/`. See 
+>[Lightning-Hydra](https://github.com/ashleve/lightning-hydra-template) for more
+>information.
 
 ### Evaluating SPT
 Use the following commands to evaluate SPT from a checkpoint file 

@@ -47,3 +47,11 @@ data_dir: /path/to/your/data/
 log_dir: /path/to/your/logs/
 ```
 
+## Logger options
+By default, your logs will automatically be uploaded to 
+[Weights and Biases](https://wandb.ai), from where you can track and compare 
+your experiments.
+
+Other loggers are available in `configs/logger/`. See 
+[Lightning-Hydra](https://github.com/ashleve/lightning-hydra-template) for more
+information.

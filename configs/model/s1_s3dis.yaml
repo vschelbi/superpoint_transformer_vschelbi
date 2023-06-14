@@ -1,6 +1,0 @@
-defaults:
-  - s1.yaml
-
-optimizer:
-  lr: 0.1
-  weight_decay: 1e-2

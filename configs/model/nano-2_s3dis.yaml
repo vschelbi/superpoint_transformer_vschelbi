@@ -1,6 +1,0 @@
-defaults:
-  - nano-2.yaml
-
-optimizer:
-  lr: 0.1
-  weight_decay: 1e-2

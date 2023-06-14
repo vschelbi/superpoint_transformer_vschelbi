@@ -2,11 +2,11 @@ _target_: src.models.segmentation.PointSegmentationModule
 
 num_classes: ${datamodule.num_classes}
 sampling_loss: False
-loss_type: 'kl'  # supports 'ce', 'wce', 'kl', 'ce_kl', 'wce_kl'
+loss_type: 'ce_kl'  # supports 'ce', 'wce', 'kl', 'ce_kl', 'wce_kl'
 weighted_loss: True
 init_linear: null  # defaults to xavier_uniform initialization
 init_rpe: null  # defaults to xavier_uniform initialization
-multi_stage_loss_lambdas: null
+multi_stage_loss_lambdas: [1, 50]  # weights for the multi-stage loss
 transformer_lr_scale: 0.1
 gc_every_n_steps: 0
 
