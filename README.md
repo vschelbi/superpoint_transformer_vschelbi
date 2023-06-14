@@ -36,6 +36,10 @@ fast algorithm that partitions 🧩 point clouds into a hierarchical superpoint
 structure, as well as a self-attention mechanism to exploit the relationships 
 between superpoints at multiple scales. 
 
+📊 SOTA on S3DIS 6-Fold (76.0 mIoU) | 📊 SOTA on KITTI-360 Val (63.5 mIoU)  | 📊 Near SOTA on DALES (79.6 mIoU)    
+:-------------------------------------------- | :-------------------------------------------------- | :------------------------------
+**🦋 212k parameters** | **⚡ S3DIS training in 3h on 1 GPU** | **⚡ [SPG](https://github.com/loicland/superpoint_graph) preprocessing ÷7** 
+
 <br>
 
 ## 📰  Updates
@@ -125,11 +129,7 @@ named `spt`.
 
 <br>
 
-## 🚀  Reproducing our results
-
-> **Note**: See the [Datasets page](docs/dataset.md) for further details on supported 
-datasets and the data structure. 
-
+## 🚀  Usage
 ### Training SPT
 Use the following commands to train SPT:
 ```bash
@@ -172,6 +172,11 @@ python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_kitti360 data
 # Train SPT on DALES
 python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
 ```
+
+### Visualization
+We provide an interactive visualization tool which can be used to produce 
+shareable HTMLs. Examples of how to use this tool are provided in 
+`notebooks/`.
 
 <br>
 
