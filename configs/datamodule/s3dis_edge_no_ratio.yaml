@@ -1,5 +1,5 @@
 defaults:
-  - s3dis_b.yaml
+  - s3dis.yaml
 
 # horizontal edge features used for training
 edge_hf:

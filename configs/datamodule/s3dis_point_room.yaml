@@ -1,5 +1,5 @@
 defaults:
-  - s3dis_b.yaml
+  - s3dis.yaml
 
 # point features used for training
 point_hf:
