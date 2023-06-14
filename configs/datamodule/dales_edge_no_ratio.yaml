@@ -1,5 +1,5 @@
 defaults:
-  -     dales_a2.yaml
+  - dales.yaml
 
 # horizontal edge features used for training
 edge_hf:

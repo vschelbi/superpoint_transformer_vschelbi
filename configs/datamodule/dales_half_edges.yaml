@@ -1,4 +1,4 @@
 defaults:
-  - dales_a2.yaml
+  - dales.yaml
 
 graph_gap: [3, 20, 30]
