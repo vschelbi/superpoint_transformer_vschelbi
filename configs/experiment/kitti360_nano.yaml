@@ -19,10 +19,10 @@ model:
     lr: 0.01
     weight_decay: 1e-4
 
-    _down_dim: [ 32, 32, 32, 32 ]
-    _up_dim: [ 32, 32, 32 ]
-    _node_mlp_out: 32
-    _h_edge_mlp_out: 32
+  _down_dim: [ 32, 32, 32, 32 ]
+  _up_dim: [ 32, 32, 32 ]
+  _node_mlp_out: 32
+  _h_edge_mlp_out: 32
 
 logger:
   wandb:
