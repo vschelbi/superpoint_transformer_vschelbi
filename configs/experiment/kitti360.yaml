@@ -29,4 +29,4 @@ model:
 logger:
   wandb:
     project: "spt_kitti360"
-        name: "SPT-128"
+    name: "SPT-128"
