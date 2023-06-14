@@ -12,40 +12,47 @@
 [//]: # ([![Conference]&#40;http://img.shields.io/badge/AnyConference-year-4b44ce.svg&#41;]&#40;https://papers.nips.cc/paper/2020&#41;)
 
 
-Official implementation for _Efficient 3D Semantic Segmentation with Superpoint Transformer_ 🚀⚡🔥<br>
+Official implementation for
+<br>
+_Efficient 3D Semantic Segmentation with Superpoint Transformer_
+<br>
+🚀⚡🔥
+<br>
+
 
 </div>
 
 <p align="center">
-    <img width="90%" src="./media/input.png">
-    <br>
-    <img width="90%" src="./media/partition.png">
-    <br>
-    <img width="90%" src="./media/prediction.png">
+    <img width="90%" src="./media/teaser.jpg">
 </p>
-
 
 ## 📌  Description
 
-SPT is a superpoint-based transformer architecture that efficiently performs 
-semantic segmentation on large-scale 3D scenes. This method includes a fast 
-algorithm that partitions point clouds into a hierarchical superpoint structure, 
-as well as a self-attention mechanism to exploit the relationships between 
-superpoints at multiple scales. 
+SPT is a superpoint-based transformer 🤖 architecture that efficiently ⚡ 
+performs semantic segmentation on large-scale 3D scenes. This method includes a 
+fast algorithm that partitions 🧩 point clouds into a hierarchical superpoint 
+structure, as well as a self-attention mechanism to exploit the relationships 
+between superpoints at multiple scales. 
+
+## 📰  Updates
+
+- **15.06.2023 Official release** 🌱
 
 ## 🧱  Installation
-The provided `install.sh` script will install all dependencies in a new conda
- environment named `spt`. 
+Simply run `install.sh` to install all dependencies in a new conda environment 
+named `spt`. 
 ```bash
 # Creates a conda env named 'spt' env and installs dependencies
 ./install.sh
 ```
 
-Setup your `data/` and `logs/` directories. By default, these folders will 
-be placed in the project directory. But since these may quickly take some space,
-or your heavy data may be stored elsewhere, you may specify your default paths 
-for these directories by creating a `configs/local/defaults.yaml` file with 
-the following structure:
+### Setting up `data/` and `logs/`
+The `data/` and `logs/` directories will store all your datasets and training 
+logs. By default, these are placed in the repository directory. 
+
+Since this may take some space, or your heavy data may be stored elsewhere, you 
+may specify other paths for these directories by creating a 
+`configs/local/defaults.yaml` file with  the following structure:
 
 ```yaml
 # @package paths
@@ -58,10 +65,62 @@ log_dir: /path/to/your/logs/
 ```
 
 <details>
+<summary><b>Data directory structure.</b></summary>
+
+Datasets are stored under the following structure:
+
+```
+└── data
+    ├── dales                                         # Structure for DALES
+    │   ├── DALESObjects.tar.gz                         # (optional) Downloaded zipped dataset
+    │   ├── raw                                         # Raw dataset files
+    │   │   └── {{train, test}}                           # DALES' split/tile.ply structure
+    │   │       └── {{tile_name}}.ply
+    │   └── processed                                   # Preprocessed data
+    |       └── {{train, val, test}}                      # Dataset splits
+    |           └── {{preprocessing_hash}}                  # Preprocessing folder
+    │               └── {{tile_name}}.h5                      # Preprocessed tile file
+    │    
+    ├── kitti360                                      # Structure for KITTI-360
+    │   ├── raw                                         # Raw dataset files
+    │   │   ├── data_3d_semantics_test.zip              # (optional) Downloaded zipped test dataset
+    │   │   ├── data_3d_semantics.zip                   # (optional) Downloaded zipped train dataset
+    │   │   └── data_3d_semantics                       # Contains all raw train and test sequences
+    │   │       └── {{sequence_name}}                     # KITTI-360's sequence/static/window.ply structure
+    │   │           └── static
+    │   │               └── {{window_name}}.ply
+    │   └── processed                                   # Preprocessed data
+    │       └── {{train, val, test}}                      # Dataset splits
+    │           └── {{preprocessing_hash}}                  # Preprocessing folder
+    │               └── {{sequence_name}}
+    │                   └── {{window_name}}.h5                # Preprocessed window file
+    │    
+    └── s3dis                                         # Structure for S3DIS
+        ├── Stanford3dDataset_v1.2.zip                  # (optional) Downloaded zipped dataset
+        ├── raw                                         # Raw dataset files
+        │   └── Area_{{1, 2, 3, 4, 5, 6}}                 # S3DIS's area/room/room.txt structure
+        │       └── {{room_name}}  
+        │           └── {{room_name}}.txt
+        └── processed                                   # Preprocessed data
+            └── {{train, val, test}}                      # Dataset splits
+                └── {{preprocessing_hash}}                  # Preprocessing folder
+                    └── Area_{{1, 2, 3, 4, 5, 6}}.h5          # Preprocessed Area file
+```
+
+All datasets inherit from the `torch_geometric` `Dataset` class, allowing for 
+automated download (when allowed), preprocessing and inference-time transforms. 
+See the [official documentation](https://pytorch-geometric.readthedocs.io/en/latest/tutorial/create_dataset.html)
+for more details.
+
+Different from `torch_geometric`, you can have multiple preprocessed versions of 
+each dataset.
+
+</details>
+
+<details>
 <summary><b>Logs directory structure.</b></summary>
 
-When using this project, your logs will be saved under the following 
-directory structure
+Your logs will be saved under the following structure:
 
 ```
 ├── logs
@@ -88,16 +147,17 @@ directory structure
 
 </details>
 
-
 ## 🚀  Reproducing our results
+### Dataset structure
+Datasets are saved `data/<dataset_name>`
 
-The next commands will do the following for you:
+### Training SPT
+By default, the training scripts will automatically do the following:
+- Search the dataset your `data/<dataset_name`
 - Download the dataset to your `data/` (if the dataset creators permit automatic download, else a prompt will indicate how to proceed manually)
 - Place the raw dataset files in `data/<dataset_name>/raw/`
 - Preprocess the dataset and save the output to `data/<dataset_name>/processed/`
 - Training a model and log the results
-
-
 
 ```bash
 # Train SPT on S3DIS Fold 5
@@ -125,6 +185,8 @@ python src/train.py logger=wandb_kitti360 ...
 python src/train.py logger=wandb_dales ...
 ```
 
+### Evaluating SPT
+
 
 ## 💳  Credits
 - This project was built using [Lightning-Hydra template](https://github.com/ashleve/lightning-hydra-template).
@@ -134,31 +196,14 @@ python src/train.py logger=wandb_dales ...
 - Some superpoint-graph-related operations were inspired from [Superpoint Graph](https://github.com/loicland/superpoint_graph)
 - The hierarchical superpoint partition is computed using [Parallel Cut-Pursuit](https://gitlab.com/1a7r0ch3/parallel-cut-pursuit)
 
-
-## License
-
-SPT is licensed under the MIT License.
+## Citing our work
+If your work uses all or part of the present code, please include the following a citation:
 
 ```
-MIT License
-
-Copyright (c) 2021 ashleve
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+@inproceedings{robert2023spt,
+  title={Efficient 3D Semantic Segmentation with Superpoint Transformer},
+  author={Robert, Damien and Raguet, Hugo and Landrieu, Loic},
+  booktitle={arxiv},
+  year={2023}
+}
 ```
