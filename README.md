@@ -153,6 +153,17 @@ python src/train.py experiment=kitti360
 python src/train.py experiment=dales
 ```
 
+> **Note**: Other ready-to-use configs are provided in
+>[`configs/experiment/`](configs/experiment). You can easily design your own 
+>experiments by composing [configs](configs):
+>```bash
+># Train Nano-3 for 50 epochs on DALES
+>python src/train.py datamodule=dales model=nano-3 trainer.max_epochs=50
+>```
+>See 
+>[Lightning-Hydra](https://github.com/ashleve/lightning-hydra-template) for more
+>information.
+
 > **Note**: By default, your logs will automatically be uploaded to 
 >[Weights and Biases](https://wandb.ai), from where you can track and compare 
 >your experiments. Other loggers are available in 
