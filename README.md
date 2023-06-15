@@ -187,11 +187,11 @@ python src/eval.py experiment=dales ckpt_path=checkpoint.ckpt
 ```
 
 ### Notebooks & visualization
-We provide [notebooks](notebooks) to help you get started with core data 
-structures, configs loading, dataset and model instantiation, inference on each
-dataset, and visualization.
+We provide [notebooks](notebooks) to help you get started with manipulating our 
+core data structures, configs loading, dataset and model instantiation, 
+inference on each dataset, and visualization.
 
-In particular, we created an interactive visualization tool 🕶 which can be used
+In particular, we created an interactive visualization tool ✨ which can be used
 to produce shareable HTMLs. Examples of how to use this tool are provided in 
 the [notebooks](notebooks).
 
