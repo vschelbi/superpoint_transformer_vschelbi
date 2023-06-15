@@ -14,11 +14,12 @@
 
 Official implementation for
 <br>
-_Efficient 3D Semantic Segmentation with Superpoint Transformer_
+###_Efficient 3D Semantic Segmentation with Superpoint Transformer_
 <br>
 🚀⚡🔥
 <br>
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712)
 
 </div>
 
@@ -185,6 +186,12 @@ python src/eval.py experiment=kitti360  ckpt_path=checkpoint.ckpt
 # Evaluate SPT on DALES
 python src/eval.py experiment=dales ckpt_path=checkpoint.ckpt
 ```
+
+> **Note**: The pretrained weights of the **SPT** and **SPT-nano** models for 
+>**S3DIS 6-Fold**, **KITTI-360 Val**, and **DALES** are available at:
+>
+>[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712) 
+
 
 ### Notebooks & visualization
 We provide [notebooks](notebooks) to help you get started with manipulating our 
