@@ -60,6 +60,24 @@ Datasets are stored under the following structure:
 > simply symlinking or copying the files to `data/<dataset_name>/raw/`, following the 
 > above structure.
 
+## Setting up your own `data/` and `logs/` paths
+The `data/` and `logs/` directories will store all your datasets and training 
+logs. By default, these are placed in the repository directory. 
+
+Since this may take some space, or your heavy data may be stored elsewhere, you 
+may specify other paths for these directories by creating a 
+`configs/local/defaults.yaml` file containing the following:
+
+```yaml
+# @package paths
+
+# path to data directory
+data_dir: /path/to/your/data/
+
+# path to logging directory
+log_dir: /path/to/your/logs/
+```
+
 ## Automatic download
 Following `torch_geometric`'s `Dataset` behaviour:
 - missing files in `data/<dataset_name>/raw` structure ➡ automatic download
@@ -67,7 +85,7 @@ Following `torch_geometric`'s `Dataset` behaviour:
 
 However, some datasets (_e.g._ KITTI-360) require you to *manually download**
 from their official webpage. For those, you will need to manually setup the 
-above-described `data/` structure.
+[above-described `data/` structure](#structure-of-the-data-directory).
 
 ## Pre-transforms, transforms, on-device transforms
 

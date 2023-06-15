@@ -29,7 +29,7 @@ Your logs will be saved under the following structure:
 
 ```
 
-## Setting up `data/` and `logs/`
+## Setting up your own `data/` and `logs/` paths
 The `data/` and `logs/` directories will store all your datasets and training 
 logs. By default, these are placed in the repository directory. 
 

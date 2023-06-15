@@ -58,14 +58,14 @@ between superpoints at multiple scales.
 <br>
 
 ## 🏗  Installation
-Simply run `install.sh` to install all dependencies in a new conda environment 
+Simply run [`install.sh`](install.sh) to install all dependencies in a new conda environment 
 named `spt`. 
 ```bash
 # Creates a conda env named 'spt' env and installs dependencies
 ./install.sh
 ```
 
-> **Note**: See the [Datasets page](docs/dataset.md) for setting up your dataset
+> **Note**: See the [Datasets page](docs/datasets.md) for setting up your dataset
 > path and file structure.
 
 <br>
@@ -91,7 +91,7 @@ named `spt`.
     │   ├── eval.yaml                 # Main config for evaluation
     │   └── train.yaml                # Main config for training
     │
-    ├── data                      # Project data
+    ├── data                      # Project data (see docs/datasets.md)
     │
     ├── docs                      # Documentation
     │
@@ -132,9 +132,9 @@ named `spt`.
 
 ```
 
-> **Note**: See the [Datasets page](docs/dataset.md) for further details on `data/``. 
+> **Note**: See the [Datasets page](docs/datasets.md) for further details on `data/``. 
 
-> **Note**: See the [Logs page](docs/logs.md) for further details on `logs/``. 
+> **Note**: See the [Logs page](docs/logging.md) for further details on `logs/``. 
 
 <br>
 
@@ -155,7 +155,8 @@ python src/train.py experiment=dales
 
 > **Note**: By default, your logs will automatically be uploaded to 
 >[Weights and Biases](https://wandb.ai), from where you can track and compare 
->your experiments. Other loggers are available in `configs/logger/`. See 
+>your experiments. Other loggers are available in 
+>[`configs/logger/`](configs/logger). See 
 >[Lightning-Hydra](https://github.com/ashleve/lightning-hydra-template) for more
 >information.
 
@@ -174,18 +175,22 @@ python src/eval.py experiment=kitti360  ckpt_path=checkpoint.ckpt
 python src/eval.py experiment=dales ckpt_path=checkpoint.ckpt
 ```
 
-### Visualization
-We provide an interactive visualization tool which can be used to produce 
-shareable HTMLs. Examples of how to use this tool are provided in 
-`notebooks/`.
+### Notebooks & visualization
+We provide [notebooks](notebooks) to help you get started with core data 
+structures, configs loading, dataset and model instantiation, inference on each
+dataset, and visualization.
+
+In particular, we created an interactive visualization tool 🕶 which can be used
+to produce shareable HTMLs. Examples of how to use this tool are provided in 
+the [notebooks](notebooks).
 
 <br>
 
 ## 📚  Documentation
 - [README](README.md) - General introduction to the project
+- [Data](docs/data_structures.md) - Introduction to `NAG` and `Data`, the core data structures of this project
 - [Datasets](docs/datasets.md) - Introduction to `Datasets` and the project's `data/` structure
-- [Logger](docs/logs.md) - Introduction to logging and the project's `logs/` structure
-- [Data](docs/data.md) - Introduction to `NAG` and `Data`, the core data structures of this project
+- [Logging](docs/logging.md) - Introduction to logging and the project's `logs/` structure
 
 > **Note**: We endeavoured to **comment our code** as much as possible to make 
 > this project usable. Still, if you find some parts are unclear or some more 
