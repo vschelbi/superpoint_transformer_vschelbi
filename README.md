@@ -161,23 +161,35 @@ python src/train.py experiment=dales
 
 ### Evaluating SPT
 Use the following commands to evaluate SPT from a checkpoint file 
-`checkpoint.ckpt`. 
+`checkpoint.ckpt`:
 ```bash
-# Train SPT on S3DIS Fold 5
-python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_s3dis datamodule=s3dis datamodule.fold=5 trainer.max_epochs=2000
+# Evaluate SPT on S3DIS Fold 5
+python src/eval.py experiment=s3dis datamodule.fold=5 ckpt_path=checkpoint.ckpt
 
-# Train SPT on KITTI-360 Val
+# Evaluate SPT on KITTI-360 Val
 # ⚠️ KITTI-360 does not support automatic download, follow prompted instructions
-python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_kitti360 datamodule=kitti360 trainer.max_epochs=200 
+python src/eval.py experiment=kitti360  ckpt_path=checkpoint.ckpt 
 
-# Train SPT on DALES
-python src/eval.py ckpt_path=checkpoint.ckpt trainer=gpu model=spt_dales datamodule=dales trainer.max_epochs=400
+# Evaluate SPT on DALES
+python src/eval.py experiment=dales ckpt_path=checkpoint.ckpt
 ```
 
 ### Visualization
 We provide an interactive visualization tool which can be used to produce 
 shareable HTMLs. Examples of how to use this tool are provided in 
 `notebooks/`.
+
+<br>
+
+## 📚  Documentation
+- [README](README.md) - General introduction to the project
+- [Datasets](docs/datasets.md) - Introduction to `Datasets` and the project's `data/` structure
+- [Logger](docs/logs.md) - Introduction to logging and the project's `logs/` structure
+- [Data](docs/data.md) - Introduction to `NAG` and `Data`, the core data structures of this project
+
+> **Note**: We endeavoured to **comment our code** as much as possible to make 
+> this project usable. Still, if you find some parts are unclear or some more 
+> documentation would be needed, feel free to let us know by creating an issue ! 
 
 <br>
 

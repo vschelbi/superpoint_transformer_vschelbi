@@ -1,4 +1,4 @@
-# Logs
+# Logging
 
 ## Structure of `logs/` directory
 Logs directory structure.
