@@ -1,13 +1,17 @@
 import os
 import re
+import sys
 import os.path as osp
 import torch
 import logging
 import hashlib
+import warnings
 from datetime import datetime
 from itertools import product
 from tqdm.auto import tqdm as tq
 from torch_geometric.data import InMemoryDataset
+from torch_geometric.data.dataset import files_exist
+from torch_geometric.data.makedirs import makedirs
 from torch_geometric.data.dataset import _repr
 from src.data import NAG
 from src.transforms import NAGSelectByKey, NAGRemoveKeys, SampleXYTiling, \
@@ -464,6 +468,35 @@ class BaseDataset(InMemoryDataset):
 
     def download_message(self, msg):
         log.info(f'Downloading "{msg}" to {self.raw_dir}...')
+
+    def _process(self):
+        """Overwrites torch-geometric's Dataset._process. This simply
+        removes the 'pre_transform.pt' file used for checking whether
+        the pre-transforms have changed. This is possible thanks to our
+        `pre_transform_hash` mechanism.
+        """
+        f = osp.join(self.processed_dir, 'pre_filter.pt')
+        if osp.exists(f) and torch.load(f) != _repr(self.pre_filter):
+            warnings.warn(
+                "The `pre_filter` argument differs from the one used in "
+                "the pre-processed version of this dataset. If you want to "
+                "make use of another pre-fitering technique, make sure to "
+                "delete '{self.processed_dir}' first")
+
+        if files_exist(self.processed_paths):  # pragma: no cover
+            return
+
+        if self.log and 'pytest' not in sys.modules:
+            print('Processing...', file=sys.stderr)
+
+        makedirs(self.processed_dir)
+        self.process()
+
+        path = osp.join(self.processed_dir, 'pre_filter.pt')
+        torch.save(_repr(self.pre_filter), path)
+
+        if self.log and 'pytest' not in sys.modules:
+            print('Done!', file=sys.stderr)
 
     def process(self):
         # If some stages have mixed clouds (they rely on the same cloud
