@@ -12,7 +12,7 @@ Important specificities of our `Data` object are:
 - `Data.super_index` stores the parent's index for each node in `Data`
 - `Data.sub` holds a `Cluster` object indicating the children of each node in `Data`
 - `Data.to_trimmed()` works like `torch_geometric`'s `Data.coalesce()` with the additional constraint that (i,j) and (j,i) edges are considered duplicates
-- `Data.save()` and `Data.load()` allow optimized, memory-friedly I/O operations
+- `Data.save()` and `Data.load()` allow optimized, memory-friendly I/O operations
 - `Data.select()` indexes the nodes à la numpy
 
 ## `NAG`
