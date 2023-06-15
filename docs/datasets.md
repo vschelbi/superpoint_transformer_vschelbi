@@ -115,9 +115,16 @@ transforms will not affect your preprocessing hash.
 
 ## Mini datasets
 Each dataset has a "mini" version which only processes a portion of the data, to
-speedup experimentation. To use it, set your dataset config:
+speedup experimentation. To use it, set your the 
+[dataset config](configs/datamodule) of your choice:
 ```yaml
 mini: True
+```
+
+Or, if you are using the CLI, use the following syntax:
+```shell script
+# Train SPT on mini-DALES
+python src/train.py experiment=dales +datamodule.mini=True
 ```
 
 ## Creating your own dataset
