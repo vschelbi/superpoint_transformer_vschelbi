@@ -83,7 +83,7 @@ Following `torch_geometric`'s `Dataset` behaviour:
 - missing files in `data/<dataset_name>/raw` structure ➡ automatic download
 - missing files in `data/<dataset_name>/processed` structure ➡ automatic preprocessing
 
-However, some datasets (_e.g._ KITTI-360) require you to *manually download**
+However, some datasets (_e.g._ KITTI-360) require you to *manually download*
 from their official webpage. For those, you will need to manually setup the 
 [above-described `data/` structure](#structure-of-the-data-directory).
 
