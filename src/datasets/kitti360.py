@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import logging
 import glob
@@ -128,8 +129,21 @@ class KITTI360(BaseDataset):
             else:
                 msg = 'Accumulated Point Clouds for Test (1.2G)'
             self.download_message(msg)
+
             script = osp.join(scripts_dir, 'download_kitti360_3d_semantics.sh')
-            run_command([f'{script} {self.raw_dir} {self.stage}'])
+            if osp.exists(script):
+                run_command([f'{script} {self.raw_dir} {self.stage}'])
+            else:
+                zip_file = \
+                    f"data_3d_semantics{'_test' * (self.stage == 'test')}.zip"
+                log.error(
+                    f"\n"
+                    f"KITTI-360 does not support automatic download.\n"
+                    f"Please go to the official webpage {CVLIBS_URL} and "
+                    f"manually download {zip_file} to {self.raw_dir}.\n"
+                    f"Then, unzip its content into the following structure:\n"
+                    f"{self.raw_file_structure}")
+                sys.exit(1)
 
     def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
