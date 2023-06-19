@@ -13,7 +13,8 @@ fi
 
 # # Create appropriate folders
 # mkdir -p $raw_dir
-cd $raw_dir 
+cd $raw_dir
+cd ..
 
 # Download the data
 if ! test -f "${zip_file}"; then

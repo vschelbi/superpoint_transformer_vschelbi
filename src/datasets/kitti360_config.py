@@ -14,6 +14,9 @@ DATA_3D_SEMANTICS_URL = osp.join(BASE_URL, '6489aabd632d115c4280b978b2dcf72cb014
 DATA_3D_SEMANTICS_TEST_URL = osp.join(BASE_URL, '6489aabd632d115c4280b978b2dcf72cb0142ad9/data_3d_semantics_test.zip')
 CALIBRATION_URL = osp.join(BASE_URL, '384509ed5413ccc81328cf8c55cc6af078b8c444/calibration.zip')
 DATA_POSES_URL = osp.join(BASE_URL, '89a6bae3c8a6f789e12de4807fc1e8fdcf182cf4/data_poses.zip')
+DATA_3D_SEMANTICS_ZIP_NAME = 'data_3d_semantics.zip'
+DATA_3D_SEMANTICS_TEST_ZIP_NAME = 'data_3d_semantics_test.zip'
+UNZIP_NAME = 'data_3d_semantics'
 
 
 ########################################################################
