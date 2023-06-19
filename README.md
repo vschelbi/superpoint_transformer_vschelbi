@@ -65,9 +65,10 @@ between superpoints at multiple scales.
 
 <br>
 
-## 📋  Environment requirements
+## 💻  Environment requirements
 This project was tested with:
 - Linux OS
+- NVIDIA V100 32G (see [Troubleshooting](#--troubleshooting) for smaller GPUs)
 - CUDA 11.8 ([`torch-geometric`](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html) does not support CUDA 12.0 yet)
 - conda 23.3.1
 
@@ -230,6 +231,29 @@ provided in [media/visualizations.7z](media/visualizations.7z)
 > this project usable. Still, if you find some parts are unclear or some more 
 > documentation would be needed, feel free to let us know by creating an issue ! 
 
+<br>
+
+## 👩‍🔧  Troubleshooting
+Here are some common issues and how to tackle them.
+
+### GPU with less than 32G memory
+datamodule.graph_chunk=[1e6, 1e5, 1e5]  # reduce if CUDA memory errors
+datamodule.max_num_nodes=15000 datamodule.max_num_edges=30000
+datamodule.dataloader.batch_size=4
+datamodule.sample_point_min=32
+datamodule.sample_point_max=128
+datamodule.sample_graph_r=7  # set to r<=0 to skip SampleRadiusSubgraphs
+datamodule.sample_graph_k=4
+
+pc_tiling: null
+xy_tiling: 3
+
+s3dis
+- datamodule.pc_tiling=2
+
+datamodule.sample_graph_k=2 "callbacks.gradient_accumulator.scheduling={0: 2}" datamodule.max_num_nodes=15000 datamodule.max_num_edges=30000
+
+  
 <br>
 
 ## 💳  Credits

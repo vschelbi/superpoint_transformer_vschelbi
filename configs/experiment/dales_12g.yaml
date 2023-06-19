@@ -1,0 +1,35 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=dales
+
+defaults:
+  - override /datamodule: dales.yaml
+  - override /model: spt-2.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+datamodule:
+  xy_tiling: 3  # split each floor into xy_tiling²=9 tiles, based on a regular XY grid. Reduces preprocessing- and inference-time GPU memory
+  sample_graph_k: 2  # 2 spherical samples in each batch instead of 4. Reduces train-time GPU memory
+
+callbacks:
+  gradient_accumulator:
+    scheduling:
+      0:
+        2  # accumulate gradient every 2 batches, to make up for reduced batch size
+
+trainer:
+  max_epochs: 400  # to keep same nb of steps: 8x more tiles, 2-step gradient accumulation -> epochs/4
+
+model:
+  optimizer:
+    lr: 0.01
+    weight_decay: 1e-4
+
+logger:
+  wandb:
+    project: "spt_dales"
+    name: "SPT-64"
