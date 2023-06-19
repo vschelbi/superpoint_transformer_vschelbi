@@ -1,9 +1,9 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=kitti360_12g
+# python train.py experiment=kitti360_11g
 
-# This configuration allows training SPT on a single 12G GPU, with a
+# This configuration allows training SPT on a single 11G GPU, with a
 # training procedure comparable with the default experiment/kitti360
 # configuration.
 # Among the multiple ways of reducing memory impact, we choose here to
