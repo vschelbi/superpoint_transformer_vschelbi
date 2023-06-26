@@ -8,10 +8,11 @@ from zipfile import ZipFile
 from plyfile import PlyData
 from torch_geometric.data.extract import extract_zip
 from src.datasets import BaseDataset
-from src.data import Data
+from src.data import Data, InstanceData
 from src.datasets.kitti360_config import *
 from src.utils.neighbors import knn_2
 from src.utils.color import to_float_rgb
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 DIR = os.path.dirname(os.path.realpath(__file__))
@@ -33,7 +34,7 @@ __all__ = ['KITTI360', 'MiniKITTI360']
 ########################################################################
 
 def read_kitti360_window(
-        filepath, xyz=True, rgb=True, semantic=True, instance=False,
+        filepath, xyz=True, rgb=True, semantic=True, instance=True,
         remap=False):
     """Read a KITTI-360 window –ie a tile– saved as PLY.
 
@@ -72,7 +73,13 @@ def read_kitti360_window(
             data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
         if instance and 'instance' in attributes:
-            data.obj = torch.LongTensor(window["vertex"]['instance'])
+            obj = torch.LongTensor(window["vertex"]['instance'])
+            # is_stuff = obj % 1000 == 0
+            # obj[is_stuff] = 0
+            obj = consecutive_cluster(obj)[0]
+            count = torch.ones_like(obj)
+            idx = torch.arange(data.num_points)
+            data.obj = InstanceData(idx, obj, count, dense=True)
 
     return data
 
@@ -176,7 +183,7 @@ class KITTI360(BaseDataset):
         be passed to `self.pre_transform`.
         """
         return read_kitti360_window(
-            raw_cloud_path, semantic=True, instance=False, remap=True)
+            raw_cloud_path, semantic=True, instance=True, remap=True)
 
     @property
     def raw_file_structure(self):

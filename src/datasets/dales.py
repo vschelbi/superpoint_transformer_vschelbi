@@ -5,9 +5,10 @@ import shutil
 import logging
 from plyfile import PlyData
 from src.datasets import BaseDataset
-from src.data import Data
+from src.data import Data, InstanceData
 from src.datasets.dales_config import *
 from torch_geometric.data import extract_tar
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 DIR = os.path.dirname(os.path.realpath(__file__))
@@ -29,7 +30,7 @@ __all__ = ['DALES', 'MiniDALES']
 ########################################################################
 
 def read_dales_tile(
-        filepath, xyz=True, intensity=True, semantic=True, instance=False,
+        filepath, xyz=True, intensity=True, semantic=True, instance=True,
         remap=False):
     """Read a DALES tile saved as PLY.
 
@@ -67,7 +68,11 @@ def read_dales_tile(
             data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
         if instance:
-            data.obj = torch.LongTensor(tile[key]['ins_class'])
+            obj = torch.LongTensor(tile[key]['ins_class'])
+            obj = consecutive_cluster(obj)[0]
+            count = torch.ones_like(obj)
+            idx = torch.arange(data.num_points)
+            data.obj = InstanceData(idx, obj, count, dense=True)
 
     return data
 
@@ -162,7 +167,7 @@ class DALES(BaseDataset):
         be passed to `self.pre_transform`.
         """
         return read_dales_tile(
-            raw_cloud_path, intensity=True, semantic=True, instance=False,
+            raw_cloud_path, intensity=True, semantic=True, instance=True,
             remap=True)
 
     @property

@@ -297,7 +297,7 @@ def visualize_3d(
     # Color the points with ground truth semantic labels. If labels are
     # expressed as histograms, keep the most frequent one
     if data_0.obj is not None:
-        obj = data_0.obj
+        obj = data_0.obj.major[0]
         colors = int_to_plotly_rgb(obj)
         text = np.array([f'Object {o}' for o in obj])
         trace_modes[i_point_trace]['Objects'] = {

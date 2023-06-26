@@ -2,7 +2,7 @@ from src.data import NAG, InstanceData
 from src.transforms import Transform
 
 
-__all__ = ['']
+__all__ = ['NAGInstances']
 
 
 class NAGInstances(Transform):

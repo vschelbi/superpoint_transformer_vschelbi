@@ -66,12 +66,12 @@ class S3DISRoom(S3DIS):
             'test': [
                 f'Area_{self.fold}/{r}' for r in ROOMS[f'Area_{self.fold}']]}
 
-    def read_single_raw_cloud(self, raw_cloud_path, instance=False):
+    def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a Data object, ready to
         be passed to `self.pre_transform`.
         """
         return read_s3dis_room(
-            raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=instance,
+            raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=True,
             xyz_room=True, align=self.align, is_val=True, verbose=False)
 
     def processed_to_raw_path(self, processed_path):

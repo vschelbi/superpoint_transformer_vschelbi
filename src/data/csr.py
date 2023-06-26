@@ -138,7 +138,7 @@ class CSRData:
     def clone(self):
         """Shallow copy of self. This may cause issues for certain types
         of downstream operations, but it saves time and memory. In
-        practice, it shouldn't in this project.
+        practice, it shouldn't be problematic in this project.
         """
         out = copy.copy(self)
         out.pointers = copy.copy(self.pointers)

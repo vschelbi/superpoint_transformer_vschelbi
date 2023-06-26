@@ -105,3 +105,8 @@ CLASS_COLORS = np.asarray([
     [239, 114,   0],
     [214,   66,  54], # vermillon
     [  0,   8, 116]])
+
+# For instance segmentation
+MIN_OBJECT_SIZE = 100
+THING_CLASSES = [2, 3, 4, 5, 6, 7]
+STUFF_CLASSES = [i for i in range(DALES_NUM_CLASSES) if not i in THING_CLASSES]

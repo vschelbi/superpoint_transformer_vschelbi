@@ -54,13 +54,14 @@ num_hf_v_edge: ${eval:'sum([ ${datamodule.feat_size}[k] for k in ${datamodule.v_
 # List of level-0 (points) and level-1+ Data keys that need to be saved
 # or loaded from disk. This saves training time, loading only necessary
 # data
+obj_key: ['obj']  # key used to store instance labels, for points and segments alike
 point_save_keys: null  # level-0 keys to save on disk after preprocessing, 'null' to save all
 point_no_save_keys: ['edge_index', 'edge_attr', 'neighbor_index', 'neighbor_distance', 'node_size', 'grid_size']  # level-0 keys to NOT save on disk after preprocessing
 segment_save_keys: null  # level-1+ keys to save on disk after preprocessing, 'null' to save all
-point_basic_load_keys: ['pos', 'y', 'super_index']  # needed point attributes, other than features
+point_basic_load_keys: ['pos', 'y', 'obj', 'super_index']  # needed point attributes, other than features
 segment_basic_load_keys: ['pos', 'y', 'super_index', 'sub', 'edge_index', 'edge_attr']  # needed segment attributes, other than features
-point_load_keys: ${eval:'list(set( ${datamodule.point_basic_load_keys} + ${datamodule.point_hf} + ${datamodule.extra_point_hf} ))'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
-segment_load_keys: ${eval:'list(set( ${datamodule.segment_basic_load_keys} + ${datamodule.segment_hf} + ${datamodule.extra_segment_hf} ))'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
+point_load_keys: ${eval:'list(set( ${datamodule.point_basic_load_keys} + ${datamodule.obj_key} * ${datamodule.instance} + ${datamodule.point_hf} + ${datamodule.extra_point_hf} ))'}  # level-0 keys to load from disk after preprocessing, 'null' to load all
+segment_load_keys: ${eval:'list(set( ${datamodule.segment_basic_load_keys} + ${datamodule.obj_key} * ${datamodule.instance} + ${datamodule.segment_hf} + ${datamodule.extra_segment_hf} ))'}  # level-1+ keys to load from disk after preprocessing, 'null' to load all
 
 # Comprehensive list of feature sizes, to be used to deduce feature size
 # from name

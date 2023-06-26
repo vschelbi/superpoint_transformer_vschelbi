@@ -13,6 +13,11 @@ data_dir: ${paths.data_dir}
 # config interpolation
 num_classes: ???
 
+# Whether the dataset produces instance labels. In any case, the
+# instance labels will be preprocessed, if any. However, `instance: False`
+# will avoid unwanted instance-related I/O operations, to save memory.
+instance: False
+
 # I/O parameters
 save_y_to_csr: True  # save 'y' label histograms using a custom CSR format to save memory and I/O time
 save_pos_dtype: 'float32'  # dtype to which 'pos' will be saved on disk
@@ -52,7 +57,8 @@ on_device_test_transform: null
 tta_runs: null
 tta_val: False
 
-# Produce submission data if test is true
+# Produce submission data if trainer.test=true, for datasets with a
+# submission process
 submit: False
 
 # DataLoader parameters. Would be good to have them live in another file

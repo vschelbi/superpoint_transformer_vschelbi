@@ -382,3 +382,8 @@ def object_name_to_label(object_class):
     """
     object_label = OBJECT_LABEL.get(object_class, OBJECT_LABEL["clutter"])
     return object_label
+
+# For instance segmentation
+MIN_OBJECT_SIZE = 100
+THING_CLASSES = list(range(S3DIS_NUM_CLASSES))
+STUFF_CLASSES = [i for i in range(S3DIS_NUM_CLASSES) if not i in THING_CLASSES]

@@ -15,6 +15,14 @@ class InstanceData(CSRData):
     """Child class of CSRData to simplify some common operations
     dedicated to instance labels clustering.
 
+    Importantly, each object in the InstanceData is expected to be
+    described by a unique index in 'obj', regardless of its actual
+    semantic class. It is not required for the object instances to be
+    contiguous in [0, obj_max], although enforcing it may have
+    beneficial downstream effects on memory and I/O times. Finally,
+    when two InstanceData are batched in an InstanceBatch, the 'obj'
+    indices will be updated to avoid collision between the batch items.
+
     :param pointers: torch.LongTensor
         Pointers to address the data in the associated value tensors.
         `values[Pointers[i]:Pointers[i+1]]` old the values for the ith
@@ -57,7 +65,7 @@ class InstanceData(CSRData):
             count = scatter_sum(count, cluster_obj_idx)
 
         super().__init__(
-            pointers, obj, count, dense=dense, is_index_value=None)
+            pointers, obj, count, dense=dense, is_index_value=[True, False])
 
     @staticmethod
     def get_batch_type():
@@ -164,7 +172,8 @@ class InstanceData(CSRData):
         # Prepare the indices for sets A and B. In particular, we want
         # the indices to be contiguous in [0, idx_max], to alleviate
         # scatter operations computation. Since `self.obj` contains
-        # global object indices, we need to update these indices locally
+        # potentially-large and non-contiguous global object indices, we
+        # update these indices locally
         a_idx = self.indices
         b_idx = consecutive_cluster(self.obj)[0]
 
@@ -291,5 +300,8 @@ class InstanceData(CSRData):
 
 
 class InstanceBatch(InstanceData, CSRBatch):
-    """Wrapper for InstanceData batching."""
+    """Wrapper for InstanceData batching. Importantly, although
+    instance labels in 'obj' will be updated to avoid collisions between
+    the different batch items.
+    """
     __csr_type__ = InstanceData

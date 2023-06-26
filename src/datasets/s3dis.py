@@ -6,7 +6,7 @@ import shutil
 import logging
 import pandas as pd
 from src.datasets import BaseDataset
-from src.data import Data, Batch
+from src.data import Data, Batch, InstanceData
 from src.datasets.s3dis_config import *
 from torch_geometric.data import extract_zip
 from src.utils import available_cpu_count, starmap_with_kwargs, \
@@ -26,7 +26,7 @@ __all__ = ['S3DIS', 'MiniS3DIS']
 ########################################################################
 
 def read_s3dis_area(
-        area_dir, xyz=True, rgb=True, semantic=True, instance=False,
+        area_dir, xyz=True, rgb=True, semantic=True, instance=True,
         xyz_room=False, align=False, is_val=True, verbose=False, processes=-1):
     """Read all S3DIS object-wise annotations in a given Area directory.
     All room-wise data are accumulated into a single cloud.
@@ -84,7 +84,7 @@ def read_s3dis_area(
 
 
 def read_s3dis_room(
-        room_dir, xyz=True, rgb=True, semantic=True, instance=False,
+        room_dir, xyz=True, rgb=True, semantic=True, instance=True,
         xyz_room=False, align=False, is_val=True, verbose=False):
     """Read all S3DIS object-wise annotations in a given room directory.
 
@@ -165,19 +165,23 @@ def read_s3dis_room(
             y_list.append(np.full(points.shape[0], label, dtype='int64'))
 
         if instance:
-            obj_list.append(
-                np.full(points.shape[0], i_object, dtype='int64'))
+            obj_list.append(np.full(points.shape[0], i_object, dtype='int64'))
 
     # Concatenate and convert to torch
     xyz_data = torch.from_numpy(np.concatenate(xyz_list, 0)) if xyz else None
     rgb_data = to_float_rgb(torch.from_numpy(np.concatenate(rgb_list, 0))) \
         if rgb else None
     y_data = torch.from_numpy(np.concatenate(y_list, 0)) if semantic else None
-    obj_data = torch.from_numpy(np.concatenate(obj_list, 0)) \
-        if instance else None
 
     # Store into a Data object
-    data = Data(pos=xyz_data, rgb=rgb_data, y=y_data, obj=obj_data)
+    data = Data(pos=xyz_data, rgb=rgb_data, y=y_data)
+
+    # Store instance labels in InstanceData format
+    if instance:
+        obj = torch.from_numpy(np.concatenate(obj_list, 0))
+        count = torch.ones_like(obj)
+        idx = torch.arange(data.num_points)
+        data.obj = InstanceData(idx, obj, count, dense=True)
 
     # Add is_val attribute if need be
     if is_val:
@@ -324,7 +328,7 @@ class S3DIS(BaseDataset):
         be passed to `self.pre_transform`.
         """
         return read_s3dis_area(
-            raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=False,
+            raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=True,
             xyz_room=True, align=False, is_val=True, verbose=False)
 
     @property

@@ -374,6 +374,12 @@ class Data(PyGData):
             if key in skip_keys:
                 continue
 
+            # Slice CSRData elements, unless specified otherwise
+            # (eg 'sub')
+            if isinstance(item, CSRData):
+                data[key] = item[idx]
+                continue
+
             is_tensor = torch.is_tensor(item)
             is_node_size = item.shape[0] == self.num_nodes
             is_edge_size = item.shape[0] == self.num_edges
@@ -395,11 +401,6 @@ class Data(PyGData):
 
             # Slice other tensor elements containing num_nodes elements
             elif is_tensor and is_node_size:
-                data[key] = item[idx]
-
-            # Slice CSRData elements, unless specified otherwise
-            # (eg 'sub')
-            elif isinstance(item, CSRData):
                 data[key] = item[idx]
 
             # Other Data attributes are simply copied
