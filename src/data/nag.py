@@ -43,10 +43,10 @@ class NAG:
         # Sizes are computed in a bottom-up fashion. Note this scatter
         # operation assumes all levels of hierarchy use dense,
         # consecutive indices which are consistent between levels
-        sub_size = self[low + 1].sub.size
+        sub_sizes = self[low + 1].sub.sizes
         for i in range(low + 1, high):
-            sub_size = scatter_sum(sub_size, self[i].super_index, dim=0)
-        return sub_size
+            sub_sizes = scatter_sum(sub_sizes, self[i].super_index, dim=0)
+        return sub_sizes
 
     def get_super_index(self, high, low=0):
         """Compute the super_index linking the points at level 'low'

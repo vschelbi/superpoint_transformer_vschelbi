@@ -21,7 +21,7 @@ class Cluster(CSRData):
 
     @staticmethod
     def get_batch_type():
-        """Required by CSRBatch.from_csr_list."""
+        """Required by CSRBatch.from_list."""
         return ClusterBatch
 
     @property
@@ -53,7 +53,7 @@ class Cluster(CSRData):
         device = self.device
         out = torch.empty((self.num_items,), dtype=torch.long, device=device)
         cluster_idx = torch.arange(self.num_groups, device=device)
-        out[self.points] = cluster_idx.repeat_interleave(self.size)
+        out[self.points] = cluster_idx.repeat_interleave(self.sizes)
         return out
 
     def select(self, idx, update_sub=True):

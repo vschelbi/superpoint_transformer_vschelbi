@@ -745,7 +745,7 @@ class Batch(PyGBatch):
         # Note we will need to do the same in `get_example` to avoid
         # breaking PyG Batch mechanisms
         if batch.is_super:
-            batch.sub = ClusterBatch.from_csr_list(batch.sub)
+            batch.sub = ClusterBatch.from_list(batch.sub)
 
         return batch
 
@@ -756,7 +756,7 @@ class Batch(PyGBatch):
 
         if self.is_super:
             sub_bckp = self.sub.clone()
-            self.sub = self.sub.to_csr_list()
+            self.sub = self.sub.to_list()
 
         data = super().get_example(idx)
 

@@ -21,7 +21,7 @@ class InstanceData(CSRData):
 
     @staticmethod
     def get_batch_type():
-        """Required by CSRBatch.from_csr_list."""
+        """Required by CSRBatch.from_list."""
         return InstanceBatch
 
     @property
@@ -101,8 +101,12 @@ class InstanceData(CSRData):
             into. Must have the same size as `self.num_clusters` and
             indices must start at 0 and be contiguous.
         """
-        # Make sure the indices are dense
+        # Make sure each cluster has a merge index and that the merge
+        # indices are dense
         idx = tensor_idx(idx)
+        assert idx.shape == torch.Size([self.num_clusters]), \
+            f"Expected indices of shape {torch.Size([self.num_clusters])}, " \
+            f"but received shape {idx.shape} instead"
         assert is_dense(idx), f"Expected contiguous indices in [0, max]"
 
         # Compute the merged cluster index for each item
@@ -116,21 +120,39 @@ class InstanceData(CSRData):
         merged_obj_idx = merged_idx * base + self.obj.long()
 
         # Make the indices contiguous in [0, max] to alleviate
-        # downstream scatter operations
+        # downstream scatter operations. Compute the merged_idx and obj
+        # for each unique merged_obj_idx indices, these will be helpful
+        # in building the pointers and obj of the new merged data
         merged_obj_idx, perm = consecutive_cluster(merged_obj_idx)
-        num_unique_merge_obj = perm.shape[0]
+        unique_merged_idx = merged_idx[perm]
+        unique_obj = self.obj[perm]
 
         # Compute the new counts for each obj in the merged data
         count = scatter_sum(self.count, merged_obj_idx)
 
+        # Return a new object holding the merged data
+        return InstanceData(unique_merged_idx, unique_obj, count, dense=True)
 
-        # build pointers using merged_idx bincounts (no need to reverse the consecutive_cluster)
-        # return new InstanceData
+    def iou(self):
+        """Compute the Intersection over Union (IoU) for each
+        cluster-object pair in the data. This is typically needed when
+        computing the Average Precision.
+        """
+        # Prepare the indices for sets A and B. In particular, we want
+        # the indices to be contiguous in [0, idx_max], to alleviate
+        # scatter operations computation. Since `self.obj` contains
+        # global object indices, we need to update these indices locally
+        a_idx = self.indices
+        b_idx = consecutive_cluster(self.obj)[0]
 
+        # Compute the size of each set and redistribute to each a-b pair
+        a_size = scatter_sum(self.count, a_idx)[a_idx]
+        b_size = scatter_sum(self.count, b_idx)[b_idx]
 
+        # Compute the IoU
+        iou = self.count / (a_size + b_size - self.count)
 
-
-
+        return iou
 
     def __repr__(self):
         info = [
