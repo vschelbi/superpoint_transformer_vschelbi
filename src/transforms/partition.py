@@ -1,11 +1,14 @@
 import sys
 import os.path as osp
+from typing import Any
+
 import torch
 import numpy as np
+from numpy import ndarray
 from torch_scatter import scatter_sum, scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.transforms import Transform
-from src.data import Data, Cluster, NAG
+from src.data import Data, NAG, Cluster, InstanceData
 from src.utils.cpu import available_cpu_count
 
 dependencies_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
@@ -45,7 +48,7 @@ class CutPursuitPartition(Transform):
 
     _IN_TYPE = Data
     _OUT_TYPE = NAG
-    _MAX_NUM_EGDES = 4294967295
+    _MAX_NUM_EDGES = 4294967295
     _NO_REPR = ['verbose', 'parallel']
 
     def __init__(
@@ -117,10 +120,10 @@ class CutPursuitPartition(Transform):
                 break
 
             # User warning if the number of edges exceeds uint32 limits
-            if d1.edge_index.shape[1] > self._MAX_NUM_EGDES and self.verbose:
+            if d1.edge_index.shape[1] > self._MAX_NUM_EDGES and self.verbose:
                 print(
                     f"WARNING: number of edges {d1.edge_index.shape[1]} "
-                    f"exceeds the uint32 limit {self._MAX_NUM_EGDES}. Please"
+                    f"exceeds the uint32 limit {self._MAX_NUM_EDGES}. Please"
                     f"update the cut-pursuit source code to accept a larger "
                     f"data type for `index_t`.")
 
@@ -140,7 +143,7 @@ class CutPursuitPartition(Transform):
                 x = d1.pos - pos_offset
             x = np.asfortranarray(x.cpu().numpy().T)
             node_size = d1.node_size.float().cpu().numpy()
-            coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
+            coor_weights= np.ones(n_dim + n_feat, dtype=np.float32)
             coor_weights[:n_dim] *= sw
 
             # Partition computation
@@ -180,6 +183,10 @@ class CutPursuitPartition(Transform):
             d2 = Data(
                 pos=pos, x=x, edge_index=edge_index, edge_attr=edge_attr,
                 sub=Cluster(pointer, value), node_size=node_size_new)
+
+            # Merge the lower level's instance annotations, if any
+            if d1.obj is not None and isinstance(d1.obj, InstanceData):
+                d2.obj = d1.obj.merge(d1.super_index)
 
             # Trim the graph
             d2 = d2.to_trimmed()
@@ -269,6 +276,10 @@ class GridPartition(Transform):
             pos = scatter_mean(d.pos, super_index, dim=0)
             cluster = Cluster(
                 super_index, torch.arange(d.num_nodes), dense=True)
+
+            # TODO: support more Data attributes and more advanced
+            #  grouping, probably by interfacing with
+            #  src.transforms.sampling._group_data()
 
             # Update the super_index of the previous level and create
             # the Data object for the new level

@@ -9,7 +9,9 @@ from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 import src
+from src.data.cluster import CSRData
 from src.data.cluster import Cluster, ClusterBatch
+from src.data.instance import InstanceData, InstanceBatch
 from src.utils import tensor_idx, is_dense, has_duplicates, \
     isolated_nodes, knn_2, save_tensor, load_tensor, save_dense_to_csr, \
     load_csr_to_dense, to_trimmed, to_float_rgb, to_byte_rgb
@@ -23,7 +25,7 @@ class Data(PyGData):
     specific needs.
     """
 
-    _NOT_INDEXABLE = ['_csr_', '_cluster_', 'edge_index', 'edge_attr']
+    _NOT_INDEXABLE = ['_csr_', '_cluster_', '_obj_', 'edge_index', 'edge_attr']
 
 
     def __init__(self, **kwargs):
@@ -167,20 +169,25 @@ class Data(PyGData):
         return self.sub.points.max() + 1 if self.is_super else 0
 
     def detach(self):
-        """Extend `torch_geometric.Data.detach` to handle Cluster
-        attributes.
+        """Extend `torch_geometric.Data.detach` to handle Cluster and
+        InstanceData attributes.
         """
         self = super().detach()
         if self.is_super:
             self.sub = self.sub.detach()
+        if self.obj is not None:
+            self.obj = self.obj.detach()
         return self
 
     def to(self, device, **kwargs):
-        """Extend `torch_geometric.Data.to` to handle Cluster attributes.
+        """Extend `torch_geometric.Data.to` to handle Cluster and
+        InstanceData attributes.
         """
         self = super().to(device, **kwargs)
         if self.is_super:
             self.sub = self.sub.to(device, **kwargs)
+        if self.obj is not None:
+            self.obj = self.obj.to(device, **kwargs)
         return self
 
     def cpu(self, **kwargs):
@@ -203,9 +210,13 @@ class Data(PyGData):
         """Sanity checks."""
         if self.is_super:
             assert isinstance(self.sub, Cluster), \
-                "Clusters must be expressed using a Cluster object"
+                "Clusters in 'sub' must be expressed using a Cluster object"
             assert self.y is None or self.y.dim() == 2, \
-                "Clusters must hold label histograms"
+                "Clusters in 'sub' must hold label histograms"
+        if self.obj is not None:
+            assert isinstance(self.obj, InstanceData), \
+                "Instance labels in 'obj' must be expressed using an " \
+                "InstanceData object"
         if self.is_sub:
             if not is_dense(self.super_index):
                 print(
@@ -384,6 +395,11 @@ class Data(PyGData):
 
             # Slice other tensor elements containing num_nodes elements
             elif is_tensor and is_node_size:
+                data[key] = item[idx]
+
+            # Slice CSRData elements, unless specified otherwise
+            # (eg 'sub')
+            elif isinstance(item, CSRData):
                 data[key] = item[idx]
 
             # Other Data attributes are simply copied
@@ -575,8 +591,11 @@ class Data(PyGData):
             elif k == 'y' and val.dim() > 1 and y_to_csr:
                 sg = f.create_group(osp.join(f.name, '_csr_', k))
                 save_dense_to_csr(val, sg, fp_dtype=fp_dtype)
-            elif isinstance(val, Cluster):
+            elif k == 'sub' and isinstance(val, Cluster):
                 sg = f.create_group(osp.join(f.name, '_cluster_', 'sub'))
+                val.save(sg, fp_dtype=fp_dtype)
+            elif k == 'obj' and isinstance(val, InstanceData):
+                sg = f.create_group(osp.join(f.name, '_obj_', 'obj'))
                 val.save(sg, fp_dtype=fp_dtype)
             elif k in ['rgb', 'mean_rgb']:
                 if val.is_floating_point():
@@ -629,7 +648,7 @@ class Data(PyGData):
             keys_idx = list(set(f.keys()) - set(Data._NOT_INDEXABLE))
         if keys is None:
             all_keys = list(f.keys())
-            for k in ['_csr_', '_cluster_']:
+            for k in ['_csr_', '_cluster_', '_obj_']:
                 if k in all_keys:
                     all_keys.remove(k)
                     all_keys += list(f[k].keys())
@@ -638,6 +657,7 @@ class Data(PyGData):
         d_dict = {}
         csr_keys = []
         cluster_keys = []
+        obj_keys = []
 
         # Deal with special keys first, then read other keys if required
         for k in f.keys():
@@ -648,6 +668,9 @@ class Data(PyGData):
             if k == '_cluster_':
                 cluster_keys = list(f[k].keys())
                 continue
+            if k == '_obj_':
+                obj_keys = list(f[k].keys())
+                continue
             if k in keys_idx:
                 d_dict[k] = load_tensor(f[k], idx=idx)
             elif k in keys:
@@ -655,11 +678,12 @@ class Data(PyGData):
             if verbose and k in d_dict.keys():
                 print(f'Data.load {k:<22}: {time() - start:0.5f}s')
 
-        # Update the 'keys_idx' with newly-found 'csr_keys' and
-        # 'cluster_keys'
+        # Update the 'keys_idx' with newly-found 'csr_keys',
+        # 'cluster_keys', and 'obj_keys'
         if idx.shape[0] != 0:
             keys_idx = list(set(keys_idx).union(set(csr_keys)))
             keys_idx = list(set(keys_idx).union(set(cluster_keys)))
+            keys_idx = list(set(keys_idx).union(set(obj_keys)))
 
         # Special key '_csr_' holds data saved in CSR format
         for k in csr_keys:
@@ -686,6 +710,17 @@ class Data(PyGData):
             if verbose and k in d_dict.keys():
                 print(f'Data.load {k:<22}: {time() - start:0.5f}s')
 
+        # Special key '_obj_' holds InstanceData data
+        for k in obj_keys:
+            start = time()
+            if k in keys_idx:
+                d_dict[k] = InstanceData.load(
+                    f['_obj_'][k], idx=idx, verbose=verbose)
+            elif k in keys:
+                d_dict[k] = InstanceData.load(f['_obj_'][k], verbose=verbose)
+            if verbose and k in d_dict.keys():
+                print(f'Data.load {k:<22}: {time() - start:0.5f}s')
+
         # In case RGB is among the keys and is in integer type, convert
         # to float
         for k in ['rgb', 'mean_rgb']:
@@ -704,7 +739,7 @@ class Batch(PyGBatch):
     @classmethod
     def from_data_list(cls, data_list, follow_batch=None, exclude_keys=None):
         """Overwrite torch_geometric from_data_list to be able to handle
-        Cluster objects batching.
+        Cluster and InstanceData objects batching.
         """
 
         # Local hack to avoid being overflowed with pesky warnings
@@ -741,26 +776,34 @@ class Batch(PyGBatch):
             batch = super().from_data_list(
                 data_list, follow_batch=follow_batch, exclude_keys=exclude_keys)
 
-        # Dirty trick: manually convert 'sub' to a proper ClusterBatch.
+        # Dirty trick: manually convert 'sub' to a proper ClusterBatch
+        # and 'obj' to a proper InstanceBatch.
         # Note we will need to do the same in `get_example` to avoid
         # breaking PyG Batch mechanisms
         if batch.is_super:
             batch.sub = ClusterBatch.from_list(batch.sub)
+        if batch.obj is not None:
+            batch.obj = InstanceBatch.from_list(batch.obj)
 
         return batch
 
     def get_example(self, idx):
         """Overwrite torch_geometric get_example to be able to handle
-        Cluster objects batching.
+        Cluster and InstanceData objects batching.
         """
 
         if self.is_super:
             sub_bckp = self.sub.clone()
             self.sub = self.sub.to_list()
+        if self.obj is not None:
+            obj_bckp = self.obj.clone()
+            self.obj = self.obj.to_list()
 
         data = super().get_example(idx)
 
         if self.is_super:
             self.sub = sub_bckp
+        if self.obj is not None:
+            self.obj = obj_bckp
 
         return data

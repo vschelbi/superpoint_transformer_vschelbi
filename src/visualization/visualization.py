@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import os.path as osp
 import plotly.graph_objects as go
-from src.data import Data, NAG, Cluster
+from src.data import Data, NAG, Cluster, InstanceData
 from src.transforms import GridSampling3D, SaveNodeIndex
 from src.utils import fast_randperm, to_trimmed
 from torch_scatter import scatter_mean
@@ -105,8 +105,9 @@ def visualize_3d(
         sub = Cluster(
             data_last.super_index, torch.arange(data_last.num_nodes),
             dense=True)
+        obj = data_last.obj.merge(data_last.super_index)
         pos = scatter_mean(data_last.pos, data_last.super_index, dim=0)
-        input = NAG(input.to_list() + [Data(pos=pos, sub=sub)])
+        input = NAG(input.to_list() + [Data(pos=pos, sub=sub, obj=obj)])
     is_nag = isinstance(input, NAG)
     num_levels = input.num_levels if is_nag else 1
 
