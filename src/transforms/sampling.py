@@ -7,8 +7,8 @@ from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils import fast_randperm, sparse_sample, scatter_pca, sanitize_keys
 from src.transforms import Transform
-from src.data import Data, NAG, NAGBatch
-from src.utils.metrics import atomic_to_histogram
+from src.data import Data, NAG, NAGBatch, CSRData, InstanceData
+from src.utils.histogram import atomic_to_histogram
 
 
 __all__ = [
@@ -60,6 +60,19 @@ class NAGSaveNodeIndex(SaveNodeIndex):
 
 class GridSampling3D(Transform):
     """ Clusters 3D points into voxels with size :attr:`size`.
+
+    By default, some special keys undergo dedicated grouping mechanisms.
+    The `_VOTING_KEYS=['y', 'super_index', 'is_val']` keys are grouped
+    by their majority label. The `_INSTANCE_KEYS=['obj']` keys are
+    grouped into an InstanceData, which stores all values in CSR format.
+    The `_LAST_KEYS = ['batch', SaveNodeIndex.KEY]` keys are by default
+    grouped following `mode='last'`.
+
+    Besides, for keys where a more subtle histogram mechanism is needed,
+    (eg for 'y'), the 'hist_key' and 'hist_size' arguments can be used.
+
+    Modified from: https://github.com/torch-points3d/torch-points3d
+
     Parameters
     ----------
     size: float
@@ -112,8 +125,9 @@ class GridSampling3D(Transform):
 
         if verbose:
             print(
-                "If you need to keep track of the position of your points, use "
-                "SaveNodeIndex transform before using GridSampling3D.")
+                f"If you need to keep track of the position of your points, "
+                f"use SaveNodeIndex transform before using "
+                f"{self.__class__.__name__}.")
 
             if self.mode == "last":
                 print(
@@ -167,7 +181,17 @@ def _group_data(
     """Group data based on indices in cluster. The option ``mode``
     controls how data gets aggregated within each cluster.
 
-    Warning: this modifies the input Data object in-place
+    By default, some special keys undergo dedicated grouping mechanisms.
+    The `_VOTING_KEYS=['y', 'super_index', 'is_val']` keys are grouped
+    by their majority label. The `_INSTANCE_KEYS=['obj']` keys are
+    grouped into an InstanceData, which stores all values in CSR format.
+    The `_LAST_KEYS = ['batch', SaveNodeIndex.KEY]` keys are by default
+    grouped following `mode='last'`.
+
+    Besides, for keys where a more subtle histogram mechanism is needed,
+    (eg for 'y'), the 'bins' argument can be used.
+
+    Warning: this function modifies the input Data object in-place.
 
     :param data : Data
     :param cluster : torch.Tensor
@@ -175,14 +199,14 @@ def _group_data(
         element is the cluster index of that point.
     :param unique_pos_indices : torch.tensor
         Tensor containing one index per cluster, this index will be used
-        to select features and labels
+        to select features and labels.
     :param mode : str
         Option to select how the features and labels for each voxel is
         computed. Can be ``last`` or ``mean``. ``last`` selects the last
         point falling in a voxel as the representative, ``mean`` takes
         the average.
     :param skip_keys: list
-        Keys of attributes to skip in the grouping
+        Keys of attributes to skip in the grouping.
     :param bins: dict
         Dictionary holding ``{'key': n_bins}`` where ``key`` is a Data
         attribute for which we would like to aggregate values into an
@@ -194,7 +218,11 @@ def _group_data(
     skip_keys = sanitize_keys(skip_keys, default=[])
 
     # Keys for which voxel aggregation will be based on majority voting
-    _VOTING_KEYS = ['y', 'instance_labels', 'super_index', 'is_val']
+    _VOTING_KEYS = ['y', 'obj', 'super_index', 'is_val']
+
+    # Keys for which voxel aggregation will use an InstanceData object,
+    # which store all input information in CSR format
+    _INSTANCE_KEYS = ['obj']
 
     # Keys for which voxel aggregation will be based on majority voting
     _LAST_KEYS = ['batch', SaveNodeIndex.KEY]
@@ -222,11 +250,12 @@ def _group_data(
 
         # Edges cannot be aggregated
         if bool(re.search('edge', key)):
-            raise ValueError("Edges not supported. Wrong data type.")
+            raise NotImplementedError("Edges not supported. Wrong data type.")
 
-        # TODO: adapt 'sub' to make use of CSRData batching ?
-        if key == 'sub':
-            raise ValueError("'sub' not supported. Wrong data type.")
+        # TODO: adapt to make use of CSRData batching ?
+        if isinstance(item, CSRData):
+            raise NotImplementedError(
+                f"Cannot merge '{key}' with data type: {type(item)}")
 
         # Only torch.Tensor attributes of size Data.num_nodes are
         # considered for aggregation
@@ -255,6 +284,11 @@ def _group_data(
             n_bins = item.max() + 1 if voting else bins[key]
             hist = atomic_to_histogram(item, cluster, n_bins=n_bins)
             data[key] = hist.argmax(dim=-1) if voting else hist
+
+        # For keys grouped into an InstanceData
+        elif key in _INSTANCE_KEYS:
+            count = torch.ones_like(item)
+            data[key] = InstanceData(cluster, item, count, dense=True)
 
         # Standard behavior, where attributes are simply
         # averaged across the clusters

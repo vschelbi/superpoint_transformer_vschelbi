@@ -2,7 +2,8 @@ import h5py
 import torch
 from time import time
 from src.data.csr import CSRData, CSRBatch
-from src.utils import tensor_idx, is_dense, save_tensor, load_tensor
+from src.utils import tensor_idx, is_dense, save_tensor, load_tensor, \
+    has_duplicates
 from torch_scatter import scatter_max, scatter_sum
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
@@ -13,9 +14,48 @@ __all__ = ['InstanceData', 'InstanceBatch']
 class InstanceData(CSRData):
     """Child class of CSRData to simplify some common operations
     dedicated to instance labels clustering.
+
+    :param pointers: torch.LongTensor
+        Pointers to address the data in the associated value tensors.
+        `values[Pointers[i]:Pointers[i+1]]` old the values for the ith
+        cluster. If `dense=True`, the `pointers` are actually the dense
+        indices to be converted to pointer format.
+    :param obj: torch.LongTensor
+        Object indices contained. Assumes there are NO DUPLICATE
+        CLUSTER-OBJECT pairs in the input data, unless 'dense=True'
+    :param count: torch.LongTensor
+        Count of each object in each cluster.
+    :param dense: bool
+        If `dense=True`, the `pointers` are actually the dense indices
+        to be converted to pointer format. Besides, any duplicate
+        cluster-obj pairs will be merged and the corresponding `count`
+        will be updated.
+    :param kwargs:
+        Other kwargs will be ignored.
     """
 
     def __init__(self, pointers, obj, count, dense=False, **kwargs):
+        # If the input data is passed in 'dense' format, we merge the
+        # potential duplicate cluster-obj pairs before anything else.
+        # NB: if dense=True, 'pointers' are not actual pointers but
+        # dense cluster indices instead
+        if dense:
+            # Build indices to uniquely identify each cluster-obj pair
+            cluster_obj_idx = pointers * (obj.max() + 1) + obj
+
+            # Make the indices contiguous in [0, max] to alleviate
+            # downstream scatter operations. Compute the cluster and obj
+            # for each unique cluster_obj_idx index. These will be
+            # helpful in building the cluster_idx and obj of the new
+            # merged data
+            cluster_obj_idx, perm = consecutive_cluster(cluster_obj_idx)
+            pointers = pointers[perm]
+            obj = obj[perm]
+
+            # Compute the actual count for each cluster-obj pair in the
+            # input data
+            count = scatter_sum(count, cluster_obj_idx)
+
         super().__init__(
             pointers, obj, count, dense=dense, is_index_value=None)
 
@@ -109,29 +149,12 @@ class InstanceData(CSRData):
             f"but received shape {idx.shape} instead"
         assert is_dense(idx), f"Expected contiguous indices in [0, max]"
 
-        # Compute the merged cluster index for each item
-        cluster_idx = self.indices
-        merged_idx = idx[cluster_idx].long()
+        # Compute the merged cluster index for each cluster-obj pair
+        merged_idx = idx[self.indices].long()
 
-        # Build a unique merged_idx-obj indices with lexicographic order
-        # placing merged_idx first and obj second. This fill facilitate
-        # building the pointers downstream
-        base = self.obj.long().max() + 1
-        merged_obj_idx = merged_idx * base + self.obj.long()
-
-        # Make the indices contiguous in [0, max] to alleviate
-        # downstream scatter operations. Compute the merged_idx and obj
-        # for each unique merged_obj_idx indices, these will be helpful
-        # in building the pointers and obj of the new merged data
-        merged_obj_idx, perm = consecutive_cluster(merged_obj_idx)
-        unique_merged_idx = merged_idx[perm]
-        unique_obj = self.obj[perm]
-
-        # Compute the new counts for each obj in the merged data
-        count = scatter_sum(self.count, merged_obj_idx)
-
-        # Return a new object holding the merged data
-        return InstanceData(unique_merged_idx, unique_obj, count, dense=True)
+        # Return a new object holding the merged data.
+        # NB: specifying 'dense=True' will do all the merging for us
+        return InstanceData(merged_idx, self.obj, self.count, dense=True)
 
     def iou(self):
         """Compute the Intersection over Union (IoU) for each
@@ -153,6 +176,13 @@ class InstanceData(CSRData):
         iou = self.count / (a_size + b_size - self.count)
 
         return iou
+
+    def debug(self):
+        super().debug()
+
+        # Make sure there are no duplicate cluster-obj pairs
+        cluster_obj_idx = self.indices * (self.obj.max() + 1) + self.obj
+        assert not has_duplicates(cluster_obj_idx)
 
     def __repr__(self):
         info = [
