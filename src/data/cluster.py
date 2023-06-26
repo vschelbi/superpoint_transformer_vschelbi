@@ -140,14 +140,15 @@ class Cluster(CSRData):
     def load(f, idx=None, update_sub=True, verbose=False):
         """Load Cluster from an HDF5 file. See `Cluster.save` for
         writing such file. Options allow reading only part of the
-        points.
+        clusters.
 
         This reproduces the behavior of Cluster.select but without
         reading the full pointer data from disk.
 
         :param f: h5 file path of h5py.File or h5py.Group
         :param idx: int, list, numpy.ndarray, torch.Tensor
-            Used to select points when reading. Supports fancy indexing
+            Used to select clusters when reading. Supports fancy
+            indexing
         :param update_sub: bool
             If True, the point (ie subpoint) indices will also be
             updated to maintain dense indices. The output will then

@@ -293,6 +293,19 @@ def visualize_3d(
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
 
+    # Color the points with ground truth semantic labels. If labels are
+    # expressed as histograms, keep the most frequent one
+    if data_0.obj is not None:
+        obj = data_0.obj
+        colors = int_to_plotly_rgb(obj)
+        text = np.array([f'Object {o}' for o in obj])
+        trace_modes[i_point_trace]['Objects'] = {
+            'marker.color': colors[data_0.selected],
+            'hovertext': text[data_0.selected]}
+        trace_modes[i_unselected_point_trace]['Objects'] = {
+            'marker.color': colors[~data_0.selected],
+            'hovertext': text[~data_0.selected]}
+
     # Color the points with predicted semantic labels. If labels are
     # expressed as histograms, keep the most frequent one
     if data_0.pred is not None:

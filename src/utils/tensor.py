@@ -66,8 +66,7 @@ def has_duplicates(a: torch.LongTensor):
 
 def is_dense(a: torch.LongTensor):
     """Checks whether a 1D tensor of indices contains dense indices.
-    That is to say all values in [a.min(), a.max] appear at least once
-    in a.
+    That is to say all values in [0, a.max] appear at least once in a.
     """
     assert a.dim() == 1, "Only supports 1D tensors"
     assert not a.is_floating_point(), "Float tensors are not supported"

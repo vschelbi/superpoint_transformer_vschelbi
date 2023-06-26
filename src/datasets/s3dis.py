@@ -40,7 +40,7 @@ def read_s3dis_area(
     :param semantic: bool
         Whether semantic labels should be saved in the output Data.y
     :param instance: bool
-        Whether instance labels should be saved in the output Data.y
+        Whether instance labels should be saved in the output Data.obj
     :param xyz_room: bool
         Whether the canonical room coordinates should be saved in the
         output Data.pos_room, as defined in the S3DIS paper section 3.2:
@@ -98,7 +98,7 @@ def read_s3dis_room(
     :param semantic: bool
         Whether semantic labels should be saved in the output `Data.y`
     :param instance: bool
-        Whether instance labels should be saved in the output `Data.y`
+        Whether instance labels should be saved in the output `Data.obj`
     :param xyz_room: bool
         Whether the canonical room coordinates should be saved in the
         output Data.pos_room, as defined in the S3DIS paper section 3.2:
@@ -122,10 +122,17 @@ def read_s3dis_room(
     xyz_list = [] if xyz else None
     rgb_list = [] if rgb else None
     y_list = [] if semantic else None
-    o_list = [] if instance else None
+    obj_list = [] if instance else None
 
     # List the object-wise annotation files in the room
     objects = sorted(glob.glob(osp.join(room_dir, 'Annotations', '*.txt')))
+
+    # 'Area_5/office_36' contains two 'wall_3' annotation files, so we
+    # manually remove the unwanted one
+    objects = [
+        p for p in objects
+        if not p.endswith("Area_5/office_36/Annotations/wall_3 (1).txt")]
+
     for i_object, path in enumerate(objects):
         object_name = osp.splitext(osp.basename(path))[0]
         if verbose:
@@ -158,17 +165,19 @@ def read_s3dis_room(
             y_list.append(np.full(points.shape[0], label, dtype='int64'))
 
         if instance:
-            o_list.append(np.full(points.shape[0], i_object, dtype='int64'))
+            obj_list.append(
+                np.full(points.shape[0], i_object, dtype='int64'))
 
     # Concatenate and convert to torch
     xyz_data = torch.from_numpy(np.concatenate(xyz_list, 0)) if xyz else None
     rgb_data = to_float_rgb(torch.from_numpy(np.concatenate(rgb_list, 0))) \
         if rgb else None
     y_data = torch.from_numpy(np.concatenate(y_list, 0)) if semantic else None
-    o_data = torch.from_numpy(np.concatenate(o_list, 0)) if instance else None
+    obj_data = torch.from_numpy(np.concatenate(obj_list, 0)) \
+        if instance else None
 
     # Store into a Data object
-    data = Data(pos=xyz_data, rgb=rgb_data, y=y_data, o=o_data)
+    data = Data(pos=xyz_data, rgb=rgb_data, y=y_data, obj=obj_data)
 
     # Add is_val attribute if need be
     if is_val:
@@ -178,12 +187,6 @@ def read_s3dis_room(
     # Exit here if canonical orientations are not needed
     if not xyz_room and not align:
         return data
-
-    # TODO: bbox alignment
-    if instance:
-        raise NotImplementedError(
-            "If you are using bbox for detection, need to implement bbox "
-            "alignment here first...")
 
     # Recover the canonical rotation angle for the room at hand. NB:
     # this assumes the raw files are stored in the S3DIS structure:

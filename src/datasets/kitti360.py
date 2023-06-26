@@ -35,6 +35,23 @@ __all__ = ['KITTI360', 'MiniKITTI360']
 def read_kitti360_window(
         filepath, xyz=True, rgb=True, semantic=True, instance=False,
         remap=False):
+    """Read a KITTI-360 window –ie a tile– saved as PLY.
+
+    :param filepath: str
+        Absolute path to the PLY file
+    :param xyz: bool
+        Whether XYZ coordinates should be saved in the output Data.pos
+    :param rgb: bool
+        Whether RGB colors should be saved in the output Data.rgb
+    :param semantic: bool
+        Whether semantic labels should be saved in the output Data.y
+    :param instance: bool
+        Whether instance labels should be saved in the output Data.obj
+    :param remap: bool
+        Whether semantic labels should be mapped from their KITTI-360 ID
+        to their train ID. For more details, see:
+        https://github.com/autonomousvision/kitti360Scripts/blob/master/kitti360scripts/evaluation/semantic_3d/evalPointLevelSemanticLabeling.py
+    """
     data = Data()
     with open(filepath, "rb") as f:
         window = PlyData.read(f)
@@ -55,7 +72,7 @@ def read_kitti360_window(
             data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
         if instance and 'instance' in attributes:
-            data.instance = torch.LongTensor(window["vertex"]['instance'])
+            data.obj = torch.LongTensor(window["vertex"]['instance'])
 
     return data
 

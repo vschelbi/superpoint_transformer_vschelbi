@@ -3,7 +3,7 @@ import torch
 import numpy as np
 import src
 from src.utils import tensor_idx, is_sorted, indices_to_pointers, \
-    sizes_to_pointers
+    sizes_to_pointers, fast_repeat
 
 
 __all__ = ['CSRData', 'CSRBatch']
@@ -121,6 +121,13 @@ class CSRData:
     def size(self):
         return self.pointers[1:] - self.pointers[:-1]
 
+    @property
+    def indices(self):
+        """Compute the dense indices corresponding to the pointers.
+        """
+        return fast_repeat(
+            torch.arange(self.num_groups, device=self.device), self.size)
+
     @staticmethod
     def get_batch_type():
         """Required by CSRBatch.from_csr_list."""
@@ -128,7 +135,7 @@ class CSRData:
 
     def clone(self):
         """Shallow copy of self. This may cause issues for certain types
-        of downstream operations but it saves time and memory. In
+        of downstream operations, but it saves time and memory. In
         practice, it shouldn't in this project.
         """
         out = copy.copy(self)

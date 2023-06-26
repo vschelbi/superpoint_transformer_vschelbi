@@ -31,6 +31,22 @@ __all__ = ['DALES', 'MiniDALES']
 def read_dales_tile(
         filepath, xyz=True, intensity=True, semantic=True, instance=False,
         remap=False):
+    """Read a DALES tile saved as PLY.
+
+    :param filepath: str
+        Absolute path to the PLY file
+    :param xyz: bool
+        Whether XYZ coordinates should be saved in the output Data.pos
+    :param rgb: bool
+        Whether RGB colors should be saved in the output Data.rgb
+    :param semantic: bool
+        Whether semantic labels should be saved in the output Data.y
+    :param instance: bool
+        Whether instance labels should be saved in the output Data.obj
+    :param remap: bool
+        Whether semantic labels should be mapped from their DALES ID
+        to their train ID.
+    """
     data = Data()
     key = 'testing'
     with open(filepath, "rb") as f:
@@ -51,7 +67,7 @@ def read_dales_tile(
             data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
         if instance:
-            data.instance = torch.LongTensor(tile[key]['ins_class'])
+            data.obj = torch.LongTensor(tile[key]['ins_class'])
 
     return data
 
