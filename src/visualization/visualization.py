@@ -15,12 +15,33 @@ from src.utils.color import *
 
 
 def visualize_3d(
-        input, figsize=1000, width=None, height=None, class_names=None,
-        class_colors=None, voxel=-1, max_points=50000, point_size=3,
-        centroid_size=None, error_color=None, centroids=False, v_edge=False,
-        h_edge=False, h_edge_attr=False, gap=None, select=None, alpha=0.1,
-        alpha_super=None, h_edge_width=None, v_edge_width=None,
-        point_symbol='circle', centroid_symbol='circle', ignore=-1, keys=None,
+        input,
+        figsize=1000,
+        width=None,
+        height=None,
+        class_names=None,
+        class_colors=None,
+        stuff_classes=None,
+        voxel=-1,
+        max_points=50000,
+        point_size=3,
+        centroid_size=None,
+        error_color=None,
+        centroids=False,
+        v_edge=False,
+        h_edge=False,
+        h_edge_attr=False,
+        gap=None,
+        select=None,
+        alpha=0.1,
+        alpha_super=None,
+        alpha_stuff=None,
+        h_edge_width=None,
+        v_edge_width=None,
+        point_symbol='circle',
+        centroid_symbol='circle',
+        ignore=-1,
+        keys=None,
         **kwargs):
     """3D data interactive visualization.
 
@@ -37,6 +58,12 @@ def visualize_3d(
     :param class_colors: List(List(int, int, int))
         colors palette for for point labels found in attributes 'y' and
         'pred'
+    :param stuff_classes: List(int)
+        semantic labels of the classes considered as "stuff" for
+        instance and panoptic segmentation. If 'y' and 'obj' are found
+        in the point attributes, the stuff annotations will appear
+        accordingly. Otherwise, stuff instance labeling will appear as
+        any other object
     :param voxel: float
         voxel size to subsample the point cloud to facilitate
         visualization
@@ -73,6 +100,10 @@ def visualize_3d(
     :param alpha_super:
         float ruling the whitening of superpoints (only if select is not
         None). If None, alpha will be used as fallback
+    :param alpha_stuff:
+        float ruling the whitening of stuff points (only if the input
+        points have 'obj' and 'pred' attributes, and 'stuff_classes' is
+        specified). If None, alpha will be used as fallback
     :param point_symbol: str
         marker symbol used for points. Must be one of
         ['circle', 'circle-open', 'square', 'square-open', 'diamond',
@@ -114,6 +145,7 @@ def visualize_3d(
     # Make sure alpha is in [0, 1]
     alpha = max(0, min(alpha, 1))
     alpha_super = max(0, min(alpha_super, 1)) if alpha_super else alpha
+    alpha_stuff = max(0, min(alpha_stuff, 1)) if alpha_stuff else alpha
 
     # If select is provided, we will call NAG.select on the input data
     # and illustrate the selected/discarded pattern in the figure
@@ -198,7 +230,7 @@ def visualize_3d(
 
     # Class colors initialization
     if class_colors is not None and not isinstance(class_colors[0], str):
-        class_colors = np.array([f"rgb{tuple(x)}" for x in class_colors])
+        class_colors = np.asarray(class_colors)
     else:
         class_colors = None
 
@@ -283,7 +315,7 @@ def visualize_3d(
         colors = class_colors[y] if class_colors is not None \
             else int_to_plotly_rgb(torch.LongTensor(y))
         if class_names is None:
-            text = np.array([f'Class {i}' for i in range(y.max() + 1)])
+            text = np.array([f"Class {i}" for i in range(y.max() + 1)])
         else:
             text = np.array([str.title(c) for c in class_names])
         text = text[y]
@@ -294,12 +326,59 @@ def visualize_3d(
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
 
-    # Color the points with ground truth semantic labels. If labels are
-    # expressed as histograms, keep the most frequent one
-    if data_0.obj is not None:
+    # Color the points with ground truth instance labels. If semantic
+    # labels and stuff_classes also passed, the stuff annotations will
+    # be treated accordingly
+    if data_0.obj is not None and (class_names is None or data_0.y is None):
         obj = data_0.obj.major[0]
         colors = int_to_plotly_rgb(obj)
-        text = np.array([f'Object {o}' for o in obj])
+        text = np.array([f"Object {o}" for o in obj])
+        trace_modes[i_point_trace]['Objects'] = {
+            'marker.color': colors[data_0.selected],
+            'hovertext': text[data_0.selected]}
+        trace_modes[i_unselected_point_trace]['Objects'] = {
+            'marker.color': colors[~data_0.selected],
+            'hovertext': text[~data_0.selected]}
+    elif data_0.obj is not None:
+        # Colors and text for thing points
+        obj = data_0.obj.major[0]
+        colors_thing = int_to_plotly_rgb(obj)
+        text_thing = np.array([f"Object {o}" for o in obj])
+
+        # Colors and text for stuff points
+        y = data_0.y
+        y = y.argmax(1).numpy() if y.dim() == 2 else y.numpy()
+        colors_stuff = class_colors[y] if class_colors is not None \
+            else int_to_plotly_rgb(torch.LongTensor(y))
+        if class_names is None:
+            text_stuff = np.array([
+                f"Stuff - Class {i}" for i in range(y.max() + 1)])
+        else:
+            text_stuff = np.array([
+                f"Stuff - {str.title(c)}" for c in class_names])
+        text_stuff = text_stuff[y]
+
+        # Apply alpha-whitening on stuff points
+        colors_stuff = colors_stuff.astype('float')
+        white = np.full((colors_stuff.shape[0], 3), 255, dtype='float')
+        colors_stuff = colors_stuff * alpha_stuff + white * (1 - alpha_stuff)
+        colors_stuff = colors_stuff.astype('int64')
+
+        # Compute mask for stuff points
+        stuff_classes = np.asarray([i for i in stuff_classes if i <= y.max()])
+        is_stuff = np.zeros(y.max() + 1, dtype='bool')
+        for i in stuff_classes:
+            if i < is_stuff.shape[0]:
+                is_stuff[i] = True
+        is_stuff = is_stuff[y]
+
+        # Merge thing and stuff colors and text
+        colors = colors_thing
+        text = text_thing
+        colors[is_stuff] = colors_stuff[is_stuff]
+        text[is_stuff] = text_stuff[is_stuff]
+
+        # Create trace modes
         trace_modes[i_point_trace]['Objects'] = {
             'marker.color': colors[data_0.selected],
             'hovertext': text[data_0.selected]}
@@ -314,7 +393,7 @@ def visualize_3d(
         pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
         colors = class_colors[pred] if class_colors is not None else None
         if class_names is None:
-            text = np.array([f'Class {i}' for i in range(pred.max() + 1)])
+            text = np.array([f"Class {i}" for i in range(pred.max() + 1)])
         else:
             text = np.array([str.title(c) for c in class_names])
         text = text[pred]
@@ -379,11 +458,11 @@ def visualize_3d(
         # assumes only it is the trace holding all level-0 points and on
         # which all other colors modes are defined
         colors = int_to_plotly_rgb(super_index)
-        text = np.array([f'↑: {i}' for i in super_index])
-        trace_modes[i_point_trace][f'Level {i_level + 1}'] = {
+        text = np.array([f"↑: {i}" for i in super_index])
+        trace_modes[i_point_trace][f"Level {i_level + 1}"] = {
             'marker.color': colors[data_0.selected],
             'hovertext': text[data_0.selected]}
-        trace_modes[i_unselected_point_trace][f'Level {i_level + 1}'] = {
+        trace_modes[i_unselected_point_trace][f"Level {i_level + 1}"] = {
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
 
@@ -459,7 +538,7 @@ def visualize_3d(
                 showlegend=False,
                 visible=gap is not None, ))
 
-        keys = [f'Level {i_level + 1}'] if gap is None \
+        keys = [f"Level {i_level + 1}"] if gap is None \
             else trace_modes[i_point_trace].keys()
         trace_modes.append(
             {k: {
@@ -593,7 +672,7 @@ def visualize_3d(
                 showlegend=False,
                 visible=gap is not None, ))
 
-        keys = [f'Level {i_level + 1}'] if gap is None \
+        keys = [f"Level {i_level + 1}"] if gap is None \
             else trace_modes[i_point_trace].keys()
         trace_modes.append({k: {} for k in keys})
 
@@ -615,7 +694,7 @@ def visualize_3d(
 
         # Prepare the color for erroneous points
         error_color = 'red' if error_color is None \
-            else f'rgb{tuple(error_color)}'
+            else np.asarray[error_color].squeeze()
 
         # Draw the erroneous points
         fig.add_trace(

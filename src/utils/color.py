@@ -42,7 +42,7 @@ def rgb_to_plotly_rgb(rgb, alpha=None):
             f'max={rgb.max()}')
 
     if alpha is None:
-        return np.array([f"rgb{tuple(x)}" for x in rgb])
+        return np.array([x for x in rgb])
 
     if isinstance(alpha, (int, float)):
         alpha = np.array([alpha] * rgb.shape[0])
@@ -53,7 +53,7 @@ def rgb_to_plotly_rgb(rgb, alpha=None):
     assert alpha.shape[0] == rgb.shape[0]
 
     return np.array([
-        f"rgba({x[0]}, {x[1]}, {x[1]}, {a})" for x, a in zip(rgb, alpha)])
+        [x[0], x[1], x[1], a] for x, a in zip(rgb, alpha)])
 
 
 def int_to_plotly_rgb(x):
