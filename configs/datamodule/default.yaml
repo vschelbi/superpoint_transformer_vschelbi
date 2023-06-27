@@ -15,8 +15,13 @@ num_classes: ???
 
 # Whether the dataset produces instance labels. In any case, the
 # instance labels will be preprocessed, if any. However, `instance: False`
-# will avoid unwanted instance-related I/O operations, to save memory.
+# will avoid unwanted instance-related I/O operations, to save memory
 instance: False
+
+# Mini dataset
+# Each dataset has a 'mini' version which only uses a small portion of
+# the data. Can be useful for experimentation and debugging
+mini: False
 
 # I/O parameters
 save_y_to_csr: True  # save 'y' label histograms using a custom CSR format to save memory and I/O time

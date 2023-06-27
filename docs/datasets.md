@@ -172,7 +172,7 @@ mini: True
 Or, if you are using the CLI, use the following syntax:
 ```shell script
 # Train SPT on mini-DALES
-python src/train.py experiment=dales +datamodule.mini=True
+python src/train.py experiment=dales datamodule.mini=True
 ```
 
 ## Creating your own dataset
