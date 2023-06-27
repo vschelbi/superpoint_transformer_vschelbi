@@ -204,6 +204,16 @@ class NAG:
             # level
             data_list[i].sub = super_sub
 
+        # The higher level InstanceData needs to be informed of the
+        # select operation. Otherwise, instance labels of higher levels
+        # will still keep track of potentially removed level-0 points.
+        # To this end, we recompute the instance labels with a bottom-up
+        # approach
+        if self[0].obj is not None:
+            for i in range(self.num_levels - 1):
+                data_list[i + 1].obj = data_list[i].obj.merge(
+                    data_list[i].super_index)
+
         # Create a new NAG with the list of indexed Data
         nag = self.__class__(data_list)
 
