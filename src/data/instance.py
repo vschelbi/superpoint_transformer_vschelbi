@@ -164,10 +164,10 @@ class InstanceData(CSRData):
         # NB: specifying 'dense=True' will do all the merging for us
         return InstanceData(merged_idx, self.obj, self.count, dense=True)
 
-    def iou(self):
-        """Compute the Intersection over Union (IoU) for each
-        cluster-object pair in the data. This is typically needed when
-        computing the Average Precision.
+    def iou_and_size(self):
+        """Compute the Intersection over Union (IoU) and the individual
+        size for each cluster-object pair in the data. This is typically
+        needed for computing the Average Precision.
         """
         # Prepare the indices for sets A and B. In particular, we want
         # the indices to be contiguous in [0, idx_max], to alleviate
@@ -184,7 +184,7 @@ class InstanceData(CSRData):
         # Compute the IoU
         iou = self.count / (a_size + b_size - self.count)
 
-        return iou
+        return iou, a_size, b_size
 
     def debug(self):
         super().debug()
