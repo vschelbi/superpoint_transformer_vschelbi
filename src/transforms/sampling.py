@@ -252,6 +252,17 @@ def _group_data(
         if bool(re.search('edge', key)):
             raise NotImplementedError("Edges not supported. Wrong data type.")
 
+        # For instance labels grouped into an InstanceData. Supports
+        # input instance labels either as InstanceData or as a simple
+        # index tensor
+        if key in _INSTANCE_KEYS:
+            if isinstance(item, InstanceData):
+                data[key] = item.merge(cluster)
+            else:
+                count = torch.ones_like(item)
+                data[key] = InstanceData(cluster, item, count, dense=True)
+            continue
+
         # TODO: adapt to make use of CSRData batching ?
         if isinstance(item, CSRData):
             raise NotImplementedError(
@@ -284,11 +295,6 @@ def _group_data(
             n_bins = item.max() + 1 if voting else bins[key]
             hist = atomic_to_histogram(item, cluster, n_bins=n_bins)
             data[key] = hist.argmax(dim=-1) if voting else hist
-
-        # For keys grouped into an InstanceData
-        elif key in _INSTANCE_KEYS:
-            count = torch.ones_like(item)
-            data[key] = InstanceData(cluster, item, count, dense=True)
 
         # Standard behavior, where attributes are simply
         # averaged across the clusters
@@ -830,7 +836,7 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         # an Identity, if need be
         if self.r <= 0:
             return nag
-        
+
         # Neighbors are searched using the node coordinates. This is not
         # the optimal search for cluster-cluster distances, but is the
         # fastest for our needs here. If need be, one could make this
