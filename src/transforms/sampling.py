@@ -260,7 +260,9 @@ def _group_data(
                 data[key] = item.merge(cluster)
             else:
                 count = torch.ones_like(item)
-                data[key] = InstanceData(cluster, item, count, dense=True)
+                y = data.y if getattr(data, 'y', None) is not None \
+                    else torch.zeros_like(item)
+                data[key] = InstanceData(cluster, item, count, y, dense=True)
             continue
 
         # TODO: adapt to make use of CSRData batching ?

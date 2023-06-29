@@ -178,10 +178,11 @@ def read_s3dis_room(
 
     # Store instance labels in InstanceData format
     if instance:
+        idx = torch.arange(data.num_points)
         obj = torch.from_numpy(np.concatenate(obj_list, 0))
         count = torch.ones_like(obj)
-        idx = torch.arange(data.num_points)
-        data.obj = InstanceData(idx, obj, count, dense=True)
+        y = torch.from_numpy(np.concatenate(y_list, 0))
+        data.obj = InstanceData(idx, obj, count, y, dense=True)
 
     # Add is_val attribute if need be
     if is_val:

@@ -73,13 +73,15 @@ def read_kitti360_window(
             data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
         if instance and 'instance' in attributes:
+            idx = torch.arange(data.num_points)
             obj = torch.LongTensor(window["vertex"]['instance'])
             # is_stuff = obj % 1000 == 0
             # obj[is_stuff] = 0
             obj = consecutive_cluster(obj)[0]
             count = torch.ones_like(obj)
-            idx = torch.arange(data.num_points)
-            data.obj = InstanceData(idx, obj, count, dense=True)
+            y = torch.LongTensor(window["vertex"]['semantic'])
+            y = torch.from_numpy(ID2TRAINID)[y] if remap else y
+            data.obj = InstanceData(idx, obj, count, y, dense=True)
 
     return data
 

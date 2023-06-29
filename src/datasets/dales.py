@@ -68,11 +68,13 @@ def read_dales_tile(
             data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
         if instance:
+            idx = torch.arange(data.num_points)
             obj = torch.LongTensor(tile[key]['ins_class'])
             obj = consecutive_cluster(obj)[0]
             count = torch.ones_like(obj)
-            idx = torch.arange(data.num_points)
-            data.obj = InstanceData(idx, obj, count, dense=True)
+            y = torch.LongTensor(tile[key]['sem_class'])
+            y = torch.from_numpy(ID2TRAINID)[y] if remap else y
+            data.obj = InstanceData(idx, obj, count, y, dense=True)
 
     return data
 

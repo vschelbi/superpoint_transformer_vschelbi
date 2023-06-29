@@ -13,14 +13,21 @@ __all__ = ['InstanceData', 'InstanceBatch']
 
 class InstanceData(CSRData):
     """Child class of CSRData to simplify some common operations
-    dedicated to instance labels clustering.
+    dedicated to instance labels clustering. In particular, this data
+    structure stores the cluster-object overlaps: for each cluster (ie
+    segment, superpoint, node in the superpoint graph, etc), we store
+    all the object instances with which it overlaps. Concretely, for
+    each cluster-object pair, we store:
+      - `obj`: the object's index
+      - `count`: the number of points in the cluster-object overlap
+      - `y`: the object's semantic label
 
     Importantly, each object in the InstanceData is expected to be
-    described by a unique index in 'obj', regardless of its actual
+    described by a unique index in `obj', regardless of its actual
     semantic class. It is not required for the object instances to be
-    contiguous in [0, obj_max], although enforcing it may have
+    contiguous in `[0, obj_max]`, although enforcing it may have
     beneficial downstream effects on memory and I/O times. Finally,
-    when two InstanceData are batched in an InstanceBatch, the 'obj'
+    when two InstanceData are batched in an InstanceBatch, the `obj'
     indices will be updated to avoid collision between the batch items.
 
     :param pointers: torch.LongTensor
@@ -29,10 +36,13 @@ class InstanceData(CSRData):
         cluster. If `dense=True`, the `pointers` are actually the dense
         indices to be converted to pointer format.
     :param obj: torch.LongTensor
-        Object indices contained. Assumes there are NO DUPLICATE
-        CLUSTER-OBJECT pairs in the input data, unless 'dense=True'
+        Object index for each cluster-object pair. Assumes there are
+        NO DUPLICATE CLUSTER-OBJECT pairs in the input data, unless
+        'dense=True'.
     :param count: torch.LongTensor
-        Count of each object in each cluster.
+        Number of points in the overlap for each cluster-object pair.
+    :param y: torch.LongTensor
+        Semantic label the object for each cluster-object pair.
     :param dense: bool
         If `dense=True`, the `pointers` are actually the dense indices
         to be converted to pointer format. Besides, any duplicate
@@ -42,7 +52,7 @@ class InstanceData(CSRData):
         Other kwargs will be ignored.
     """
 
-    def __init__(self, pointers, obj, count, dense=False, **kwargs):
+    def __init__(self, pointers, obj, count, y, dense=False, **kwargs):
         # If the input data is passed in 'dense' format, we merge the
         # potential duplicate cluster-obj pairs before anything else.
         # NB: if dense=True, 'pointers' are not actual pointers but
@@ -59,13 +69,15 @@ class InstanceData(CSRData):
             cluster_obj_idx, perm = consecutive_cluster(cluster_obj_idx)
             pointers = pointers[perm]
             obj = obj[perm]
+            y = y[perm]
 
             # Compute the actual count for each cluster-obj pair in the
             # input data
             count = scatter_sum(count, cluster_obj_idx)
 
         super().__init__(
-            pointers, obj, count, dense=dense, is_index_value=[True, False])
+            pointers, obj, count, y, dense=dense,
+            is_index_value=[True, False, False])
 
     @staticmethod
     def get_batch_type():
@@ -97,6 +109,18 @@ class InstanceData(CSRData):
         #     self.debug()
 
     @property
+    def y(self):
+        return self.values[2]
+
+    @y.setter
+    def y(self, y):
+        assert y.device == self.device, \
+            f"y is on {y.device} while self is on {self.device}"
+        self.values[2] = y
+        # if src.is_debug_enabled():
+        #     self.debug()
+
+    @property
     def num_clusters(self):
         return self.num_groups
 
@@ -110,8 +134,8 @@ class InstanceData(CSRData):
 
     @property
     def major(self):
-        """Return the obj and count of the majority (ie most frequent)
-        instance in each cluster.
+        """Return the obj, count, and y of the majority (ie most
+        frequent) instance in each cluster.
         """
         # Compute the cluster index for each overlap (ie each row in
         # self.values)
@@ -120,8 +144,9 @@ class InstanceData(CSRData):
         # Search for the obj with the largest count, for each cluster
         count, argmax = scatter_max(self.count, cluster_idx)
         obj = self.obj[argmax]
+        y = self.y[argmax]
 
-        return obj, count
+        return obj, count, y
 
     def select(self, idx):
         """Returns a new InstanceData which indexes `self` using entries
@@ -162,7 +187,8 @@ class InstanceData(CSRData):
 
         # Return a new object holding the merged data.
         # NB: specifying 'dense=True' will do all the merging for us
-        return InstanceData(merged_idx, self.obj, self.count, dense=True)
+        return InstanceData(
+            merged_idx, self.obj, self.count, self.y, dense=True)
 
     def iou_and_size(self):
         """Compute the Intersection over Union (IoU) and the individual
@@ -216,6 +242,7 @@ class InstanceData(CSRData):
         save_tensor(self.pointers, f, 'pointers', fp_dtype=fp_dtype)
         save_tensor(self.obj, f, 'obj', fp_dtype=fp_dtype)
         save_tensor(self.count, f, 'count', fp_dtype=fp_dtype)
+        save_tensor(self.y, f, 'y', fp_dtype=fp_dtype)
 
     @staticmethod
     def load(f, idx=None, verbose=False):
@@ -229,7 +256,7 @@ class InstanceData(CSRData):
             indexing
         :param verbose: bool
         """
-        KEYS = ['pointers', 'obj', 'count']
+        KEYS = ['pointers', 'obj', 'count', 'y']
 
         if not isinstance(f, (h5py.File, h5py.Group)):
             with h5py.File(f, 'r') as file:
@@ -248,10 +275,11 @@ class InstanceData(CSRData):
             pointers = load_tensor(f['pointers'])
             obj = load_tensor(f['obj'])
             count = load_tensor(f['count'])
+            y = load_tensor(f['y'])
             if verbose:
                 print(f'InstanceData.load read all           : {time() - start:0.5f}s')
             start = time()
-            out = InstanceData(pointers, obj, count)
+            out = InstanceData(pointers, obj, count, y)
             if verbose:
                 print(f'InstanceData.load init               : {time() - start:0.5f}s')
             return out
@@ -288,12 +316,13 @@ class InstanceData(CSRData):
         start = time()
         obj = load_tensor(f['obj'], idx=val_idx)
         count = load_tensor(f['count'], idx=val_idx)
+        y = load_tensor(f['y'], idx=val_idx)
         if verbose:
             print(f'InstanceData.load read values    : {time() - start:0.5f}s')
 
         # Build the InstanceData object
         start = time()
-        out = InstanceData(pointers, obj, count)
+        out = InstanceData(pointers, obj, count, y)
         if verbose:
             print(f'InstanceData.load init           : {time() - start:0.5f}s')
         return out
