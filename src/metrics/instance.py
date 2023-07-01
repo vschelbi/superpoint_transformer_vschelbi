@@ -161,6 +161,13 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
     ) -> None:
         super().__init__(**kwargs)
 
+
+        # TODO: check results valid
+        # TODO: check results equal original on toy image segmentation
+        # TODO: test cuda
+        # TODO: optionally remove size ranges to save time
+        # TODO: check bottlenecks
+
         if not _TORCHVISION_GREATER_EQUAL_0_8:
             raise ModuleNotFoundError(
                 f"`{self.__class__.__name__}` metric requires that `torchvision` version 0.8.0 or newer is installed. "
@@ -294,12 +301,23 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         pair_gt_semantic = pair_data.y
         pair_iou, pair_pred_size, pair_gt_size = pair_data.iou_and_size()
 
+        from src.utils import print_tensor_info
+        # print_tensor_info(pred_score, f"{'pred_score':<20}")
+        # print(f"    {pred_score}")
+        # print_tensor_info(pred_semantic, f"{'pred_semantic':<20}")
+        # print(f"    {pred_semantic}")
+        # print_tensor_info(pair_pred_idx, f"{'pair_pred_idx':<20}")
+        # print(f"    {pair_pred_idx}")
+        # print_tensor_info(pair_iou, f"{'pair_iou':<20}")
+        # print(f"    {pair_iou}")
+        print()
+
         # To alleviate memory and compute, we would rather store
         # ground-truth-specific attributes in tensors of size
         # num_gt rather than for all prediction-ground truth
         # pairs. We will keep track of the prediction and ground truth
         # indices for each pair, to be able to recover relevant
-        # information when need be. To this end, since there is not
+        # information when need be. To this end, since there is no
         # guarantee the ground truth indices are contiguous in
         # [0, gt_idx_max], we contract those and gather associated
         # pre-ground-truth attributes
@@ -307,8 +325,13 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         gt_semantic = pair_gt_semantic[gt_idx]
         gt_size = pair_gt_size[gt_idx]
         del gt_idx, pair_gt_semantic, pair_gt_size
-
-        # TODO: make sure this does not break anything
+        # print_tensor_info(pair_gt_idx, f"{'pair_gt_idx':<20}")
+        # print(f"    {pair_gt_idx}")
+        print_tensor_info(gt_semantic, f"{'gt_semantic':<20}")
+        print(f"    {gt_semantic}")
+        print_tensor_info(gt_size, f"{'gt_size':<20}")
+        print(f"    {gt_size}")
+        print()
 
         # Similarly, we do not need to store all prediction attributes
         # at a pair-wise level. So we compute the corresponding
@@ -316,8 +339,9 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         pred_size = torch.zeros_like(pred_semantic)
         pred_size[pair_pred_idx] = pair_pred_size
         del pair_pred_size
-
-        # TODO: make sure this does what we want: gather the prediction sizes efficiently
+        # print_tensor_info(pred_size, f"{'pred_size':<20}")
+        # print(f"    {pred_size}")
+        # print()
 
         # To prepare for downstream matching assignments, we sort all
         # pairs by decreasing prediction score. We do this now because
@@ -330,16 +354,27 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         pred_score = pred_score[order]
         pred_semantic = pred_semantic[order]
         pred_size = pred_size[order]
-        pair_pred_idx = order[pair_pred_idx]  # TODO: make sure this does not break the prediction indices
         width = pair_data.sizes
         start = sizes_to_pointers(width[:-1])
         pair_order = arange_interleave(width[order], start=start[order])
-        pair_pred_idx = pair_pred_idx[pair_order]  # TODO: make sure this does what we want
+        pair_pred_idx = torch.arange(
+            width.shape[0], device=self.device).repeat_interleave(width[order])
         pair_gt_idx = pair_gt_idx[pair_order]
         pair_iou = pair_iou[pair_order]
         del pair_data, order, width, start, pair_order
-
-        # TODO: make sure the ordering is correct does not break the pairs
+        print_tensor_info(pred_score, f"{'pred_score':<20}")
+        print(f"    {pred_score}")
+        print_tensor_info(pred_semantic, f"{'pred_semantic':<20}")
+        print(f"    {pred_semantic}")
+        print_tensor_info(pred_size, f"{'pred_size':<20}")
+        print(f"    {pred_size}")
+        print_tensor_info(pair_pred_idx, f"{'pair_pred_idx':<20}")
+        print(f"    {pair_pred_idx}")
+        print_tensor_info(pair_gt_idx, f"{'pair_gt_idx':<20}")
+        print(f"    {pair_gt_idx}")
+        print_tensor_info(pair_iou, f"{'pair_iou':<20}")
+        print(f"    {pair_iou}")
+        print()
 
         # Recover the classes of interest for this metric. These are the
         # classes whose labels appear at least once in the predicted
@@ -347,11 +382,13 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Besides, if `stuff_classes` was provided, the corresponding
         # labels are ignored
         class_ids = self._get_classes()
+        print(f"'class_ids':    {class_ids}")
+        print()
 
         # For each class, each size range (and each IoU threshold),
         # compute the prediction-ground truth matches. Importantly, the
         # output of this step is formatted so as to be passed to
-        # `self.__calculate_recall_precision_scores`
+        # `MeanAveragePrecision.__calculate_recall_precision_scores`
         evaluations = [
             self._evaluate(
                 class_id,
@@ -378,19 +415,15 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Compute the recall, precision, and score for each IoU
         # threshold, class, and size range
         for idx_cls, _ in enumerate(class_ids):
+            print(f"idx_cls: {idx_cls}   type: {type(idx_cls)}")
             for i_size, _ in enumerate(self.size_ranges):
                 recall, precision, scores = self.__calculate_recall_precision_scores(
                     recall,
                     precision,
                     scores,
-                    idx_cls=idx_cls,
-                    idx_bbox_area=i_size,
-                    idx_max_det_thrs=0,
-                    eval_imgs=evaluations,
-                    rec_thresholds=self.rec_thresholds.to(self.device),
-                    max_det=torch.iinfo(torch.int64).max,
-                    nb_imgs=1,
-                    nb_bbox_areas=num_sizes)
+                    idx_cls,
+                    i_size,
+                    evaluations)
 
         # Compute all AP and AR metrics
         map_val, mar_val = self._summarize_results(precision, recall)
@@ -411,8 +444,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                 map_per_class_list.append(cls_map.map)
                 mar_per_class_list.append(cls_mar.mar)
 
-            map_per_class_val = torch.astensor(map_per_class_list)
-            mar_per_class_val = torch.astensor(mar_per_class_list)
+            map_per_class_val = torch.as_tensor(map_per_class_list)
+            mar_per_class_val = torch.as_tensor(mar_per_class_list)
 
         # Prepare the final metrics output
         metrics = InstanceMetricResults()
@@ -471,6 +504,27 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         :param gt_size: Tensor of shape [N_gt]
         :return:
         """
+        from src.utils import print_tensor_info
+        print('________________________________________________________________')
+        print(f"class_id :    {class_id}")
+        print(f"size_range :    {size_range}")
+        print_tensor_info(pred_score, f"{'pred_score':<20}")
+        print(f"    {pred_score}")
+        print_tensor_info(pair_iou, f"{'pair_iou':<20}")
+        print(f"    {pair_iou}")
+        print_tensor_info(pair_pred_idx, f"{'pair_pred_idx':<20}")
+        print(f"    {pair_pred_idx}")
+        print_tensor_info(pair_gt_idx, f"{'pair_gt_idx':<20}")
+        print(f"    {pair_gt_idx}")
+        print_tensor_info(pred_semantic, f"{'pred_semantic':<20}")
+        print(f"    {pred_semantic}")
+        print_tensor_info(gt_semantic, f"{'gt_semantic':<20}")
+        print(f"    {gt_semantic}")
+        print_tensor_info(pred_size, f"{'pred_size':<20}")
+        print(f"    {pred_size}")
+        print_tensor_info(gt_size, f"{'gt_size':<20}")
+        print(f"    {gt_size}")
+        print()
 
         # Compute masks on the prediction-target pairs, based on their
         # semantic label, as well as their size
@@ -478,18 +532,28 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         is_pred_class = pred_semantic == class_id
         is_gt_in_size_range = (size_range[0] < gt_size.float()) \
                               & (gt_size.float() < size_range[1]) \
-                              & self.min_size <= gt_size.float()
+                              & (self.min_size <= gt_size.float())
         is_pred_in_size_range = (size_range[0] < pred_size.float()) \
                                 & (pred_size.float() < size_range[1])\
-                                & self.min_size <= pred_size.float()
+                                & (self.min_size <= pred_size.float())
+        print(f"{'is_gt_class':<20}:    {is_gt_class}")
+        print(f"{'is_pred_class':<20}:    {is_pred_class}")
+        print(f"{'is_gt_in_size_range':<20}:    {is_gt_in_size_range}")
+        print(f"{'is_pred_in_size_range':<20}:    {is_pred_in_size_range}")
+        print()
 
         # Count the number of ground truths and predictions with the
         # class at hand
         num_gt = is_gt_class.count_nonzero().item()
         num_pred = is_pred_class.count_nonzero().item()
+        print(f"{'num_gt':<20}:    {num_gt}")
+        print(f"{'num_pred':<20}:    {num_pred}")
+        print()
 
         # Get the number of IoU thresholds
         num_iou = len(self.iou_thresholds)
+        print(f"{'num_iou':<20}:    {num_iou}")
+        print()
 
         # If no ground truth and no detection carry the class of
         # instance, return None
@@ -527,11 +591,15 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         gt_class_idx = torch.where(is_gt_class)[0]
         pred_class_idx = torch.where(is_pred_class)[0]
         is_pair_gt_class = torch.isin(pair_gt_idx, gt_class_idx)
+        print(f"{'gt_class_idx':<20}:    {gt_class_idx}")
+        print(f"{'pred_class_idx':<20}:    {pred_class_idx}")
+        print(f"{'is_pair_gt_class':<20}:    {is_pair_gt_class}")
+        print()
 
         # Build the tensors used to track which ground truth and which
         # prediction has found a match, for each IoU threshold. This is
         # the data structure expected by torchmetrics'
-        # `self.__calculate_recall_precision_scores()`
+        # `MeanAveragePrecision.__calculate_recall_precision_scores()`
         gt_matches = torch.zeros(
             num_iou, num_gt, dtype=torch.bool, device=self.device)
         det_matches = torch.zeros(
@@ -540,11 +608,43 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         det_ignore = torch.zeros(
             num_iou, num_pred, dtype=torch.bool, device=self.device)
 
+        # Each pair is associated with a prediction index and a ground
+        # truth index. Except these indices are global, spanning across
+        # all objects in the data, regardless of their class. Here, we
+        # are also going to need to link a pair with the local ground
+        # truth index (tracking objects with the current class of
+        # interest), to be able to index and update the above-created
+        # gt_matches and gt_ignore. To this end, we will compute a
+        # simple mapping. NB: we do not need to build such mapping for
+        # prediction indices, because we will simply enumerate
+        # pred_class_idx, which provides both local and global indices
+        gt_idx_to_i_gt = torch.full_like(gt_semantic, -1)
+        gt_idx_to_i_gt[gt_class_idx] = torch.arange(num_gt, device=self.device)
+
+
+
+        ####
+        from src.utils import print_tensor_info
+
+
+
         # Match each prediction to a ground truth
         # NB: the assumed pre-ordering of predictions by decreasing
         # score ensures we are assigning high-confidence predictions
         # first
         for i_pred, pred_idx in enumerate(pred_class_idx):
+            print()
+            print(f"******** i_pred={i_pred}, pred_idx={pred_idx} ********")
+            print()
+            print_tensor_info(gt_matches, f"{'gt_matches':<20}")
+            print(f"    {gt_matches}")
+            print_tensor_info(det_matches, f"{'det_matches':<20}")
+            print(f"    {det_matches}")
+            print_tensor_info(gt_ignore, f"{'gt_ignore':<20}")
+            print(f"    {gt_ignore}")
+            print_tensor_info(det_ignore, f"{'det_ignore':<20}")
+            print(f"    {det_ignore}")
+            print()
 
             # Get the indices of pairs which involve the prediction at
             # hand and whose ground truth has the class at hand
@@ -559,20 +659,36 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             # Gather the pairs' ground truth information for candidate
             # ground truth matches
             _pair_gt_idx = pair_gt_idx[_pair_idx]
+            _pair_i_gt = gt_idx_to_i_gt[_pair_gt_idx]
             _pair_iou = pair_iou[_pair_idx]
 
-            # Sort the ground truths by decreasing size. In case the
-            # prediction ahs multiple candidate ground truth matches, we
-            # will select the one with largest size in priority
+            # Sort the candidates by decreasing gt size. In case the
+            # prediction has multiple candidate ground truth matches
+            # with equal IoU, we will select the one with the largest
+            # size in priority
             if _pair_gt_idx.numel() > 1:
                 order = gt_size[_pair_gt_idx].argsort(descending=True)
+                _pair_idx = _pair_idx[order]
                 _pair_gt_idx = _pair_gt_idx[order]
+                _pair_i_gt = _pair_i_gt[order]
                 _pair_iou = _pair_iou[order]
                 del order
 
-            from src.utils import print_tensor_info
-            print_tensor_info(gt_matches, 'gt_matches')
-            print_tensor_info(_pair_gt_idx, '_pair_gt_idx')
+            print_tensor_info(_pair_idx, f"{'_pair_idx':<20}")
+            print(f"    {_pair_idx}")
+            print_tensor_info(_pair_gt_idx, f"{'_pair_gt_idx':<20}")
+            print(f"    {_pair_gt_idx}")
+            print_tensor_info(_pair_i_gt, f"{'_pair_i_gt':<20}")
+            print(f"    {_pair_i_gt}")
+            print_tensor_info(_pair_iou, f"{'_pair_iou':<20}")
+            print(f"    {_pair_iou}")
+            print()
+
+            _pair_iou = (_pair_iou * 10).clamp(max=1.0)
+            print_tensor_info(_pair_iou, f"{'CHEAAAT _pair_iou':<20}")
+            print(f"    {_pair_iou}")
+            print()
+
 
             # Among potential ground truth matches, remove those which
             # are already matched with a prediction.
@@ -581,7 +697,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             # good prediction, if any. This way, the prediction in
             # question will also be marked as to be 'ignored', else it
             # would be unfairly penalized as a False Positive
-            _iou_pair_gt_matched = gt_matches[:, _pair_gt_idx]
+            _iou_pair_gt_matched = gt_matches[:, _pair_i_gt]
 
             # For each IoU and each candidate ground truth, search the
             # available candidates with large-enough IoU.
@@ -604,13 +720,22 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
 
             # For each IoU threshold, get the corresponding ground truth
             # index. From there, we can update the det_ignore,
-            # det_matches and gt_matches
-            _iou_match_gt_idx = _pair_gt_idx[_iou_match_idx]
-            det_ignore[:, pred_idx] = \
-                gt_ignore[_iou_match_gt_idx] * _iou_match_ok
-            det_matches[:, pred_idx] = _iou_match_ok
+            # det_matches and gt_matches.
+            _iou_match_i_gt = _pair_i_gt[_iou_match_idx]
+            det_ignore[:, i_pred] = gt_ignore[_iou_match_i_gt] * _iou_match_ok
+            det_matches[:, i_pred] = _iou_match_ok
+
+            #  Special attention must be paid to gt_matches in case the
+            #  prediction tried to match an already-assigned gt. In
+            #  which case the prediction will not match (ie
+            #  _iou_match_ok is False). To avoid re-setting the
+            #  corresponding gt_matches to False, we need to make sure
+            #  gt_matches was not already matched
+            _iou_match_gt_ok = \
+                gt_matches.gather(1, _iou_match_i_gt.view(-1, 1)).squeeze()
+            _iou_match_gt_ok = _iou_match_gt_ok | _iou_match_ok
             gt_matches.scatter_(
-                1, _iou_match_gt_idx.view(-1, 1), _iou_match_ok.view(-1, 1))
+                1, _iou_match_i_gt.view(-1, 1), _iou_match_gt_ok.view(-1, 1))
 
         # The above procedure may leave some predictions without match.
         # Those should count as False Positives, unless their size is
@@ -625,6 +750,28 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             "dtScores": pred_score[is_pred_class],
             "gtIgnore": gt_ignore,
             "dtIgnore": det_ignore}
+
+    def __calculate_recall_precision_scores(
+            self,
+            recall: Tensor,
+            precision: Tensor,
+            scores: Tensor,
+            idx_cls: int,
+            idx_size_range: int,
+            evaluations: list,
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        return MeanAveragePrecision._MeanAveragePrecision__calculate_recall_precision_scores(
+            recall,
+            precision,
+            scores,
+            idx_cls,
+            idx_size_range,
+            0,
+            evaluations,
+            self.rec_thresholds.to(self.device),
+            torch.iinfo(torch.int64).max,
+            1,
+            len(self.size_ranges))
 
     def _move_list_states_to_cpu(self) -> None:
         """Move list states to cpu to save GPU memory."""
@@ -719,15 +866,15 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             map_metrics.map_75 = self._summarize(res, True, iou_threshold=0.75)
         else:
             map_metrics.map_75 = torch.tensor([-1])
-        map_metrics.map_small = self._summarize(res, True, area_range="small")
-        map_metrics.map_medium = self._summarize(res, True, area_range="medium")
-        map_metrics.map_large = self._summarize(res, True, area_range="large")
+        map_metrics.map_small = self._summarize(res, True, size_range="small")
+        map_metrics.map_medium = self._summarize(res, True, size_range="medium")
+        map_metrics.map_large = self._summarize(res, True, size_range="large")
 
         mar_metrics = MARMetricResults()
         mar_metrics.mar = self._summarize(res, False)
-        mar_metrics.mar_small = self._summarize(res, False, area_range="small")
-        mar_metrics.mar_medium = self._summarize(res, False, area_range="medium")
-        mar_metrics.mar_large = self._summarize(res, False, area_range="large")
+        mar_metrics.mar_small = self._summarize(res, False, size_range="small")
+        mar_metrics.mar_medium = self._summarize(res, False, size_range="medium")
+        mar_metrics.mar_large = self._summarize(res, False, size_range="large")
 
         # Finally, compute the results for IoU=0.25
         res = dict(precision=precisions, recall=recalls)
