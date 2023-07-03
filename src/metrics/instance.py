@@ -61,6 +61,11 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
     Mean-Average-Recall (mAR)`_ for 3D instance segmentation.
     Optionally, the mAP and mAR values can be calculated per class.
 
+    Importantly, this implementation expects predictions and targets to
+    be passed as InstanceData, which assumes predictions and targets
+    form two PARTITIONS of the scene: all points belong to one and only
+    one prediction and one and only one target ('stuff' included).
+
     Predicted instances and targets have to be passed to
     :meth:``forward`` or :meth:``update`` within a custom format. See
     the :meth:`update` method for more information about the input
@@ -137,6 +142,20 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             Minimum target instance size to consider when computing the
             metrics. If a target is smaller, it will be ignored, as well
             as its matched prediction, if any.
+        :param medium_size: float
+            Marks the frontier between small-sized and medium-sized
+            objects. If both `medium_size` and `large_size` are
+            provided, a breakdown of the metrics will be computed
+            between 'small', 'medium', and 'large' objects. Setting
+            either `medium_size` or `large_size` to None will skip this
+            behavior.
+        :param large_size: float
+            Marks the frontier between medium-sized and large-sized
+            objects. If both `medium_size` and `large_size` are
+            provided, a breakdown of the metrics will be computed
+            between 'small', 'medium', and 'large' objects. Setting
+            either `medium_size` or `large_size` to None will skip this
+            behavior.
         :param compute_on_cpu: bool
             If True, the accumulated prediction and target data will be
             stored on CPU, and the metrics computation will be performed
@@ -157,52 +176,35 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             class_metrics: bool = False,
             stuff_classes: Optional[List[int]] = None,
             min_size: int = 100,
+            medium_size: float = 10**3,
+            large_size: float = 10**5,
             **kwargs: Any
     ) -> None:
         super().__init__(**kwargs)
 
-
-        # TODO: check results valid
-        # TODO: check results equal original on toy image segmentation
-        # TODO: test cuda
-        # TODO: optionally remove size ranges to save time
-        # TODO: check bottlenecks
-
         if not _TORCHVISION_GREATER_EQUAL_0_8:
             raise ModuleNotFoundError(
-                f"`{self.__class__.__name__}` metric requires that `torchvision` version 0.8.0 or newer is installed. "
-                f"Please install with `pip install torchvision>=0.8` or `pip install torchmetrics[detection]`.")
+                f"`{self.__class__.__name__}` metric requires that "
+                f"`torchvision` version 0.8.0 or newer is installed. "
+                f"Please install with `pip install torchvision>=0.8` or "
+                f"`pip install torchmetrics[detection]`.")
 
         # The IoU thresholds are used for computing various mAP. The
         # standard mAP is the mean of the AP for IoU thresholds of
         # [0.5, 0.55, ..., 0.95]. It is also often common practice to
         # communicate AP25, AP50 and AP75, respectively associated with
         # IoU thresholds of 25, 50, and 75.
-        self.iou_thresholds = torch.asarray(iou_thresholds).clamp(min=0) \
-            if iou_thresholds else torch.cat((torch.tensor([0.25]), torch.arange(0.5, 1, 0.05)))
+        base_ious = torch.cat((torch.tensor([0.25]), torch.arange(0.5, 1, 0.05)))
+        iou_thresholds = torch.asarray(iou_thresholds).clamp(min=0) \
+            if iou_thresholds else base_ious
+        self.iou_thresholds = iou_thresholds.tolist()
 
         # The recall thresholds control the number of bins we use when
         # integrating the area under the precision-recall curve
-        self.rec_thresholds = torch.asarray(rec_thresholds) \
-            if rec_thresholds else torch.arange(0, 1.01, 0.01)
-
-        # Area ranges are used to compute the metrics for several
-        # families of objects, based on their ground truth size
-        self.size_ranges = {
-            "all": (0, float("inf")),
-            "small": (0, float(10**3)),
-            "medium": (float(10**3), float(10**5)),
-            "large": (float(10**5), float("inf"))}
-
-        # If class_metrics=True the per-class metrics will also be
-        # returned, although this may impact overall speed
-        if not isinstance(class_metrics, bool):
-            raise ValueError("Expected argument `class_metrics` to be a boolean")
-        self.class_metrics = class_metrics
-
-        # Stuff classes may be specified, to be properly accounted for
-        # in metrics computation
-        self.stuff_classes = stuff_classes
+        base_rec = torch.arange(0, 1.01, 0.01)
+        rec_thresholds = torch.asarray(rec_thresholds) \
+            if rec_thresholds else base_rec
+        self.rec_thresholds = rec_thresholds.tolist()
 
         # A minimum size can be provided to ignore target instances
         # below this threshold. All ground truth objects below this
@@ -211,6 +213,30 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # targets) and below this threshold will also be ignored in the
         # metrics
         self.min_size = min_size
+
+        # Area ranges are used to compute the metrics for several
+        # families of objects, based on their ground truth size
+        if medium_size is not None and large_size is not None:
+            min_size = float(min_size)
+            medium_size = max(float(medium_size), min_size)
+            large_size = max(float(large_size), min_size)
+            self.size_ranges = dict(
+                all=(min_size, float("inf")),
+                small=(min_size, medium_size),
+                medium=(medium_size, large_size),
+                large=(large_size, float("inf")))
+        else:
+            self.size_ranges = dict(all=(float(min_size), float("inf")))
+
+        # If class_metrics=True the per-class metrics will also be
+        # returned, although this may impact overall speed
+        if not isinstance(class_metrics, bool):
+            raise ValueError("Expected argument `class_metrics` to be a bool")
+        self.class_metrics = class_metrics
+
+        # Stuff classes may be specified, to be properly accounted for
+        # in metrics computation
+        self.stuff_classes = stuff_classes
 
         # All torchmetric's Metrics have internal states they use to
         # store predictions and ground truths. Those are updated when
@@ -246,7 +272,10 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
              Importantly, ALL PREDICTION AND TARGET INSTANCES ARE
              ASSUMED TO BE REPRESENTED in THIS InstanceData, even
              'stuff' classes and 'too small' instances, which will be
-             accounted for in this metric
+             accounted for in this metric. Besides the InstanceData
+             assumes the predictions and targets form two PARTITIONS of
+             the scene: all points belong to one and only one prediction
+             and one and only one target object ('stuff' included).
         :return:
         """
         # Sanity checks
@@ -254,9 +283,9 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             prediction_score, prediction_semantic, instance_data)
 
         # Store in the internal states
-        self.prediction_score.append(prediction_score.to(self.device))
-        self.prediction_semantic.append(prediction_semantic.to(self.device))
-        self.instance_data.append(instance_data.to(self.device))
+        self.prediction_score.append(prediction_score)
+        self.prediction_semantic.append(prediction_semantic)
+        self.instance_data.append(instance_data)
 
     @staticmethod
     def _input_validator(
@@ -266,20 +295,32 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         """Sanity checks executed on the input of `self.update()`.
         """
         if not isinstance(prediction_score, Tensor):
-            raise ValueError("Expected argument `prediction_score` to be of type Tensor")
-        if not isinstance(prediction_semantic, LongTensor):
-            raise ValueError("Expected argument `prediction_semantic` to be of type LongTensor")
+            raise ValueError(
+                "Expected argument `prediction_score` to be of type Tensor")
+        if not isinstance(prediction_semantic, Tensor):
+            raise ValueError(
+                "Expected argument `prediction_semantic` to be of type Tensor")
+        if not prediction_semantic.dtype == torch.long:
+            raise ValueError(
+                "Expected argument `prediction_semantic` to have dtype=long")
         if not isinstance(instance_data, InstanceData):
-            raise ValueError("Expected argument `instance_data` to be of type InstanceData")
+            raise ValueError(
+                "Expected argument `instance_data` to be of type InstanceData")
 
         if prediction_score.dim() != 1:
-            raise ValueError("Expected argument `prediction_score` to have dim=1")
+            raise ValueError(
+                "Expected argument `prediction_score` to have dim=1")
         if prediction_semantic.dim() != 1:
-            raise ValueError("Expected argument `prediction_semantic` to have dim=1")
+            raise ValueError(
+                "Expected argument `prediction_semantic` to have dim=1")
         if prediction_score.numel() != prediction_semantic.numel():
-            raise ValueError("Expected argument `prediction_score` and `prediction_semantic` to have the same size")
+            raise ValueError(
+                "Expected argument `prediction_score` and `prediction_semantic`"
+                " to have the same size")
         if prediction_score.numel() != instance_data.num_clusters:
-            raise ValueError("Expected argument `prediction_score` and `instance_data` to have the same number of size")
+            raise ValueError(
+                "Expected argument `prediction_score` and `instance_data` to "
+                "have the same number of size")
 
     def compute(self) -> dict:
         """Metrics computation.
@@ -291,26 +332,19 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         pred_score = torch.cat(self.prediction_score)
         pred_semantic = torch.cat(self.prediction_semantic)
         pair_data = InstanceBatch.from_list(self.instance_data)
+        device = pred_score.device
 
         # Recover the target index, IoU, sizes, and target label for
         # each pair. Importantly, the way the pair_pred_idx is built
         # guarantees the prediction indices are contiguous in
-        # [0, pred_id_max]
+        # [0, pred_id_max]. Besides it is IMPORTANT that all points are
+        # accounted for in the InstanceData, regardless of their class.
+        # This is because the InstanceData will infer the total size
+        # of each segment, as well as the IoUs from these values.
         pair_pred_idx = pair_data.indices
         pair_gt_idx = pair_data.obj
         pair_gt_semantic = pair_data.y
         pair_iou, pair_pred_size, pair_gt_size = pair_data.iou_and_size()
-
-        from src.utils import print_tensor_info
-        # print_tensor_info(pred_score, f"{'pred_score':<20}")
-        # print(f"    {pred_score}")
-        # print_tensor_info(pred_semantic, f"{'pred_semantic':<20}")
-        # print(f"    {pred_semantic}")
-        # print_tensor_info(pair_pred_idx, f"{'pair_pred_idx':<20}")
-        # print(f"    {pair_pred_idx}")
-        # print_tensor_info(pair_iou, f"{'pair_iou':<20}")
-        # print(f"    {pair_iou}")
-        print()
 
         # To alleviate memory and compute, we would rather store
         # ground-truth-specific attributes in tensors of size
@@ -325,13 +359,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         gt_semantic = pair_gt_semantic[gt_idx]
         gt_size = pair_gt_size[gt_idx]
         del gt_idx, pair_gt_semantic, pair_gt_size
-        # print_tensor_info(pair_gt_idx, f"{'pair_gt_idx':<20}")
-        # print(f"    {pair_gt_idx}")
-        print_tensor_info(gt_semantic, f"{'gt_semantic':<20}")
-        print(f"    {gt_semantic}")
-        print_tensor_info(gt_size, f"{'gt_size':<20}")
-        print(f"    {gt_size}")
-        print()
 
         # Similarly, we do not need to store all prediction attributes
         # at a pair-wise level. So we compute the corresponding
@@ -339,9 +366,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         pred_size = torch.zeros_like(pred_semantic)
         pred_size[pair_pred_idx] = pair_pred_size
         del pair_pred_size
-        # print_tensor_info(pred_size, f"{'pred_size':<20}")
-        # print(f"    {pred_size}")
-        # print()
 
         # To prepare for downstream matching assignments, we sort all
         # pairs by decreasing prediction score. We do this now because
@@ -358,23 +382,10 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         start = sizes_to_pointers(width[:-1])
         pair_order = arange_interleave(width[order], start=start[order])
         pair_pred_idx = torch.arange(
-            width.shape[0], device=self.device).repeat_interleave(width[order])
+            width.shape[0], device=device).repeat_interleave(width[order])
         pair_gt_idx = pair_gt_idx[pair_order]
         pair_iou = pair_iou[pair_order]
         del pair_data, order, width, start, pair_order
-        print_tensor_info(pred_score, f"{'pred_score':<20}")
-        print(f"    {pred_score}")
-        print_tensor_info(pred_semantic, f"{'pred_semantic':<20}")
-        print(f"    {pred_semantic}")
-        print_tensor_info(pred_size, f"{'pred_size':<20}")
-        print(f"    {pred_size}")
-        print_tensor_info(pair_pred_idx, f"{'pair_pred_idx':<20}")
-        print(f"    {pair_pred_idx}")
-        print_tensor_info(pair_gt_idx, f"{'pair_gt_idx':<20}")
-        print(f"    {pair_gt_idx}")
-        print_tensor_info(pair_iou, f"{'pair_iou':<20}")
-        print(f"    {pair_iou}")
-        print()
 
         # Recover the classes of interest for this metric. These are the
         # classes whose labels appear at least once in the predicted
@@ -382,8 +393,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Besides, if `stuff_classes` was provided, the corresponding
         # labels are ignored
         class_ids = self._get_classes()
-        print(f"'class_ids':    {class_ids}")
-        print()
 
         # For each class, each size range (and each IoU threshold),
         # compute the prediction-ground truth matches. Importantly, the
@@ -408,16 +417,15 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         num_rec = len(self.rec_thresholds)
         num_classes = len(class_ids)
         num_sizes = len(self.size_ranges)
-        precision = -torch.ones((num_iou, num_rec, num_classes, num_sizes, 1))
-        recall = -torch.ones((num_iou, num_classes, num_sizes, 1))
-        scores = -torch.ones((num_iou, num_rec, num_classes, num_sizes, 1))
+        precision = -torch.ones((num_iou, num_rec, num_classes, num_sizes, 1), device=device)
+        recall = -torch.ones((num_iou, num_classes, num_sizes, 1), device=device)
+        scores = -torch.ones((num_iou, num_rec, num_classes, num_sizes, 1), device=device)
 
         # Compute the recall, precision, and score for each IoU
         # threshold, class, and size range
         for idx_cls, _ in enumerate(class_ids):
-            print(f"idx_cls: {idx_cls}   type: {type(idx_cls)}")
             for i_size, _ in enumerate(self.size_ranges):
-                recall, precision, scores = self.__calculate_recall_precision_scores(
+                recall, precision, scores = self.__calculate(
                     recall,
                     precision,
                     scores,
@@ -459,7 +467,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
     def _evaluate(
             self,
             class_id: int,
-            size_range : Tuple[int, int],
+            size_range: Tuple[int, int],
             pred_score: Tensor,
             pair_iou: Tensor,
             pair_pred_idx: Tensor,
@@ -504,56 +512,24 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         :param gt_size: Tensor of shape [N_gt]
         :return:
         """
-        from src.utils import print_tensor_info
-        print('________________________________________________________________')
-        print(f"class_id :    {class_id}")
-        print(f"size_range :    {size_range}")
-        print_tensor_info(pred_score, f"{'pred_score':<20}")
-        print(f"    {pred_score}")
-        print_tensor_info(pair_iou, f"{'pair_iou':<20}")
-        print(f"    {pair_iou}")
-        print_tensor_info(pair_pred_idx, f"{'pair_pred_idx':<20}")
-        print(f"    {pair_pred_idx}")
-        print_tensor_info(pair_gt_idx, f"{'pair_gt_idx':<20}")
-        print(f"    {pair_gt_idx}")
-        print_tensor_info(pred_semantic, f"{'pred_semantic':<20}")
-        print(f"    {pred_semantic}")
-        print_tensor_info(gt_semantic, f"{'gt_semantic':<20}")
-        print(f"    {gt_semantic}")
-        print_tensor_info(pred_size, f"{'pred_size':<20}")
-        print(f"    {pred_size}")
-        print_tensor_info(gt_size, f"{'gt_size':<20}")
-        print(f"    {gt_size}")
-        print()
+        device = gt_semantic.device
 
         # Compute masks on the prediction-target pairs, based on their
         # semantic label, as well as their size
         is_gt_class = gt_semantic == class_id
         is_pred_class = pred_semantic == class_id
-        is_gt_in_size_range = (size_range[0] < gt_size.float()) \
-                              & (gt_size.float() < size_range[1]) \
-                              & (self.min_size <= gt_size.float())
-        is_pred_in_size_range = (size_range[0] < pred_size.float()) \
-                                & (pred_size.float() < size_range[1])\
-                                & (self.min_size <= pred_size.float())
-        print(f"{'is_gt_class':<20}:    {is_gt_class}")
-        print(f"{'is_pred_class':<20}:    {is_pred_class}")
-        print(f"{'is_gt_in_size_range':<20}:    {is_gt_in_size_range}")
-        print(f"{'is_pred_in_size_range':<20}:    {is_pred_in_size_range}")
-        print()
+        is_gt_in_size_range = (size_range[0] <= gt_size.float()) \
+                              & (gt_size.float() <= size_range[1])
+        is_pred_in_size_range = (size_range[0] <= pred_size.float()) \
+                                & (pred_size.float() <= size_range[1])
 
         # Count the number of ground truths and predictions with the
         # class at hand
         num_gt = is_gt_class.count_nonzero().item()
         num_pred = is_pred_class.count_nonzero().item()
-        print(f"{'num_gt':<20}:    {num_gt}")
-        print(f"{'num_pred':<20}:    {num_pred}")
-        print()
 
         # Get the number of IoU thresholds
         num_iou = len(self.iou_thresholds)
-        print(f"{'num_iou':<20}:    {num_iou}")
-        print()
 
         # If no ground truth and no detection carry the class of
         # instance, return None
@@ -564,25 +540,25 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         if num_pred == 0:
             return {
                 "dtMatches": torch.zeros(
-                    num_iou, 0, dtype=torch.bool, device=self.device),
+                    num_iou, 0, dtype=torch.bool, device=device),
                 "gtMatches": torch.zeros(
-                    num_iou, num_gt, dtype=torch.bool, device=self.device),
-                "dtScores": torch.zeros(0, device=self.device),
+                    num_iou, num_gt, dtype=torch.bool, device=device),
+                "dtScores": torch.zeros(0, device=device),
                 "gtIgnore": ~is_gt_in_size_range[is_gt_class],
                 "dtIgnore": torch.zeros(
-                    num_iou, 0, dtype=torch.bool, device=self.device)}
+                    num_iou, 0, dtype=torch.bool, device=device)}
 
         # Some predictions have the class at hand but no target does
         if num_gt == 0:
             pred_ignore = ~is_pred_in_size_range[is_pred_class]
             return {
                 "dtMatches": torch.zeros(
-                    num_iou, num_pred, dtype=torch.bool, device=self.device),
+                    num_iou, num_pred, dtype=torch.bool, device=device),
                 "gtMatches": torch.zeros(
-                    num_iou, 0, dtype=torch.bool, device=self.device),
+                    num_iou, 0, dtype=torch.bool, device=device),
                 "dtScores": pred_score[is_pred_class],
                 "gtIgnore": torch.zeros(
-                    0, dtype=torch.bool, device=self.device),
+                    0, dtype=torch.bool, device=device),
                 "dtIgnore": pred_ignore.view(1, -1).repeat(num_iou, 1)}
 
         # Compute the global indices of the prediction and ground truth
@@ -591,22 +567,18 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         gt_class_idx = torch.where(is_gt_class)[0]
         pred_class_idx = torch.where(is_pred_class)[0]
         is_pair_gt_class = torch.isin(pair_gt_idx, gt_class_idx)
-        print(f"{'gt_class_idx':<20}:    {gt_class_idx}")
-        print(f"{'pred_class_idx':<20}:    {pred_class_idx}")
-        print(f"{'is_pair_gt_class':<20}:    {is_pair_gt_class}")
-        print()
 
         # Build the tensors used to track which ground truth and which
         # prediction has found a match, for each IoU threshold. This is
         # the data structure expected by torchmetrics'
         # `MeanAveragePrecision.__calculate_recall_precision_scores()`
         gt_matches = torch.zeros(
-            num_iou, num_gt, dtype=torch.bool, device=self.device)
+            num_iou, num_gt, dtype=torch.bool, device=device)
         det_matches = torch.zeros(
-            num_iou, num_pred, dtype=torch.bool, device=self.device)
+            num_iou, num_pred, dtype=torch.bool, device=device)
         gt_ignore = ~is_gt_in_size_range[is_gt_class]
         det_ignore = torch.zeros(
-            num_iou, num_pred, dtype=torch.bool, device=self.device)
+            num_iou, num_pred, dtype=torch.bool, device=device)
 
         # Each pair is associated with a prediction index and a ground
         # truth index. Except these indices are global, spanning across
@@ -619,32 +591,13 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # prediction indices, because we will simply enumerate
         # pred_class_idx, which provides both local and global indices
         gt_idx_to_i_gt = torch.full_like(gt_semantic, -1)
-        gt_idx_to_i_gt[gt_class_idx] = torch.arange(num_gt, device=self.device)
-
-
-
-        ####
-        from src.utils import print_tensor_info
-
-
+        gt_idx_to_i_gt[gt_class_idx] = torch.arange(num_gt, device=device)
 
         # Match each prediction to a ground truth
         # NB: the assumed pre-ordering of predictions by decreasing
         # score ensures we are assigning high-confidence predictions
         # first
         for i_pred, pred_idx in enumerate(pred_class_idx):
-            print()
-            print(f"******** i_pred={i_pred}, pred_idx={pred_idx} ********")
-            print()
-            print_tensor_info(gt_matches, f"{'gt_matches':<20}")
-            print(f"    {gt_matches}")
-            print_tensor_info(det_matches, f"{'det_matches':<20}")
-            print(f"    {det_matches}")
-            print_tensor_info(gt_ignore, f"{'gt_ignore':<20}")
-            print(f"    {gt_ignore}")
-            print_tensor_info(det_ignore, f"{'det_ignore':<20}")
-            print(f"    {det_ignore}")
-            print()
 
             # Get the indices of pairs which involve the prediction at
             # hand and whose ground truth has the class at hand
@@ -674,22 +627,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                 _pair_iou = _pair_iou[order]
                 del order
 
-            print_tensor_info(_pair_idx, f"{'_pair_idx':<20}")
-            print(f"    {_pair_idx}")
-            print_tensor_info(_pair_gt_idx, f"{'_pair_gt_idx':<20}")
-            print(f"    {_pair_gt_idx}")
-            print_tensor_info(_pair_i_gt, f"{'_pair_i_gt':<20}")
-            print(f"    {_pair_i_gt}")
-            print_tensor_info(_pair_iou, f"{'_pair_iou':<20}")
-            print(f"    {_pair_iou}")
-            print()
-
-            _pair_iou = (_pair_iou * 10).clamp(max=1.0)
-            print_tensor_info(_pair_iou, f"{'CHEAAAT _pair_iou':<20}")
-            print(f"    {_pair_iou}")
-            print()
-
-
             # Among potential ground truth matches, remove those which
             # are already matched with a prediction.
             # NB: we do not remove the 'ignored' ground truth yet: if a
@@ -704,7 +641,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             # NB: clamping the thresholds to 0 will facilitate searching
             # for the best match for each prediction while identifying
             # False Positives
-            iou_thresholds = self.iou_thresholds.to(device=self.device)
+            iou_thresholds = torch.tensor(self.iou_thresholds, device=device)
 
             # Get the best possible matching pair for each IoU threshold
             _iou_match, _iou_match_idx = \
@@ -742,7 +679,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # outside the size_range of interest, in which case it should be
         # ignored from metrics computation
         det_ignore = det_ignore | ~det_matches \
-                     & is_pred_in_size_range[is_pred_class].view(1, -1)
+                     & ~is_pred_in_size_range[is_pred_class].view(1, -1)
 
         return {
             "dtMatches": det_matches,
@@ -751,7 +688,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             "gtIgnore": gt_ignore,
             "dtIgnore": det_ignore}
 
-    def __calculate_recall_precision_scores(
+    def __calculate(
             self,
             recall: Tensor,
             precision: Tensor,
@@ -768,7 +705,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             idx_size_range,
             0,
             evaluations,
-            self.rec_thresholds.to(self.device),
+            torch.tensor(self.rec_thresholds, device=recall.device),
             torch.iinfo(torch.int64).max,
             1,
             len(self.size_ranges))
@@ -779,6 +716,19 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             current_val = getattr(self, key)
             if isinstance(current_val, Sequence):
                 setattr(self, key, [cur_v.to("cpu") for cur_v in current_val])
+
+    def to(self, *args, **kwargs):
+        """Overwrite torch.nn.Module.to() to handle the InstanceData
+        stored in the internal states.
+        """
+        instance_data = getattr(self, 'instance_data', None)
+        if instance_data is not None:
+            self.instance_data = torch.zeros(1, device=self.device)
+        out = super().to(*args, **kwargs)
+        if instance_data is not None:
+            self.instance_data = instance_data
+            out.instance_data = [x.to(*args, **kwargs) for x in instance_data]
+        return out
 
     def _get_classes(self) -> List:
         """Returns a list of unique classes found in ground truth and
@@ -818,7 +768,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         """
         i_size = [
             i for i, k in enumerate(self.size_ranges.keys()) if k == size_range]
-        i_iou = torch.where(self.iou_thresholds == iou_threshold)[0] \
+        i_iou = self.iou_thresholds.index(iou_threshold) \
             if iou_threshold else Ellipsis
 
         if avg_prec:
@@ -852,36 +802,29 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Compute all metrics for IoU > 0.5. This little trick is needed
         # to avoid including IoU=0.25 in the mAP computation, which, by
         # convention, is computed on IoUs=[0.5, 0.55, ..., 0.95]
-        res = dict(
-            precision=precisions[self.iou_thresholds >= 0.5],
-            recall=recalls[self.iou_thresholds >= 0.5])
+        device = precisions.device
+        idx = torch.tensor(self.iou_thresholds, device=device) >= 0.5
+        res_above_50 = dict(precision=precisions[idx], recall=recalls[idx])
 
         map_metrics = MAPMetricResults()
-        map_metrics.map = self._summarize(res, True)
-        if 0.5 in self.iou_thresholds:
-            map_metrics.map_50 = self._summarize(res, True, iou_threshold=0.5)
-        else:
-            map_metrics.map_50 = torch.tensor([-1])
-        if 0.75 in self.iou_thresholds:
-            map_metrics.map_75 = self._summarize(res, True, iou_threshold=0.75)
-        else:
-            map_metrics.map_75 = torch.tensor([-1])
-        map_metrics.map_small = self._summarize(res, True, size_range="small")
-        map_metrics.map_medium = self._summarize(res, True, size_range="medium")
-        map_metrics.map_large = self._summarize(res, True, size_range="large")
+        map_metrics.map = self._summarize(res_above_50, True)
+        map_metrics.map_small = self._summarize(res_above_50, True, size_range="small")
+        map_metrics.map_medium = self._summarize(res_above_50, True, size_range="medium")
+        map_metrics.map_large = self._summarize(res_above_50, True, size_range="large")
 
         mar_metrics = MARMetricResults()
-        mar_metrics.mar = self._summarize(res, False)
-        mar_metrics.mar_small = self._summarize(res, False, size_range="small")
-        mar_metrics.mar_medium = self._summarize(res, False, size_range="medium")
-        mar_metrics.mar_large = self._summarize(res, False, size_range="large")
+        mar_metrics.mar = self._summarize(res_above_50, False)
+        mar_metrics.mar_small = self._summarize(res_above_50, False, size_range="small")
+        mar_metrics.mar_medium = self._summarize(res_above_50, False, size_range="medium")
+        mar_metrics.mar_large = self._summarize(res_above_50, False, size_range="large")
 
-        # Finally, compute the results for IoU=0.25
+        # Finally, compute the results for specific IoU levels
         res = dict(precision=precisions, recall=recalls)
-        if 0.25 in self.iou_thresholds:
-            map_metrics.map_25 = self._summarize(
-                res, True, iou_threshold=0.25)
-        else:
-            map_metrics.map_25 = torch.tensor([-1])
+        map_metrics.map_25 = self._summarize(res, True, iou_threshold=0.25) \
+            if 0.25 in self.iou_thresholds else torch.tensor([-1])
+        map_metrics.map_50 = self._summarize(res, True, iou_threshold=0.5) \
+            if 0.5 in self.iou_thresholds else torch.tensor([-1])
+        map_metrics.map_75 = self._summarize(res, True, iou_threshold=0.75) \
+            if 0.75 in self.iou_thresholds else torch.tensor([-1])
 
         return map_metrics, mar_metrics
