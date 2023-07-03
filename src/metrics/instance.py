@@ -57,7 +57,7 @@ class InstanceMetricResults(BaseMetricResults):
 
 
 class MeanAveragePrecision3D(MeanAveragePrecision):
-    r"""Computes the `Mean-Average-Precision (mAP) and
+    """Computes the `Mean-Average-Precision (mAP) and
     Mean-Average-Recall (mAR)`_ for 3D instance segmentation.
     Optionally, the mAP and mAR values can be calculated per class.
 
@@ -105,65 +105,45 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         (with corresponding version 1.7.0 of torch or newer). Please install with ``pip install torchvision`` or
         ``pip install torchmetrics[detection]``.
 
-    Args:
-        box_format:
-            Input format of given boxes. Supported formats are ``[`xyxy`, `xywh`, `cxcywh`]``.
-        iou_type:
-            Type of input (either masks or bounding-boxes) used for computing IOU.
-            Supported IOU types are ``["bbox", "segm"]``.
-            If using ``"segm"``, masks should be provided (see :meth:`update`).
-        iou_thresholds:
-            IoU thresholds for evaluation. If set to ``None`` it corresponds to the stepped range ``[0.5,...,0.95]``
-            with step ``0.05``. Else provide a list of floats.
-        rec_thresholds:
-            Recall thresholds for evaluation. If set to ``None`` it corresponds to the stepped range ``[0,...,1]``
-            with step ``0.01``. Else provide a list of floats.
-        max_detection_thresholds:
-            Thresholds on max detections per image. If set to `None` will use thresholds ``[1, 10, 100]``.
-            Else, please provide a list of ints.
-        class_metrics:
-            Option to enable per-class metrics for mAP and mAR_100. Has a performance impact.
-        kwargs: Additional keyword arguments, see :ref:`Metric kwargs` for more info.
-
-        :param iou_thresholds: List or Tensor
-            List of IoU on which to evaluate the performance. If None,
-            the mAP and mAR will be computed on thresholds
-            [0.5, 0.55, ..., 0.95], and AP25, AP50, and AP75 will be
-            computed.
-        :param rec_thresholds: List or Tensor
-            The recall steps to use when integrating the AUC.
-        :param class_metrics: bool
-            If True, the per-class AP and AR metrics will also be
-            computed .
-        :param stuff_classes: List or Tensor
-            List of 'stuff' class labels to ignore in the metrics
-            computation.
-        :param min_size: int
-            Minimum target instance size to consider when computing the
-            metrics. If a target is smaller, it will be ignored, as well
-            as its matched prediction, if any.
-        :param medium_size: float
-            Marks the frontier between small-sized and medium-sized
-            objects. If both `medium_size` and `large_size` are
-            provided, a breakdown of the metrics will be computed
-            between 'small', 'medium', and 'large' objects. Setting
-            either `medium_size` or `large_size` to None will skip this
-            behavior.
-        :param large_size: float
-            Marks the frontier between medium-sized and large-sized
-            objects. If both `medium_size` and `large_size` are
-            provided, a breakdown of the metrics will be computed
-            between 'small', 'medium', and 'large' objects. Setting
-            either `medium_size` or `large_size` to None will skip this
-            behavior.
-        :param compute_on_cpu: bool
-            If True, the accumulated prediction and target data will be
-            stored on CPU, and the metrics computation will be performed
-            on CPU. This can be necessary for particularly large
-            datasets.
-        :param kwargs:
-            Additional keyword arguments, see :ref:`Metric kwargs` for
-            more info.
+    :param iou_thresholds: List or Tensor
+        List of IoU on which to evaluate the performance. If None,
+        the mAP and mAR will be computed on thresholds
+        [0.5, 0.55, ..., 0.95], and AP25, AP50, and AP75 will be
+        computed.
+    :param rec_thresholds: List or Tensor
+        The recall steps to use when integrating the AUC.
+    :param class_metrics: bool
+        If True, the per-class AP and AR metrics will also be
+        computed .
+    :param stuff_classes: List or Tensor
+        List of 'stuff' class labels to ignore in the metrics
+        computation.
+    :param min_size: int
+        Minimum target instance size to consider when computing the
+        metrics. If a target is smaller, it will be ignored, as well
+        as its matched prediction, if any.
+    :param medium_size: float
+        Marks the frontier between small-sized and medium-sized
+        objects. If both `medium_size` and `large_size` are
+        provided, a breakdown of the metrics will be computed
+        between 'small', 'medium', and 'large' objects. Setting
+        either `medium_size` or `large_size` to None will skip this
+        behavior.
+    :param large_size: float
+        Marks the frontier between medium-sized and large-sized
+        objects. If both `medium_size` and `large_size` are
+        provided, a breakdown of the metrics will be computed
+        between 'small', 'medium', and 'large' objects. Setting
+        either `medium_size` or `large_size` to None will skip this
+        behavior.
+    :param compute_on_cpu: bool
+        If True, the accumulated prediction and target data will be
+        stored on CPU, and the metrics computation will be performed
+        on CPU. This can be necessary for particularly large
+        datasets.
+    :param kwargs:
+        Additional keyword arguments, see :ref:`Metric kwargs` for
+        more info.
     """
     prediction_score: List[Tensor]
     prediction_semantic: List[LongTensor]
@@ -188,6 +168,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                 f"`torchvision` version 0.8.0 or newer is installed. "
                 f"Please install with `pip install torchvision>=0.8` or "
                 f"`pip install torchmetrics[detection]`.")
+
+        # TODO: deal with ignored classes
 
         # The IoU thresholds are used for computing various mAP. The
         # standard mAP is the mean of the AP for IoU thresholds of
