@@ -2,9 +2,8 @@ import torch
 import logging
 from torch import Tensor, LongTensor
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-from torchmetrics.detection.mean_ap import MeanAveragePrecision, \
-    BaseMetricResults
-from torchmetrics.utilities.imports import _TORCHVISION_GREATER_EQUAL_0_8
+from torchmetrics.metric import Metric
+from torchmetrics.detection.mean_ap import BaseMetricResults
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 from src.data import InstanceData, InstanceBatch
@@ -14,52 +13,44 @@ from src.utils import arange_interleave, sizes_to_pointers
 log = logging.getLogger(__name__)
 
 
-__all__ = ['MeanAveragePrecision3D']
+__all__ = ['PanopticQuality3D']
 
 
-class MAPMetricResults(BaseMetricResults):
-    """Class to wrap the final mAP results.
+class PanopticMetricResults(BaseMetricResults):
+    """Class to wrap the final metric results for Panoptic Segmentation.
     """
     __slots__ = (
-        "map",
-        "map_25",
-        "map_50",
-        "map_75",
-        "map_small",
-        "map_medium",
-        "map_large")
+        "pq",
+        "pq_thing",
+        "pq_stuff",
+        "pq_per_class",
+        "sq",
+        "sq_thing",
+        "sq_stuff",
+        "sq_per_class",
+        "rq",
+        "rq_thing",
+        "rq_stuff",
+        "rq_per_class",
+        "pq_modified",
+        "pq_modified_thing",
+        "pq_modified_stuff",
+        "pq_modified_per_class",
+        "sq_modified",
+        "sq_modified_thing",
+        "sq_modified_stuff",
+        "sq_modified_per_class",
+        "rq_modified",
+        "rq_modified_thing",
+        "rq_modified_per_class",
+        "mean_precision",
+        "mean_recall")
 
 
-class MARMetricResults(BaseMetricResults):
-    """Class to wrap the final mAR results.
-    """
-    __slots__ = ("mar", "mar_small", "mar_medium", "mar_large")
-
-
-class InstanceMetricResults(BaseMetricResults):
-    """Class to wrap the final COCO metric results including various
-    mAP/mAR values.
-    """
-    __slots__ = (
-        "map",
-        "map_25",
-        "map_50",
-        "map_75",
-        "map_small",
-        "map_medium",
-        "map_large",
-        "mar",
-        "mar_small",
-        "mar_medium",
-        "mar_large",
-        "map_per_class",
-        "mar_per_class")
-
-
-class MeanAveragePrecision3D(MeanAveragePrecision):
-    """Computes the `Mean-Average-Precision (mAP) and
-    Mean-Average-Recall (mAR)`_ for 3D instance segmentation.
-    Optionally, the mAP and mAR values can be calculated per class.
+class PanopticQuality3D(Metric):
+    """Computes the `Panoptic Quality (PQ) and associated metrics`_ for
+    3D panoptic segmentation.
+    Optionally, the metrics can be calculated per class.
 
     Importantly, this implementation expects predictions and targets to
     be passed as InstanceData, which assumes predictions and targets
@@ -74,142 +65,49 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
     As output of ``forward`` and ``compute`` the metric returns the
     following output:
 
-    - ``map_dict``: A dictionary containing the following key-values:
+    - ``pq_dict``: A dictionary containing the following key-values:
 
-        - map: (:class:`~torch.Tensor`)
-        - map_25: (:class:`~torch.Tensor`) (-1 if 0.25 not in the list of iou thresholds)
-        - map_50: (:class:`~torch.Tensor`) (-1 if 0.5 not in the list of iou thresholds)
-        - map_75: (:class:`~torch.Tensor`) (-1 if 0.75 not in the list of iou thresholds)
-        - map_small: (:class:`~torch.Tensor`)
-        - map_medium:(:class:`~torch.Tensor`)
-        - map_large: (:class:`~torch.Tensor`)
-        - mar: (:class:`~torch.Tensor`)
-        - mar_small: (:class:`~torch.Tensor`)
-        - mar_medium: (:class:`~torch.Tensor`)
-        - mar_large: (:class:`~torch.Tensor`)
-        - map_per_class: (:class:`~torch.Tensor`) (-1 if class metrics are disabled)
-        - mar_per_class: (:class:`~torch.Tensor`) (-1 if class metrics are disabled)
+        - pq: (:class:`~torch.Tensor`)
+        - pq_thing: (:class:`~torch.Tensor`)
+        - pq_stuff: (:class:`~torch.Tensor`)
+        - pq_per_class: (:class:`~torch.Tensor`)
+        - sq: (:class:`~torch.Tensor`)
+        - sq_thing: (:class:`~torch.Tensor`)
+        - sq_stuff: (:class:`~torch.Tensor`)
+        - sq_per_class: (:class:`~torch.Tensor`)
+        - rq: (:class:`~torch.Tensor`)
+        - rq_thing: (:class:`~torch.Tensor`)
+        - rq_stuff: (:class:`~torch.Tensor`)
+        - rq_per_class: (:class:`~torch.Tensor`)
+        - pq_modified: (:class:`~torch.Tensor`)
+        - pq_modified_thing: (:class:`~torch.Tensor`)
+        - pq_modified_stuff: (:class:`~torch.Tensor`)
+        - pq_modified_per_class: (:class:`~torch.Tensor`)
+        - sq_modified: (:class:`~torch.Tensor`)
+        - sq_modified_thing: (:class:`~torch.Tensor`)
+        - sq_modified_stuff: (:class:`~torch.Tensor`)
+        - sq_modified_per_class: (:class:`~torch.Tensor`)
+        - rq_modified: (:class:`~torch.Tensor`)
+        - rq_modified_thing: (:class:`~torch.Tensor`)
+        - rq_modified_per_class: (:class:`~torch.Tensor`)
+        - mean_precision: (:class:`~torch.Tensor`)
+        - mean_recall: (:class:`~torch.Tensor`)
 
-    .. note::
-        ``map`` score is calculated with @[ IoU=self.iou_thresholds | area=all ].
-        Caution: If the initialization parameters are changed, dictionary keys for mAR can change as well.
-        The default properties are also accessible via fields and will raise an ``AttributeError`` if not available.
-
-    .. note::
-        This metric is following the mAP implementation of
-        `pycocotools <https://github.com/cocodataset/cocoapi/tree/master/PythonAPI/pycocotools>`_,
-        a standard implementation for the mAP metric for object detection.
-
-    .. note::
-        This metric requires you to have `torchvision` version 0.8.0 or newer installed
-        (with corresponding version 1.7.0 of torch or newer). Please install with ``pip install torchvision`` or
-        ``pip install torchmetrics[detection]``.
-
-    :param iou_thresholds: List or Tensor
-        List of IoU on which to evaluate the performance. If None,
-        the mAP and mAR will be computed on thresholds
-        [0.5, 0.55, ..., 0.95], and AP25, AP50, and AP75 will be
-        computed.
-    :param rec_thresholds: List or Tensor
-        The recall steps to use when integrating the AUC.
-    :param class_metrics: bool
-        If True, the per-class AP and AR metrics will also be
-        computed .
-    :param stuff_classes: List or Tensor
-        List of 'stuff' class labels to ignore in the metrics
-        computation.
-    :param min_size: int
-        Minimum target instance size to consider when computing the
-        metrics. If a target is smaller, it will be ignored, as well
-        as its matched prediction, if any.
-    :param medium_size: float
-        Marks the frontier between small-sized and medium-sized
-        objects. If both `medium_size` and `large_size` are
-        provided, a breakdown of the metrics will be computed
-        between 'small', 'medium', and 'large' objects. Setting
-        either `medium_size` or `large_size` to None will skip this
-        behavior.
-    :param large_size: float
-        Marks the frontier between medium-sized and large-sized
-        objects. If both `medium_size` and `large_size` are
-        provided, a breakdown of the metrics will be computed
-        between 'small', 'medium', and 'large' objects. Setting
-        either `medium_size` or `large_size` to None will skip this
-        behavior.
-    :param compute_on_cpu: bool
-        If True, the accumulated prediction and target data will be
-        stored on CPU, and the metrics computation will be performed
-        on CPU. This can be necessary for particularly large
-        datasets.
-    :param kwargs:
-        Additional keyword arguments, see :ref:`Metric kwargs` for
-        more info.
+    :param **************
     """
-    prediction_score: List[Tensor]
     prediction_semantic: List[LongTensor]
     instance_data: List[InstanceData]
 
     def __init__(
             self,
-            iou_thresholds: Optional[List[float]] = None,
-            rec_thresholds: Optional[List[float]] = None,
             class_metrics: bool = False,
             stuff_classes: Optional[List[int]] = None,
-            min_size: int = 100,
-            medium_size: float = 10**3,
-            large_size: float = 10**5,
             **kwargs: Any
     ) -> None:
         super().__init__(**kwargs)
 
-        if not _TORCHVISION_GREATER_EQUAL_0_8:
-            raise ModuleNotFoundError(
-                f"`{self.__class__.__name__}` metric requires that "
-                f"`torchvision` version 0.8.0 or newer is installed. "
-                f"Please install with `pip install torchvision>=0.8` or "
-                f"`pip install torchmetrics[detection]`.")
-
         # TODO: deal with ignored classes
-        # TODO: parallelize per-class computation with starmap (careful with evaluations order for self.__calculate ...)
-
-        # The IoU thresholds are used for computing various mAP. The
-        # standard mAP is the mean of the AP for IoU thresholds of
-        # [0.5, 0.55, ..., 0.95]. It is also often common practice to
-        # communicate AP25, AP50 and AP75, respectively associated with
-        # IoU thresholds of 25, 50, and 75.
-        base_ious = torch.cat((torch.tensor([0.25]), torch.arange(0.5, 1, 0.05)))
-        iou_thresholds = torch.asarray(iou_thresholds).clamp(min=0) \
-            if iou_thresholds else base_ious
-        self.iou_thresholds = iou_thresholds.tolist()
-
-        # The recall thresholds control the number of bins we use when
-        # integrating the area under the precision-recall curve
-        base_rec = torch.arange(0, 1.01, 0.01)
-        rec_thresholds = torch.asarray(rec_thresholds) \
-            if rec_thresholds else base_rec
-        self.rec_thresholds = rec_thresholds.tolist()
-
-        # A minimum size can be provided to ignore target instances
-        # below this threshold. All ground truth objects below this
-        # threshold will be ignored in the metrics computation. Besides,
-        # a prediction with no match (after assigning predictions to
-        # targets) and below this threshold will also be ignored in the
-        # metrics
-        self.min_size = min_size
-
-        # Area ranges are used to compute the metrics for several
-        # families of objects, based on their ground truth size
-        if medium_size is not None and large_size is not None:
-            min_size = float(min_size)
-            medium_size = max(float(medium_size), min_size)
-            large_size = max(float(large_size), min_size)
-            self.size_ranges = dict(
-                all=(min_size, float("inf")),
-                small=(min_size, medium_size),
-                medium=(medium_size, large_size),
-                large=(large_size, float("inf")))
-        else:
-            self.size_ranges = dict(all=(float(min_size), float("inf")))
+        # TODO: parallelize per-class computation with starmap
 
         # If class_metrics=True the per-class metrics will also be
         # returned, although this may impact overall speed
@@ -230,21 +128,16 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # This happens when calling `self.reset()`. For `self.reset()`
         # to know what to reset and to which value, these states to be
         # declared with `self.add_state()`
-        self.add_state("prediction_score", default=[], dist_reduce_fx=None)
         self.add_state("prediction_semantic", default=[], dist_reduce_fx=None)
         self.add_state("instance_data", default=[], dist_reduce_fx=None)
 
     def update(
             self,
-            prediction_score: Tensor,
             prediction_semantic: LongTensor,
             instance_data: InstanceData,
     ) -> None:
         """Update the internal state of the metric.
 
-        :param prediction_score: Tensor
-             1D tensor of size N_pred holding the confidence score of
-             the predicted instances.
         :param prediction_semantic: LongTensor
              1D tensor of size N_pred holding the semantic label of the
              predicted instances.
@@ -262,24 +155,18 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         :return:
         """
         # Sanity checks
-        self._input_validator(
-            prediction_score, prediction_semantic, instance_data)
+        self._input_validator(prediction_semantic, instance_data)
 
         # Store in the internal states
-        self.prediction_score.append(prediction_score)
         self.prediction_semantic.append(prediction_semantic)
         self.instance_data.append(instance_data)
 
     @staticmethod
     def _input_validator(
-            prediction_score: Tensor,
             prediction_semantic: LongTensor,
             instance_data: InstanceData):
         """Sanity checks executed on the input of `self.update()`.
         """
-        if not isinstance(prediction_score, Tensor):
-            raise ValueError(
-                "Expected argument `prediction_score` to be of type Tensor")
         if not isinstance(prediction_semantic, Tensor):
             raise ValueError(
                 "Expected argument `prediction_semantic` to be of type Tensor")
@@ -290,19 +177,12 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             raise ValueError(
                 "Expected argument `instance_data` to be of type InstanceData")
 
-        if prediction_score.dim() != 1:
-            raise ValueError(
-                "Expected argument `prediction_score` to have dim=1")
         if prediction_semantic.dim() != 1:
             raise ValueError(
                 "Expected argument `prediction_semantic` to have dim=1")
-        if prediction_score.numel() != prediction_semantic.numel():
+        if prediction_semantic.numel() != instance_data.num_clusters:
             raise ValueError(
-                "Expected argument `prediction_score` and `prediction_semantic`"
-                " to have the same size")
-        if prediction_score.numel() != instance_data.num_clusters:
-            raise ValueError(
-                "Expected argument `prediction_score` and `instance_data` to "
+                "Expected argument `prediction_semantic` and `instance_data` to "
                 "have the same number of size")
 
     def compute(self) -> dict:
@@ -312,10 +192,9 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Batch together the values stored in the internal states.
         # Importantly, the InstanceBatch mechanism ensures there is no
         # collision between object labels of the stored scenes
-        pred_score = torch.cat(self.prediction_score)
         pred_semantic = torch.cat(self.prediction_semantic)
         pair_data = InstanceBatch.from_list(self.instance_data)
-        device = pred_score.device
+        device = pred_semantic.device
 
         # Recover the target index, IoU, sizes, and target label for
         # each pair. Importantly, the way the pair_pred_idx is built
@@ -327,7 +206,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         pair_pred_idx = pair_data.indices
         pair_gt_idx = pair_data.obj
         pair_gt_semantic = pair_data.y
-        pair_iou, pair_pred_size, pair_gt_size = pair_data.iou_and_size()
+        pair_iou = pair_data.iou_and_size()[0]
 
         # To alleviate memory and compute, we would rather store
         # ground-truth-specific attributes in tensors of size
@@ -340,42 +219,14 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # pre-ground-truth attributes
         pair_gt_idx, gt_idx = consecutive_cluster(pair_gt_idx)
         gt_semantic = pair_gt_semantic[gt_idx]
-        gt_size = pair_gt_size[gt_idx]
-        del gt_idx, pair_gt_semantic, pair_gt_size
-
-        # Similarly, we do not need to store all prediction attributes
-        # at a pair-wise level. So we compute the corresponding
-        # prediction-wise attributes
-        pred_size = torch.zeros_like(pred_semantic)
-        pred_size[pair_pred_idx] = pair_pred_size
-        del pair_pred_size
-
-        # To prepare for downstream matching assignments, we sort all
-        # pairs by decreasing prediction score. We do this now because
-        # we want to leverage the convenient order ensured by the
-        # InstanceData structure. Indeed, we want to compute the sorting
-        # on the prediction-wise scores and apply the resulting
-        # reordering to the prediction-wise as well as the pair-wise
-        # data
-        order = pred_score.argsort(descending=True)
-        pred_score = pred_score[order]
-        pred_semantic = pred_semantic[order]
-        pred_size = pred_size[order]
-        width = pair_data.sizes
-        start = sizes_to_pointers(width[:-1])
-        pair_order = arange_interleave(width[order], start=start[order])
-        pair_pred_idx = torch.arange(
-            width.shape[0], device=device).repeat_interleave(width[order])
-        pair_gt_idx = pair_gt_idx[pair_order]
-        pair_iou = pair_iou[pair_order]
-        del pair_data, order, width, start, pair_order
+        del gt_idx, pair_gt_semantic
 
         # Recover the classes of interest for this metric. These are the
         # classes whose labels appear at least once in the predicted
         # semantic label or in the ground truth semantic labels.
         # Besides, if `stuff_classes` was provided, the corresponding
         # labels are ignored
-        class_ids = self._get_classes()
+        class_ids = self._get_classes()  # TODO: this should NOT remove the STUFF clases for panoptic...
 
         # For each class, each size range (and each IoU threshold),
         # compute the prediction-ground truth matches. Importantly, the
@@ -384,17 +235,12 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         evaluations = [
             self._evaluate(
                 class_id,
-                size_range,
-                pred_score,
                 pair_iou,
                 pair_pred_idx,
                 pair_gt_idx,
                 pred_semantic,
-                gt_semantic,
-                pred_size,
-                gt_size)
-            for class_id in class_ids
-            for size_range in self.size_ranges.values()]
+                gt_semantic)
+            for class_id in class_ids]
 
         num_iou = len(self.iou_thresholds)
         num_rec = len(self.rec_thresholds)
@@ -417,33 +263,11 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                     evaluations)
 
         # Compute all AP and AR metrics
-        map_val, mar_val = self._summarize_results(precision, recall)
+        metrics
 
         # If class_metrics is enabled, also evaluate all metrics for
         # each class of interest
-        map_per_class_val = torch.tensor([-1.0])
-        mar_per_class_val = torch.tensor([-1.0])
-        if self.class_metrics:
-            map_per_class_list = []
-            mar_per_class_list = []
-
-            for i_class in range(len(class_ids)):
-                cls_precisions = precision[:, :, i_class].unsqueeze(dim=2)
-                cls_recalls = recall[:, i_class].unsqueeze(dim=1)
-                cls_map, cls_mar = self._summarize_results(
-                    cls_precisions, cls_recalls)
-                map_per_class_list.append(cls_map.map)
-                mar_per_class_list.append(cls_mar.mar)
-
-            map_per_class_val = torch.as_tensor(map_per_class_list)
-            mar_per_class_val = torch.as_tensor(mar_per_class_list)
-
-        # Prepare the final metrics output
-        metrics = InstanceMetricResults()
-        metrics.update(map_val)
-        metrics.update(mar_val)
-        metrics.map_per_class = map_per_class_val
-        metrics.mar_per_class = mar_per_class_val
+        pass
 
         return metrics
 
@@ -671,28 +495,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             "gtIgnore": gt_ignore,
             "dtIgnore": det_ignore}
 
-    def __calculate(
-            self,
-            recall: Tensor,
-            precision: Tensor,
-            scores: Tensor,
-            idx_cls: int,
-            idx_size_range: int,
-            evaluations: list,
-    ) -> Tuple[Tensor, Tensor, Tensor]:
-        return MeanAveragePrecision._MeanAveragePrecision__calculate_recall_precision_scores(
-            recall,
-            precision,
-            scores,
-            idx_cls,
-            idx_size_range,
-            0,
-            evaluations,
-            torch.tensor(self.rec_thresholds, device=recall.device),
-            torch.iinfo(torch.int64).max,
-            1,
-            len(self.size_ranges))
-
     def _move_list_states_to_cpu(self) -> None:
         """Move list states to cpu to save GPU memory."""
         for key in self._defaults.keys():
@@ -725,89 +527,11 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             return all_y_without_stuff
         return []
 
-    def _summarize(
-            self,
-            results: Dict,
-            avg_prec: bool = True,
-            iou_threshold: Optional[float] = None,
-            size_range: str = "all",
-    ) -> Tensor:
-        """Summarize Precision or Recall results, for a given IoU
-        threshold.
-
-        :param results: Dict
-            Dictionary including precision, recall and scores for all
-            combinations.
-        :param avg_prec: bool
-            Whether the average precision or the average recall should
-            be returned.
-        :param iou_threshold: float
-            IoU threshold. If set to ``None`` it all values are used.
-            Else results are filtered. NB: the passed IoU threshold MUST
-            BE in `self.iou_thresholds`
-        :param size_range: str
-            String indicating the size range. The corresponding key MUST
-            BE in `self.size_ranges`.
-        """
-        i_size = [
-            i for i, k in enumerate(self.size_ranges.keys()) if k == size_range]
-        i_iou = self.iou_thresholds.index(iou_threshold) \
-            if iou_threshold else Ellipsis
-
-        if avg_prec:
-            # dimension of precision: [TxRxKxAx1]
-            prec = results["precision"]
-            prec = prec[i_iou, :, :, i_size, 0]
-        else:
-            # dimension of recall: [TxKxAx1]
-            prec = results["recall"]
-            prec = prec[i_iou, :, i_size, 0]
-
-        mean_prec = torch.tensor([-1.0]) if len(prec[prec > -1]) == 0 \
-            else torch.mean(prec[prec > -1])
-
-        return mean_prec
-
     def _summarize_results(
             self,
             precisions: Tensor,
             recalls: Tensor
-    ) -> Tuple[MAPMetricResults, MARMetricResults]:
-        """Summarizes the precision and recall values to calculate
-        mAP/mAR.
-
-        Args:
-            precisions:
-                Precision values for different thresholds
-            recalls:
-                Recall values for different thresholds
+    ) -> PanopticMetricResults:
+        """Summarizes ...
         """
-        # Compute all metrics for IoU > 0.5. This little trick is needed
-        # to avoid including IoU=0.25 in the mAP computation, which, by
-        # convention, is computed on IoUs=[0.5, 0.55, ..., 0.95]
-        device = precisions.device
-        idx = torch.tensor(self.iou_thresholds, device=device) >= 0.5
-        res_above_50 = dict(precision=precisions[idx], recall=recalls[idx])
-
-        map_metrics = MAPMetricResults()
-        map_metrics.map = self._summarize(res_above_50, True)
-        map_metrics.map_small = self._summarize(res_above_50, True, size_range="small")
-        map_metrics.map_medium = self._summarize(res_above_50, True, size_range="medium")
-        map_metrics.map_large = self._summarize(res_above_50, True, size_range="large")
-
-        mar_metrics = MARMetricResults()
-        mar_metrics.mar = self._summarize(res_above_50, False)
-        mar_metrics.mar_small = self._summarize(res_above_50, False, size_range="small")
-        mar_metrics.mar_medium = self._summarize(res_above_50, False, size_range="medium")
-        mar_metrics.mar_large = self._summarize(res_above_50, False, size_range="large")
-
-        # Finally, compute the results for specific IoU levels
-        res = dict(precision=precisions, recall=recalls)
-        map_metrics.map_25 = self._summarize(res, True, iou_threshold=0.25) \
-            if 0.25 in self.iou_thresholds else torch.tensor([-1])
-        map_metrics.map_50 = self._summarize(res, True, iou_threshold=0.5) \
-            if 0.5 in self.iou_thresholds else torch.tensor([-1])
-        map_metrics.map_75 = self._summarize(res, True, iou_threshold=0.75) \
-            if 0.75 in self.iou_thresholds else torch.tensor([-1])
-
-        return map_metrics, mar_metrics
+        return PanopticMetricResults
