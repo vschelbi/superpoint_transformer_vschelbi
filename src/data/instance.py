@@ -42,7 +42,11 @@ class InstanceData(CSRData):
     :param count: torch.LongTensor
         Number of points in the overlap for each cluster-object pair.
     :param y: torch.LongTensor
-        Semantic label the object for each cluster-object pair.
+        Semantic label the object for each cluster-object pair. By
+        definition, we assume the objects to be SEMANTICALLY PURE. For
+        that reason, we only store a single semantic label for objects,
+        as opposed to superpoints, for which we want to maintain a
+        histogram of labels.
     :param dense: bool
         If `dense=True`, the `pointers` are actually the dense indices
         to be converted to pointer format. Besides, any duplicate
