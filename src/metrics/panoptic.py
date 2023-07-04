@@ -76,8 +76,9 @@ class PanopticQuality3D(Metric):
 
     :param ignore_unseen_classes: bool
         If True, the mean metrics will only be computed on seen classes.
-        Otherwise, metrics for the unseen classes will be set to zero
-        and those will affect the average metrics over all classes.
+        Otherwise, metrics for the unseen classes will be set to ZERO by
+        default and those will affect the average metrics over all
+        classes.
     :param stuff_classes: List or Tensor
         List of 'stuff' class labels to ignore in the metrics
         computation.
@@ -231,11 +232,6 @@ class PanopticQuality3D(Metric):
         # `self.ignore_unseen_classes=False`
         all_semantic = torch.cat((gt_semantic, pred_semantic))
         num_classes = all_semantic.max().item() + 1
-        if self.ignore_unseen_classes:
-            is_seen = torch.zeros(num_classes, dtype=torch.bool, device=device)
-            is_seen[all_semantic.unique()] = True
-        else:
-            is_seen = torch.ones(num_classes, dtype=torch.bool, device=device)
         classes = range(num_classes)
 
         # Class-wise mask for stuff/thing
@@ -281,22 +277,33 @@ class PanopticQuality3D(Metric):
             idx_pair_tp_mod = torch.where(
                 pair_agrees & (pair_iou_gt_50 | pair_is_stuff))[0]
             # tp_mod = torch.bincount(
-            # pair_gt_semantic[idx_pair_tp_mod], minlength=num_classes)
+            #     pair_gt_semantic[idx_pair_tp_mod], minlength=num_classes)
             iou_mod_sum = scatter_sum(
                 pair_iou[idx_pair_tp_mod], pair_gt_semantic[idx_pair_tp_mod])
-            denominator = (gt_class_counts + pred_class_counts) / 2
-            denominator[is_stuff] = gt_class_counts[is_stuff]
+            denominator = (gt_class_counts + pred_class_counts).float() / 2
+            denominator[is_stuff] = gt_class_counts[is_stuff].float()
             pq_mod = iou_mod_sum / denominator
         else:
             pq_mod = pq
 
-        # Set unseen classes metrics to Nan
-        pq[~is_seen] = torch.nan
-        sq[~is_seen] = torch.nan
-        rq[~is_seen] = torch.nan
-        pq_mod[~is_seen] = torch.nan
-        precision[~is_seen] = torch.nan
-        recall[~is_seen] = torch.nan
+        # Deal with unseen classes metrics. to Nan
+        is_seen = torch.zeros(num_classes, dtype=torch.bool, device=device)
+        is_seen[all_semantic.unique()] = True
+        default = torch.nan if self.ignore_unseen_classes else 0
+
+        pq[~is_seen] = default
+        sq[~is_seen] = default
+        rq[~is_seen] = default
+        pq_mod[~is_seen] = default
+        precision[~is_seen] = default
+        recall[~is_seen] = default
+
+        if not self.ignore_unseen_classes:
+            assert not pq.isnan().any()
+            assert not sq.isnan().any()
+            assert not rq.isnan().any()
+            assert not pq_mod.isnan().any()
+            assert not precision.isnan().any()
 
         # Compute the final metrics
         metrics = PanopticMetricResults()
