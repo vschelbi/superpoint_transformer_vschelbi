@@ -96,14 +96,14 @@ CLASS_NAMES = [
     'Unknown']
 
 CLASS_COLORS = np.asarray([
-    [243, 214, 171], # sunset
-    [ 70, 115,  66], # fern green
+    [243, 214, 171],  # sunset
+    [ 70, 115,  66],  # fern green
     [233,  50, 239],
     [243, 238,   0],
     [190, 153, 153],
     [  0, 233,  11],
     [239, 114,   0],
-    [214,   66,  54], # vermillon
+    [214,   66,  54],  # vermillon
     [  0,   8, 116]])
 
 # For instance segmentation

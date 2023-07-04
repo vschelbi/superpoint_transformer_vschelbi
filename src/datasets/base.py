@@ -31,7 +31,8 @@ __all__ = ['BaseDataset']
 class BaseDataset(InMemoryDataset):
     """Base class for datasets.
 
-    Child classes must overwrite the following:
+    Child classes must overwrite the following methods (see respective
+    docstrings for more details):
 
     ```
     MyDataset(BaseDataset):
@@ -240,8 +241,8 @@ class BaseDataset(InMemoryDataset):
     def class_names(self):
         """List of string names for dataset classes. This list may be
         one-item larger than `self.num_classes` if the last label
-        corresponds to 'unlabelled' or 'ignored' indices, indicated as
-        `-1` in the dataset labels.
+        corresponds to 'void', 'unlabelled' or 'ignored' indices,
+        indicated as `-1` in the dataset labels.
         """
         raise NotImplementedError
 
@@ -249,8 +250,8 @@ class BaseDataset(InMemoryDataset):
     def num_classes(self):
         """Number of classes in the dataset. May be one-item smaller
         than `self.class_names`, to account for the last class name
-        being optionally used for 'unlabelled' or 'ignored' classes,
-        indicated as `-1` in the dataset labels.
+        being optionally used for 'void', 'unlabelled' or 'ignored'
+        classes, indicated as `-1` in the dataset labels.
         """
         raise NotImplementedError
 
@@ -543,8 +544,13 @@ class BaseDataset(InMemoryDataset):
         raw_path = self.processed_to_raw_path(cloud_path)
         data = self.read_single_raw_cloud(raw_path)
 
-        # TODO: this is dirty, may cause subsequent collisions with
-        #  self.num_classes ?
+        # IMPORTANT: to deal with 'void'/'ignored'/'unknown' points, we
+        # give those the label y=self.num_classes (hence we actually
+        # have self.num_classes+1 labels in the data. This allows
+        # identifying the points to be ignored at metric computation
+        # time. This step assumes self.read_single_raw_cloud returned
+        # 'void'/'ignored'/'unknown' points either with label y=-1 or
+        # y=self.num_classes
         if getattr(data, 'y', None) is not None:
             data.y[data.y == -1] = self.num_classes
 

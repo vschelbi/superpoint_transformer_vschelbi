@@ -35,7 +35,7 @@ def visualize_3d(
         select=None,
         alpha=0.1,
         alpha_super=None,
-        alpha_stuff=None,
+        alpha_stuff=0.2,
         h_edge_width=None,
         v_edge_width=None,
         point_symbol='circle',
