@@ -6,7 +6,6 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision, \
     BaseMetricResults
 from torchmetrics.utilities.imports import _TORCHVISION_GREATER_EQUAL_0_8
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-
 from src.data import InstanceData, InstanceBatch
 from src.utils import arange_interleave, sizes_to_pointers
 
@@ -156,11 +155,12 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             class_metrics: bool = False,
             stuff_classes: Optional[List[int]] = None,
             min_size: int = 100,
-            medium_size: float = 10**3,
-            large_size: float = 10**5,
+            medium_size: Optional[float] = None,
+            large_size: Optional[float] = None,
+            compute_on_cpu: bool = True,
             **kwargs: Any
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(compute_on_cpu=compute_on_cpu, **kwargs)
 
         if not _TORCHVISION_GREATER_EQUAL_0_8:
             raise ModuleNotFoundError(
@@ -169,7 +169,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                 f"Please install with `pip install torchvision>=0.8` or "
                 f"`pip install torchmetrics[detection]`.")
 
-        # TODO: deal with ignored classes
+        # TODO: deal with ignored /void classes
         # TODO: parallelize per-class computation with starmap (careful with evaluations order for self.__calculate ...)
 
         # The IoU thresholds are used for computing various mAP. The

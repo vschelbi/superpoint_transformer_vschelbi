@@ -1,13 +1,12 @@
 import torch
 import logging
+from torch_scatter import scatter_sum
 from torch import Tensor, LongTensor
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence
 from torchmetrics.metric import Metric
 from torchmetrics.detection.mean_ap import BaseMetricResults
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-
 from src.data import InstanceData, InstanceBatch
-from src.utils import arange_interleave, sizes_to_pointers
 
 
 log = logging.getLogger(__name__)
@@ -20,31 +19,22 @@ class PanopticMetricResults(BaseMetricResults):
     """Class to wrap the final metric results for Panoptic Segmentation.
     """
     __slots__ = (
-        "pq",
-        "pq_thing",
-        "pq_stuff",
-        "pq_per_class",
-        "sq",
-        "sq_thing",
-        "sq_stuff",
-        "sq_per_class",
-        "rq",
-        "rq_thing",
-        "rq_stuff",
-        "rq_per_class",
-        "pq_modified",
-        "pq_modified_thing",
-        "pq_modified_stuff",
-        "pq_modified_per_class",
-        "sq_modified",
-        "sq_modified_thing",
-        "sq_modified_stuff",
-        "sq_modified_per_class",
-        "rq_modified",
-        "rq_modified_thing",
-        "rq_modified_per_class",
-        "mean_precision",
-        "mean_recall")
+        'pq',
+        'sq',
+        'rq',
+        'pq_modified',
+        'pq_thing',
+        'sq_thing',
+        'rq_thing',
+        'pq_stuff',
+        'sq_stuff',
+        'rq_stuff',
+        'pq_per_class',
+        'sq_per_class',
+        'rq_per_class',
+        'pq_modified_per_class',
+        'mean_precision',
+        'mean_recall')
 
 
 class PanopticQuality3D(Metric):
@@ -68,52 +58,58 @@ class PanopticQuality3D(Metric):
     - ``pq_dict``: A dictionary containing the following key-values:
 
         - pq: (:class:`~torch.Tensor`)
-        - pq_thing: (:class:`~torch.Tensor`)
-        - pq_stuff: (:class:`~torch.Tensor`)
-        - pq_per_class: (:class:`~torch.Tensor`)
         - sq: (:class:`~torch.Tensor`)
-        - sq_thing: (:class:`~torch.Tensor`)
-        - sq_stuff: (:class:`~torch.Tensor`)
-        - sq_per_class: (:class:`~torch.Tensor`)
         - rq: (:class:`~torch.Tensor`)
-        - rq_thing: (:class:`~torch.Tensor`)
-        - rq_stuff: (:class:`~torch.Tensor`)
-        - rq_per_class: (:class:`~torch.Tensor`)
         - pq_modified: (:class:`~torch.Tensor`)
-        - pq_modified_thing: (:class:`~torch.Tensor`)
-        - pq_modified_stuff: (:class:`~torch.Tensor`)
+        - pq_thing: (:class:`~torch.Tensor`)
+        - sq_thing: (:class:`~torch.Tensor`)
+        - rq_thing: (:class:`~torch.Tensor`)
+        - pq_stuff: (:class:`~torch.Tensor`)
+        - sq_stuff: (:class:`~torch.Tensor`)
+        - rq_stuff: (:class:`~torch.Tensor`)
+        - pq_per_class: (:class:`~torch.Tensor`)
+        - sq_per_class: (:class:`~torch.Tensor`)
+        - rq_per_class: (:class:`~torch.Tensor`)
         - pq_modified_per_class: (:class:`~torch.Tensor`)
-        - sq_modified: (:class:`~torch.Tensor`)
-        - sq_modified_thing: (:class:`~torch.Tensor`)
-        - sq_modified_stuff: (:class:`~torch.Tensor`)
-        - sq_modified_per_class: (:class:`~torch.Tensor`)
-        - rq_modified: (:class:`~torch.Tensor`)
-        - rq_modified_thing: (:class:`~torch.Tensor`)
-        - rq_modified_per_class: (:class:`~torch.Tensor`)
         - mean_precision: (:class:`~torch.Tensor`)
         - mean_recall: (:class:`~torch.Tensor`)
 
-    :param **************
+    :param ignore_unseen_classes: bool
+        If True, the mean metrics will only be computed on seen classes.
+        Otherwise, metrics for the unseen classes will be set to zero
+        and those will affect the average metrics over all classes.
+    :param stuff_classes: List or Tensor
+        List of 'stuff' class labels to ignore in the metrics
+        computation.
+    :param compute_on_cpu: bool
+        If True, the accumulated prediction and target data will be
+        stored on CPU, and the metrics computation will be performed
+        on CPU. This can be necessary for particularly large
+        datasets.
+    :param kwargs:
+        Additional keyword arguments, see :ref:`Metric kwargs` for
+        more info.
     """
     prediction_semantic: List[LongTensor]
     instance_data: List[InstanceData]
 
     def __init__(
             self,
-            class_metrics: bool = False,
+            ignore_unseen_classes: bool = True,
             stuff_classes: Optional[List[int]] = None,
+            compute_on_cpu: bool = False,
             **kwargs: Any
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(compute_on_cpu=compute_on_cpu, **kwargs)
 
-        # TODO: deal with ignored classes
-        # TODO: parallelize per-class computation with starmap
-
-        # If class_metrics=True the per-class metrics will also be
-        # returned, although this may impact overall speed
-        if not isinstance(class_metrics, bool):
-            raise ValueError("Expected argument `class_metrics` to be a bool")
-        self.class_metrics = class_metrics
+        # TODO: deal with ignored / void classes
+        # TODO: warning stuff must be preprocessed to 1 gt and 1 pred at
+        #  most per image/scene before being stored in the internal
+        #  states
+        
+        # Whether classes without any prediction or target in the data
+        # should be ignored in the metrics computation
+        self.ignore_unseen_classes = ignore_unseen_classes
 
         # Stuff classes may be specified, to be properly accounted for
         # in metrics computation
@@ -152,6 +148,8 @@ class PanopticQuality3D(Metric):
              assumes the predictions and targets form two PARTITIONS of
              the scene: all points belong to one and only one prediction
              and one and only one target object ('stuff' included).
+             Besides, for each 'stuff' class, AT MOST ONE prediction and
+             AT MOST ONE target are allowed per scene/cloud/image.
         :return:
         """
         # Sanity checks
@@ -186,9 +184,14 @@ class PanopticQuality3D(Metric):
                 "have the same number of size")
 
     def compute(self) -> dict:
-        """Metrics computation.
-        """
+        """Compute the metrics from the data stored in the internal
+        states.
 
+        NB: this implementation assumes the prediction and targets
+        stored in the internal states represent two PARTITIONS of the
+        data points. Said otherwise, all points belong to one and only
+        one prediction and one and only one target.
+        """
         # Batch together the values stored in the internal states.
         # Importantly, the InstanceBatch mechanism ensures there is no
         # collision between object labels of the stored scenes
@@ -221,279 +224,100 @@ class PanopticQuality3D(Metric):
         gt_semantic = pair_gt_semantic[gt_idx]
         del gt_idx, pair_gt_semantic
 
-        # Recover the classes of interest for this metric. These are the
-        # classes whose labels appear at least once in the predicted
-        # semantic label or in the ground truth semantic labels.
-        # Besides, if `stuff_classes` was provided, the corresponding
-        # labels are ignored
-        class_ids = self._get_classes()  # TODO: this should NOT remove the STUFF clases for panoptic...
+        # Recover the classes present in the data. In particular, we
+        # identify the expected classes which are absent from both
+        # predictions and targets. Those classes are not accounted for
+        # in the mean metrics computation, unless
+        # `self.ignore_unseen_classes=False`
+        all_semantic = torch.cat((gt_semantic, pred_semantic))
+        num_classes = all_semantic.max().item() + 1
+        if self.ignore_unseen_classes:
+            is_seen = torch.zeros(num_classes, dtype=torch.bool, device=device)
+            is_seen[all_semantic.unique()] = True
+        else:
+            is_seen = torch.ones(num_classes, dtype=torch.bool, device=device)
+        classes = range(num_classes)
 
-        # For each class, each size range (and each IoU threshold),
-        # compute the prediction-ground truth matches. Importantly, the
-        # output of this step is formatted so as to be passed to
-        # `MeanAveragePrecision.__calculate_recall_precision_scores`
-        evaluations = [
-            self._evaluate(
-                class_id,
-                pair_iou,
-                pair_pred_idx,
-                pair_gt_idx,
-                pred_semantic,
-                gt_semantic)
-            for class_id in class_ids]
+        # Class-wise mask for stuff/thing
+        is_stuff = torch.tensor(
+            [i in self.stuff_classes for i in classes], device=device)
+        has_stuff = is_stuff.count_nonzero() > 0
 
-        num_iou = len(self.iou_thresholds)
-        num_rec = len(self.rec_thresholds)
-        num_classes = len(class_ids)
-        num_sizes = len(self.size_ranges)
-        precision = -torch.ones((num_iou, num_rec, num_classes, num_sizes, 1), device=device)
-        recall = -torch.ones((num_iou, num_classes, num_sizes, 1), device=device)
-        scores = -torch.ones((num_iou, num_rec, num_classes, num_sizes, 1), device=device)
+        # TP + FN
+        gt_class_counts = torch.bincount(gt_semantic, minlength=num_classes)
 
-        # Compute the recall, precision, and score for each IoU
-        # threshold, class, and size range
-        for idx_cls, _ in enumerate(class_ids):
-            for i_size, _ in enumerate(self.size_ranges):
-                recall, precision, scores = self.__calculate(
-                    recall,
-                    precision,
-                    scores,
-                    idx_cls,
-                    i_size,
-                    evaluations)
+        # TP + FP
+        pred_class_counts = torch.bincount(pred_semantic, minlength=num_classes)
 
-        # Compute all AP and AR metrics
-        metrics
+        # Preparing for TP search among candidate pairs
+        pair_gt_semantic = gt_semantic[pair_gt_idx]
+        pair_pred_semantic = pred_semantic[pair_pred_idx]
+        pair_is_stuff = is_stuff[pair_gt_semantic]
+        pair_agrees = pair_gt_semantic == pair_pred_semantic
+        pair_iou_gt_50 = pair_iou > 0.5
 
-        # If class_metrics is enabled, also evaluate all metrics for
-        # each class of interest
-        pass
+        # TP
+        idx_pair_tp = torch.where(pair_agrees & pair_iou_gt_50)[0]
+        tp = torch.bincount(
+            pair_gt_semantic[idx_pair_tp], minlength=num_classes)
+        iou_sum = scatter_sum(
+            pair_iou[idx_pair_tp], pair_gt_semantic[idx_pair_tp])
+
+        # Precision & Recall
+        precision = tp / pred_class_counts
+        recall = tp / gt_class_counts
+
+        # SQ - Segmentation Quality
+        sq = iou_sum / tp
+
+        # RQ - Recognition Quality
+        rq = 2 * precision * recall / (precision + recall)
+
+        # PQ - Panoptic Quality
+        pq = sq * rq
+
+        # PQ modified - more permissive for stuff classes
+        if has_stuff:
+            idx_pair_tp_mod = torch.where(
+                pair_agrees & (pair_iou_gt_50 | pair_is_stuff))[0]
+            # tp_mod = torch.bincount(
+            # pair_gt_semantic[idx_pair_tp_mod], minlength=num_classes)
+            iou_mod_sum = scatter_sum(
+                pair_iou[idx_pair_tp_mod], pair_gt_semantic[idx_pair_tp_mod])
+            denominator = (gt_class_counts + pred_class_counts) / 2
+            denominator[is_stuff] = gt_class_counts[is_stuff]
+            pq_mod = iou_mod_sum / denominator
+        else:
+            pq_mod = pq
+
+        # Set unseen classes metrics to Nan
+        pq[~is_seen] = torch.nan
+        sq[~is_seen] = torch.nan
+        rq[~is_seen] = torch.nan
+        pq_mod[~is_seen] = torch.nan
+        precision[~is_seen] = torch.nan
+        recall[~is_seen] = torch.nan
+
+        # Compute the final metrics
+        metrics = PanopticMetricResults()
+        metrics.pq = pq.nanmean()
+        metrics.sq = sq.nanmean()
+        metrics.rq = rq.nanmean()
+        metrics.pq_modified = pq_mod.nanmean()
+        metrics.pq_thing = pq[~is_stuff].nanmean()
+        metrics.sq_thing = sq[~is_stuff].nanmean()
+        metrics.rq_thing = rq[~is_stuff].nanmean()
+        metrics.pq_stuff = pq[is_stuff].nanmean() if has_stuff else torch.nan
+        metrics.sq_stuff = sq[is_stuff].nanmean() if has_stuff else torch.nan
+        metrics.rq_stuff = rq[is_stuff].nanmean() if has_stuff else torch.nan
+        metrics.pq_per_class = pq
+        metrics.sq_per_class = sq
+        metrics.rq_per_class = rq
+        metrics.pq_modified_per_class = pq_mod
+        metrics.mean_precision = precision.nanmean()
+        metrics.mean_recall = recall.nanmean()
 
         return metrics
-
-    def _evaluate(
-            self,
-            class_id: int,
-            size_range: Tuple[int, int],
-            pred_score: Tensor,
-            pair_iou: Tensor,
-            pair_pred_idx: Tensor,
-            pair_gt_idx: Tensor,
-            pred_semantic: Tensor,
-            gt_semantic: Tensor,
-            pred_size: Tensor,
-            gt_size: Tensor
-    ) -> Optional[dict]:
-        """Perform evaluation for single class and a single size range.
-        The output evaluations cover all required IoU thresholds.
-        Concretely, these "evaluations" are the prediction-target
-        assignments, with respect to constraints on the semantic class
-        of interest, the IoU threshold (for AP computation), the target
-        size, etc.
-
-        The following rules apply:
-          - at most 1 prediction per target
-          - predictions are assigned by order of decreasing score and to
-            the not-already-matched target with highest IoU (within IoU
-            threshold)
-
-        NB: the input prediction-wise and pair-wise data is assumed to
-        be ALREADY SORTED by descending prediction scores.
-
-        The output is formatted so as to be passed to torchmetrics'
-        `MeanAveragePrecision.__calculate_recall_precision_scores`.
-
-        :param class_id: int
-            Index of the class on which to compute the evaluations.
-        :param size_range: List
-            Upper and lower bounds for the size range of interest.
-            Target objects outside those bounds will be ignored. As well
-            as non-matched predictions outside those bounds.
-        :param pred_score: Tensor of shape [N_pred]
-        :param pair_iou: Tensor of shape [N_pred_gt_overlaps]
-        :param pair_pred_idx: Tensor of shape [N_pred_gt_overlaps]
-        :param pair_gt_idx: Tensor of shape [N_pred_gt_overlaps]
-        :param pred_semantic: Tensor of shape [N_pred]
-        :param gt_semantic: Tensor of shape [N_gt]
-        :param pred_size: Tensor of shape [N_pred]
-        :param gt_size: Tensor of shape [N_gt]
-        :return:
-        """
-        device = gt_semantic.device
-
-        # Compute masks on the prediction-target pairs, based on their
-        # semantic label, as well as their size
-        is_gt_class = gt_semantic == class_id
-        is_pred_class = pred_semantic == class_id
-        is_gt_in_size_range = (size_range[0] <= gt_size.float()) \
-                              & (gt_size.float() <= size_range[1])
-        is_pred_in_size_range = (size_range[0] <= pred_size.float()) \
-                                & (pred_size.float() <= size_range[1])
-
-        # Count the number of ground truths and predictions with the
-        # class at hand
-        num_gt = is_gt_class.count_nonzero().item()
-        num_pred = is_pred_class.count_nonzero().item()
-
-        # Get the number of IoU thresholds
-        num_iou = len(self.iou_thresholds)
-
-        # If no ground truth and no detection carry the class of
-        # instance, return None
-        if num_gt == 0 and num_pred == 0:
-            return None
-
-        # Some targets have the class at hand but no prediction does
-        if num_pred == 0:
-            return {
-                "dtMatches": torch.zeros(
-                    num_iou, 0, dtype=torch.bool, device=device),
-                "gtMatches": torch.zeros(
-                    num_iou, num_gt, dtype=torch.bool, device=device),
-                "dtScores": torch.zeros(0, device=device),
-                "gtIgnore": ~is_gt_in_size_range[is_gt_class],
-                "dtIgnore": torch.zeros(
-                    num_iou, 0, dtype=torch.bool, device=device)}
-
-        # Some predictions have the class at hand but no target does
-        if num_gt == 0:
-            pred_ignore = ~is_pred_in_size_range[is_pred_class]
-            return {
-                "dtMatches": torch.zeros(
-                    num_iou, num_pred, dtype=torch.bool, device=device),
-                "gtMatches": torch.zeros(
-                    num_iou, 0, dtype=torch.bool, device=device),
-                "dtScores": pred_score[is_pred_class],
-                "gtIgnore": torch.zeros(
-                    0, dtype=torch.bool, device=device),
-                "dtIgnore": pred_ignore.view(1, -1).repeat(num_iou, 1)}
-
-        # Compute the global indices of the prediction and ground truth
-        # for the class at hand. These will be used to search for
-        # relevant pairs
-        gt_class_idx = torch.where(is_gt_class)[0]
-        pred_class_idx = torch.where(is_pred_class)[0]
-        is_pair_gt_class = torch.isin(pair_gt_idx, gt_class_idx)
-
-        # Build the tensors used to track which ground truth and which
-        # prediction has found a match, for each IoU threshold. This is
-        # the data structure expected by torchmetrics'
-        # `MeanAveragePrecision.__calculate_recall_precision_scores()`
-        gt_matches = torch.zeros(
-            num_iou, num_gt, dtype=torch.bool, device=device)
-        det_matches = torch.zeros(
-            num_iou, num_pred, dtype=torch.bool, device=device)
-        gt_ignore = ~is_gt_in_size_range[is_gt_class]
-        det_ignore = torch.zeros(
-            num_iou, num_pred, dtype=torch.bool, device=device)
-
-        # Each pair is associated with a prediction index and a ground
-        # truth index. Except these indices are global, spanning across
-        # all objects in the data, regardless of their class. Here, we
-        # are also going to need to link a pair with the local ground
-        # truth index (tracking objects with the current class of
-        # interest), to be able to index and update the above-created
-        # gt_matches and gt_ignore. To this end, we will compute a
-        # simple mapping. NB: we do not need to build such mapping for
-        # prediction indices, because we will simply enumerate
-        # pred_class_idx, which provides both local and global indices
-        gt_idx_to_i_gt = torch.full_like(gt_semantic, -1)
-        gt_idx_to_i_gt[gt_class_idx] = torch.arange(num_gt, device=device)
-
-        # Match each prediction to a ground truth
-        # NB: the assumed pre-ordering of predictions by decreasing
-        # score ensures we are assigning high-confidence predictions
-        # first
-        for i_pred, pred_idx in enumerate(pred_class_idx):
-
-            # Get the indices of pairs which involve the prediction at
-            # hand and whose ground truth has the class at hand
-            _pair_idx = torch.where(
-                (pair_pred_idx == pred_idx) & is_pair_gt_class)[0]
-
-            # Detection will be ignored if no candidate overlapping gt
-            # is found
-            if _pair_idx.numel() == 0:
-                continue
-
-            # Gather the pairs' ground truth information for candidate
-            # ground truth matches
-            _pair_gt_idx = pair_gt_idx[_pair_idx]
-            _pair_i_gt = gt_idx_to_i_gt[_pair_gt_idx]
-            _pair_iou = pair_iou[_pair_idx]
-
-            # Sort the candidates by decreasing gt size. In case the
-            # prediction has multiple candidate ground truth matches
-            # with equal IoU, we will select the one with the largest
-            # size in priority
-            if _pair_gt_idx.numel() > 1:
-                order = gt_size[_pair_gt_idx].argsort(descending=True)
-                _pair_idx = _pair_idx[order]
-                _pair_gt_idx = _pair_gt_idx[order]
-                _pair_i_gt = _pair_i_gt[order]
-                _pair_iou = _pair_iou[order]
-                del order
-
-            # Among potential ground truth matches, remove those which
-            # are already matched with a prediction.
-            # NB: we do not remove the 'ignored' ground truth yet: if a
-            # ground truth is 'ignored', we still want to match it to a
-            # good prediction, if any. This way, the prediction in
-            # question will also be marked as to be 'ignored', else it
-            # would be unfairly penalized as a False Positive
-            _iou_pair_gt_matched = gt_matches[:, _pair_i_gt]
-
-            # For each IoU and each candidate ground truth, search the
-            # available candidates with large-enough IoU.
-            # NB: clamping the thresholds to 0 will facilitate searching
-            # for the best match for each prediction while identifying
-            # False Positives
-            iou_thresholds = torch.tensor(self.iou_thresholds, device=device)
-
-            # Get the best possible matching pair for each IoU threshold
-            _iou_match, _iou_match_idx = \
-                (~_iou_pair_gt_matched * _pair_iou.view(1, -1)).max(dim=1)
-
-            # Check if the match found for each IoU threshold is valid.
-            # A match is valid if:
-            #   - the match's IoU is above the IoU threshold
-            #   - the ground truth is not already matched
-            # A match may be valid but still be ignored if:
-            #   - the ground truth is marked as ignored
-            _iou_match_ok = _iou_match > iou_thresholds
-
-            # For each IoU threshold, get the corresponding ground truth
-            # index. From there, we can update the det_ignore,
-            # det_matches and gt_matches.
-            _iou_match_i_gt = _pair_i_gt[_iou_match_idx]
-            det_ignore[:, i_pred] = gt_ignore[_iou_match_i_gt] * _iou_match_ok
-            det_matches[:, i_pred] = _iou_match_ok
-
-            #  Special attention must be paid to gt_matches in case the
-            #  prediction tried to match an already-assigned gt. In
-            #  which case the prediction will not match (ie
-            #  _iou_match_ok is False). To avoid re-setting the
-            #  corresponding gt_matches to False, we need to make sure
-            #  gt_matches was not already matched
-            _iou_match_gt_ok = \
-                gt_matches.gather(1, _iou_match_i_gt.view(-1, 1)).squeeze()
-            _iou_match_gt_ok = _iou_match_gt_ok | _iou_match_ok
-            gt_matches.scatter_(
-                1, _iou_match_i_gt.view(-1, 1), _iou_match_gt_ok.view(-1, 1))
-
-        # The above procedure may leave some predictions without match.
-        # Those should count as False Positives, unless their size is
-        # outside the size_range of interest, in which case it should be
-        # ignored from metrics computation
-        det_ignore = det_ignore | ~det_matches \
-                     & ~is_pred_in_size_range[is_pred_class].view(1, -1)
-
-        return {
-            "dtMatches": det_matches,
-            "gtMatches": gt_matches,
-            "dtScores": pred_score[is_pred_class],
-            "gtIgnore": gt_ignore,
-            "dtIgnore": det_ignore}
 
     def _move_list_states_to_cpu(self) -> None:
         """Move list states to cpu to save GPU memory."""
@@ -514,24 +338,3 @@ class PanopticQuality3D(Metric):
             self.instance_data = instance_data
             out.instance_data = [x.to(*args, **kwargs) for x in instance_data]
         return out
-
-    def _get_classes(self) -> List:
-        """Returns a list of unique classes found in ground truth and
-        detection data, excluding 'stuff' classes if any.
-        """
-        if len(self.prediction_semantic) > 0 or len(self.instance_data) > 0:
-            all_pred_y = self.prediction_semantic
-            all_gt_y = [x.y for x in self.instance_data]
-            all_y = torch.cat(all_pred_y + all_gt_y).unique().tolist()
-            all_y_without_stuff = list(set(all_y) - set(self.stuff_classes))
-            return all_y_without_stuff
-        return []
-
-    def _summarize_results(
-            self,
-            precisions: Tensor,
-            recalls: Tensor
-    ) -> PanopticMetricResults:
-        """Summarizes ...
-        """
-        return PanopticMetricResults
