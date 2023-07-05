@@ -181,8 +181,21 @@ class KITTI360(BaseDataset):
         shutil.rmtree(osp.join(self.raw_dir, 'data_3d_semantics', stage))
 
     def read_single_raw_cloud(self, raw_cloud_path):
-        """Read a single raw cloud and return a Data object, ready to
+        """Read a single raw cloud and return a `Data` object, ready to
         be passed to `self.pre_transform`.
+
+        This `Data` object should contain the following attributes:
+          - `pos`: point coordinates
+          - `y`: OPTIONAL point semantic label
+          - `obj`: OPTIONAL `InstanceData` object with instance labels
+          - `rgb`: OPTIONAL point color
+          - `intensity`: OPTIONAL point LiDAR intensity
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE IGNORED LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
         """
         return read_kitti360_window(
             raw_cloud_path, semantic=True, instance=True, remap=True)
@@ -256,7 +269,7 @@ class KITTI360(BaseDataset):
         # Read the raw point cloud
         raw_path = osp.join(
             self.raw_dir, self.id_to_relative_raw_path(self.cloud_ids[idx]))
-        data_raw = self.read_single_raw_cloud(raw_path)
+        data_raw = self.sanitized_read_single_raw_cloud(raw_path)
 
         # Search the nearest neighbor of each point and apply the
         # neighbor's class to the points

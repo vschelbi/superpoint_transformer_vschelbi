@@ -542,17 +542,7 @@ class BaseDataset(InMemoryDataset):
         # Read the raw cloud corresponding to the final processed
         # `cloud_path` and convert it to a Data object
         raw_path = self.processed_to_raw_path(cloud_path)
-        data = self.read_single_raw_cloud(raw_path)
-
-        # IMPORTANT: to deal with 'void'/'ignored'/'unknown' points, we
-        # give those the label y=self.num_classes (hence we actually
-        # have self.num_classes+1 labels in the data. This allows
-        # identifying the points to be ignored at metric computation
-        # time. This step assumes self.read_single_raw_cloud returned
-        # 'void'/'ignored'/'unknown' points either with label y=-1 or
-        # y=self.num_classes
-        if getattr(data, 'y', None) is not None:
-            data.y[data.y == -1] = self.num_classes
+        data = self.sanitized_read_single_raw_cloud(raw_path)
 
         # If the cloud path indicates a tiling is needed, apply it here
         if self.xy_tiling is not None:
@@ -614,10 +604,48 @@ class BaseDataset(InMemoryDataset):
         return None
 
     def read_single_raw_cloud(self, raw_cloud_path):
-        """Read a single raw cloud and return a Data object, ready to
+        """Read a single raw cloud and return a `Data` object, ready to
         be passed to `self.pre_transform`.
+
+        This `Data` object should contain the following attributes:
+          - `pos`: point coordinates
+          - `y`: OPTIONAL point semantic label
+          - `obj`: OPTIONAL `InstanceData` object with instance labels
+          - `rgb`: OPTIONAL point color
+          - `intensity`: OPTIONAL point LiDAR intensity
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE IGNORED LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
         """
         raise NotImplementedError
+
+    def sanitized_read_single_raw_cloud(self, raw_cloud_path):
+        """Wrapper around the actual `self.read_single_raw_cloud`. This
+        function ensures that the class labels returned by the reader
+        are sanitized.
+
+        More specifically, we assume `[0, self.num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE IGNORED LABELS.
+
+        To this end, this function maps all labels outside of
+        `[0, self.num_classes-1]` to `y = self.num_classes`.
+
+        Hence, we actually have `self.num_classes + 1` labels in the
+        data. This allows identifying the points to be ignored at metric
+        computation time.
+        """
+        data = self.read_single_raw_cloud(raw_cloud_path)
+        if getattr(data, 'y', None) is not None:
+            data.y[data.y < 0] = self.num_classes
+            data.y[data.y > self.num_classes] = self.num_classes
+        if getattr(data, 'obj', None) is not None:
+            data.obj.y[data.obj.y < 0] = self.num_classes
+        data.obj.y[data.obj.y > self.num_classes] = self.num_classes
+        return data
 
     def get_class_weight(self, smooth='sqrt'):
         """Compute class weights based on the labels distribution in the
