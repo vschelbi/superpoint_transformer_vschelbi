@@ -39,13 +39,20 @@ class PanopticMetricResults(BaseMetricResults):
 
 class PanopticQuality3D(Metric):
     """Computes the `Panoptic Quality (PQ) and associated metrics`_ for
-    3D panoptic segmentation.
-    Optionally, the metrics can be calculated per class.
+    3D panoptic segmentation. Optionally, the metrics can be calculated
+    per class.
 
     Importantly, this implementation expects predictions and targets to
     be passed as InstanceData, which assumes predictions and targets
     form two PARTITIONS of the scene: all points belong to one and only
     one prediction and one and only one target ('stuff' included).
+
+    By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL VALID
+    LABELS (ie not 'ignored', 'void', 'unknown', etc), while `y < 0`
+    AND `y >= self.num_classes` ARE IGNORED LABELS. Void data is dealt
+    with following:
+      - https://arxiv.org/abs/1801.00868
+      - https://arxiv.org/abs/1905.01220
 
     Predicted instances and targets have to be passed to
     :meth:``forward`` or :meth:``update`` within a custom format. See
@@ -74,14 +81,21 @@ class PanopticQuality3D(Metric):
         - mean_precision: (:class:`~torch.Tensor`)
         - mean_recall: (:class:`~torch.Tensor`)
 
+    :param num_classes: int
+        Number of valid classes in the dataset. By convention, we assume
+        `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (ie not
+        'ignored', 'void', 'unknown', etc), while `y < 0` AND
+        `y >= self.num_classes` ARE IGNORED LABELS. Void data is dealt
+        with following https://arxiv.org/abs/1801.00868 and
+        https://arxiv.org/abs/1905.01220
     :param ignore_unseen_classes: bool
         If True, the mean metrics will only be computed on seen classes.
         Otherwise, metrics for the unseen classes will be set to ZERO by
         default and those will affect the average metrics over all
         classes.
     :param stuff_classes: List or Tensor
-        List of 'stuff' class labels to ignore in the metrics
-        computation.
+        List of 'stuff' class labels, to distinguish between 'thing' and
+        'stuff' classes.
     :param compute_on_cpu: bool
         If True, the accumulated prediction and target data will be
         stored on CPU, and the metrics computation will be performed
@@ -96,6 +110,7 @@ class PanopticQuality3D(Metric):
 
     def __init__(
             self,
+            num_classes: int,
             ignore_unseen_classes: bool = True,
             stuff_classes: Optional[List[int]] = None,
             compute_on_cpu: bool = False,
@@ -103,11 +118,13 @@ class PanopticQuality3D(Metric):
     ) -> None:
         super().__init__(compute_on_cpu=compute_on_cpu, **kwargs)
 
-        # TODO: deal with ignored / void classes
         # TODO: warning stuff must be preprocessed to 1 gt and 1 pred at
         #  most per image/scene before being stored in the internal
         #  states
-        
+
+        # Store the number of valid classes in the dataset
+        self.num_classes = num_classes
+
         # Whether classes without any prediction or target in the data
         # should be ignored in the metrics computation
         self.ignore_unseen_classes = ignore_unseen_classes
@@ -200,6 +217,13 @@ class PanopticQuality3D(Metric):
         pair_data = InstanceBatch.from_list(self.instance_data)
         device = pred_semantic.device
 
+        # Remove some prediction, targets, and pairs to properly account
+        # for points with 'void' labels in the data. For more details,
+        # `InstanceData.remove_void` documentation
+        pair_data, is_pred_valid = pair_data.remove_void(self.num_classes)
+        pred_semantic = pred_semantic[is_pred_valid]
+        del is_pred_valid
+
         # Recover the target index, IoU, sizes, and target label for
         # each pair. Importantly, the way the pair_pred_idx is built
         # guarantees the prediction indices are contiguous in
@@ -225,13 +249,13 @@ class PanopticQuality3D(Metric):
         gt_semantic = pair_gt_semantic[gt_idx]
         del gt_idx, pair_gt_semantic
 
-        # Recover the classes present in the data. In particular, we
-        # identify the expected classes which are absent from both
-        # predictions and targets. Those classes are not accounted for
-        # in the mean metrics computation, unless
-        # `self.ignore_unseen_classes=False`
-        all_semantic = torch.cat((gt_semantic, pred_semantic))
-        num_classes = all_semantic.max().item() + 1
+        # Recover the classes present in the data.
+        # NB: this step assumes `InstanceData.remove_void()` was called
+        # beforehand. Otherwise, some data labels may be outside of
+        # `[0, self.num_classes-1]`
+        # all_semantic = torch.cat((gt_semantic, pred_semantic))
+        # num_classes = all_semantic.max().item() + 1
+        num_classes = self.num_classes
         classes = range(num_classes)
 
         # Class-wise mask for stuff/thing
@@ -241,9 +265,11 @@ class PanopticQuality3D(Metric):
 
         # TP + FN
         gt_class_counts = torch.bincount(gt_semantic, minlength=num_classes)
+        gt_class_counts = gt_class_counts[:num_classes]
 
         # TP + FP
         pred_class_counts = torch.bincount(pred_semantic, minlength=num_classes)
+        pred_class_counts = pred_class_counts[:num_classes]
 
         # Preparing for TP search among candidate pairs
         pair_gt_semantic = gt_semantic[pair_gt_idx]
@@ -272,7 +298,8 @@ class PanopticQuality3D(Metric):
         # PQ - Panoptic Quality
         pq = sq * rq
 
-        # PQ modified - more permissive for stuff classes
+        # PQ modified - more permissive for stuff classes, following:
+        # https://arxiv.org/abs/1905.01220
         if has_stuff:
             idx_pair_tp_mod = torch.where(
                 pair_agrees & (pair_iou_gt_50 | pair_is_stuff))[0]
@@ -286,9 +313,20 @@ class PanopticQuality3D(Metric):
         else:
             pq_mod = pq
 
-        # Deal with unseen classes metrics. to Nan
+        # Recover the classes present in the data. In particular, we
+        # identify the expected classes which are absent from both
+        # predictions and targets.
+        # Unseen classes are classes whose label is in
+        # `[0, self.num_classes-1]` (considered 'void' otherwise), and
+        # appears at least once in the predictions or in the ground
+        # truth data.
+        # Those classes are not accounted for in the mean metrics
+        # computation, unless `self.ignore_unseen_classes=False`
+        all_semantic = torch.cat((gt_semantic, pred_semantic))
+        class_ids = all_semantic.unique()
+        class_ids = class_ids[(class_ids >= 0) & (class_ids < num_classes)]
         is_seen = torch.zeros(num_classes, dtype=torch.bool, device=device)
-        is_seen[all_semantic.unique()] = True
+        is_seen[class_ids] = True
         default = torch.nan if self.ignore_unseen_classes else 0
 
         pq[~is_seen] = default

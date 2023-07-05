@@ -76,18 +76,18 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
     - ``map_dict``: A dictionary containing the following key-values:
 
         - map: (:class:`~torch.Tensor`)
-        - map_25: (:class:`~torch.Tensor`) (-1 if 0.25 not in the list of iou thresholds)
-        - map_50: (:class:`~torch.Tensor`) (-1 if 0.5 not in the list of iou thresholds)
-        - map_75: (:class:`~torch.Tensor`) (-1 if 0.75 not in the list of iou thresholds)
-        - map_small: (:class:`~torch.Tensor`)
-        - map_medium:(:class:`~torch.Tensor`)
-        - map_large: (:class:`~torch.Tensor`)
+        - map_25: (:class:`~torch.Tensor`)         (NaN if 0.25 not in the list of iou thresholds)
+        - map_50: (:class:`~torch.Tensor`)         (NaN if 0.5 not in the list of iou thresholds)
+        - map_75: (:class:`~torch.Tensor`)         (NaN if 0.75 not in the list of iou thresholds)
+        - map_small: (:class:`~torch.Tensor`)      (NaN if `medium_size` and `large_size` are not specified)
+        - map_medium:(:class:`~torch.Tensor`)      (NaN if `medium_size` and `large_size` are not specified)
+        - map_large: (:class:`~torch.Tensor`)      (NaN if `medium_size` and `large_size` are not specified)
         - mar: (:class:`~torch.Tensor`)
-        - mar_small: (:class:`~torch.Tensor`)
-        - mar_medium: (:class:`~torch.Tensor`)
-        - mar_large: (:class:`~torch.Tensor`)
-        - map_per_class: (:class:`~torch.Tensor`) (-1 if class metrics are disabled)
-        - mar_per_class: (:class:`~torch.Tensor`) (-1 if class metrics are disabled)
+        - mar_small: (:class:`~torch.Tensor`)      (NaN if `medium_size` and `large_size` are not specified)
+        - mar_medium: (:class:`~torch.Tensor`)     (NaN if `medium_size` and `large_size` are not specified)
+        - mar_large: (:class:`~torch.Tensor`)      (NaN if `medium_size` and `large_size` are not specified)
+        - map_per_class: (:class:`~torch.Tensor`)  (NaN if class metrics are disabled)
+        - mar_per_class: (:class:`~torch.Tensor`)  (NaN if class metrics are disabled)
 
     .. note::
         ``map`` score is calculated with @[ IoU=self.iou_thresholds | area=all ].
@@ -104,6 +104,16 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         (with corresponding version 1.7.0 of torch or newer). Please install with ``pip install torchvision`` or
         ``pip install torchmetrics[detection]``.
 
+    :param num_classes: int
+        Number of valid semantic classes (union of 'thing' and 'stuff')
+        in the dataset. These are all semantic classes whose
+        points are not to be considered as 'void' or 'ignored' when
+        computing the metrics. By convention, we assume
+        `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (ie not
+        'ignored', 'void', 'unknown', etc), while `y < 0` AND
+        `y >= self.num_classes` ARE IGNORED LABELS. Void data is dealt
+        with following https://arxiv.org/abs/1801.00868 and
+        https://arxiv.org/abs/1905.01220
     :param iou_thresholds: List or Tensor
         List of IoU on which to evaluate the performance. If None,
         the mAP and mAR will be computed on thresholds
@@ -113,10 +123,12 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         The recall steps to use when integrating the AUC.
     :param class_metrics: bool
         If True, the per-class AP and AR metrics will also be
-        computed .
+        computed.
     :param stuff_classes: List or Tensor
         List of 'stuff' class labels to ignore in the metrics
-        computation.
+        computation. NB: as opposed to 'void' classes, 'stuff' classes
+        are not entirely ignored per se, as they are accounted for when
+        computing the IoUs.
     :param min_size: int
         Minimum target instance size to consider when computing the
         metrics. If a target is smaller, it will be ignored, as well
@@ -140,6 +152,11 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         stored on CPU, and the metrics computation will be performed
         on CPU. This can be necessary for particularly large
         datasets.
+    :param remove_void: bool
+        If True, points with 'void' labels will be removed following
+        the procedure proposed in:
+          - https://arxiv.org/abs/1801.00868
+          - https://arxiv.org/abs/1905.01220
     :param kwargs:
         Additional keyword arguments, see :ref:`Metric kwargs` for
         more info.
@@ -150,6 +167,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
 
     def __init__(
             self,
+            num_classes: int,
             iou_thresholds: Optional[List[float]] = None,
             rec_thresholds: Optional[List[float]] = None,
             class_metrics: bool = False,
@@ -158,6 +176,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             medium_size: Optional[float] = None,
             large_size: Optional[float] = None,
             compute_on_cpu: bool = True,
+            remove_void: bool = False,
             **kwargs: Any
     ) -> None:
         super().__init__(compute_on_cpu=compute_on_cpu, **kwargs)
@@ -169,8 +188,10 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                 f"Please install with `pip install torchvision>=0.8` or "
                 f"`pip install torchmetrics[detection]`.")
 
-        # TODO: deal with ignored /void classes
         # TODO: parallelize per-class computation with starmap (careful with evaluations order for self.__calculate ...)
+
+        # Store the number of valid semantic classes in the dataset
+        self.num_classes = num_classes
 
         # The IoU thresholds are used for computing various mAP. The
         # standard mAP is the mean of the AP for IoU thresholds of
@@ -220,6 +241,12 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Stuff classes may be specified, to be properly accounted for
         # in metrics computation
         self.stuff_classes = stuff_classes
+
+        # Whether points with 'void' labels should be removed following
+        # the procedure proposed in:
+        #   - https://arxiv.org/abs/1801.00868
+        #   - https://arxiv.org/abs/1905.01220
+        self.remove_void = remove_void
 
         # All torchmetric's Metrics have internal states they use to
         # store predictions and ground truths. Those are updated when
@@ -308,7 +335,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
     def compute(self) -> dict:
         """Metrics computation.
         """
-
         # Batch together the values stored in the internal states.
         # Importantly, the InstanceBatch mechanism ensures there is no
         # collision between object labels of the stored scenes
@@ -316,6 +342,15 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         pred_semantic = torch.cat(self.prediction_semantic)
         pair_data = InstanceBatch.from_list(self.instance_data)
         device = pred_score.device
+
+        # Remove some prediction, targets, and pairs to properly account
+        # for points with 'void' labels in the data. For more details,
+        # `InstanceData.remove_void` documentation
+        if self.remove_void:
+            pair_data, is_pred_valid = pair_data.remove_void(self.num_classes)
+            pred_score = pred_score[is_pred_valid]
+            pred_semantic = pred_semantic[is_pred_valid]
+            del is_pred_valid
 
         # Recover the target index, IoU, sizes, and target label for
         # each pair. Importantly, the way the pair_pred_idx is built
@@ -373,9 +408,15 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Recover the classes of interest for this metric. These are the
         # classes whose labels appear at least once in the predicted
         # semantic label or in the ground truth semantic labels.
+        # By default, all labels in `[0, self.num_classes-1]` are
+        # considered valid and all labels outside of this range will be
+        # considered 'void' and ignored.
         # Besides, if `stuff_classes` was provided, the corresponding
         # labels are ignored
-        class_ids = self._get_classes()
+        all_semantic = torch.cat((gt_semantic, pred_semantic))
+        class_ids = all_semantic.unique()
+        class_ids = class_ids[(class_ids >= 0) & (class_ids < self.num_classes)]
+        class_ids = list(set(class_ids.tolist()) - set(self.stuff_classes))
 
         # For each class, each size range (and each IoU threshold),
         # compute the prediction-ground truth matches. Importantly, the
@@ -421,8 +462,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
 
         # If class_metrics is enabled, also evaluate all metrics for
         # each class of interest
-        map_per_class_val = torch.tensor([-1.0])
-        mar_per_class_val = torch.tensor([-1.0])
+        map_per_class_val = torch.tensor([torch.nan])
+        mar_per_class_val = torch.tensor([torch.nan])
         if self.class_metrics:
             map_per_class_list = []
             mar_per_class_list = []
@@ -713,18 +754,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             out.instance_data = [x.to(*args, **kwargs) for x in instance_data]
         return out
 
-    def _get_classes(self) -> List:
-        """Returns a list of unique classes found in ground truth and
-        detection data, excluding 'stuff' classes if any.
-        """
-        if len(self.prediction_semantic) > 0 or len(self.instance_data) > 0:
-            all_pred_y = self.prediction_semantic
-            all_gt_y = [x.y for x in self.instance_data]
-            all_y = torch.cat(all_pred_y + all_gt_y).unique().tolist()
-            all_y_without_stuff = list(set(all_y) - set(self.stuff_classes))
-            return all_y_without_stuff
-        return []
-
     def _summarize(
             self,
             results: Dict,
@@ -763,7 +792,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             prec = results["recall"]
             prec = prec[i_iou, :, i_size, 0]
 
-        mean_prec = torch.tensor([-1.0]) if len(prec[prec > -1]) == 0 \
+        mean_prec = torch.tensor([torch.nan]) if len(prec[prec > -1]) == 0 \
             else torch.mean(prec[prec > -1])
 
         return mean_prec
@@ -804,10 +833,10 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Finally, compute the results for specific IoU levels
         res = dict(precision=precisions, recall=recalls)
         map_metrics.map_25 = self._summarize(res, True, iou_threshold=0.25) \
-            if 0.25 in self.iou_thresholds else torch.tensor([-1])
+            if 0.25 in self.iou_thresholds else torch.tensor([torch.nan])
         map_metrics.map_50 = self._summarize(res, True, iou_threshold=0.5) \
-            if 0.5 in self.iou_thresholds else torch.tensor([-1])
+            if 0.5 in self.iou_thresholds else torch.tensor([torch.nan])
         map_metrics.map_75 = self._summarize(res, True, iou_threshold=0.75) \
-            if 0.75 in self.iou_thresholds else torch.tensor([-1])
+            if 0.75 in self.iou_thresholds else torch.tensor([torch.nan])
 
         return map_metrics, mar_metrics

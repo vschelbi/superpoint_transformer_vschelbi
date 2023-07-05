@@ -199,11 +199,11 @@ class InstanceData(CSRData):
         size for each cluster-object pair in the data. This is typically
         needed for computing the Average Precision.
         """
-        # Prepare the indices for sets A and B. In particular, we want
-        # the indices to be contiguous in [0, idx_max], to alleviate
-        # scatter operations computation. Since `self.obj` contains
-        # potentially-large and non-contiguous global object indices, we
-        # update these indices locally
+        # Prepare the indices for sets A (ie predictions) and B (ie
+        # targets). In particular, we want the indices to be contiguous
+        # in [0, idx_max], to alleviate scatter operations computation.
+        # Since `self.obj` contains potentially-large and non-contiguous
+        # global object indices, we update these indices locally
         a_idx = self.indices
         b_idx = consecutive_cluster(self.obj)[0]
 
@@ -211,10 +211,166 @@ class InstanceData(CSRData):
         a_size = scatter_sum(self.count, a_idx)[a_idx]
         b_size = scatter_sum(self.count, b_idx)[b_idx]
 
+        # If self was created using `self.remove_void()`, use the
+        # `self.pair_cropped_count` attribute to account for cropped
+        # parts of b
+        # TODO: `self.pair_cropped_count` is not accounted for in the
+        #  `self.values`. InstanceBatch mechanisms will discard this
+        #  value. ie 'pair_cropped_count' will disappear when calling
+        #  `InstanceBatch.from_list` or `InstanceBatch.to_list`
+        if getattr(self, 'pair_cropped_count', None) is not None:
+            b_size += self.pair_cropped_count * 0
+
         # Compute the IoU
         iou = self.count / (a_size + b_size - self.count)
 
         return iou, a_size, b_size
+
+    def search_void(self, num_classes):
+        """Search for clusters and objects with 'void' semantic labels.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'void', 'ignored', 'unknown', etc),
+        while `y < 0` AND `y >= num_classes` ARE IGNORED LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
+
+        Points with 'void' labels are handled following the procedure
+        proposed in:
+          - https://arxiv.org/abs/1801.00868
+          - https://arxiv.org/abs/1905.01220
+
+        More precisely, we remove from IoU and metrics computation:
+          - predictions (ie clusters here) containing more than 50% of
+            'void' points
+          - targets (ie objects here) containing more than 50% of
+            'void' points. In our case, we assume targets to be
+            SEMANTICALLY PURE, so we remove a target even if it contains
+            a single 'void' point
+
+        To this end, the present function returns:
+          - `cluster_mask`: boolean mask of the clusters containing more
+            than 50% points with `void` labels
+          - `pair_mask`: boolean mask of the cluster-object pairs whose
+            object (ie target) has an `void` label
+          - `pair_cropped_count`: tensor of cropped target size, for
+            each pair. Indeed, blindly removing the predictions with 50%
+            or more void points will affect downstream IoU computation.
+            To account for this, this, `pair_cropped_count` is intended
+            to be used at IoU computation time, when assessing the
+            prediction and target sizes
+
+        NB: by construction, removing pairs in `pair_mask` from the
+            InstanceData will also remove all target objects containing
+            'void' points. Importantly, this assumes, however, that the
+            raw instance annotations in the datasets are semantically
+            pure: all annotated instance contain points of the same
+            class. Said otherwise: IF AN INSTANCE CONTAINS A SINGLE
+            'VOID' POINT, THEN ALL OF ITS POINTS ARE 'VOID'.
+        """
+        # Identify the pairs whose object (ie target instance) is void.
+        # For simplicity, we note 'a' for clusters/predictions and 'b'
+        # for objects/targets/ground truths
+        is_pair_b_void = (self.y < 0) | (self.y >= num_classes)
+
+        # Get the cluster indices, for each cluster-object pair
+        pair_a_idx = self.indices
+
+        # Compute the size of each set and redistribute to each a-b pair
+        a_size = scatter_sum(self.count, pair_a_idx)
+
+        # Identify the indices of the clusters included in a void pair
+        void_a_idx = pair_a_idx[is_pair_b_void].unique()
+
+        # For those clusters specifically, identify those whose total
+        # size encompasses more than 50% void points
+        void_a_total_size = a_size[void_a_idx]
+        void_a_void_size = scatter_sum(
+            self.count[is_pair_b_void], pair_a_idx[is_pair_b_void])[void_a_idx]
+        void_a_50_plus = (void_a_void_size / void_a_total_size.float()) > 0.5
+        void_a_50_plus_idx = void_a_idx[void_a_50_plus]
+
+        # Convert the indices to a boolean mask spanning the clusters
+        is_a_void = torch.zeros(
+            self.num_clusters, dtype=torch.bool, device=self.device)
+        is_a_void[void_a_50_plus_idx] = True
+
+        # Blindly removing the predictions with 50% or more void points
+        # will affect downstream IoU computation. To account for this,
+        # we search the affected target indices and compute the size of
+        # the corresponding crop induced by void prediction removal.
+        # Finally, we expand this as a pair-wise tensor, indicating the
+        # missing crop size for each pair
+        b_idx = consecutive_cluster(self.obj)[0]
+        pair_cropped_count = scatter_sum(
+            self.count * is_a_void[pair_a_idx], b_idx)[b_idx]
+
+        # Update the pair-wise void mask, to account for the removal of
+        # +50%-void predictions
+        is_pair_void = is_pair_b_void | is_a_void[pair_a_idx]
+
+        return is_a_void, is_pair_void, pair_cropped_count
+
+    def remove_void(self, num_classes):
+        """Return a new InstanceData with void clusters, objects and
+        pairs removed.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'void', 'ignored', 'unknown', etc),
+        while `y < 0` AND `y >= num_classes` ARE IGNORED LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
+
+        Points with 'void' labels are handled following the procedure
+        proposed in:
+          - https://arxiv.org/abs/1801.00868
+          - https://arxiv.org/abs/1905.01220
+
+        More precisely:
+          - predictions (ie clusters here) containing more than 50% of
+            'void' points are removed from the metrics computation
+          - targets (ie objects here) containing more than 50% of
+            'void' points are removed from the metrics computation
+          - the remaining 'void' points are ignored when computing the
+            prediction-target (ie cluster-object here) IoUs
+
+        To this end, the present function returns:
+          - `instance_data`: a new InstanceData object with all void
+            clusters, objects, and pairs removed
+          - `non_void_mask`: boolean mask spanning the clusters,
+            indicating the clusters that were preserved in the
+            `instance_data`. This mask can be used outside of this
+            function to subsample cluster-wise information after
+            void-removal
+
+        NB: by construction, removing pairs in `pair_mask` from the
+            InstanceData will also remove all target objects containing
+            'void' points. Importantly, this assumes, however, that the
+            raw instance annotations in the datasets are semantically
+            pure: all annotated instance contain points of the same
+            class. Said otherwise: IF AN INSTANCE CONTAINS A SINGLE
+            'VOID' POINT, THEN ALL OF ITS POINTS ARE 'VOID'.
+        """
+        # Get the masks for indexing void clusters and pairs
+        is_cluster_void, is_pair_void, pair_cropped_count = \
+            self.search_void(num_classes)
+
+        # Create a new InstanceData without void data
+        idx = self.indices
+        idx = idx[~is_pair_void]
+        idx = consecutive_cluster(idx)[0]
+        obj = self.obj[~is_pair_void]
+        count = self.count[~is_pair_void]
+        y = self.y[~is_pair_void]
+        pair_cropped_count = pair_cropped_count[~is_pair_void]
+        instance_data = InstanceData(idx, obj, count, y, dense=True)
+
+        # Save the pair_cropped_count in the new InstanceData. This will
+        # be used by `self.iou_and_size()` to cleanly account for the
+        # removal of +50%-void predictions
+        instance_data.pair_cropped_count = pair_cropped_count
+
+        return instance_data, ~is_cluster_void
 
     def debug(self):
         super().debug()
