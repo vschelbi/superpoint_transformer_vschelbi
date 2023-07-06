@@ -181,8 +181,9 @@ To create your own dataset, you will need to do the following:
 - create `YourDataModule` class inheriting from `src.datamodules.DataModule`
 - create `configs/datamodule/your_dataset.yaml` config 
  
-Instructions are provided in the docstrings of those classes and you can get
-inspiration from our code for S3DIS, KITTI-360 and DALES to get started. 
+**Detailed instructions are provided in the docstrings of those classes** and 
+you can get inspiration from our code for S3DIS, KITTI-360 and DALES to get 
+started. 
 
 We suggest that your config inherits from `configs/datamodule/default.yaml`. See
 `configs/datamodule/s3dis.yaml`, `configs/datamodule/kitti360.yaml`, and 
