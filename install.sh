@@ -5,6 +5,14 @@ PROJECT_NAME=spt
 PYTHON=3.8
 
 
+# Recover the project's directory from the position of the install.sh
+# script and move there. Not doing so would install some dependencies in
+# the wrong place
+HERE=`dirname $0`
+HERE=`realpath $HERE`
+cd $HERE
+
+
 # Installation of Superpoint Transformer in a conda environment
 echo "_____________________________________________"
 echo
