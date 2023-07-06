@@ -355,9 +355,6 @@ class InstanceData(CSRData):
         is_cluster_void, is_pair_void, pair_cropped_count = \
             self.search_void(num_classes)
 
-        print(self.obj[is_pair_void].unique())
-        print(self.y[is_pair_void].unique())
-
         # Create a new InstanceData without void data
         idx = self.indices
         idx = idx[~is_pair_void]
@@ -489,6 +486,78 @@ class InstanceData(CSRData):
         if verbose:
             print(f'InstanceData.load init           : {time() - start:0.5f}s')
         return out
+
+    def oracle(self):
+        """Compute the oracle predictions for instance and panoptic
+        segmentation. This corresponds to the best achievable prediction
+        with the cluster partition at hand. The output data can be
+        passed to the relevant metrics in `src.metrics` for performance
+        computation.
+
+        :return oracle_scores, oracle_y, oracle_instance_data
+        """
+        # For each cluster, identify the dominant object
+        cluster_idx = self.indices
+        argmax = scatter_max(self.count, cluster_idx)[1]
+        idx, perm = consecutive_cluster(self.obj[argmax])
+
+        # Group together clusters with the same target object index.
+        # This amounts to constructing the oracle predictions instances
+        oracle = self.merge(idx)
+
+        # Compute the oracle predicted semantic label for each grouped
+        # cluster instance
+        oracle_y = self.y[argmax][perm]
+
+        # Compute the oracle predicted scores. Here, we choose to score
+        # clusters by their IoU with their optimal target
+        iou = oracle.iou_and_size()[0]
+        argmax = scatter_max(oracle.count, oracle.indices)[1]
+        oracle_scores = iou[argmax]
+
+        return oracle_scores, oracle_y, oracle
+
+    def instance_segmentation_oracle(self, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for instance segmentation,
+        when all clusters are properly assigned to the object they have
+        the highest overlap with. This corresponds to the highest
+        achievable performance with the cluster partition at hand.
+
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+        """
+        # Compute oracle predictions
+        oracle_scores, oracle_y, oracle = self.oracle()
+
+        # Performance evaluation
+        from src.metrics import MeanAveragePrecision3D
+        metric = MeanAveragePrecision3D(*metric_args, **metric_kwargs)
+        results = metric(oracle_scores, oracle_y, oracle)
+
+        return results
+
+    def panoptic_segmentation_oracle(self, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for panoptic segmentation,
+        when all clusters are properly assigned to the object they have
+        the highest overlap with. This corresponds to the highest
+        achievable performance with the cluster partition at hand.
+
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+        """
+        # Compute oracle predictions
+        oracle_scores, oracle_y, oracle = self.oracle()
+
+        # Performance evaluation
+        from src.metrics import PanopticQuality3D
+        metric = PanopticQuality3D(*metric_args, **metric_kwargs)
+        results = metric(oracle_y, oracle)
+
+        return results
 
 
 class InstanceBatch(InstanceData, CSRBatch):

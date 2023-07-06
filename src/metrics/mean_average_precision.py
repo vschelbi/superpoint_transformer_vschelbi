@@ -170,13 +170,13 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             num_classes: int,
             iou_thresholds: Optional[List[float]] = None,
             rec_thresholds: Optional[List[float]] = None,
-            class_metrics: bool = False,
+            class_metrics: bool = True,
             stuff_classes: Optional[List[int]] = None,
-            min_size: int = 100,
+            min_size: int = 0,
             medium_size: Optional[float] = None,
             large_size: Optional[float] = None,
             compute_on_cpu: bool = True,
-            remove_void: bool = False,
+            remove_void: bool = True,
             **kwargs: Any
     ) -> None:
         super().__init__(compute_on_cpu=compute_on_cpu, **kwargs)
@@ -238,7 +238,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
 
         # Stuff classes may be specified, to be properly accounted for
         # in metrics computation
-        self.stuff_classes = stuff_classes
+        self.stuff_classes = stuff_classes or []
 
         # Whether points with 'void' labels should be removed following
         # the procedure proposed in:

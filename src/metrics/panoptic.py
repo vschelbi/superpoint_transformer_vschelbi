@@ -131,7 +131,7 @@ class PanopticQuality3D(Metric):
 
         # Stuff classes may be specified, to be properly accounted for
         # in metrics computation
-        self.stuff_classes = stuff_classes
+        self.stuff_classes = stuff_classes or []
 
         # All torchmetric's Metrics have internal states they use to
         # store predictions and ground truths. Those are updated when
