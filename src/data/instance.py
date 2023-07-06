@@ -219,7 +219,7 @@ class InstanceData(CSRData):
         #  value. ie 'pair_cropped_count' will disappear when calling
         #  `InstanceBatch.from_list` or `InstanceBatch.to_list`
         if getattr(self, 'pair_cropped_count', None) is not None:
-            b_size += self.pair_cropped_count * 0
+            b_size += self.pair_cropped_count
 
         # Compute the IoU
         iou = self.count / (a_size + b_size - self.count)
@@ -354,6 +354,9 @@ class InstanceData(CSRData):
         # Get the masks for indexing void clusters and pairs
         is_cluster_void, is_pair_void, pair_cropped_count = \
             self.search_void(num_classes)
+
+        print(self.obj[is_pair_void].unique())
+        print(self.y[is_pair_void].unique())
 
         # Create a new InstanceData without void data
         idx = self.indices

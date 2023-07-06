@@ -188,8 +188,6 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                 f"Please install with `pip install torchvision>=0.8` or "
                 f"`pip install torchmetrics[detection]`.")
 
-        # TODO: parallelize per-class computation with starmap (careful with evaluations order for self.__calculate ...)
-
         # Store the number of valid semantic classes in the dataset
         self.num_classes = num_classes
 
