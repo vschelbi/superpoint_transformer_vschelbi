@@ -26,7 +26,7 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
             num_classes, ignore_index=ignore_index, normalize=None,
             validate_args=False)
 
-    def update(self, preds, target): # TODO change update to compute metric from histogram rather than brute-force atomic pred...
+    def update(self, preds, target):
         """Update state with predictions and targets. Extends the
         `MulticlassConfusionMatrix.update()` with the possibility to
         pass histograms as targets. This is typically useful for

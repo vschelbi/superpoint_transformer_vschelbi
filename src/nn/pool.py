@@ -235,7 +235,7 @@ class BaseAttentivePool(nn.Module):
         :param x_parent: Tensor of shape (Np, Cp)
             Node features for the parent nodes
 
-        :returns Tensor of shape (Np, D * H)
+        :return: Tensor of shape (Np, D * H)
         """
         raise NotImplementedError
 
@@ -286,7 +286,7 @@ class AttentivePool(BaseAttentivePool):
         :param x_parent: Tensor of shape (Np, Cp)
             Node features for the parent nodes
 
-        :returns Tensor of shape (Np, D * H)
+        :return: Tensor of shape (Np, D * H)
         """
         return self.q(x_parent)  # [Np, DH]
 
@@ -341,7 +341,7 @@ class AttentivePoolWithLearntQueries(BaseAttentivePool):
         :param x_parent: Tensor of shape (Np, Cp)
             Node features for the parent nodes
 
-        :returns Tensor of shape (Np, D * H)
+        :return: Tensor of shape (Np, D * H)
         """
         Np = x_parent.shape[0]
         return self.q.repeat(Np, 1)

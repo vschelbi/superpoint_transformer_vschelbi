@@ -5,6 +5,8 @@ import warnings
 import numpy as np
 import os.path as osp
 from time import time
+from torch_scatter import scatter_sum
+from torch.nn.functional import one_hot
 from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
@@ -276,17 +278,17 @@ class Data(PyGData):
             changes to maintain consistency with higher hierarchy levels
             of a NAG.
 
-        :returns data, (idx_sub, sub_super), (idx_super, super_sub)
-        data: Data
-            indexed data
-        idx_sub: torch.LongTensor
-            to be used with 'Data.select()' on the sub-level
-        sub_super: torch.LongTensor
-            to replace 'Data.super_index' on the sub-level
-        idx_super: torch.LongTensor
-            to be used with 'Data.select()' on the super-level
-        super_sub: Cluster
-            to replace 'Data.sub' on the super-level
+        :return: data, (idx_sub, sub_super), (idx_super, super_sub)
+            data: Data
+                indexed data
+            idx_sub: torch.LongTensor
+                to be used with 'Data.select()' on the sub-level
+            sub_super: torch.LongTensor
+                to replace 'Data.super_index' on the sub-level
+            idx_super: torch.LongTensor
+                to be used with 'Data.select()' on the super-level
+            super_sub: Cluster
+                to replace 'Data.sub' on the super-level
         """
         device = self.device
 
@@ -730,6 +732,92 @@ class Data(PyGData):
                     else to_byte_rgb(d_dict[k])
 
         return Data(**d_dict)
+
+    def semantic_segmentation_oracle(
+            self, num_classes, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for semantic segmentation,
+        when all nodes predict the dominant label among their points.
+        This corresponds to the highest achievable performance with the
+        partition at hand.
+
+        This expects one of the following attributes:
+          - `Data.obj`: holding node overlaps with instance annotations
+          - `Data.y`: holding node label histograms
+
+        :param num_classes: int
+            Number of valid classes. By convention, we assume
+            `y ∈ [0, num_classes-1]` are VALID LABELS, while
+            `y < 0` AND `y >= num_classes` are IGNORED LABELS
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+
+        :return: mIoU, pre-class IoU, OA, mAcc
+        """
+        # Rely on the InstanceData for computation, if any
+        if self.obj is not None:
+            return self.obj.semantic_segmentation_oracle(
+                num_classes, *metric_args, **metric_kwargs)
+
+        # Return None if no labels
+        if getattr(self, 'y', None) is None:
+            return None
+
+        # Get the label histogram, while excluding void classes, if any
+        node_hist = self.y[:, :num_classes]
+
+        # Performance evaluation
+        from src.metrics import ConfusionMatrix
+        metric = ConfusionMatrix(
+            num_classes, *metric_args, ignore_index=num_classes, **metric_kwargs)
+        metric(node_hist.argmax(dim=1), node_hist)
+
+        return metric.miou(), metric.iou(), metric.oa(), metric.macc()
+
+    def instance_segmentation_oracle(self, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for instance segmentation,
+        when all clusters are properly assigned to the object they have
+        the highest overlap with. This corresponds to the highest
+        achievable performance with the cluster partition at hand.
+
+        This expects the following attributes:
+          - `Data.obj`: holding node overlaps with instance annotations
+
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+
+        :return: InstanceMetricResults
+        """
+        # Rely on the InstanceData for computation, if any
+        if self.obj is not None:
+            return self.obj.instance_segmentation_oracle(
+                *metric_args, **metric_kwargs)
+        return None
+
+    def panoptic_segmentation_oracle(self, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for panoptic segmentation,
+        when all clusters are properly assigned to the object they have
+        the highest overlap with. This corresponds to the highest
+        achievable performance with the cluster partition at hand.
+
+        This expects the following attributes:
+          - `Data.obj`: holding node overlaps with instance annotations
+
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+
+        :return: PanopticMetricResults
+        """
+        # Rely on the InstanceData for computation, if any
+        if self.obj is not None:
+            return self.obj.panoptic_segmentation_oracle(
+                *metric_args, **metric_kwargs)
+        return None
 
 
 class Batch(PyGBatch):

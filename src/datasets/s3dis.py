@@ -112,6 +112,7 @@ def read_s3dis_room(
         indicating whether they belong to their Area validation split
     :param verbose: bool
         Verbosity
+
     :return: Data
     """
     if verbose:

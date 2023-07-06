@@ -1,6 +1,7 @@
 import h5py
 import torch
 from time import time
+from torch.nn.functional import one_hot
 from src.data.csr import CSRData, CSRBatch
 from src.utils import tensor_idx, is_dense, save_tensor, load_tensor, \
     has_duplicates
@@ -487,6 +488,40 @@ class InstanceData(CSRData):
             print(f'InstanceData.load init           : {time() - start:0.5f}s')
         return out
 
+    def semantic_segmentation_oracle(
+            self, num_classes, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for semantic segmentation,
+        when all clusters predict the dominant label among their points.
+        This corresponds to the highest achievable performance with the
+        cluster partition at hand.
+
+        :param num_classes: int
+            Number of valid classes. By convention, we assume
+            `y ∈ [0, num_classes-1]` are VALID LABELS, while
+            `y < 0` AND `y >= num_classes` are IGNORED LABELS
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+
+        :return: mIoU, pre-class IoU, OA, mAcc
+        """
+        # Set all void labels to `num_classes`, if any
+        y = self.y.clone()
+        y[(y < 0) | (y > num_classes)] = num_classes
+
+        # Accumulate all pair labels into pre-cluster label histograms
+        y_hist = one_hot(y, num_classes=num_classes + 1) * self.count.view(-1, 1)
+        cluster_hist = scatter_sum(y_hist[:, :num_classes], self.indices, dim=0)
+
+        # Performance evaluation
+        from src.metrics import ConfusionMatrix
+        metric = ConfusionMatrix(
+            num_classes, *metric_args, ignore_index=num_classes, **metric_kwargs)
+        metric(cluster_hist.argmax(dim=1), cluster_hist)
+
+        return metric.miou(), metric.iou(), metric.oa(), metric.macc()
+
     def oracle(self):
         """Compute the oracle predictions for instance and panoptic
         segmentation. This corresponds to the best achievable prediction
@@ -494,7 +529,7 @@ class InstanceData(CSRData):
         passed to the relevant metrics in `src.metrics` for performance
         computation.
 
-        :return oracle_scores, oracle_y, oracle_instance_data
+        :return: oracle_scores, oracle_y, oracle_instance_data
         """
         # For each cluster, identify the dominant object
         cluster_idx = self.indices
@@ -511,6 +546,11 @@ class InstanceData(CSRData):
 
         # Compute the oracle predicted scores. Here, we choose to score
         # clusters by their IoU with their optimal target
+        # NB: this choice is relatively arbitrary, one could design
+        # another approach for scoring the predictions
+        # (eg IoU * semantic purity). There is no guarantee that this
+        # specific scoring function maximizes mAP, but it is a
+        # reasonable proxy
         iou = oracle.iou_and_size()[0]
         argmax = scatter_max(oracle.count, oracle.indices)[1]
         oracle_scores = iou[argmax]
@@ -527,6 +567,8 @@ class InstanceData(CSRData):
             Args for the metrics computation
         :param metric_kwargs:
             Kwargs for the metrics computation
+
+        :return: InstanceMetricResults
         """
         # Compute oracle predictions
         oracle_scores, oracle_y, oracle = self.oracle()
@@ -548,6 +590,8 @@ class InstanceData(CSRData):
             Args for the metrics computation
         :param metric_kwargs:
             Kwargs for the metrics computation
+
+        :return: PanopticMetricResults
         """
         # Compute oracle predictions
         oracle_scores, oracle_y, oracle = self.oracle()

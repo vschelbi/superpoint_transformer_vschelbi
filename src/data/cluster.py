@@ -78,13 +78,13 @@ class Cluster(CSRData):
             changes to maintain consistency with lower hierarchy levels
             of a NAG.
 
-        :returns cluster, (idx_sub, sub_super)
-        clusters: Cluster
-            indexed cluster
-        idx_sub: torch.LongTensor
-            to be used with 'Data.select()' on the sub-level
-        sub_super: torch.LongTensor
-            to replace 'Data.super_index' on the sub-level
+        :return: cluster, (idx_sub, sub_super)
+            clusters: Cluster
+                indexed cluster
+            idx_sub: torch.LongTensor
+                to be used with 'Data.select()' on the sub-level
+            sub_super: torch.LongTensor
+                to replace 'Data.super_index' on the sub-level
         """
         # Normal CSRData indexing, creates a new object in memory
         cluster = self[idx]
@@ -156,6 +156,7 @@ class Cluster(CSRData):
             changes to maintain consistency with lower hierarchy levels
             of a NAG.
         :param verbose: bool
+
         :return: cluster, (idx_sub, sub_super)
         """
         KEYS = ['pointers', 'points']
