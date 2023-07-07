@@ -644,7 +644,7 @@ class BaseDataset(InMemoryDataset):
             data.y[data.y > self.num_classes] = self.num_classes
         if getattr(data, 'obj', None) is not None:
             data.obj.y[data.obj.y < 0] = self.num_classes
-        data.obj.y[data.obj.y > self.num_classes] = self.num_classes
+            data.obj.y[data.obj.y > self.num_classes] = self.num_classes
         return data
 
     def get_class_weight(self, smooth='sqrt'):
