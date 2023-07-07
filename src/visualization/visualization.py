@@ -41,87 +41,85 @@ def visualize_3d(
         v_edge_width=None,
         point_symbol='circle',
         centroid_symbol='circle',
-        ignore=-1,
         keys=None,
         **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
     :param figsize: int
-        figure dimensions will be (figsize, figsize/2) if `width` and
+        Figure dimensions will be (figsize, figsize/2) if `width` and
         `height` are not specified
     :param width: int
-        figure width
+        Figure width
     :param height: int
-        figure height
+        Figure height
     :param class_names: List(str)
-        names for point labels found in attributes 'y' and 'pred'
+        Names for point labels found in attributes 'y' and 'pred'
     :param class_colors: List(List(int, int, int))
-        colors palette for for point labels found in attributes 'y' and
+        Colors palette for for point labels found in attributes 'y' and
         'pred'
     :param stuff_classes: List(int)
-        semantic labels of the classes considered as 'stuff' for
+        Semantic labels of the classes considered as 'stuff' for
         instance and panoptic segmentation. If 'y' and 'obj' are found
         in the point attributes, the stuff annotations will appear
         accordingly. Otherwise, stuff instance labeling will appear as
         any other object
     :param void_classes: List(int)
-        semantic labels of the classes considered as 'void' for
+        Semantic labels of the classes considered as 'void' for
         semantic, instance, and panoptic segmentation. If 'y' and 'obj'
         are found in the point attributes, the void annotations will
         appear accordingly. Otherwise, void instance labeling will
-        appear as any other object
+        appear as any other object. Additionally, void_classes will also
+        be used for visualizing prediction errors, when relevant
     :param voxel: float
-        voxel size to subsample the point cloud to facilitate
+        Voxel size to subsample the point cloud to facilitate
         visualization
     :param max_points: int
-        maximum number of points displayed to facilitate visualization
+        Maximum number of points displayed to facilitate visualization
     :param point_size: int or float
-        size of point markers
+        Size of point markers
     :param centroid_size: int or float
-        size of superpoint markers
+        Size of superpoint markers
     :param error_color: List(int, int, int)
-        color used to identify mis-predicted points
+        Color used to identify mis-predicted points
     :param centroids: bool
-        whether superpoint centroids should be displayed
+        Whether superpoint centroids should be displayed
     :param v_edge: bool
-        whether vertical edges should be displayed (only if
+        Whether vertical edges should be displayed (only if
         centroids=True and gap is not None)
     :param h_edge: bool
-        whether horizontal edges should be displayed (only if
+        Whether horizontal edges should be displayed (only if
         centroids=True)
     :param h_edge_attr: bool
-        whether the edges should be colored by their features found in
+        Whether the edges should be colored by their features found in
         'edge_attr' (only if h_edge=True)
     :param gap: List(float, float, float)
-        if None, the hierarchical graphs will be overlaid on the points.
+        If None, the hierarchical graphs will be overlaid on the points.
         If not None, a 3D tensor indicating the offset by which the
         hierarchical graphs should be plotted
     :param select:
-        if not None, will call Data.select(select) or
+        If not None, will call Data.select(select) or
         NAG.select(*select) on the input data (depending on its nature)
         and the coloring schemes will illustrate it
     :param alpha: float
-        rules the whitening of selected points, nodes and edges (only if
+        Rules the whitening of selected points, nodes and edges (only if
          select is not None)
     :param alpha_super:
-        float ruling the whitening of superpoints (only if select is not
+        Float ruling the whitening of superpoints (only if select is not
         None). If None, alpha will be used as fallback
     :param alpha_stuff:
-        float ruling the whitening of stuff points (only if the input
+        Float ruling the whitening of stuff points (only if the input
         points have 'obj' and 'pred' attributes, and 'stuff_classes' or
         'void_classes' is specified). If None, `alpha` will be used as
         fallback
     :param point_symbol: str
-        marker symbol used for points. Must be one of
+        Marker symbol used for points. Must be one of
         ['circle', 'circle-open', 'square', 'square-open', 'diamond',
         'diamond-open', 'cross', 'x']. Defaults to 'circle'
     :param centroid_symbol: str
-        marker symbol used for centroids. Must be one of
+        Marker symbol used for centroids. Must be one of
         ['circle', 'circle-open', 'square', 'square-open', 'diamond',
         'diamond-open', 'cross', 'x']. Defaults to 'circle'
-    :param ignore: int
-        label to ignore when computing prediction error
     :param kwargs
 
     :return:
@@ -707,7 +705,9 @@ def visualize_3d(
         pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
 
         # Identify erroneous point indices
-        indices = np.where((pred != y) & (y != ignore))[0]
+        ignore = void_classes if void_classes else []
+        ignore = ignore + [-1]
+        indices = np.where((pred != y) & (~np.in1d(y, ignore)))[0]
 
         # Prepare the color for erroneous points
         error_color = 'red' if error_color is None \
@@ -860,10 +860,13 @@ def show(
     """Interactive data visualization.
 
     :param input: Data or NAG object
-    :param path: path to save the visualization into a sharable HTML
-    :param title: figure title
-    :param no_output: set to True if you want to return the 3D and 2D
-      Plotly figure objects
+    :param path: str
+        Path to save the visualization into a sharable HTML
+    :param title: str
+        Figure title
+    :param no_output: bool
+        Set to True if you want to return the 3D and 2D Plotly figure
+        objects
     :param kwargs:
     :return:
     """
