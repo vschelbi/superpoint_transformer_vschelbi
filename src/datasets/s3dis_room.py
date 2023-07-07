@@ -80,7 +80,7 @@ class S3DISRoom(S3DIS):
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
         VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
-        while `y < 0` AND `y >= self.num_classes` ARE IGNORED LABELS.
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
         """
         return read_s3dis_room(

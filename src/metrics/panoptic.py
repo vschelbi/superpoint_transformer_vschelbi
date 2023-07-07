@@ -49,7 +49,7 @@ class PanopticQuality3D(Metric):
 
     By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL VALID
     LABELS (ie not 'ignored', 'void', 'unknown', etc), while `y < 0`
-    AND `y >= self.num_classes` ARE IGNORED LABELS. Void data is dealt
+    AND `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
     with following:
       - https://arxiv.org/abs/1801.00868
       - https://arxiv.org/abs/1905.01220
@@ -85,7 +85,7 @@ class PanopticQuality3D(Metric):
         Number of valid classes in the dataset. By convention, we assume
         `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (ie not
         'ignored', 'void', 'unknown', etc), while `y < 0` AND
-        `y >= self.num_classes` ARE IGNORED LABELS. Void data is dealt
+        `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
         with following https://arxiv.org/abs/1801.00868 and
         https://arxiv.org/abs/1905.01220
     :param ignore_unseen_classes: bool

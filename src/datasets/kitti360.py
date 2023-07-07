@@ -120,21 +120,42 @@ class KITTI360(BaseDataset):
 
     @property
     def class_names(self):
-        """List of string names for dataset classes. This list may be
-        one-item larger than `self.num_classes` if the last label
-        corresponds to 'unlabelled' or 'ignored' indices, indicated as
-        `-1` in the dataset labels.
+        """List of string names for dataset classes. This list must be
+        one-item larger than `self.num_classes`, with the last label
+        corresponding to 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         return CLASS_NAMES
 
     @property
     def num_classes(self):
-        """Number of classes in the dataset. May be one-item smaller
+        """Number of classes in the dataset. Must be one-item smaller
         than `self.class_names`, to account for the last class name
-        being optionally used for 'unlabelled' or 'ignored' classes,
-        indicated as `-1` in the dataset labels.
+        being used for 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         return KITTI360_NUM_CLASSES
+
+    @property
+    def stuff_classes(self):
+        """List of 'stuff' labels for INSTANCE and PANOPTIC
+        SEGMENTATION (setting this is NOT REQUIRED FOR SEMANTIC
+        SEGMENTATION alone). By definition, 'stuff' labels are labels in
+        `[0, self.num_classes-1]` which are not 'thing' labels.
+
+        In instance segmentation, 'stuff' classes are not taken into
+        account in performance metrics computation.
+
+        In panoptic segmentation, 'stuff' classes are taken into account
+        in performance metrics computation. Besides, each cloud/scene
+        can only have at most one instance of each 'stuff' class.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        raise STUFF_CLASSES
 
     @property
     def all_base_cloud_ids(self):
@@ -194,7 +215,7 @@ class KITTI360(BaseDataset):
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
         VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
-        while `y < 0` AND `y >= self.num_classes` ARE IGNORED LABELS.
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
         """
         return read_kitti360_window(

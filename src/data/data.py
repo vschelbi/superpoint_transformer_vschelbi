@@ -747,7 +747,7 @@ class Data(PyGData):
         :param num_classes: int
             Number of valid classes. By convention, we assume
             `y ∈ [0, num_classes-1]` are VALID LABELS, while
-            `y < 0` AND `y >= num_classes` are IGNORED LABELS
+            `y < 0` AND `y >= num_classes` ARE VOID LABELS
         :param metric_args:
             Args for the metrics computation
         :param metric_kwargs:

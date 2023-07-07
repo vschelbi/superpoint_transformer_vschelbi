@@ -233,7 +233,7 @@ class InstanceData(CSRData):
         IMPORTANT:
         By convention, we assume `y ∈ [0, num_classes-1]` ARE ALL
         VALID LABELS (ie not 'void', 'ignored', 'unknown', etc),
-        while `y < 0` AND `y >= num_classes` ARE IGNORED LABELS.
+        while `y < 0` AND `y >= num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
 
         Points with 'void' labels are handled following the procedure
@@ -319,7 +319,7 @@ class InstanceData(CSRData):
         IMPORTANT:
         By convention, we assume `y ∈ [0, num_classes-1]` ARE ALL
         VALID LABELS (ie not 'void', 'ignored', 'unknown', etc),
-        while `y < 0` AND `y >= num_classes` ARE IGNORED LABELS.
+        while `y < 0` AND `y >= num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
 
         Points with 'void' labels are handled following the procedure
@@ -498,7 +498,7 @@ class InstanceData(CSRData):
         :param num_classes: int
             Number of valid classes. By convention, we assume
             `y ∈ [0, num_classes-1]` are VALID LABELS, while
-            `y < 0` AND `y >= num_classes` are IGNORED LABELS
+            `y < 0` AND `y >= num_classes` ARE VOID LABELS
         :param metric_args:
             Args for the metrics computation
         :param metric_kwargs:

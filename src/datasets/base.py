@@ -43,6 +43,9 @@ class BaseDataset(InMemoryDataset):
         def num_classes(self):
             pass
 
+        def stuff_classes(self):
+            pass
+
         def all_base_cloud_ids(self):
             pass
 
@@ -239,21 +242,68 @@ class BaseDataset(InMemoryDataset):
 
     @property
     def class_names(self):
-        """List of string names for dataset classes. This list may be
-        one-item larger than `self.num_classes` if the last label
-        corresponds to 'void', 'unlabelled' or 'ignored' indices,
-        indicated as `-1` in the dataset labels.
+        """List of string names for dataset classes. This list must be
+        one-item larger than `self.num_classes`, with the last label
+        corresponding to 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         raise NotImplementedError
 
     @property
     def num_classes(self):
-        """Number of classes in the dataset. May be one-item smaller
+        """Number of classes in the dataset. Must be one-item smaller
         than `self.class_names`, to account for the last class name
-        being optionally used for 'void', 'unlabelled' or 'ignored'
-        classes, indicated as `-1` in the dataset labels.
+        being used for 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         raise NotImplementedError
+
+    @property
+    def stuff_classes(self):
+        """List of 'stuff' labels for INSTANCE and PANOPTIC
+        SEGMENTATION (setting this is NOT REQUIRED FOR SEMANTIC
+        SEGMENTATION alone). By definition, 'stuff' labels are labels in
+        `[0, self.num_classes-1]` which are not 'thing' labels.
+
+        In instance segmentation, 'stuff' classes are not taken into
+        account in performance metrics computation.
+
+        In panoptic segmentation, 'stuff' classes are taken into account
+        in performance metrics computation. Besides, each cloud/scene
+        can only have at most one instance of each 'stuff' class.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        raise NotImplementedError
+
+    @property
+    def thing_classes(self):
+        """List of 'thing' labels for instance and panoptic
+        segmentation. By definition, 'thing' labels are labels in
+        `[0, self.num_classes-1]` which are not 'stuff' labels.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        raise [i for i in range(self.num_classes) if i not in self.stuff_classes]
+
+    @property
+    def void_classes(self):
+        """List containing the 'void' labels. By default, we group all
+        void/ignored/unknown class labels into a single
+        `[self.num_classes]` label for simplicity.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        raise [self.num_classes]
 
     @property
     def data_subdir_name(self):
@@ -617,7 +667,7 @@ class BaseDataset(InMemoryDataset):
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
         VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
-        while `y < 0` AND `y >= self.num_classes` ARE IGNORED LABELS.
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
         """
         raise NotImplementedError
@@ -629,7 +679,7 @@ class BaseDataset(InMemoryDataset):
 
         More specifically, we assume `[0, self.num_classes-1]` ARE ALL
         VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
-        while `y < 0` AND `y >= self.num_classes` ARE IGNORED LABELS.
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
 
         To this end, this function maps all labels outside of
         `[0, self.num_classes-1]` to `y = self.num_classes`.
@@ -639,12 +689,27 @@ class BaseDataset(InMemoryDataset):
         computation time.
         """
         data = self.read_single_raw_cloud(raw_cloud_path)
+
+        # Set all void labels to self.num_classes in the semantic
+        # segmentation labels
         if getattr(data, 'y', None) is not None:
             data.y[data.y < 0] = self.num_classes
             data.y[data.y > self.num_classes] = self.num_classes
+
+        # Set all void labels to self.num_classes in the
+        # instance/panoptic segmentation annotations
         if getattr(data, 'obj', None) is not None:
             data.obj.y[data.obj.y < 0] = self.num_classes
             data.obj.y[data.obj.y > self.num_classes] = self.num_classes
+
+            # For each cloud/scene and each stuff/void class, group
+            # annotations into a single instance
+            for i in self.stuff_classes + self.void_classes:
+                idx = torch.where(data.obj.y == i)[0]
+                if idx.numel() == 0:
+                    continue
+                data.obj.obj[idx] = data.obj.obj[idx].min()
+
         return data
 
     def get_class_weight(self, smooth='sqrt'):

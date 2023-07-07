@@ -22,6 +22,7 @@ def visualize_3d(
         class_names=None,
         class_colors=None,
         stuff_classes=None,
+        void_classes=None,
         voxel=-1,
         max_points=50000,
         point_size=3,
@@ -59,11 +60,17 @@ def visualize_3d(
         colors palette for for point labels found in attributes 'y' and
         'pred'
     :param stuff_classes: List(int)
-        semantic labels of the classes considered as "stuff" for
+        semantic labels of the classes considered as 'stuff' for
         instance and panoptic segmentation. If 'y' and 'obj' are found
         in the point attributes, the stuff annotations will appear
         accordingly. Otherwise, stuff instance labeling will appear as
         any other object
+    :param void_classes: List(int)
+        semantic labels of the classes considered as 'void' for
+        semantic, instance, and panoptic segmentation. If 'y' and 'obj'
+        are found in the point attributes, the void annotations will
+        appear accordingly. Otherwise, void instance labeling will
+        appear as any other object
     :param voxel: float
         voxel size to subsample the point cloud to facilitate
         visualization
@@ -102,8 +109,9 @@ def visualize_3d(
         None). If None, alpha will be used as fallback
     :param alpha_stuff:
         float ruling the whitening of stuff points (only if the input
-        points have 'obj' and 'pred' attributes, and 'stuff_classes' is
-        specified). If None, alpha will be used as fallback
+        points have 'obj' and 'pred' attributes, and 'stuff_classes' or
+        'void_classes' is specified). If None, `alpha` will be used as
+        fallback
     :param point_symbol: str
         marker symbol used for points. Must be one of
         ['circle', 'circle-open', 'square', 'square-open', 'diamond',
@@ -327,8 +335,8 @@ def visualize_3d(
             'hovertext': text[~data_0.selected]}
 
     # Color the points with ground truth instance labels. If semantic
-    # labels and stuff_classes also passed, the stuff annotations will
-    # be treated accordingly
+    # labels and stuff_classes/void_classes also passed, the stuff/void
+    # annotations will be treated accordingly
     if data_0.obj is not None and (class_names is None or data_0.y is None):
         obj = data_0.obj.major[0]
         colors = int_to_plotly_rgb(obj)
@@ -345,6 +353,13 @@ def visualize_3d(
         colors_thing = int_to_plotly_rgb(obj)
         text_thing = np.array([f"Object {o}" for o in obj])
 
+        # For simplicity, we merge void_classes into the stuff_classes,
+        # the expected behavior is the same, except that we will ensure
+        # that the hover text distinguishes between stuff and void
+        stuff_classes = stuff_classes if stuff_classes else []
+        void_classes = void_classes if void_classes else []
+        stuff_classes = list(set(stuff_classes).union(set(void_classes)))
+
         # Colors and text for stuff points
         y = data_0.y
         y = y.argmax(1).numpy() if y.dim() == 2 else y.numpy()
@@ -352,10 +367,12 @@ def visualize_3d(
             else int_to_plotly_rgb(torch.LongTensor(y))
         if class_names is None:
             text_stuff = np.array([
-                f"Stuff - Class {i}" for i in range(y.max() + 1)])
+                f"{'Void' if i in void_classes else 'Stuff'} - Class {i}"
+                for i in range(y.max() + 1)])
         else:
             text_stuff = np.array([
-                f"Stuff - {str.title(c)}" for c in class_names])
+                f"{'Void' if i in void_classes else 'Stuff'} - {str.title(c)}"
+                for i, c in enumerate(class_names)])
         text_stuff = text_stuff[y]
 
         # Apply alpha-whitening on stuff points
