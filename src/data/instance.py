@@ -227,6 +227,51 @@ class InstanceData(CSRData):
 
         return iou, a_size, b_size
 
+    def estimate_centroid(self, cluster_pos):
+        """Estimate the centroid position of each object, based on the
+        position of the clusters.
+
+        Based on the hypothesis that clusters are relatively
+        instance-pure, we approximate the centroid of each object by
+        taking the barycenter of the centroids of the clusters
+        overlapping with each object, weighed down by their respective
+        IoUs.
+
+        This is a proxy and one could design failure cases, when
+        clusters are not not pure enough.
+
+        :param cluster_pos: Tensor of size [num_clusters, D]
+            Centroid position of each cluster
+
+        :return obj_pos, obj_idx
+            obj_pos: Tensor
+                Estimated position for each object
+            obj_idx: Tensor
+                Corresponding object indices
+        """
+        # Prepare the indices for sets A (ie clusters) and B (ie
+        # objects). In particular, we want the indices to be contiguous
+        # in [0, idx_max], to alleviate scatter operations computation.
+        # Since `self.obj` contains potentially-large and non-contiguous
+        # global object indices, we update these indices locally
+        a_idx = self.indices
+        b_idx, perm = consecutive_cluster(self.obj)
+        obj_idx = self.obj[perm]
+
+        # Expand per-cluster positions to each overlap
+        a_pos = cluster_pos[a_idx]
+
+        # Compute the IoU for each overlap
+        iou, a_size, b_size = self.iou_and_size
+
+        # To avoid running 2 scatter operations, we concatenate the data
+        # we want to sum before
+        a_wpos_iou = torch.cat((a_pos * iou, iou.view(-1, 1)), dim=1)
+        res = scatter_sum(a_wpos_iou, b_idx, dim=0)
+        obj_pos = res[:, :-1] / res[:, -1].view(-1, 1)
+
+        return obj_pos, obj_idx
+
     def search_void(self, num_classes):
         """Search for clusters and objects with 'void' semantic labels.
 
