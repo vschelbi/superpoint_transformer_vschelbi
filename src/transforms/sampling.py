@@ -843,7 +843,7 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         # the optimal search for cluster-cluster distances, but is the
         # fastest for our needs here. If need be, one could make this
         # search more accurate using something like:
-        # `src.utils.neighbors.cluster_radius_nn`
+        # `src.utils.neighbors.cluster_radius_nn_graph`
 
         # TODO: searching using knn_2 was sluggish, switching to brute
         #  force for now. If bottleneck, need to investigate alternative

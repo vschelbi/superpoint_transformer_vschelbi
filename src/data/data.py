@@ -733,6 +733,38 @@ class Data(PyGData):
 
         return Data(**d_dict)
 
+    def estimate_instance_centroid(self, mode='iou'):
+        """Estimate the centroid position of each target instance
+        object, based on the position of the clusters.
+
+        Based on the hypothesis that clusters are relatively
+        instance-pure, we approximate the centroid of each object by
+        taking the barycenter of the centroids of the clusters
+        overlapping with each object, weighed down by their respective
+        IoUs.
+
+        NB: This is a proxy and one could design failure cases, when
+        clusters are not pure enough.
+
+        :param mode: str
+            Method used to estimate the centroids. 'iou' will weigh down
+            the centroids of the clusters overlapping each instance by
+            their IoU. 'ratio-product' will use the product of the size
+            ratios of the overlap wrt the cluster and wrt the instance.
+            'overlap' will use the size of the overlap between the
+            cluster and the instance.
+
+        :return obj_pos, obj_idx
+            obj_pos: Tensor
+                Estimated position for each object
+            obj_idx: Tensor
+                Corresponding object indices
+        """
+        if self.obj is None:
+            return None, None
+
+        return self.obj.estimate_centroid(self.pos, mode=mode)
+
     def semantic_segmentation_oracle(
             self, num_classes, *metric_args, **metric_kwargs):
         """Compute the oracle performance for semantic segmentation,
@@ -776,10 +808,17 @@ class Data(PyGData):
         return metric.miou(), metric.iou(), metric.oa(), metric.macc()
 
     def instance_segmentation_oracle(self, *metric_args, **metric_kwargs):
-        """Compute the oracle performance for instance segmentation,
-        when all clusters are properly assigned to the object they have
-        the highest overlap with. This corresponds to the highest
-        achievable performance with the cluster partition at hand.
+        """Compute the oracle performance for instance segmentation.
+        This is a proxy for the highest achievable performance with the
+        cluster partition at hand.
+
+        More precisely, for the oracle prediction:
+          - each cluster is assigned to the instance it shares the most
+            points with
+          - clusters assigned to the same instance are merged into a
+            single prediction
+          - each predicted instance has a score equal to its IoU with
+            the assigned target instance
 
         This expects the following attributes:
           - `Data.obj`: holding node overlaps with instance annotations
@@ -798,10 +837,15 @@ class Data(PyGData):
         return None
 
     def panoptic_segmentation_oracle(self, *metric_args, **metric_kwargs):
-        """Compute the oracle performance for panoptic segmentation,
-        when all clusters are properly assigned to the object they have
-        the highest overlap with. This corresponds to the highest
-        achievable performance with the cluster partition at hand.
+        """Compute the oracle performance for panoptic segmentation.
+        This is a proxy for the highest achievable performance with the
+        cluster partition at hand.
+
+        More precisely, for the oracle prediction:
+          - each cluster is assigned to the instance it shares the most
+            points with
+          - clusters assigned to the same instance are merged into a
+            single prediction
 
         This expects the following attributes:
           - `Data.obj`: holding node overlaps with instance annotations

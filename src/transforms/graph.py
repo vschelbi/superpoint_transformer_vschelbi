@@ -9,9 +9,9 @@ import src
 from src.data import NAG
 from src.dependencies.point_geometric_features.python.bin.pgeof import pgeof
 from src.utils import print_tensor_info, isolated_nodes, edge_to_superedge, \
-    subedges, to_trimmed, cluster_radius_nn, is_trimmed, base_vectors_3d, \
-    scatter_mean_orientation, POINT_FEATURES, SEGMENT_BASE_FEATURES, \
-    SUBEDGE_FEATURES, ON_THE_FLY_HORIZONTAL_FEATURES, \
+    subedges, to_trimmed, cluster_radius_nn_graph, is_trimmed, \
+    base_vectors_3d, scatter_mean_orientation, POINT_FEATURES, \
+    SEGMENT_BASE_FEATURES, SUBEDGE_FEATURES, ON_THE_FLY_HORIZONTAL_FEATURES, \
     ON_THE_FLY_VERTICAL_FEATURES, sanitize_keys
 
 __all__ = [
@@ -814,7 +814,7 @@ def _horizontal_graph_by_radius_for_single_level(
 
     # Search neighboring clusters
     data.raise_if_edge_keys()
-    edge_index, distances = cluster_radius_nn(
+    edge_index, distances = cluster_radius_nn_graph(
         nag[0].pos, super_index, k_max=k_max, gap=gap, trim=trim,
         cycles=cycles, chunk_size=chunk_size)
 

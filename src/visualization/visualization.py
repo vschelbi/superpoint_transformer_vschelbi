@@ -336,7 +336,7 @@ def visualize_3d(
     # labels and stuff_classes/void_classes also passed, the stuff/void
     # annotations will be treated accordingly
     if data_0.obj is not None and (class_names is None or data_0.y is None):
-        obj = data_0.obj.major[0]
+        obj = data_0.obj.major()[0]
         colors = int_to_plotly_rgb(obj)
         text = np.array([f"Object {o}" for o in obj])
         trace_modes[i_point_trace]['Objects'] = {
@@ -347,7 +347,7 @@ def visualize_3d(
             'hovertext': text[~data_0.selected]}
     elif data_0.obj is not None:
         # Colors and text for thing points
-        obj = data_0.obj.major[0]
+        obj = data_0.obj.major()[0]
         colors_thing = int_to_plotly_rgb(obj)
         text_thing = np.array([f"Object {o}" for o in obj])
 
@@ -658,8 +658,8 @@ def visualize_3d(
             # that the edge direction only changes the sign of the
             # feature
             colors = feats_to_rgb(se_attr.abs(), normalize=True)
-            colors = rgb_to_plotly_rgb(colors)
-            colors = np.repeat(colors, 3)
+            colors = rgb_to_plotly_rgb(colors).reshape((-1, 3))
+            colors = np.repeat(colors, 3, axis=0)
             edge_width = point_size if h_edge_width is None else h_edge_width
 
         else:

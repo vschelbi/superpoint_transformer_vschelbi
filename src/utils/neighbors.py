@@ -7,14 +7,18 @@ from src.utils.scatter import scatter_nearest_neighbor
 
 
 __all__ = [
-    'knn_1', 'knn_2', 'inliers_split', 'outliers_split',
-    'inliers_outliers_splits', 'cluster_radius_nn']
+    'knn_1', 'knn_1_graph', 'knn_2', 'inliers_split', 'outliers_split',
+    'inliers_outliers_splits', 'cluster_radius_nn_graph']
 
 
 def knn_1(
-        xyz, k, r_max=1, oversample=False, self_is_neighbor=False,
+        xyz,
+        k,
+        r_max=1,
+        oversample=False,
+        self_is_neighbor=False,
         verbose=False):
-    """Search k-NN inside for a 3D point cloud xyz. This search differs
+    """Search k-NN for a 3D point cloud xyz. This search differs
     from `knn_2` in that it operates on a single cloud input (search and
     query are the same) and it allows oversampling the neighbors when
     less than `k` neighbors are found within `r_max`
@@ -67,6 +71,62 @@ def knn_1(
         f"neighborhoods (missing neighbors are indicated by -1 indices).")
 
     return neighbors, distances
+
+
+def knn_1_graph(
+        xyz,
+        k,
+        r_max=1,
+        oversample=False,
+        self_is_neighbor=False,
+        verbose=False,
+        trim=True):
+    """Search k-NN for a 3D point cloud xyz and convert the output into
+    torch_geometric's `edge_index`, `edge_attr` format. This search
+    differs from `knn_2` in that it operates on a single cloud input
+    (search and query are the same) and it allows oversampling the
+    neighbors when less than `k` neighbors are found within `r_max`.
+
+    Importantly, the output graph will be coalesced: duplicate edges
+    will be removed. Besides, if `trim=True`, the graph will be further
+    reduced using `to_trimmed()` (see function documentation for more
+    information).
+    """
+    # Nearest neighbor search
+    neighbors, distances = knn_1(
+        xyz,
+        k,
+        r_max=r_max,
+        oversample=oversample,
+        self_is_neighbor=self_is_neighbor,
+        verbose=verbose)
+
+    # Build the corresponding graph
+    num_points = xyz.shape[0]
+    source = torch.arange(num_points, device=xyz.device).repeat_interleave(k)
+    target = neighbors.flatten()
+    edge_index = torch.vstack((source, target))
+    distances = distances.flatten()
+
+    # Trim edges where points are missing (ie -1 neighbor indices)
+    missing_point_edge = edge_index[1] == -1
+    edge_index = edge_index[:, ~missing_point_edge]
+    distances = distances[~missing_point_edge]
+
+    # Trim the graph. This is required before computing the actual
+    # nearest points between all cluster pairs. Since this operation is
+    # so costly, we first built on a coarse neighborhood edge_index to
+    # alleviate compute and memory cost
+    if trim:
+        from src.utils import to_trimmed
+        edge_index, distances = to_trimmed(
+            edge_index, edge_attr=distances, reduce='min')
+    # Coalesce edges to remove duplicates
+    else:
+        edge_index, distances = coalesce(
+            edge_index, edge_attr=distances, reduce='min')
+
+    return edge_index, distances
 
 
 def knn_2(x_search, x_query, k, r_max=1):
@@ -271,7 +331,7 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
     return neighbors, distances
 
 
-def cluster_radius_nn(
+def cluster_radius_nn_graph(
         x_points, idx, k_max=100, gap=0, trim=True, cycles=3,
         chunk_size=100000):
     """Compute the radius neighbors of clusters. Two clusters are

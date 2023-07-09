@@ -4,7 +4,7 @@ from time import time
 from torch.nn.functional import one_hot
 from src.data.csr import CSRData, CSRBatch
 from src.utils import tensor_idx, is_dense, save_tensor, load_tensor, \
-    has_duplicates
+    has_duplicates, to_trimmed
 from torch_scatter import scatter_max, scatter_sum
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
@@ -137,7 +137,6 @@ class InstanceData(CSRData):
     def num_obj(self):
         return self.obj.unique().numel()
 
-    @property
     def major(self):
         """Return the obj, count, and y of the majority (ie most
         frequent) instance in each cluster.
@@ -202,7 +201,7 @@ class InstanceData(CSRData):
         """
         # Prepare the indices for sets A (ie predictions) and B (ie
         # targets). In particular, we want the indices to be contiguous
-        # in [0, idx_max], to alleviate scatter operations computation.
+        # in [0, idx_max], to alleviate scatter operations' computation.
         # Since `self.obj` contains potentially-large and non-contiguous
         # global object indices, we update these indices locally
         a_idx = self.indices
@@ -227,21 +226,28 @@ class InstanceData(CSRData):
 
         return iou, a_size, b_size
 
-    def estimate_centroid(self, cluster_pos):
+    def estimate_centroid(self, cluster_pos, mode='iou'):
         """Estimate the centroid position of each object, based on the
         position of the clusters.
 
         Based on the hypothesis that clusters are relatively
-        instance-pure, we approximate the centroid of each object by
+        instance-pure, we can approximate the centroid of each object by
         taking the barycenter of the centroids of the clusters
         overlapping with each object, weighed down by their respective
         IoUs.
 
-        This is a proxy and one could design failure cases, when
-        clusters are not not pure enough.
+        NB: This is a proxy and one could design failure cases, when
+        clusters are not pure enough.
 
         :param cluster_pos: Tensor of size [num_clusters, D]
             Centroid position of each cluster
+        :param mode: str
+            Method used to estimate the centroids. 'iou' will weigh down
+            the centroids of the clusters overlapping each instance by
+            their IoU. 'ratio-product' will use the product of the size
+            ratios of the overlap wrt the cluster and wrt the instance.
+            'overlap' will use the size of the overlap between the
+            cluster and the instance.
 
         :return obj_pos, obj_idx
             obj_pos: Tensor
@@ -251,7 +257,7 @@ class InstanceData(CSRData):
         """
         # Prepare the indices for sets A (ie clusters) and B (ie
         # objects). In particular, we want the indices to be contiguous
-        # in [0, idx_max], to alleviate scatter operations computation.
+        # in [0, idx_max], to alleviate scatter operations' computation.
         # Since `self.obj` contains potentially-large and non-contiguous
         # global object indices, we update these indices locally
         a_idx = self.indices
@@ -261,16 +267,122 @@ class InstanceData(CSRData):
         # Expand per-cluster positions to each overlap
         a_pos = cluster_pos[a_idx]
 
-        # Compute the IoU for each overlap
-        iou, a_size, b_size = self.iou_and_size
+        # Compute the weight for each overlap
+        mode = mode.lower()
+        if mode == 'iou':
+            iou, _, _ = self.iou_and_size()
+            w = iou
+        elif mode == 'product-iou':
+            _, a_size, b_size = self.iou_and_size()
+            w = self.count**2 / (a_size * b_size)
+        elif mode == 'overlap':
+            w = self.count
+        else:
+            raise NotImplementedError
+        w = w.view(-1, 1)
 
         # To avoid running 2 scatter operations, we concatenate the data
         # we want to sum before
-        a_wpos_iou = torch.cat((a_pos * iou, iou.view(-1, 1)), dim=1)
-        res = scatter_sum(a_wpos_iou, b_idx, dim=0)
+        a_wpos = torch.cat((a_pos * w, w), dim=1)
+        res = scatter_sum(a_wpos, b_idx, dim=0)
         obj_pos = res[:, :-1] / res[:, -1].view(-1, 1)
 
         return obj_pos, obj_idx
+
+    def instance_graph(self, edge_index, smooth_affinity=True):
+        """Compute instance graph and per-edge affinity scores.
+
+        :param edge_index: Tensor of size [2, num_edges]
+            Edges connecting the clusters in of the instance graph. The
+            output instance graph will be a trimmed version of this
+            graph, where only (i, j) edges with (i < j) are preserved.
+        :param smooth_affinity: bool
+            If True, the affinity score computed for each edge will
+            follow the 'smooth' formulation:
+            `(overlap_i_obj_j / size_i + overlap_j_obj_i / size_j) / 2`
+            for the edge `(i, j)`, where `obj_i` designates the target
+            instance of `i`. If False, the affinity will be computed
+            with the simpler formulation: `obj_i == obj_j`
+
+        :return obj_edge_index, obj_edge_affinity
+            obj_edge_index: Tensor of size [2, num_trimmed_edges]
+                Edges of the trimmed instance graph
+            obj_edge_affinity: Tensor
+                Affinity for each edge
+        """
+        # In order to save compute and memory, and because the
+        # cut-pursuit partition algorithm considers edges to be
+        # non-oriented, we do not need to express both (i, j) and (j, i)
+        # edges in the instance graph. So we start by trimming the input
+        # edges to only have unique (i, j) edges with i < j.
+        # Importantly, this operation also removes self-loops, which is
+        # what we want here
+        obj_edge_index = to_trimmed(edge_index.to(self.device))
+
+        # Return here if the graph is empty
+        if obj_edge_index.numel() == 0:
+            return obj_edge_index, torch.zeros(0, device=self.device)
+
+        # Find the target instance for each cluster: the instance it has
+        # the biggest overlap with
+        sp_obj_idx = self.major()[0]
+
+        # Propagate the instance object to the edges' source and target
+        # clusters
+        i_obj_idx = sp_obj_idx[obj_edge_index[0]]
+        j_obj_idx = sp_obj_idx[obj_edge_index[1]]
+
+        # In case smooth affinity computation is not required, the
+        # affinity is directly calculated by `obj_i == obj_j`
+        if not smooth_affinity:
+            return obj_edge_index, (i_obj_idx == j_obj_idx).float()
+
+        # In order to efficiently compute the overlaps `overlap_i_obj_j`
+        # and `overlap_j_obj_i`, we will need to recover from self the
+        # overlaps that exist (those are non-zero) and set the other
+        # ones to zero. By definition, since we assume the data
+        # contained in self accounts for two partitions of the scene, if
+        # an overlap is not present in self, then the overlap is empty.
+        # To properly align edge-wise overlaps and cluster-object
+        # overlaps, we will build a shared indexing to uniquely identify
+        # each cluster-object pair (including the pairs not in self). We
+        # will build this indexing in such a way that it is compact, to
+        # avoid ever constructing any brutal [num_clusters, num_objects]
+        # matrix. We will compute the corresponding index for each
+        # cluster-object pair in self (A), each `overlap_i_obj_j` (B),
+        # and each `overlap_j_obj_i` (C)
+        base = self.obj.max() + 1
+        A = self.indices * base + self.obj
+        B = obj_edge_index[0] * base + j_obj_idx
+        C = obj_edge_index[1] * base + i_obj_idx
+
+        # Make the index contiguous
+        all_uid_raw = torch.cat((A, B, C))
+        uid, perm = consecutive_cluster(all_uid_raw)
+        uid_raw = all_uid_raw[perm]
+        num_uid = uid.max() + 1
+        A_uid = uid[:A.shape[0]]
+        B_uid = uid[A.shape[0]:A.shape[0] + B.shape[0]]
+        C_uid = uid[-C.shape[0]:]
+
+        # To compute the overlaps, we will initialize them all to 0.
+        # Then, we will populate the non-zero overlaps using self.count.
+        # Finally, we wil distribute the overlap to each relevant edge
+        # for smooth affinity computation
+        overlaps = torch.zeros(num_uid, device=self.device)
+        overlaps[A_uid] = self.count.float()
+        overlap_i_obj_j = overlaps[B_uid]
+        overlap_j_obj_i = overlaps[C_uid]
+
+        # Compute the size of each cluster and propagate it to each edge
+        sp_size = scatter_sum(self.count, self.indices)
+        size_i = sp_size[obj_edge_index[0]].float()
+        size_j = sp_size[obj_edge_index[1]].float()
+
+        # We can now compute the smooth affinity for each edge
+        affinity = (overlap_i_obj_j / size_i + overlap_j_obj_i / size_j) / 2
+
+        return obj_edge_index, affinity
 
     def search_void(self, num_classes):
         """Search for clusters and objects with 'void' semantic labels.
@@ -538,7 +650,7 @@ class InstanceData(CSRData):
         """Compute the oracle performance for semantic segmentation,
         when all clusters predict the dominant label among their points.
         This corresponds to the highest achievable performance with the
-        cluster partition at hand.
+        partition at hand.
 
         :param num_classes: int
             Number of valid classes. By convention, we assume
@@ -569,10 +681,18 @@ class InstanceData(CSRData):
 
     def oracle(self):
         """Compute the oracle predictions for instance and panoptic
-        segmentation. This corresponds to the best achievable prediction
-        with the cluster partition at hand. The output data can be
-        passed to the relevant metrics in `src.metrics` for performance
-        computation.
+        segmentation. This is a proxy for the highest achievable
+        performance with the cluster partition at hand. The output data
+        can be passed to the relevant metrics in `src.metrics` for
+        performance computation.
+
+        More precisely, for the oracle prediction:
+          - each cluster is assigned to the instance it shares the most
+            points with
+          - clusters assigned to the same instance are merged into a
+            single prediction
+          - each predicted instance has a score equal to its IoU with
+            the assigned target instance
 
         :return: oracle_scores, oracle_y, oracle_instance_data
         """
@@ -603,10 +723,17 @@ class InstanceData(CSRData):
         return oracle_scores, oracle_y, oracle
 
     def instance_segmentation_oracle(self, *metric_args, **metric_kwargs):
-        """Compute the oracle performance for instance segmentation,
-        when all clusters are properly assigned to the object they have
-        the highest overlap with. This corresponds to the highest
-        achievable performance with the cluster partition at hand.
+        """Compute the oracle performance for instance segmentation.
+        This is a proxy for the highest achievable performance with the
+        cluster partition at hand.
+
+        More precisely, for the oracle prediction:
+          - each cluster is assigned to the instance it shares the most
+            points with
+          - clusters assigned to the same instance are merged into a
+            single prediction
+          - each predicted instance has a score equal to its IoU with
+            the assigned target instance
 
         :param metric_args:
             Args for the metrics computation
@@ -626,10 +753,15 @@ class InstanceData(CSRData):
         return results
 
     def panoptic_segmentation_oracle(self, *metric_args, **metric_kwargs):
-        """Compute the oracle performance for panoptic segmentation,
-        when all clusters are properly assigned to the object they have
-        the highest overlap with. This corresponds to the highest
-        achievable performance with the cluster partition at hand.
+        """Compute the oracle performance for panoptic segmentation.
+        This is a proxy for the highest achievable performance with the
+        cluster partition at hand.
+
+        More precisely, for the oracle prediction:
+          - each cluster is assigned to the instance it shares the most
+            points with
+          - clusters assigned to the same instance are merged into a
+            single prediction
 
         :param metric_args:
             Args for the metrics computation
