@@ -147,7 +147,7 @@ def generate_single_random_segment_image(
     and semantic segmentation data. To make the images realisitc, and to
     ensure that the instances form a PARTITION of the image, we rely on
     voronoi cells. Besides, to encourage a realistic overalp between the
-    predicted and and target instances, the predcition cell centers are
+    predicted and target instances, the predcition cell centers are
     sampled near the target samples.
     """
     # Generate random pixel positions for the ground truth and the

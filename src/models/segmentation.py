@@ -313,11 +313,18 @@ class PointSegmentationModule(LightningModule):
         # If some nodes were not seen across any of the multi-runs,
         # search their nearest seen neighbor
         unseen_idx = torch.where(~seen)[0]
+        batch = nag[1].batch
         if unseen_idx.shape[0] > 0:
             seen_idx = torch.where(seen)[0]
             x_search = nag[1].pos[seen_idx]
             x_query = nag[1].pos[unseen_idx]
-            neighbors = knn_2(x_search, x_query, 1, r_max=2)[0]
+            neighbors = knn_2(
+                x_search,
+                x_query,
+                1,
+                r_max=2,
+                batch_search=batch[seen_idx] if batch is not None else None,
+                batch_query=batch[unseen_idx] if batch is not None else None)[0]
             num_unseen = unseen_idx.shape[0]
             num_seen = seen_idx.shape[0]
             num_left_out = (neighbors == -1).sum().long()

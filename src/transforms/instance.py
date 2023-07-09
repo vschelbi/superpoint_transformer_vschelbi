@@ -50,7 +50,7 @@ class OnTheFlyInstanceGraph(Transform):
 
     Importantly, one could think of other assignment rules, such as the
     maximum IoU, for instance. But the latter would not work for
-    oversegmented scenes with small superpoints and very large 'stuff'
+    over-segmented scenes with small superpoints and very large 'stuff'
     instances. We favor the overlap-size rule due to this scenario and
     for its simplicity.
 
@@ -76,6 +76,13 @@ class OnTheFlyInstanceGraph(Transform):
         calls for it
     :param radius: float
         Radius used for neighbor search if `adjacency_mode` calls for it
+    :param use_batch: bool
+        If True, the 'NAG[level].batch' attribute will be used to
+        guide neighbor search if `adjacency_mode` calls for it. More
+        specifically, if the input NAG is a NAGBatch made up of multiple
+        NAGs, the neighbor search will ensure that clusters from
+        different batch items cannot be neighbors. It is recommended to
+        keep the default `use_batch=True`
     :param centroid_mode: str
         Method used to estimate the centroids. 'iou' will weigh down
         the centroids of the clusters overlapping each instance by
@@ -105,6 +112,7 @@ class OnTheFlyInstanceGraph(Transform):
             adjacency_mode='radius-centroid',
             k_max=30,
             radius=1,
+            use_batch=True,
             centroid_mode='iou',
             centroid_level=1,
             smooth_affinity=True):
@@ -116,6 +124,7 @@ class OnTheFlyInstanceGraph(Transform):
         self.adjacency_mode = adjacency_mode.lower()
         self.k_max = k_max
         self.radius = radius
+        self.use_batch = use_batch
         self.centroid_mode = centroid_mode.lower()
         self.centroid_level = centroid_level
         self.smooth_affinity = smooth_affinity
@@ -138,19 +147,22 @@ class OnTheFlyInstanceGraph(Transform):
             # TODO: accelerate with subsampling ?
             super_index = nag.get_super_index(self.level, low=0)
             obj_edge_index, _ = cluster_radius_nn_graph(
-                nag[0].pos, super_index, k_max=self.k_max, gap=self.radius)
+                nag[0].pos,
+                super_index,
+                k_max=self.k_max,
+                gap=self.radius,
+                batch=nag[self.level].batch if self.use_batch else None)
 
         # Compute the neighbors solely based on the clusters' centroids
         elif self.adjacency_mode == 'radius-centroid':
             obj_edge_index, _ = knn_1_graph(
-                nag[self.level].pos, self.k_max, r_max=self.radius)
+                nag[self.level].pos,
+                self.k_max,
+                r_max=self.radius,
+                batch=nag[self.level].batch if self.use_batch else None)
 
         else:
             raise NotImplementedError
-
-        # TODO: make sure we properly handle isolated nodes/empty graph.
-        #  Should not be a problem, since this is the easiest
-        #  instantiation setup !
 
         # If, for some reason, the graph is None, we convert it to an
         # empty torch_geometric-friendly `edge_index`-like format
@@ -179,6 +191,10 @@ class OnTheFlyInstanceGraph(Transform):
         # `obj_pos`
         sp_obj_idx_consec = consecutive_cluster(sp_obj_idx)[0]
         data.obj_pos = obj_pos[sp_obj_idx_consec]
+
+        # TODO: make sure we properly handle isolated nodes/empty graph.
+        #  Should not be a problem, since this is the easiest
+        #  instantiation setup !
 
         # TODO: upon edge affinity prediction loss computation, need to
         #  IGNORE THE VOID-VOID EDGES

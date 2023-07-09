@@ -15,22 +15,35 @@ def knn_1(
         xyz,
         k,
         r_max=1,
+        batch=None,
         oversample=False,
         self_is_neighbor=False,
         verbose=False):
     """Search k-NN for a 3D point cloud xyz. This search differs
     from `knn_2` in that it operates on a single cloud input (search and
     query are the same) and it allows oversampling the neighbors when
-    less than `k` neighbors are found within `r_max`
+    less than `k` neighbors are found within `r_max`. Optionally,
+    passing `batch` will ensure the neighbor search does not mix up
+    batch items.
     """
     assert isinstance(xyz, torch.Tensor)
     assert k >= 1
     assert xyz.dim() == 2
+    assert batch is None or batch.shape[0] == xyz.shape[0]
+
+    # To take the batch into account, we add an offset to the Z
+    # coordinates. The offset is designed so that any points from two
+    # batch different batch items are separated by at least `r_max + 1`
+    batch_offset = 0
+    if batch is not None:
+        z_offset = xyz[:, 2].max() - xyz[:, 2].min() + r_max + 1
+        batch_offset = torch.zeros_like(xyz)
+        batch_offset[:, 2] = batch * z_offset
 
     # Data initialization
     device = xyz.device
-    xyz_query = xyz.view(1, -1, 3)
-    xyz_search = xyz.view(1, -1, 3)
+    xyz_query = (xyz + batch_offset).view(1, -1, 3)
+    xyz_search = (xyz + batch_offset).view(1, -1, 3)
     if not xyz.is_cuda:
         xyz_query = xyz_query.cuda()
         xyz_search = xyz_search.cuda()
@@ -77,6 +90,7 @@ def knn_1_graph(
         xyz,
         k,
         r_max=1,
+        batch=None,
         oversample=False,
         self_is_neighbor=False,
         verbose=False,
@@ -86,6 +100,8 @@ def knn_1_graph(
     differs from `knn_2` in that it operates on a single cloud input
     (search and query are the same) and it allows oversampling the
     neighbors when less than `k` neighbors are found within `r_max`.
+    Optionally, passing `batch` will ensure the neighbor search does not
+    mix up batch items.
 
     Importantly, the output graph will be coalesced: duplicate edges
     will be removed. Besides, if `trim=True`, the graph will be further
@@ -97,6 +113,7 @@ def knn_1_graph(
         xyz,
         k,
         r_max=r_max,
+        batch=batch,
         oversample=oversample,
         self_is_neighbor=self_is_neighbor,
         verbose=verbose)
@@ -129,8 +146,16 @@ def knn_1_graph(
     return edge_index, distances
 
 
-def knn_2(x_search, x_query, k, r_max=1):
+def knn_2(
+        x_search,
+        x_query,
+        k,
+        r_max=1,
+        batch_search=None,
+        batch_query=None):
     """Search k-NN of x_query inside x_search, within radius `r_max`.
+    Optionally, passing `batch_search` and `batch_query` will ensure the
+    neighbor search does not mix up batch items.
     """
     assert isinstance(x_search, torch.Tensor)
     assert isinstance(x_query, torch.Tensor)
@@ -138,14 +163,31 @@ def knn_2(x_search, x_query, k, r_max=1):
     assert x_search.dim() == 2
     assert x_query.dim() == 2
     assert x_query.shape[1] == x_search.shape[1]
+    assert bool(batch_search) == bool(batch_query)
+    assert batch_search is None or batch_search.shape[0] == x_search.shape[0]
+    assert batch_query is None or batch_query.shape[0] == x_query.shape[0]
 
     k = torch.tensor([k])
     r_max = torch.tensor([r_max])
 
+    # To take the batch into account, we add an offset to the Z
+    # coordinates. The offset is designed so that any points from two
+    # batch different batch items are separated by at least `r_max + 1`
+    batch_search_offset = 0
+    batch_query_offset = 0
+    if batch_search is not None:
+        hi = max(x_search[:, 2].max(), x_query[:, 2].max())
+        lo = min(x_search[:, 2].min(), x_query[:, 2].min())
+        z_offset = hi - lo + r_max + 1
+        batch_search_offset = torch.zeros_like(x_search)
+        batch_search_offset[:, 2] = batch_search * z_offset
+        batch_query_offset = torch.zeros_like(x_query)
+        batch_query_offset[:, 2] = batch_query * z_offset
+
     # Data initialization
     device = x_search.device
-    xyz_query = x_query.view(1, -1, 3).cuda()
-    xyz_search = x_search.view(1, -1, 3).cuda()
+    xyz_query = (x_query + batch_query_offset).view(1, -1, 3).cuda()
+    xyz_search = (x_search + batch_search_offset).view(1, -1, 3).cuda()
 
     # KNN on GPU. Actual neighbor search now
     distances, neighbors, _, _ = frnn.frnn_grid_points(
@@ -332,7 +374,13 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
 
 
 def cluster_radius_nn_graph(
-        x_points, idx, k_max=100, gap=0, trim=True, cycles=3,
+        x_points,
+        idx,
+        k_max=100,
+        gap=0,
+        batch=None,
+        trim=True,
+        cycles=3,
         chunk_size=100000):
     """Compute the radius neighbors of clusters. Two clusters are
     considered neighbors if 2 of their points are distant of `gap` of
@@ -347,6 +395,11 @@ def cluster_radius_nn_graph(
     :param idx:
     :param k_max:
     :param gap:
+    :param batch:
+        Passing `batch` will ensure the neighbor search does
+        not mix up batch items. This batch tensor is a tensor of size
+        `num_clusters=idx.max() + 1` indicating which batch item each
+        cluster belongs to
     :param trim bool
         If True, the output `edge_index` will be trimmed using
         `to_trimmed`, to save compute and memory
@@ -361,6 +414,8 @@ def cluster_radius_nn_graph(
         divided into parts of `edge_index.shape[1] * chunk_size` or less
     :return:
     """
+    assert batch is None or batch.shape[0] == idx.max() + 1
+
     device = x_points.device
 
     # Roughly estimate the diameter and center of each segment. Note we
@@ -379,7 +434,7 @@ def cluster_radius_nn_graph(
     # Obviously, the r_search may produce more neighbors than needed and
     # some subsequent pruning will be needed
     r_search = float(diam.max() + gap)
-    neighbors, distances = knn_1(center, k_max, r_max=r_search)
+    neighbors, distances = knn_1(center, k_max, r_max=r_search, batch=batch)
 
     # Build the corresponding edge_index
     num_clusters = idx.max() + 1

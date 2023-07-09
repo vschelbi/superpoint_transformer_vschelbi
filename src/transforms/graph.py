@@ -815,8 +815,14 @@ def _horizontal_graph_by_radius_for_single_level(
     # Search neighboring clusters
     data.raise_if_edge_keys()
     edge_index, distances = cluster_radius_nn_graph(
-        nag[0].pos, super_index, k_max=k_max, gap=gap, trim=trim,
-        cycles=cycles, chunk_size=chunk_size)
+        nag[0].pos,
+        super_index,
+        k_max=k_max,
+        gap=gap,
+        batch=nag[i_level].batch,
+        trim=trim,
+        cycles=cycles,
+        chunk_size=chunk_size)
 
     # Save the graph in the Data object
     data.edge_index = edge_index

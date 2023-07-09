@@ -454,7 +454,12 @@ class Data(PyGData):
         low = self.pos.min(dim=0).values
         r_max = (high - low).norm()
         neighbors, distances = knn_2(
-            self.pos, self.pos[is_out], k + 1, r_max=r_max)
+            self.pos,
+            self.pos[is_out],
+            k + 1,
+            r_max=r_max,
+            batch_search=self.batch,
+            batch_query=self.batch[is_out] if self.batch is not None else None)
         distances = distances[:, 1:]
         neighbors = neighbors[:, 1:]
 
