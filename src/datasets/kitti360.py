@@ -155,7 +155,7 @@ class KITTI360(BaseDataset):
         VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
-        raise STUFF_CLASSES
+        return STUFF_CLASSES
 
     @property
     def all_base_cloud_ids(self):
