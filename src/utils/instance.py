@@ -1,13 +1,30 @@
+import sys
 import torch
 import numpy as np
+import os.path as osp
 from itertools import product
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.cm as cm
 from src.utils.neighbors import knn_2
+from src.utils.graph import to_trimmed
+from src.utils.cpu import available_cpu_count
+
+src_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
+sys.path.append(src_folder)
+sys.path.append(osp.join(src_folder, "dependencies/grid_graph/python/bin"))
+sys.path.append(osp.join(src_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
+
+from grid_graph import edge_list_to_forward_star
+from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 
-__all__ = ['generate_random_bbox_data', 'generate_random_segment_data']
+__all__ = [
+    'generate_random_bbox_data', 'generate_random_segment_data',
+    'instance_cut_pursuit']
+
+
+_MAX_NUM_EDGES = 4294967295
 
 
 def generate_random_bbox_data(
@@ -303,3 +320,171 @@ def generate_random_segment_data(
         spt_data.append(spt_data_)
 
     return tm_data, spt_data
+
+
+def instance_cut_pursuit(
+        node_pos,
+        node_offset,
+        node_logits,
+        node_size,
+        edge_index,
+        edge_affinity,
+        regularization=1e-2,
+        spatial_weight=1,
+        cutoff=1,
+        parallel=True,
+        iterations=10,
+        trim=False,
+        discrepancy_epsilon=1e-3,
+        verbose=False):
+    """Partition an instance graph using cut-pursuit.
+
+    :param node_pos: Tensor of shape [num_nodes, num_dim]
+        Node positions
+    :param node_offset: Tensor of shape [num_nodes, num_dim]
+        Predicted instance centroid offset for each node
+    :param node_logits: Tensor of shape [num_nodes, num_classes]
+        Predicted classification logits for each node
+    :param node_size: Tensor of shape [num_nodes]
+        Size of each node
+    :param edge_index: Tensor of shape [2, num_edges]
+        Edges of the graph, in torch-geometric's format
+    :param edge_affinity: Tensor of shape [num_edges]
+        Predicted affinity each edge
+    :param regularization: float
+        Regularization parameter for the partition
+    :param spatial_weight: float
+        Weight used to mitigate the impact of the point position in the
+        partition. The larger, the less spatial coordinates matter. This
+        can be loosely interpreted as the inverse of a maximum
+        superpoint radius
+    :param cutoff: float
+        Minimum number of points in each cluster
+    :param parallel: bool
+        Whether cut-pursuit should run in parallel
+    :param iterations: int
+        Maximum number of iterations for each partition
+    :param trim: bool
+        Whether the input graph should be trimmed. See `to_trimmed()`
+        documentation for more details on this operation
+    :param discrepancy_epsilon: float
+        Mitigates the maximum discrepancy. More precisely:
+        `affinity=0 ⇒ discrepancy=discrepancy_epsilon`
+    :param verbose: bool
+    :return:
+    """
+
+    # Sanity checks
+    assert node_pos.dim() == 2, \
+        "`node_pos` must have shape `[num_nodes, num_dim]`"
+    assert node_offset.dim() == 2, \
+        "`node_offset` must have shape `[num_nodes, num_dim]`"
+    assert node_logits.dim() == 2, \
+        "`node_logits` must have shape `[num_nodes, num_classes]`"
+    assert node_pos.shape == node_offset.shape, \
+        "`node_pos` and `node_offset` must have the same shape"
+    assert node_logits.shape[0] == node_pos.shape[0], \
+        "`node_logits` and `node_pos` must have the same number of points"
+    assert node_size.dim() == 1, \
+        "`node_size` must have shape `[num_nodes]`"
+    assert node_size.shape[0] == node_pos.shape[0], \
+        "`node_size` and `node_pos` must have the same number of points"
+    assert edge_index.dim() == 2 and edge_index.shape[0] == 2, \
+        "`edge_index` must be of shape `[2, num_edges]`"
+    assert edge_affinity.dim() == 1 and edge_index.shape[0] == 2, \
+        "`edge_affinity` must be of shape `[num_edges]`"
+    assert edge_affinity.shape[0] == edge_index.shape[1], \
+        "`edge_affinity` and `edge_index` must have the same number of edges"
+
+    device = node_pos.device
+    num_nodes = node_pos.shape[0]
+    num_dim = node_pos.shape[1]
+    num_classes = node_logits.shape[1]
+    num_edges = edge_affinity.numel()
+
+    assert num_nodes < np.iinfo(np.uint32).max, \
+        "Too many nodes for `uint32` indices"
+    assert num_edges < np.iinfo(np.uint32).max, \
+        "Too many edges for `uint32` indices"
+
+    # Initialize the number of threads used for parallel cut-pursuit
+    num_threads = available_cpu_count() if parallel else 1
+
+    # Exit if the graph contains only one node
+    if num_nodes < 2:
+        return torch.zeros(num_nodes, dtype=torch.long, device=device)
+
+    # Trim the graph, if need be
+    if trim:
+        edge_index, edge_affinity = to_trimmed(
+            edge_index, edge_attr=edge_affinity, reduce='mean')
+
+    if verbose:
+        print(
+            f'Launching instance partition reg={regularization}, '
+            f'cutoff={cutoff}')
+
+    # User warning if the number of edges exceeds uint32 limits
+    if num_edges > _MAX_NUM_EDGES and verbose:
+        print(
+            f"WARNING: number of edges {num_edges} exceeds the uint32 limit "
+            f"{_MAX_NUM_EDGES}. Please update the cut-pursuit source code to "
+            f"accept a larger data type for `index_t`.")
+
+    # Convert affinities to discrepancies
+    edge_discrepancy = 1 / (discrepancy_epsilon + discrepancy_epsilon)
+
+    # Convert edges to forward-star (or CSR) representation
+    source_csr, target, reindex = edge_list_to_forward_star(
+        num_nodes, edge_index.T.contiguous().cpu().numpy())
+    source_csr = source_csr.astype('uint32')
+    target = target.astype('uint32')
+    edge_weights = edge_discrepancy.cpu().numpy()[reindex] * regularization \
+        if edge_discrepancy is not None else regularization
+
+    # Convert logits to class probabilities
+    node_probas = torch.nn.functional.softmax(node_logits, dim=1)
+
+    # Mean-center the node positions, in case coordinates are very large
+    center_offset = node_pos.mean(dim=0)
+    node_pos = node_pos - center_offset.view(1, -1)
+
+    # Build the node features as the concatenation of positions and
+    # class probabilities
+    # TODO: this is for `improve_merge` branch, need to adapt to new
+    #  interface for L2+KL formulation
+    loss_type = 1
+    x = torch.cat((node_pos + node_offset, node_probas), dim=1)
+    x = np.asfortranarray(x.cpu().numpy().T)
+    node_size = node_size.float().cpu().numpy()
+    coor_weights = np.ones(num_dim + num_classes, dtype=np.float32)
+    coor_weights[:num_dim] *= spatial_weight
+
+    # Partition computation
+    instance_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
+        loss_type,
+        x,
+        source_csr,
+        target,
+        edge_weights=edge_weights,
+        vert_weights=node_size,
+        coor_weights=coor_weights,
+        min_comp_weight=cutoff,
+        cp_dif_tol=1e-2,
+        cp_it_max=iterations,
+        split_damp_ratio=0.7,
+        verbose=verbose,
+        max_num_threads=num_threads,
+        balance_parallel_split=True,
+        compute_Time=True,
+        compute_List=True,
+        compute_Graph=True)
+
+    if verbose:
+        delta_t = (times[1:] - times[:-1]).round(2)
+        print(f'Instance partition times: {delta_t}')
+
+    # Convert the instance_index to the input format
+    instance_index = torch.from_numpy(instance_index.astype('int64')).to(device)
+
+    return instance_index

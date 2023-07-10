@@ -4,17 +4,16 @@ from typing import Any
 
 import torch
 import numpy as np
-from numpy import ndarray
 from torch_scatter import scatter_sum, scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.transforms import Transform
 from src.data import Data, NAG, Cluster, InstanceData
 from src.utils.cpu import available_cpu_count
 
-dependencies_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path.append(dependencies_folder)
-sys.path.append(osp.join(dependencies_folder, "dependencies/grid_graph/python/bin"))
-sys.path.append(osp.join(dependencies_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
+src_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
+sys.path.append(src_folder)
+sys.path.append(osp.join(src_folder, "dependencies/grid_graph/python/bin"))
+sys.path.append(osp.join(src_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
 
 from grid_graph import edge_list_to_forward_star
 from cp_kmpp_d0_dist import cp_kmpp_d0_dist
@@ -143,7 +142,7 @@ class CutPursuitPartition(Transform):
                 x = d1.pos - pos_offset
             x = np.asfortranarray(x.cpu().numpy().T)
             node_size = d1.node_size.float().cpu().numpy()
-            coor_weights= np.ones(n_dim + n_feat, dtype=np.float32)
+            coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
             coor_weights[:n_dim] *= sw
 
             # Partition computation

@@ -205,4 +205,7 @@ class OnTheFlyInstanceGraph(Transform):
         # TODO: DOES PREDICTING STUFF centroid MAKE ANY SENSE ? SHOULD
         #  ALL STUFF offsets be predicted to zero ? Same for VOID ?
 
+        # Save in the data in the NAG structure
+        nag._list[self.level] = data
+
         return nag
