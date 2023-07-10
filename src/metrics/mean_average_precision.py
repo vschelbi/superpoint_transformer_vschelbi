@@ -1,5 +1,7 @@
 import torch
 import logging
+import numpy as np
+import matplotlib.pyplot as plt
 from torch import Tensor, LongTensor
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 from torchmetrics.detection.mean_ap import MeanAveragePrecision, \
@@ -157,6 +159,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         the procedure proposed in:
           - https://arxiv.org/abs/1801.00868
           - https://arxiv.org/abs/1905.01220
+    :param plot: bool
+        If True, the `mAP = f(IoU)` and `mAR = f(IoU)` curves be plotted
     :param kwargs:
         Additional keyword arguments, see :ref:`Metric kwargs` for
         more info.
@@ -177,6 +181,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             large_size: Optional[float] = None,
             compute_on_cpu: bool = True,
             remove_void: bool = True,
+            plot: bool = False,
             **kwargs: Any
     ) -> None:
         super().__init__(compute_on_cpu=compute_on_cpu, **kwargs)
@@ -245,6 +250,9 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         #   - https://arxiv.org/abs/1801.00868
         #   - https://arxiv.org/abs/1905.01220
         self.remove_void = remove_void
+
+        # Whether the mAP and mAR curves should be plotted
+        self.plot = plot
 
         # All torchmetric's Metrics have internal states they use to
         # store predictions and ground truths. Those are updated when
@@ -456,7 +464,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                     evaluations)
 
         # Compute all AP and AR metrics
-        map_val, mar_val = self._summarize_results(precision, recall)
+        map_val, mar_val = self._summarize_results(
+            precision, recall, plot=self.plot)
 
         # If class_metrics is enabled, also evaluate all metrics for
         # each class of interest
@@ -798,7 +807,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
     def _summarize_results(
             self,
             precisions: Tensor,
-            recalls: Tensor
+            recalls: Tensor,
+            plot: bool = False
     ) -> Tuple[MAPMetricResults, MARMetricResults]:
         """Summarizes the precision and recall values to calculate
         mAP/mAR.
@@ -808,6 +818,9 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
                 Precision values for different thresholds
             recalls:
                 Recall values for different thresholds
+            plot:
+                If True, the `mAP = f(IoU)` and `mAR = f(IoU)` curves
+                 be plotted
         """
         # Compute all metrics for IoU > 0.5. This little trick is needed
         # to avoid including IoU=0.25 in the mAP computation, which, by
@@ -836,5 +849,14 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             if 0.5 in self.iou_thresholds else torch.tensor([torch.nan])
         map_metrics.map_75 = self._summarize(res, True, iou_threshold=0.75) \
             if 0.75 in self.iou_thresholds else torch.tensor([torch.nan])
+
+        if plot:
+            map_per_iou = []
+            mar_per_iou = []
+            for iou in sorted(self.iou_thresholds):
+                map_per_iou.append(self._summarize(res, True, iou_threshold=iou))
+                mar_per_iou.append(self._summarize(res, False, iou_threshold=iou))
+            plt.plot(sorted(self.iou_thresholds), np.array(map_per_iou))
+            plt.show()
 
         return map_metrics, mar_metrics
