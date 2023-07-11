@@ -432,7 +432,7 @@ def instance_cut_pursuit(
             f"accept a larger data type for `index_t`.")
 
     # Convert affinities to discrepancies
-    edge_discrepancy = 1 / (discrepancy_epsilon + discrepancy_epsilon)
+    edge_discrepancy = 1 / (edge_affinity + discrepancy_epsilon)
 
     # Convert edges to forward-star (or CSR) representation
     source_csr, target, reindex = edge_list_to_forward_star(
