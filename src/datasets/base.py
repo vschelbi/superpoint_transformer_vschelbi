@@ -6,6 +6,7 @@ import torch
 import logging
 import hashlib
 import warnings
+from tqdm import tqdm
 from datetime import datetime
 from itertools import product
 from tqdm.auto import tqdm as tq
@@ -13,6 +14,7 @@ from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.dataset import files_exist
 from torch_geometric.data.makedirs import makedirs
 from torch_geometric.data.dataset import _repr
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.data import NAG
 from src.transforms import NAGSelectByKey, NAGRemoveKeys, SampleXYTiling, \
     SampleRecursiveMainXYAxisTiling
@@ -711,6 +713,27 @@ class BaseDataset(InMemoryDataset):
                 data.obj.obj[idx] = data.obj.obj[idx].min()
 
         return data
+
+    def debug_instance_data(self, level=1):
+        """Sanity check to make sure at most 1 instance of each stuff
+        class per scene/cloud.
+
+        :param level: int
+            NAG level which to inspect
+        """
+        problematic_clouds = []
+        for i_cloud, nag in tqdm(enumerate(self)):
+            _, perm = consecutive_cluster(nag[level].obj.obj)
+            y = nag[level].obj.y[perm]
+            y_count = torch.bincount(y, minlength=self.num_classes + 1)
+            for c in self.stuff_classes + self.void_classes:
+                if y_count[c] > 1:
+                    problematic_clouds.append(i_cloud)
+                    break
+
+        assert len(problematic_clouds) == 0, \
+            f"The following clouds have more than 1 instance of for a stuff " \
+            f"or void class:\n{problematic_clouds}"
 
     def get_class_weight(self, smooth='sqrt'):
         """Compute class weights based on the labels distribution in the
