@@ -675,7 +675,7 @@ class InstanceData(CSRData):
         from src.metrics import ConfusionMatrix
         metric = ConfusionMatrix(
             num_classes, *metric_args, ignore_index=num_classes, **metric_kwargs)
-        metric(cluster_hist.argmax(dim=1), cluster_hist)
+        metric(cluster_hist.argmax(dim=1).cpu(), cluster_hist.cpu())
 
         return metric.miou(), metric.iou(), metric.oa(), metric.macc()
 

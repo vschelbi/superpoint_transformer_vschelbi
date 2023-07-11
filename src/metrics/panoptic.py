@@ -118,10 +118,6 @@ class PanopticQuality3D(Metric):
     ) -> None:
         super().__init__(compute_on_cpu=compute_on_cpu, **kwargs)
 
-        # TODO: warning stuff must be preprocessed to 1 gt and 1 pred at
-        #  most per image/scene before being stored in the internal
-        #  states
-
         # Store the number of valid classes in the dataset
         self.num_classes = num_classes
 

@@ -19,12 +19,19 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
     :param ignore_index: int
         Specifies a target value that is ignored and does not
         contribute to the metric calculation
+    :param compute_on_cpu: bool
+        If True, the accumulated prediction and target data will be
+        stored on CPU, and the metrics computation will be performed
+        on CPU. This can be necessary for particularly large
+        datasets.
+    :param kwargs:
+        Additional keyword arguments, see :ref:`Metric kwargs` for
+        more info.
     """
 
-    def __init__(self, num_classes, ignore_index=None):
+    def __init__(self, num_classes, **kwargs):
         super().__init__(
-            num_classes, ignore_index=ignore_index, normalize=None,
-            validate_args=False)
+            num_classes, normalize=None, validate_args=False, **kwargs)
 
     def update(self, preds, target):
         """Update state with predictions and targets. Extends the
