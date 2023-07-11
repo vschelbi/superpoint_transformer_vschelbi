@@ -202,9 +202,6 @@ class OnTheFlyInstanceGraph(Transform):
         # TODO: call this AFTER ALL BATCH RADIUS SAMPLING, TO AVOID
         #  GLOBAL POSITIONS FOR STUFF. Careful in the config files !
 
-        # TODO: DOES PREDICTING STUFF centroid MAKE ANY SENSE ? SHOULD
-        #  ALL STUFF offsets be predicted to zero ? Same for VOID ?
-
         # Save in the data in the NAG structure
         nag._list[self.level] = data
 

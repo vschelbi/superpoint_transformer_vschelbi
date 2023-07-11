@@ -307,6 +307,19 @@ class BaseDataset(InMemoryDataset):
         """
         return [self.num_classes]
 
+    def print_classes(self):
+        """Show the class names, labels and type (thing, stuff, void).
+        """
+        for i, c in enumerate(self.class_names):
+            try:
+                class_type = \
+                    'stuff' if i in self.stuff_classes \
+                    else 'thing' if i in self.thing_classes \
+                    else 'void'
+            except:
+                class_type = ''
+            print(f"{i:<3} {c:<20} {class_type}")
+
     @property
     def data_subdir_name(self):
         return self.__class__.__name__.lower()
