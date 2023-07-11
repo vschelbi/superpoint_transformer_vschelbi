@@ -290,7 +290,7 @@ class BaseDataset(InMemoryDataset):
         VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
-        raise [i for i in range(self.num_classes) if i not in self.stuff_classes]
+        return [i for i in range(self.num_classes) if i not in self.stuff_classes]
 
     @property
     def void_classes(self):
@@ -303,7 +303,7 @@ class BaseDataset(InMemoryDataset):
         VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
-        raise [self.num_classes]
+        return [self.num_classes]
 
     @property
     def data_subdir_name(self):
