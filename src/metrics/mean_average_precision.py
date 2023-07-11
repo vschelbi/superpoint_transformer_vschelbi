@@ -854,8 +854,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             map_per_iou = []
             mar_per_iou = []
             for iou in sorted(self.iou_thresholds):
-                map_per_iou.append(self._summarize(res, True, iou_threshold=iou))
-                mar_per_iou.append(self._summarize(res, False, iou_threshold=iou))
+                map_per_iou.append(self._summarize(res, True, iou_threshold=iou).cpu())
+                mar_per_iou.append(self._summarize(res, False, iou_threshold=iou).cpu())
             plt.plot(sorted(self.iou_thresholds), np.array(map_per_iou))
             plt.show()
 

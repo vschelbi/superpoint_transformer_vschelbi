@@ -748,7 +748,8 @@ class InstanceData(CSRData):
         # Performance evaluation
         from src.metrics import MeanAveragePrecision3D
         metric = MeanAveragePrecision3D(*metric_args, **metric_kwargs)
-        results = metric(oracle_scores, oracle_y, oracle)
+        metric.update(oracle_scores, oracle_y, oracle)
+        results = metric.compute()
 
         return results
 
@@ -776,7 +777,8 @@ class InstanceData(CSRData):
         # Performance evaluation
         from src.metrics import PanopticQuality3D
         metric = PanopticQuality3D(*metric_args, **metric_kwargs)
-        results = metric(oracle_y, oracle)
+        metric.update(oracle_y, oracle)
+        results = metric.compute()
 
         return results
 
