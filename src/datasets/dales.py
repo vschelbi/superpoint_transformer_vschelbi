@@ -146,7 +146,7 @@ class DALES(BaseDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
         return STUFF_CLASSES
@@ -198,7 +198,7 @@ class DALES(BaseDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
         while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
         """

@@ -44,8 +44,16 @@ class PointSegmentationModule(LightningModule):
         else:
             self.criterion = criterion
 
+        # Ignore the `num_classes` labels, which, by construction, are
+        # where we send all 'ignored'/'void' annotations
+        if isinstance(self.criterion, MultiLoss):
+            for i in range(len(self.criterion.criteria)):
+                self.criterion.criteria[i].ignore_index = num_classes
+        else:
+            self.criterion.ignore_index = num_classes
+
         # Network that will do the actual computation. NB, we make sure
-        # the net returns the output from all up stages, if a multi stage
+        # the net returns the output from all up stages, if a multi-stage
         # loss is expected
         self.net = net
         if self.multi_stage_loss:
@@ -77,12 +85,9 @@ class PointSegmentationModule(LightningModule):
         self.num_classes = num_classes
         self.class_names = class_names if class_names is not None \
             else [f'class-{i}' for i in range(num_classes)]
-        self.train_cm = ConfusionMatrix(
-            num_classes, ignore_index=num_classes)
-        self.val_cm = ConfusionMatrix(
-            num_classes, ignore_index=num_classes)
-        self.test_cm = ConfusionMatrix(
-            num_classes, ignore_index=num_classes)
+        self.train_cm = ConfusionMatrix(num_classes)
+        self.val_cm = ConfusionMatrix(num_classes)
+        self.test_cm = ConfusionMatrix(num_classes)
 
         # For averaging loss across batches
         self.train_loss = MeanMetric()
@@ -174,7 +179,7 @@ class PointSegmentationModule(LightningModule):
         else:
             logits, preds, y_hist = self.step_multi_run_inference(*batch)
 
-        # If the input batch does  not have any labels (eg test set with
+        # If the input batch does not have any labels (e.g. test set with
         # held-out labels), y_hist will be None and the loss will not be
         # computed
         if y_hist is None:
@@ -350,15 +355,16 @@ class PointSegmentationModule(LightningModule):
         # Return None if the required labels cannot be found in the NAG
         if self.hparams.sampling_loss and nag[0].y is None:
             return
-        elif self.multi_stage_loss and \
-                not all([nag[i].y is not None for i in range(1, nag.num_levels)]):
-            return
+        elif self.multi_stage_loss:
+            for i in range(1, nag.num_levels):
+                if nag[i].y is None:
+                    return
         elif nag[1].y is None:
             return
 
         # Recover level-1 label histograms, either from the level-0
-        # sampled points (ie sampling will affect the loss and metrics)
-        # or directly from the precomputed level-1 label histograms (ie
+        # sampled points (i.e. sampling will affect the loss and metrics)
+        # or directly from the precomputed level-1 label histograms (i.e.
         # true annotations)
         if self.hparams.sampling_loss and self.multi_stage_loss:
             y_hist = [
@@ -380,13 +386,6 @@ class PointSegmentationModule(LightningModule):
 
         else:
             y_hist = nag[1].y
-
-        # Remove the last bin of the histogram, accounting for
-        # unlabeled/ignored points
-        if self.multi_stage_loss:
-            y_hist = [yh[:, :self.num_classes] for yh in y_hist]
-        else:
-            y_hist = y_hist[:, :self.num_classes]
 
         return y_hist
 
@@ -459,7 +458,7 @@ class PointSegmentationModule(LightningModule):
     def test_step(self, batch, batch_idx):
         loss, preds, targets = self.model_step(batch)
 
-        # If the input batch does not have any labels (eg test set with
+        # If the input batch does not have any labels (e.g. test set with
         # held-out labels), y_hist will be None and the loss will not be
         # computed. In this case, we arbitrarily set the loss to 0 and
         # do not update the confusion matrix

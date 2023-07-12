@@ -69,7 +69,8 @@ class GridSampling3D(Transform):
     grouped following `mode='last'`.
 
     Besides, for keys where a more subtle histogram mechanism is needed,
-    (eg for 'y'), the 'hist_key' and 'hist_size' arguments can be used.
+    (e.g. for 'y'), the 'hist_key' and 'hist_size' arguments can be
+    used.
 
     Modified from: https://github.com/torch-points3d/torch-points3d
 
@@ -189,7 +190,7 @@ def _group_data(
     grouped following `mode='last'`.
 
     Besides, for keys where a more subtle histogram mechanism is needed,
-    (eg for 'y'), the 'bins' argument can be used.
+    (e.g. for 'y'), the 'bins' argument can be used.
 
     Warning: this function modifies the input Data object in-place.
 
@@ -448,7 +449,7 @@ class SampleSubNodes(Transform):
     :param low: int
         Partition level we will sample from, guided by the `high`
         segments. By default, `high=0` to sample the level-0 points.
-        `low=-1` is accepted when level-0 has a `sub` attribute (ie
+        `low=-1` is accepted when level-0 has a `sub` attribute (i.e.
         level-0 points are themselves segments of `-1` level absent
         from the NAG object).
     :param n_max: int
@@ -456,7 +457,7 @@ class SampleSubNodes(Transform):
         `high`-level segment
     :param n_min: int
         Minimum number of `low`-level elements to sample in each
-        `high`-level segment, within the limits of its size (ie no
+        `high`-level segment, within the limits of its size (i.e. no
         oversampling)
     :param mask: list, np.ndarray, torch.LongTensor, torch.BoolTensor
         Indicates a subset of `low`-level elements to consider. This

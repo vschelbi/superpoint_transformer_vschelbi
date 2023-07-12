@@ -72,7 +72,7 @@ class Cluster(CSRData):
             Cluster indices to select from 'self'. Must NOT contain
             duplicates
         update_sub: bool
-            If True, the point (ie subpoint) indices will also be
+            If True, the point (i.e. subpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels
@@ -150,7 +150,7 @@ class Cluster(CSRData):
             Used to select clusters when reading. Supports fancy
             indexing
         :param update_sub: bool
-            If True, the point (ie subpoint) indices will also be
+            If True, the point (i.e. subpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels

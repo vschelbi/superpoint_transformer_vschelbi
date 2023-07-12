@@ -276,7 +276,7 @@ class BaseDataset(InMemoryDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
         raise NotImplementedError
@@ -289,7 +289,7 @@ class BaseDataset(InMemoryDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
         return [i for i in range(self.num_classes) if i not in self.stuff_classes]
@@ -302,7 +302,7 @@ class BaseDataset(InMemoryDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
         return [self.num_classes]
@@ -408,7 +408,7 @@ class BaseDataset(InMemoryDataset):
         """String to describe to the user the file structure of your
         dataset, at download time.
         """
-        return None
+        return
 
     @property
     def raw_file_names(self):
@@ -419,8 +419,8 @@ class BaseDataset(InMemoryDataset):
     def raw_file_names_3d(self):
         """Some file paths to find in order to skip the download.
         Those are not directly specified inside `self.raw_file_names`
-        in case `self.raw_file_names` would need to be extended (eg with
-        3D bounding boxes files).
+        in case `self.raw_file_names` would need to be extended (e.g.
+        with 3D bounding boxes files).
         """
         return [self.id_to_relative_raw_path(x) for x in self.cloud_ids]
 
@@ -666,7 +666,7 @@ class BaseDataset(InMemoryDataset):
             steps = torch.log2(torch.tensor(num)).int().item()
             return (x - 1, steps), prefix, suffix
 
-        return None
+        return
 
     def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a `Data` object, ready to
@@ -681,7 +681,7 @@ class BaseDataset(InMemoryDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
         while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
         """
@@ -693,7 +693,7 @@ class BaseDataset(InMemoryDataset):
         are sanitized.
 
         More specifically, we assume `[0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
         while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
 
         To this end, this function maps all labels outside of

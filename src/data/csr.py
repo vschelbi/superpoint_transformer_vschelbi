@@ -119,7 +119,7 @@ class CSRData:
 
     @property
     def sizes(self):
-        """Returns the size of each group (ie the pointer jumps).
+        """Returns the size of each group (i.e. the pointer jumps).
         """
         return self.pointers[1:] - self.pointers[:-1]
 

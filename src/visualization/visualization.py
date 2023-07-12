@@ -253,7 +253,7 @@ def visualize_3d(
     fig = go.Figure(layout=layout)
 
     # To keep track of which trace should be seen under which mode
-    # (ie button), we build trace_modes. This is a list of dictionaries
+    # (i.e. button), we build trace_modes. This is a list of dictionaries
     # indicating, for each trace (list element), which mode (dict key)
     # it should appear in and with which attributes (values are dict of
     # parameters for plotly figure updates)

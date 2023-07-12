@@ -140,7 +140,7 @@ def read_s3dis_room(
             log.debug(f"Reading object {i_object}: {object_name}")
 
         # Remove the trailing number in the object name to isolate the
-        # object class (eg 'chair_24' -> 'chair')
+        # object class (e.g. 'chair_24' -> 'chair')
         object_class = object_name.split('_')[0]
 
         # Convert object class string to int label. Note that by default
@@ -301,7 +301,7 @@ class S3DIS(BaseDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
         return STUFF_CLASSES
@@ -359,7 +359,7 @@ class S3DIS(BaseDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
         while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
         """

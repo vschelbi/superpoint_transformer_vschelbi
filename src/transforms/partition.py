@@ -198,7 +198,7 @@ class CutPursuitPartition(Transform):
 
             # Aggregate some point attributes into the clusters. This
             # is not performed dynamically since not all attributes can
-            # be aggregated (eg 'neighbor_index', 'neighbor_distance',
+            # be aggregated (e.g. 'neighbor_index', 'neighbor_distance',
             # 'edge_index', 'edge_attr'...)
             if 'y' in d1.keys:
                 assert d1.y.dim() == 2, \

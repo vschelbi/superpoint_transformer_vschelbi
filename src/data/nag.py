@@ -34,7 +34,7 @@ class NAG:
         each superpoint of level 'high'.
 
         Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
-        (ie level-0 points are themselves clusters of '-1' level
+        (i.e. level-0 points are themselves clusters of '-1' level
         absent from the NAG object).
         """
         assert -1 <= low < high < self.num_levels
@@ -415,7 +415,7 @@ class NAG:
         :param low: int
             Partition level we will sample from, guided by the `high`
             segments. By default, `high=0` to sample the level-0 points.
-            `low=-1` is accepted when level-0 has a `sub` attribute (ie
+            `low=-1` is accepted when level-0 has a `sub` attribute (i.e.
             level-0 points are themselves segments of `-1` level absent
             from the NAG object).
         :param n_max: int
@@ -423,7 +423,7 @@ class NAG:
             `high`-level segment
         :param n_min: int
             Minimum number of `low`-level elements to sample in each
-            `high`-level segment, within the limits of its size (ie no
+            `high`-level segment, within the limits of its size (i.e. no
             oversampling)
         :param mask: list, np.ndarray, torch.Tensor
             Indicates a subset of `low`-level elements to consider. This

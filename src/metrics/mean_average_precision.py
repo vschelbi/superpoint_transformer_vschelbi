@@ -111,7 +111,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         in the dataset. These are all semantic classes whose
         points are not to be considered as 'void' or 'ignored' when
         computing the metrics. By convention, we assume
-        `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (ie not
+        `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (i.e. not
         'ignored', 'void', 'unknown', etc), while `y < 0` AND
         `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
         with following https://arxiv.org/abs/1801.00868 and
@@ -565,7 +565,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # If no ground truth and no detection carry the class of
         # instance, return None
         if num_gt == 0 and num_pred == 0:
-            return None
+            return
 
         # Some targets have the class at hand but no prediction does
         if num_pred == 0:
@@ -695,7 +695,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
 
             #  Special attention must be paid to gt_matches in case the
             #  prediction tried to match an already-assigned gt. In
-            #  which case the prediction will not match (ie
+            #  which case the prediction will not match (i.e.
             #  _iou_match_ok is False). To avoid re-setting the
             #  corresponding gt_matches to False, we need to make sure
             #  gt_matches was not already matched

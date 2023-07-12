@@ -74,7 +74,7 @@ class AdjacencyGraph(Transform):
 
 class SegmentFeatures(Transform):
     """Compute segment features for all the NAG levels except its first
-    (ie the 0-level). These are handcrafted node features that will be
+    (i.e. the 0-level). These are handcrafted node features that will be
     saved in the node attributes. To make use of those at training time,
     remember to move them to the `x` attribute using `AddKeysTo` and
     `NAGAddKeysTo`.
@@ -184,7 +184,7 @@ def _compute_cluster_features(
     nn_ptr = ptr_samples.cpu().numpy().astype('uint32')
 
     # Heuristic to avoid issues when a cluster sampling is such that
-    # it produces singular covariance matrix (eg the sampling only
+    # it produces singular covariance matrix (e.g. the sampling only
     # contains the same point repeated multiple times)
     xyz = xyz + torch.rand(xyz.shape).numpy() * 1e-5
 
@@ -292,7 +292,7 @@ def _compute_cluster_features(
 
 class DelaunayHorizontalGraph(Transform):
     """Compute horizontal edges for all NAG levels except its first
-    (ie the 0-level). These are the edges connecting the segments at
+    (i.e. the 0-level). These are the edges connecting the segments at
     each level, equipped with handcrafted edge features.
 
     This approach relies on the dual graph of the Delaunay triangulation
@@ -550,7 +550,7 @@ def _horizontal_graph_by_delaunay(
 
 class RadiusHorizontalGraph(Transform):
     """Compute horizontal edges for all NAG levels except its first
-    (ie the 0-level). These are the edges connecting the segments at
+    (i.e. the 0-level). These are the edges connecting the segments at
     each level, equipped with handcrafted edge features.
 
     This approach relies on a fast heuristics to search neighboring
@@ -671,7 +671,7 @@ class RadiusHorizontalGraph(Transform):
 
     def _process_edge_features_for_single_level(
             self, nag, i_level, se_ratio, se_min, cycles, margin, chunk_size):
-        # Compute 'subedges', ie edges between level-0 points making up
+        # Compute 'subedges', i.e. edges between level-0 points making up
         # the edges between the segments. These will be used for edge
         # features computation. NB: this operation simplifies the
         # edge_index graph into a trimmed graph. To restore
@@ -873,7 +873,7 @@ def _minimalistic_horizontal_edge_features(
     #  - PCA of points in S/T cloud (is it linear border or surfacic
     #    border ?)
     #  - mean dist of S->T along S/T normal (offset along the objects
-    #    normals, eg offsets between steps)
+    #    normals, e.g. offsets between steps)
 
     keys = sanitize_keys(keys, default=SUBEDGE_FEATURES)
 
@@ -931,7 +931,7 @@ def _minimalistic_horizontal_edge_features(
 
 class OnTheFlyHorizontalEdgeFeatures(Transform):
     """Compute edge features "on-the-fly" for all i->j and j->i
-    horizontal edges of the NAG levels except its first (ie the
+    horizontal edges of the NAG levels except its first (i.e. the
     0-level).
 
     Expects only trimmed edges as input, along with some edge-specific
@@ -1343,7 +1343,7 @@ class NodeSize(Transform):
     attribute of the corresponding Data objects.
 
     Note: `low=-1` is accepted when level-0 has a `sub` attribute
-    (ie level-0 points are themselves segments of `-1` level absent
+    (i.e. level-0 points are themselves segments of `-1` level absent
     from the NAG object).
 
     :param low: int

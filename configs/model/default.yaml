@@ -27,6 +27,7 @@ scheduler:
 
 criterion:
   _target_: torch.nn.CrossEntropyLoss
+  ignore_index: ${datamodule.num_classes}
 
 # Parameters declared here to facilitate tuning configs. Those are only
 # used here for config interpolation but will/should actually fall in
@@ -44,6 +45,6 @@ _v_edge_hf_dim: ${datamodule.num_hf_v_edge}  # size of level-1+ handcrafted vert
 
 _down_dim: [64, 64, 64, 64]  # encoder stage dimensions
 _up_dim: [64, 64, 64]  # decoder stage dimensions
-_mlp_depth: 2  # default nb of layers in all MLPs (ie MLP depth)
+_mlp_depth: 2  # default nb of layers in all MLPs (i.e. MLP depth)
 
 net: ???

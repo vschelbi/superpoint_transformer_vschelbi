@@ -36,7 +36,7 @@ __all__ = ['KITTI360', 'MiniKITTI360']
 def read_kitti360_window(
         filepath, xyz=True, rgb=True, semantic=True, instance=True,
         remap=False):
-    """Read a KITTI-360 window –ie a tile– saved as PLY.
+    """Read a KITTI-360 window –i.e. a tile– saved as PLY.
 
     :param filepath: str
         Absolute path to the PLY file
@@ -152,7 +152,7 @@ class KITTI360(BaseDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc), while
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
         return STUFF_CLASSES
@@ -183,7 +183,7 @@ class KITTI360(BaseDataset):
             log.error(
                 f"\nKITTI-360 does not support automatic download.\n"
                 f"Please go to the official webpage {self._form_url}, "
-                f"manually download the '{msg}' (ie '{zip_name}') to your "
+                f"manually download the '{msg}' (i.e. '{zip_name}') to your "
                 f"'{self.root}/' directory, and re-run.\n"
                 f"The dataset will automatically be unzipped into the "
                 f"following structure:\n"
@@ -214,7 +214,7 @@ class KITTI360(BaseDataset):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'ignored', 'void', 'unknown', etc),
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
         while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
         """

@@ -125,7 +125,7 @@ def knn_1_graph(
     edge_index = torch.vstack((source, target))
     distances = distances.flatten()
 
-    # Trim edges where points are missing (ie -1 neighbor indices)
+    # Trim edges where points are missing (i.e. -1 neighbor indices)
     missing_point_edge = edge_index[1] == -1
     edge_index = edge_index[:, ~missing_point_edge]
     distances = distances[~missing_point_edge]
@@ -355,7 +355,7 @@ def oversample_partial_neighborhoods(neighbors, distances, k):
     # Compute the oversampling column indices. The 0.9999 factor is a
     # security to handle the case where torch.rand is to close to 1.0,
     # which would yield incorrect sampling coordinates that would in
-    # result in sampling '-1' indices (ie all we try to avoid here)
+    # result in sampling '-1' indices (i.e. all we try to avoid here)
     idx_y_sampling = (n_valid * torch.rand(
         n_valid.shape[0], device=device) * 0.9999).floor().long()
 
@@ -460,7 +460,7 @@ def cluster_radius_nn_graph(
     edge_index = edge_index[:, in_gap_range]
     distances = distances[in_gap_range]
 
-    # Trim edges where points are missing (ie -1 neighbor indices)
+    # Trim edges where points are missing (i.e. -1 neighbor indices)
     missing_point_edge = edge_index[1] == -1
     edge_index = edge_index[:, ~missing_point_edge]
     distances = distances[~missing_point_edge]

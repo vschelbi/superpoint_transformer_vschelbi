@@ -48,7 +48,7 @@ class PanopticQuality3D(Metric):
     one prediction and one and only one target ('stuff' included).
 
     By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL VALID
-    LABELS (ie not 'ignored', 'void', 'unknown', etc), while `y < 0`
+    LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while `y < 0`
     AND `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
     with following:
       - https://arxiv.org/abs/1801.00868
@@ -83,7 +83,7 @@ class PanopticQuality3D(Metric):
 
     :param num_classes: int
         Number of valid classes in the dataset. By convention, we assume
-        `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (ie not
+        `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (i.e. not
         'ignored', 'void', 'unknown', etc), while `y < 0` AND
         `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
         with following https://arxiv.org/abs/1801.00868 and
@@ -247,7 +247,7 @@ class PanopticQuality3D(Metric):
 
         # Recover the classes present in the data.
         # NB: this step assumes `InstanceData.remove_void()` was called
-        # beforehand. Otherwise, some data labels may be outside of
+        # beforehand. Otherwise, some data labels may be outside
         # `[0, self.num_classes-1]`
         # all_semantic = torch.cat((gt_semantic, pred_semantic))
         # num_classes = all_semantic.max().item() + 1

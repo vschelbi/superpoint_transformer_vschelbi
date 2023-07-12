@@ -274,7 +274,7 @@ class RoomPosition(Transform):
         # Shift XY
         pos[:, :2] -= pos[:, :2].min(dim=0).values.view(1, -1)
 
-        # Scale XYZ based on the maximum values. ie the highest point
+        # Scale XYZ based on the maximum values. i.e. the highest point
         # will be considered as the ceiling
         pos /= pos.max(dim=0).values.view(1, -1)
 

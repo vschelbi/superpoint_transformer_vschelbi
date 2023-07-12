@@ -76,10 +76,10 @@ class Data(PyGData):
         """Index to be used for LayerNorm.
 
         :param mode: str
-            Normalization mode. 'graph' will normalize per graph (ie per
-            cloud, ie per batch). 'node' will normalize per node (ie per
-            point). 'segment' will normalize per segment (ie per
-            cluster)
+            Normalization mode. 'graph' will normalize per graph (i.e.
+            per cloud, i.e. per batch). 'node' will normalize per node
+            (i.e. per point). 'segment' will normalize per segment
+            (i.e.  per cluster)
         """
         if getattr(self, 'batch', None) is not None:
             batch = self.batch
@@ -223,7 +223,7 @@ class Data(PyGData):
             if not is_dense(self.super_index):
                 print(
                     "WARNING: super_index indices are generally expected to be "
-                    "dense (ie all indices in [0, super_index.max()] are used),"
+                    "dense (i.e. all indices in [0, super_index.max()] are used),"
                     " which is not the case here. This may be because you are "
                     "creating a Data object after applying a selection of "
                     "points without updating the cluster indices.")
@@ -266,13 +266,13 @@ class Data(PyGData):
             Data indices to select from 'self'. Must NOT contain
             duplicates
         update_sub: bool
-            If True, the point (ie subpoint) indices will also be
+            If True, the point (i.e. subpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels
             of a NAG.
         update_super: bool
-            If True, the cluster (ie superpoint) indices will also be
+            If True, the cluster (i.e. superpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_super, super_sub)' which can help apply these
             changes to maintain consistency with higher hierarchy levels
@@ -306,7 +306,7 @@ class Data(PyGData):
         # Data like this, as it might cause issues when calling
         # 'data.num_nodes' later on. Need to be careful when calling
         # 'data.num_nodes' before having set any of the pointwise
-        # attributes (eg 'x', 'pos', 'rgb', 'y', etc)
+        # attributes (e.g. 'x', 'pos', 'rgb', 'y', etc)
         data = self.__class__()
 
         # If Data contains edges, we will want to update edge indices
@@ -324,7 +324,7 @@ class Data(PyGData):
                 0, idx, torch.arange(idx.shape[0], device=device))
             edge_index = reindex[self.edge_index]
 
-            # Remove obsolete edges (ie those involving a '-1' index)
+            # Remove obsolete edges (i.e. those involving a '-1' index)
             idx_edge = torch.where((edge_index != -1).all(dim=0))[0]
             data.edge_index = edge_index[:, idx_edge]
 
@@ -377,7 +377,7 @@ class Data(PyGData):
                 continue
 
             # Slice CSRData elements, unless specified otherwise
-            # (eg 'sub')
+            # (e.g. 'sub')
             if isinstance(item, CSRData):
                 data[key] = item[idx]
                 continue
@@ -485,7 +485,7 @@ class Data(PyGData):
         d = (self.pos[s] - self.pos[t]).norm(dim=1)
         d_1 = torch.vstack((d, torch.ones_like(d))).T
 
-        # Least square on d_1.x = w  (ie d.a + b = w)
+        # Least square on d_1.x = w  (i.e. d.a + b = w)
         # NB: CUDA may crash trying to solve this simple system, in
         # which case we will fall back to CPU. Not ideal though
         try:
@@ -630,7 +630,7 @@ class Data(PyGData):
         :param keys: List(str)
             Keys should be loaded from the file, ignoring the rest
         :param update_sub: bool
-            If True, the point (ie subpoint) indices will also be
+            If True, the point (i.e. subpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels
@@ -799,16 +799,20 @@ class Data(PyGData):
 
         # Return None if no labels
         if getattr(self, 'y', None) is None:
-            return None
+            return
 
-        # Get the label histogram, while excluding void classes, if any
-        node_hist = self.y[:, :num_classes]
+        # We expect the network to predict the most frequent label. For
+        # clusters where the dominant label is 'void', we expect the
+        # network to predict the second most frequent label. In the
+        # event where the cluster is 100% 'void', the metric will ignore
+        # the prediction, regardless its value
+        pred = self.y[:, :num_classes].argmax(dim=1)
+        target = self.y
 
         # Performance evaluation
         from src.metrics import ConfusionMatrix
-        metric = ConfusionMatrix(
-            num_classes, *metric_args, ignore_index=num_classes, **metric_kwargs)
-        metric(node_hist.argmax(dim=1), node_hist)
+        metric = ConfusionMatrix(num_classes, *metric_args, **metric_kwargs)
+        metric(pred.cpu(), target.cpu())
 
         return metric.miou(), metric.iou(), metric.oa(), metric.macc()
 
@@ -839,7 +843,7 @@ class Data(PyGData):
         if self.obj is not None:
             return self.obj.instance_segmentation_oracle(
                 *metric_args, **metric_kwargs)
-        return None
+        return
 
     def panoptic_segmentation_oracle(self, *metric_args, **metric_kwargs):
         """Compute the oracle performance for panoptic segmentation.
@@ -866,7 +870,7 @@ class Data(PyGData):
         if self.obj is not None:
             return self.obj.panoptic_segmentation_oracle(
                 *metric_args, **metric_kwargs)
-        return None
+        return
 
 
 class Batch(PyGBatch):
