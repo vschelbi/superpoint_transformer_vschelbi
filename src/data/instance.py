@@ -15,7 +15,7 @@ __all__ = ['InstanceData', 'InstanceBatch']
 class InstanceData(CSRData):
     """Child class of CSRData to simplify some common operations
     dedicated to instance labels clustering. In particular, this data
-    structure stores the cluster-object overlaps: for each cluster (ie
+    structure stores the cluster-object overlaps: for each cluster (i.e.
     segment, superpoint, node in the superpoint graph, etc), we store
     all the object instances with which it overlaps. Concretely, for
     each cluster-object pair, we store:
@@ -138,10 +138,26 @@ class InstanceData(CSRData):
         return self.obj.unique().numel()
 
     def major(self):
-        """Return the obj, count, and y of the majority (ie most
-        frequent) instance in each cluster.
+        """Return the obj, count, and y of the majority instance in each
+        cluster (i.e. the object with which it has the highest overlap).
         """
-        # Compute the cluster index for each overlap (ie each row in
+        # TODO: if the majority instance of a cluster is of type 'void',
+        #  shouldn't we return the second-highest object (if any)
+        #  instead ? The downsides is that this requires passing
+        #  `num_classes` as input to `major()` and that it will be a bit
+        #  harder to compute for those cases. But, on the other hand,
+        #  assigning a cluster to the 'void' object discards all other
+        #  potentially-useful annotation inside this cluster. In
+        #  practice, this means that as soon as a cluster has a majority
+        #  of 'void' points, it is as if the rest of the points
+        #  contained in this cluster were not annotated either and those
+        #  will not be used in the loss nor in the metrics. Still, this
+        #  is roughly how the Panoptic Segmentation paper recommends to
+        #  deal with predictions with +50% 'void' points. The only
+        #  difference in our case is that the condition is not to have
+        #  "+50% 'void' points" but a "majority of 'void' points"
+
+        # Compute the cluster index for each overlap (i.e. each row in
         # self.values)
         cluster_idx = self.indices
 
@@ -199,7 +215,7 @@ class InstanceData(CSRData):
         size for each cluster-object pair in the data. This is typically
         needed for computing the Average Precision.
         """
-        # Prepare the indices for sets A (ie predictions) and B (ie
+        # Prepare the indices for sets A (i.e. predictions) and B (i.e.
         # targets). In particular, we want the indices to be contiguous
         # in [0, idx_max], to alleviate scatter operations' computation.
         # Since `self.obj` contains potentially-large and non-contiguous
@@ -216,7 +232,7 @@ class InstanceData(CSRData):
         # parts of b
         # TODO: `self.pair_cropped_count` is not accounted for in the
         #  `self.values`. InstanceBatch mechanisms will discard this
-        #  value. ie 'pair_cropped_count' will disappear when calling
+        #  value. i.e. 'pair_cropped_count' will disappear when calling
         #  `InstanceBatch.from_list` or `InstanceBatch.to_list`
         if getattr(self, 'pair_cropped_count', None) is not None:
             b_size += self.pair_cropped_count
@@ -255,7 +271,7 @@ class InstanceData(CSRData):
             obj_idx: Tensor
                 Corresponding object indices
         """
-        # Prepare the indices for sets A (ie clusters) and B (ie
+        # Prepare the indices for sets A (i.e. clusters) and B (i.e.
         # objects). In particular, we want the indices to be contiguous
         # in [0, idx_max], to alleviate scatter operations' computation.
         # Since `self.obj` contains potentially-large and non-contiguous
@@ -389,7 +405,7 @@ class InstanceData(CSRData):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'void', 'ignored', 'unknown', etc),
+        VALID LABELS (i.e. not 'void', 'ignored', 'unknown', etc),
         while `y < 0` AND `y >= num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
 
@@ -399,9 +415,9 @@ class InstanceData(CSRData):
           - https://arxiv.org/abs/1905.01220
 
         More precisely, we remove from IoU and metrics computation:
-          - predictions (ie clusters here) containing more than 50% of
+          - predictions (i.e. clusters here) containing more than 50% of
             'void' points
-          - targets (ie objects here) containing more than 50% of
+          - targets (i.e. objects here) containing more than 50% of
             'void' points. In our case, we assume targets to be
             SEMANTICALLY PURE, so we remove a target even if it contains
             a single 'void' point
@@ -410,7 +426,7 @@ class InstanceData(CSRData):
           - `cluster_mask`: boolean mask of the clusters containing more
             than 50% points with `void` labels
           - `pair_mask`: boolean mask of the cluster-object pairs whose
-            object (ie target) has an `void` label
+            object (i.e. target) has an `void` label
           - `pair_cropped_count`: tensor of cropped target size, for
             each pair. Indeed, blindly removing the predictions with 50%
             or more void points will affect downstream IoU computation.
@@ -426,7 +442,7 @@ class InstanceData(CSRData):
             class. Said otherwise: IF AN INSTANCE CONTAINS A SINGLE
             'VOID' POINT, THEN ALL OF ITS POINTS ARE 'VOID'.
         """
-        # Identify the pairs whose object (ie target instance) is void.
+        # Identify the pairs whose object (i.e. target instance) is void.
         # For simplicity, we note 'a' for clusters/predictions and 'b'
         # for objects/targets/ground truths
         is_pair_b_void = (self.y < 0) | (self.y >= num_classes)
@@ -475,7 +491,7 @@ class InstanceData(CSRData):
 
         IMPORTANT:
         By convention, we assume `y ∈ [0, num_classes-1]` ARE ALL
-        VALID LABELS (ie not 'void', 'ignored', 'unknown', etc),
+        VALID LABELS (i.e. not 'void', 'ignored', 'unknown', etc),
         while `y < 0` AND `y >= num_classes` ARE VOID LABELS.
         This applies to both `Data.y` and `Data.obj.y`.
 
@@ -485,12 +501,12 @@ class InstanceData(CSRData):
           - https://arxiv.org/abs/1905.01220
 
         More precisely:
-          - predictions (ie clusters here) containing more than 50% of
+          - predictions (i.e. clusters here) containing more than 50% of
             'void' points are removed from the metrics computation
-          - targets (ie objects here) containing more than 50% of
+          - targets (i.e. objects here) containing more than 50% of
             'void' points are removed from the metrics computation
           - the remaining 'void' points are ignored when computing the
-            prediction-target (ie cluster-object here) IoUs
+            prediction-target (i.e. cluster-object here) IoUs
 
         To this end, the present function returns:
           - `instance_data`: a new InstanceData object with all void
@@ -669,13 +685,20 @@ class InstanceData(CSRData):
 
         # Accumulate all pair labels into pre-cluster label histograms
         y_hist = one_hot(y, num_classes=num_classes + 1) * self.count.view(-1, 1)
-        cluster_hist = scatter_sum(y_hist[:, :num_classes], self.indices, dim=0)
+        cluster_hist = scatter_sum(y_hist, self.indices, dim=0)
+
+        # We expect the network to predict the most frequent label. For
+        # clusters where the dominant label is 'void', we expect the
+        # network to predict the second most frequent label. In the
+        # event where the cluster is 100% 'void', the metric will ignore
+        # the prediction, regardless its value
+        pred = cluster_hist[:, :num_classes].argmax(dim=1)
+        target = cluster_hist
 
         # Performance evaluation
         from src.metrics import ConfusionMatrix
-        metric = ConfusionMatrix(
-            num_classes, *metric_args, ignore_index=num_classes, **metric_kwargs)
-        metric(cluster_hist.argmax(dim=1).cpu(), cluster_hist.cpu())
+        metric = ConfusionMatrix(num_classes, *metric_args, **metric_kwargs)
+        metric(pred.cpu(), target.cpu())
 
         return metric.miou(), metric.iou(), metric.oa(), metric.macc()
 
@@ -696,7 +719,8 @@ class InstanceData(CSRData):
 
         :return: oracle_scores, oracle_y, oracle_instance_data
         """
-        # For each cluster, identify the dominant object
+        # For each cluster, identify the dominant object (i.e. the object
+        # with which the cluster has the most overlap)
         cluster_idx = self.indices
         argmax = scatter_max(self.count, cluster_idx)[1]
         idx, perm = consecutive_cluster(self.obj[argmax])
@@ -709,11 +733,14 @@ class InstanceData(CSRData):
         # cluster instance
         oracle_y = self.y[argmax][perm]
 
+        # TODO: what if dominant is void ?
+        # TODO: where does major return void ?
+
         # Compute the oracle predicted scores. Here, we choose to score
         # clusters by their IoU with their optimal target
         # NB: this choice is relatively arbitrary, one could design
         # another approach for scoring the predictions
-        # (eg IoU * semantic purity). There is no guarantee that this
+        # (e.g. IoU * semantic purity). There is no guarantee that this
         # specific scoring function maximizes mAP, but it is a
         # reasonable proxy
         iou = oracle.iou_and_size()[0]
