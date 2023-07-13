@@ -22,7 +22,7 @@ def visualize_3d(
         class_names=None,
         class_colors=None,
         stuff_classes=None,
-        void_classes=None,
+        num_classes=None,
         voxel=-1,
         max_points=50000,
         point_size=3,
@@ -56,7 +56,7 @@ def visualize_3d(
     :param class_names: List(str)
         Names for point labels found in attributes 'y' and 'pred'
     :param class_colors: List(List(int, int, int))
-        Colors palette for for point labels found in attributes 'y' and
+        Colors palette for point labels found in attributes 'y' and
         'pred'
     :param stuff_classes: List(int)
         Semantic labels of the classes considered as 'stuff' for
@@ -64,13 +64,10 @@ def visualize_3d(
         in the point attributes, the stuff annotations will appear
         accordingly. Otherwise, stuff instance labeling will appear as
         any other object
-    :param void_classes: List(int)
-        Semantic labels of the classes considered as 'void' for
-        semantic, instance, and panoptic segmentation. If 'y' and 'obj'
-        are found in the point attributes, the void annotations will
-        appear accordingly. Otherwise, void instance labeling will
-        appear as any other object. Additionally, void_classes will also
-        be used for visualizing prediction errors, when relevant
+    :param num_classes: int
+        Number of valid classes. By convention, we assume
+        `y ∈ [0, num_classes-1]` are VALID LABELS, while
+        `y < 0` AND `y >= num_classes` ARE VOID LABELS
     :param voxel: float
         Voxel size to subsample the point cloud to facilitate
         visualization
@@ -110,7 +107,7 @@ def visualize_3d(
     :param alpha_stuff:
         Float ruling the whitening of stuff points (only if the input
         points have 'obj' and 'pred' attributes, and 'stuff_classes' or
-        'void_classes' is specified). If None, `alpha` will be used as
+        'num_classes' is specified). If None, `alpha` will be used as
         fallback
     :param point_symbol: str
         Marker symbol used for points. Must be one of
@@ -336,7 +333,7 @@ def visualize_3d(
     # labels and stuff_classes/void_classes also passed, the stuff/void
     # annotations will be treated accordingly
     if data_0.obj is not None and (class_names is None or data_0.y is None):
-        obj = data_0.obj.major()[0]
+        obj = data_0.obj.major(num_classes=num_classes)[0]
         colors = int_to_plotly_rgb(obj)
         text = np.array([f"Object {o}" for o in obj])
         trace_modes[i_point_trace]['Objects'] = {
@@ -347,7 +344,7 @@ def visualize_3d(
             'hovertext': text[~data_0.selected]}
     elif data_0.obj is not None:
         # Colors and text for thing points
-        obj = data_0.obj.major()[0]
+        obj = data_0.obj.major(num_classes=num_classes)[0]
         colors_thing = int_to_plotly_rgb(obj)
         text_thing = np.array([f"Object {o}" for o in obj])
 
@@ -355,7 +352,7 @@ def visualize_3d(
         # the expected behavior is the same, except that we will ensure
         # that the hover text distinguishes between stuff and void
         stuff_classes = stuff_classes if stuff_classes else []
-        void_classes = void_classes if void_classes else []
+        void_classes = [num_classes] if num_classes else []
         stuff_classes = list(set(stuff_classes).union(set(void_classes)))
 
         # Colors and text for stuff points

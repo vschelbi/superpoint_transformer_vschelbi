@@ -45,8 +45,7 @@ class OnTheFlyInstanceGraph(Transform):
     segmentation.
 
     We choose the following assignment rule:
-      - each superpoint is assigned to the instance it shares the most
-        points with
+      - each superpoint is assigned to the instance it overlaps the most
 
     Importantly, one could think of other assignment rules, such as the
     maximum IoU, for instance. But the latter would not work for
@@ -62,6 +61,14 @@ class OnTheFlyInstanceGraph(Transform):
     step.
 
     :param level: int
+    :param num_classes: int
+        Number of classes in the dataset. Specifying `num_classes`
+        allows identifying 'void' labels. By convention, we assume
+        `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (i.e. not
+        'ignored', 'void', 'unknown', etc), while `y < 0` AND
+        `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
+        with following https://arxiv.org/abs/1801.00868 and
+        https://arxiv.org/abs/1905.01220
     :param adjacency_mode: str
         Method used to compute search for adjacent nodes. If 'available'
         the already-existing graph in the input's 'edge_index' will be
@@ -109,6 +116,7 @@ class OnTheFlyInstanceGraph(Transform):
     def __init__(
             self,
             level=1,
+            num_classes=None,
             adjacency_mode='radius-centroid',
             k_max=30,
             radius=1,
@@ -121,6 +129,7 @@ class OnTheFlyInstanceGraph(Transform):
         assert centroid_mode.lower() in self._CENTROID_MODES, \
             f"Expected 'mode' to be one of {self._CENTROID_MODES}"
         self.level = level
+        self.num_classes = num_classes
         self.adjacency_mode = adjacency_mode.lower()
         self.k_max = k_max
         self.radius = radius
@@ -172,7 +181,9 @@ class OnTheFlyInstanceGraph(Transform):
 
         # Compute the trimmed graph and the edge affinity scores
         data.obj_edge_index, data.obj_edge_affinity = data.obj.instance_graph(
-            obj_edge_index, smooth_affinity=self.smooth_affinity)
+            obj_edge_index,
+            num_classes=self.num_classes,
+            smooth_affinity=self.smooth_affinity)
 
         # Compute the superpoint target instance centroid position
         # NB: this is a proxy method assuming nag[0] is pure-enough
@@ -182,7 +193,7 @@ class OnTheFlyInstanceGraph(Transform):
 
         # Find the target instance for each superpoint: the instance it
         # has the biggest overlap with
-        sp_obj_idx = data.obj.major()[0]
+        sp_obj_idx = data.obj.major(num_classes=self.num_classes)[0]
 
         # Recover, for each superpoint, the instance position. Since the
         # `estimate_instance_centroid()` output is sorted by increasing

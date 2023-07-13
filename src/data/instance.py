@@ -137,9 +137,18 @@ class InstanceData(CSRData):
     def num_obj(self):
         return self.obj.unique().numel()
 
-    def major(self):
+    def major(self, num_classes=None):
         """Return the obj, count, and y of the majority instance in each
         cluster (i.e. the object with which it has the highest overlap).
+
+        :param num_classes: int
+            Number of classes in the dataset. Specifying `num_classes`
+            allows identifying 'void' labels. By convention, we assume
+            `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (i.e. not
+            'ignored', 'void', 'unknown', etc), while `y < 0` AND
+            `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
+            with following https://arxiv.org/abs/1801.00868 and
+            https://arxiv.org/abs/1905.01220
         """
         # TODO: if the majority instance of a cluster is of type 'void',
         #  shouldn't we return the second-highest object (if any)
@@ -157,14 +166,51 @@ class InstanceData(CSRData):
         #  difference in our case is that the condition is not to have
         #  "+50% 'void' points" but a "majority of 'void' points"
 
+        # If `num_classes` was not passed, we set it to `y_max + 1`
+        # (i.e. there are no 'void' objects)
+        num_classes = num_classes if num_classes else self.y.max() + 1
+
         # Compute the cluster index for each overlap (i.e. each row in
         # self.values)
         cluster_idx = self.indices
 
-        # Search for the obj with the largest count, for each cluster
-        count, argmax = scatter_max(self.count, cluster_idx)
+        # Search the overlaps with void objects
+        pair_is_void = (self.y < 0) | (self.y >= num_classes)
+
+        # Search for the obj with the largest overlap, for each cluster
+        x = torch.stack((self.count, self.count * ~pair_is_void)).T
+        res = scatter_max(x, cluster_idx, dim=0)
+        count = res[0][:, 0]
+        argmax = res[1][:, 0]
         obj = self.obj[argmax]
         y = self.y[argmax]
+
+        # If no cluster mainly overlaps with a void object, exit here
+        is_major_void = (y < 0) | (y >= num_classes)
+        if (~is_major_void).all():
+            return obj, count, y
+
+        # Otherwise, we need to find those clusters which overlap with
+        # void, but with less than 50%. These clusters will not be
+        # assigned to their main void cluster, but to their second-best
+        # overlap. This way, only clusters with +50% void overlap will
+        # be excluded from metrics computation, as defined in:
+        # https://arxiv.org/abs/1801.00868
+
+        # Search if any of the clusters assigned to a void object have
+        # less than 50% void points
+        total_count = scatter_sum(self.count, cluster_idx, dim=0)
+        major_50_plus = (count / total_count) > 0.5
+        if major_50_plus[is_major_void].all():
+            return obj, count, y
+
+        # Assign the clusters with less than 50% overlap with their 
+        # second-best overlap
+        count_no_void = res[0][:, 1]
+        argmax_no_void = res[1][:, 1]
+        count[is_major_void] = count_no_void[is_major_void]
+        obj[is_major_void] = self.obj[argmax_no_void][is_major_void]
+        y[is_major_void] = self.y[argmax_no_void][is_major_void]
 
         return obj, count, y
 
@@ -305,13 +351,21 @@ class InstanceData(CSRData):
 
         return obj_pos, obj_idx
 
-    def instance_graph(self, edge_index, smooth_affinity=True):
+    def instance_graph(self, edge_index, num_classes=None, smooth_affinity=True):
         """Compute instance graph and per-edge affinity scores.
 
         :param edge_index: Tensor of size [2, num_edges]
             Edges connecting the clusters in of the instance graph. The
             output instance graph will be a trimmed version of this
             graph, where only (i, j) edges with (i < j) are preserved.
+        :param num_classes: int
+            Number of classes in the dataset. Specifying `num_classes`
+            allows identifying 'void' labels. By convention, we assume
+            `y ∈ [0, self.num_classes-1]` ARE ALL VALID LABELS (i.e. not
+            'ignored', 'void', 'unknown', etc), while `y < 0` AND
+            `y >= self.num_classes` ARE VOID LABELS. Void data is dealt
+            with following https://arxiv.org/abs/1801.00868 and
+            https://arxiv.org/abs/1905.01220
         :param smooth_affinity: bool
             If True, the affinity score computed for each edge will
             follow the 'smooth' formulation:
@@ -341,7 +395,7 @@ class InstanceData(CSRData):
 
         # Find the target instance for each cluster: the instance it has
         # the biggest overlap with
-        sp_obj_idx = self.major()[0]
+        sp_obj_idx = self.major(num_classes=num_classes)[0]
 
         # Propagate the instance object to the edges' source and target
         # clusters
@@ -702,7 +756,7 @@ class InstanceData(CSRData):
 
         return metric.miou(), metric.iou(), metric.oa(), metric.macc()
 
-    def oracle(self):
+    def oracle(self, num_classes):
         """Compute the oracle predictions for instance and panoptic
         segmentation. This is a proxy for the highest achievable
         performance with the cluster partition at hand. The output data
@@ -717,13 +771,20 @@ class InstanceData(CSRData):
           - each predicted instance has a score equal to its IoU with
             the assigned target instance
 
+        :param num_classes: int
+            Number of valid classes. By convention, we assume
+            `y ∈ [0, num_classes-1]` are VALID LABELS, while
+            `y < 0` AND `y >= num_classes` ARE VOID LABELS
         :return: oracle_scores, oracle_y, oracle_instance_data
         """
         # For each cluster, identify the dominant object (i.e. the object
         # with which the cluster has the most overlap)
-        cluster_idx = self.indices
-        argmax = scatter_max(self.count, cluster_idx)[1]
-        idx, perm = consecutive_cluster(self.obj[argmax])
+
+        # cluster_idx = self.indices
+        # argmax = scatter_max(self.count, cluster_idx)[1]
+        obj, count, y = self.major(num_classes=num_classes)
+        # idx, perm = consecutive_cluster(self.obj[argmax])
+        idx, perm = consecutive_cluster(obj)
 
         # Group together clusters with the same target object index.
         # This amounts to constructing the oracle predictions instances
@@ -731,7 +792,8 @@ class InstanceData(CSRData):
 
         # Compute the oracle predicted semantic label for each grouped
         # cluster instance
-        oracle_y = self.y[argmax][perm]
+        oracle_y = y[perm]
+        # oracle_y = self.y[argmax][perm]
 
         # TODO: what if dominant is void ?
         # TODO: where does major return void ?
@@ -749,7 +811,7 @@ class InstanceData(CSRData):
 
         return oracle_scores, oracle_y, oracle
 
-    def instance_segmentation_oracle(self, *metric_args, **metric_kwargs):
+    def instance_segmentation_oracle(self, num_classes, **metric_kwargs):
         """Compute the oracle performance for instance segmentation.
         This is a proxy for the highest achievable performance with the
         cluster partition at hand.
@@ -762,25 +824,27 @@ class InstanceData(CSRData):
           - each predicted instance has a score equal to its IoU with
             the assigned target instance
 
-        :param metric_args:
-            Args for the metrics computation
+        :param num_classes: int
+            Number of valid classes. By convention, we assume
+            `y ∈ [0, num_classes-1]` are VALID LABELS, while
+            `y < 0` AND `y >= num_classes` ARE VOID LABELS
         :param metric_kwargs:
             Kwargs for the metrics computation
 
         :return: InstanceMetricResults
         """
         # Compute oracle predictions
-        oracle_scores, oracle_y, oracle = self.oracle()
+        oracle_scores, oracle_y, oracle = self.oracle(num_classes)
 
         # Performance evaluation
         from src.metrics import MeanAveragePrecision3D
-        metric = MeanAveragePrecision3D(*metric_args, **metric_kwargs)
+        metric = MeanAveragePrecision3D(num_classes, **metric_kwargs)
         metric.update(oracle_scores, oracle_y, oracle)
         results = metric.compute()
 
         return results
 
-    def panoptic_segmentation_oracle(self, *metric_args, **metric_kwargs):
+    def panoptic_segmentation_oracle(self, num_classes, **metric_kwargs):
         """Compute the oracle performance for panoptic segmentation.
         This is a proxy for the highest achievable performance with the
         cluster partition at hand.
@@ -791,19 +855,21 @@ class InstanceData(CSRData):
           - clusters assigned to the same instance are merged into a
             single prediction
 
-        :param metric_args:
-            Args for the metrics computation
+        :param num_classes: int
+            Number of valid classes. By convention, we assume
+            `y ∈ [0, num_classes-1]` are VALID LABELS, while
+            `y < 0` AND `y >= num_classes` ARE VOID LABELS
         :param metric_kwargs:
             Kwargs for the metrics computation
 
         :return: PanopticMetricResults
         """
         # Compute oracle predictions
-        oracle_scores, oracle_y, oracle = self.oracle()
+        oracle_scores, oracle_y, oracle = self.oracle(num_classes)
 
         # Performance evaluation
         from src.metrics import PanopticQuality3D
-        metric = PanopticQuality3D(*metric_args, **metric_kwargs)
+        metric = PanopticQuality3D(num_classes, **metric_kwargs)
         metric.update(oracle_y, oracle)
         results = metric.compute()
 
