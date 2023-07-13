@@ -279,7 +279,9 @@ class PanopticQuality3D(Metric):
         tp = torch.bincount(
             pair_gt_semantic[idx_pair_tp], minlength=num_classes)
         iou_sum = scatter_sum(
-            pair_iou[idx_pair_tp], pair_gt_semantic[idx_pair_tp])
+            pair_iou[idx_pair_tp],
+            pair_gt_semantic[idx_pair_tp],
+            dim_size=num_classes)
 
         # Precision & Recall
         precision = tp / pred_class_counts
@@ -302,7 +304,9 @@ class PanopticQuality3D(Metric):
             # tp_mod = torch.bincount(
             #     pair_gt_semantic[idx_pair_tp_mod], minlength=num_classes)
             iou_mod_sum = scatter_sum(
-                pair_iou[idx_pair_tp_mod], pair_gt_semantic[idx_pair_tp_mod])
+                pair_iou[idx_pair_tp_mod],
+                pair_gt_semantic[idx_pair_tp_mod],
+                dim_size=num_classes)
             denominator = (gt_class_counts + pred_class_counts).float() / 2
             denominator[is_stuff] = gt_class_counts[is_stuff].float()
             pq_mod = iou_mod_sum / denominator

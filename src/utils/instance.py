@@ -616,7 +616,8 @@ def oracle_superpoint_clustering(
         weighted_node_logits, instance_index, dim=0).argmax(dim=1)
     pred_instance_label = instance_label[instance_index]
 
-    batch = nag[1].batch if nag[1].batch else torch.zeros_like(instance_index)
+    batch = nag[1].batch if nag[1].batch is not None \
+        else torch.zeros_like(instance_index)
     num_batch_items = batch.max() + 1
 
     is_thing = torch.isin(pred_instance_label, thing_classes)

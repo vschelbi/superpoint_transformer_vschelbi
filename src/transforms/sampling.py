@@ -195,10 +195,10 @@ def _group_data(
     Warning: this function modifies the input Data object in-place.
 
     :param data : Data
-    :param cluster : torch.Tensor
+    :param cluster : Tensor
         Tensor of the same size as the number of points in data. Each
         element is the cluster index of that point.
-    :param unique_pos_indices : torch.tensor
+    :param unique_pos_indices : Tensor
         Tensor containing one index per cluster, this index will be used
         to select features and labels.
     :param mode : str
