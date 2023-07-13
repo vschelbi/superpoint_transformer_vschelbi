@@ -150,21 +150,6 @@ class InstanceData(CSRData):
             with following https://arxiv.org/abs/1801.00868 and
             https://arxiv.org/abs/1905.01220
         """
-        # TODO: if the majority instance of a cluster is of type 'void',
-        #  shouldn't we return the second-highest object (if any)
-        #  instead ? The downsides is that this requires passing
-        #  `num_classes` as input to `major()` and that it will be a bit
-        #  harder to compute for those cases. But, on the other hand,
-        #  assigning a cluster to the 'void' object discards all other
-        #  potentially-useful annotation inside this cluster. In
-        #  practice, this means that as soon as a cluster has a majority
-        #  of 'void' points, it is as if the rest of the points
-        #  contained in this cluster were not annotated either and those
-        #  will not be used in the loss nor in the metrics. Still, this
-        #  is roughly how the Panoptic Segmentation paper recommends to
-        #  deal with predictions with +50% 'void' points. The only
-        #  difference in our case is that the condition is not to have
-        #  "+50% 'void' points" but a "majority of 'void' points"
 
         # If `num_classes` was not passed, we set it to `y_max + 1`
         # (i.e. there are no 'void' objects)
@@ -779,11 +764,7 @@ class InstanceData(CSRData):
         """
         # For each cluster, identify the dominant object (i.e. the object
         # with which the cluster has the most overlap)
-
-        # cluster_idx = self.indices
-        # argmax = scatter_max(self.count, cluster_idx)[1]
         obj, count, y = self.major(num_classes=num_classes)
-        # idx, perm = consecutive_cluster(self.obj[argmax])
         idx, perm = consecutive_cluster(obj)
 
         # Group together clusters with the same target object index.
@@ -793,10 +774,6 @@ class InstanceData(CSRData):
         # Compute the oracle predicted semantic label for each grouped
         # cluster instance
         oracle_y = y[perm]
-        # oracle_y = self.y[argmax][perm]
-
-        # TODO: what if dominant is void ?
-        # TODO: where does major return void ?
 
         # Compute the oracle predicted scores. Here, we choose to score
         # clusters by their IoU with their optimal target
