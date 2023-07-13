@@ -6,6 +6,9 @@ from itertools import product
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.cm as cm
+from torch.nn.functional import one_hot, softmax
+from torch_scatter import scatter_sum
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils.neighbors import knn_2
 from src.utils.graph import to_trimmed
 from src.utils.cpu import available_cpu_count
@@ -21,7 +24,7 @@ from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 __all__ = [
     'generate_random_bbox_data', 'generate_random_segment_data',
-    'instance_cut_pursuit']
+    'instance_cut_pursuit', 'oracle_superpoint_clustering']
 
 
 _MAX_NUM_EDGES = 4294967295
@@ -488,3 +491,144 @@ def instance_cut_pursuit(
     instance_index = torch.from_numpy(instance_index.astype('int64')).to(device)
 
     return instance_index
+
+
+def oracle_superpoint_clustering(
+        nag,
+        num_classes,
+        thing_classes,
+        level=1,
+        k_max=30,
+        radius=3,
+        adjacency_mode='radius-centroid',
+        centroid_mode='iou',
+        centroid_level=1,
+        smooth_affinity=True,
+        regularization=1e-5,
+        spatial_weight=1e-1,
+        cutoff=1,
+        parallel=True,
+        iterations=10,
+        trim=False,
+        discrepancy_epsilon=1e-1
+):
+    """Compute an oracle for superpoint clustering for instance and
+    panoptic segmentation. This is a proxy for the highest achievable
+    graph clustering performance with the superpoint partition at hand
+    and the input clustering parameters.
+
+    The output `InstanceData` can then be used to compute final
+    segmentation metrics using:
+      - `InstanceData.semantic_segmentation_oracle()`
+      - `InstanceData.instance_segmentation_oracle()`
+      - `InstanceData.panoptic_segmentation_oracle()`
+
+    More precisely, for the optimal superpoint clustering:
+      - build the instance graph on the input `NAG` `level`-partition
+      - for each edge, the oracle perfectly predicts the affinity
+      - for each node, the oracle perfectly predicts the offset
+      - for each node, the oracle predicts the dominant label from its
+        label histogram (excluding the 'void' label)
+      - partition the instance graph using the oracle edge affinities,
+        node offsets and node classes
+      - merge superpoints if they are assigned to the same object
+      - merge 'stuff' predictions together, so that there is at most 1
+        prediction of each 'stuff' class per batch item
+
+    :param nag: NAG object
+    :param num_classes: int
+        Number of classes in the dataset, allows differentiating between
+        valid and void classes
+    :param thing_classes: List[int]
+        List of labels for 'thing' classes. The remaining labels are
+        either 'stuff' of 'void'
+    :param level: int
+        Level at which to compute the superpoint clustering
+    :param k_max:
+    :param radius:
+    :param adjacency_mode:
+    :param centroid_mode:
+    :param centroid_level:
+    :param smooth_affinity:
+    :param regularization:
+    :param spatial_weight:
+    :param cutoff:
+    :param parallel:
+    :param iterations:
+    :param trim:
+    :param discrepancy_epsilon:
+    :return:
+    """
+    # Local imports to avoid import loop errors
+    from src.transforms import OnTheFlyInstanceGraph
+    from src.nn.instance import InstancePartitioner
+
+    # Instance graph computation
+    nag = OnTheFlyInstanceGraph(
+        level=level,
+        num_classes=num_classes,
+        adjacency_mode=adjacency_mode,
+        k_max=k_max,
+        radius=radius,
+        centroid_mode=centroid_mode,
+        centroid_level=centroid_level,
+        smooth_affinity=smooth_affinity)(nag)
+
+    # Create the InstancePartitioner module
+    module = InstancePartitioner(
+        regularization=regularization,
+        spatial_weight=spatial_weight,
+        cutoff=cutoff,
+        parallel=parallel,
+        iterations=iterations,
+        trim=trim,
+        discrepancy_epsilon=discrepancy_epsilon)
+
+    # Prepare input for instance graph partition
+    # NB: we assign only to valid classes and ignore void
+    node_y = nag[1].y[:, :num_classes].argmax(dim=1)
+    node_pos = nag[1].pos
+    node_offset = nag[1].obj_pos - nag[1].pos
+    node_logits = one_hot(node_y, num_classes=num_classes).float()
+    node_size = nag.get_sub_size(1)
+    edge_index = nag[1].obj_edge_index
+    edge_affinity = nag[1].obj_edge_affinity
+
+    # Set node offset to 0 for stuff and void classes
+    thing_classes = torch.tensor(thing_classes, device=nag.device)
+    is_thing = torch.isin(node_y, thing_classes)
+    node_offset = node_offset * is_thing.view(-1, 1)
+
+    # Instance graph partition
+    instance_index = module(
+        node_pos,
+        node_offset,
+        node_logits,
+        node_size,
+        edge_index,
+        edge_affinity)
+
+    # For each stuff class of each batch item, merge predictions
+    # together
+    weighted_node_logits = softmax(
+        node_logits.float(), dim=1) * node_size.view(-1, 1)
+    instance_label = scatter_sum(
+        weighted_node_logits, instance_index, dim=0).argmax(dim=1)
+    pred_instance_label = instance_label[instance_index]
+
+    batch = nag[1].batch if nag[1].batch else torch.zeros_like(instance_index)
+    num_batch_items = batch.max() + 1
+
+    is_thing = torch.isin(pred_instance_label, thing_classes)
+
+    final_instance_index = instance_index.clone()
+    final_instance_index[~is_thing] = \
+        instance_index.max() + 1 \
+        + pred_instance_label[~is_thing] * num_batch_items \
+        + batch[~is_thing]
+    final_instance_index = consecutive_cluster(final_instance_index)[0]
+
+    # Compute the instance data by merging nodes based on instance_index
+    instance_data = nag[1].obj.merge(final_instance_index)
+
+    return instance_data

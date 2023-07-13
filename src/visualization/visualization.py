@@ -33,6 +33,8 @@ def visualize_3d(
         h_edge=False,
         h_edge_attr=False,
         gap=None,
+        radius=None,
+        center=None,
         select=None,
         alpha=0.1,
         alpha_super=None,
@@ -94,10 +96,19 @@ def visualize_3d(
         If None, the hierarchical graphs will be overlaid on the points.
         If not None, a 3D tensor indicating the offset by which the
         hierarchical graphs should be plotted
+    :param radius: float
+        If not None, only visualize a spherical sampling of the input
+        data, centered on `center` and with size `radius`. This option
+        is not compatible with `select`
+    :param center: List(float, float, float)
+        If `radius` is provided, only visualize a spherical sampling of
+        the input data, centered on `center` and with size `radius`. If
+        None, the center of the scene will be used
     :param select:
         If not None, will call Data.select(select) or
         NAG.select(*select) on the input data (depending on its nature)
-        and the coloring schemes will illustrate it
+        and the coloring schemes will illustrate it. This option is not
+        compatible with `radius`
     :param alpha: float
         Rules the whitening of selected points, nodes and edges (only if
          select is not None)
@@ -124,6 +135,8 @@ def visualize_3d(
     # assert isinstance(input, (Data, NAG))
     gap = torch.tensor(gap) if gap is not None else gap
     assert gap is None or gap.shape == torch.Size([3])
+    assert not (radius and (select is not None)), \
+        "Cannot use both a `radius` and `select` at once"
 
     # We work on copies of the input data, to allow modified in this
     # scope
@@ -150,7 +163,33 @@ def visualize_3d(
     alpha_super = max(0, min(alpha_super, 1)) if alpha_super else alpha
     alpha_stuff = max(0, min(alpha_stuff, 1)) if alpha_stuff else alpha
 
-    # If select is provided, we will call NAG.select on the input data
+    # If `radius` is provided, we only visualize a spherical selection
+    # of size `radius` around the `center`
+    if radius is not None:
+        # If no `center` provided, pick the middle of the scene
+        if center is None:
+            hi = input[0].pos.max(dim=0).values
+            lo = input[0].pos.min(dim=0).values
+            center = (hi + lo) / 2
+
+            # For Z, we center on the average Z, because the middle
+            # value may cause empty samplings for outdoor scenes with
+            # some very high objects and most of the interesting stuff
+            # happening near the ground 
+            center[2] = input[0].pos[:, 2].mean()
+        else:
+            center = torch.as_tensor(center).cpu()
+        center = center.view(1, -1)
+
+        # Create a mask on level-0 (ie points) to be used for indexing
+        # the NAG structure
+        mask = torch.where(
+            torch.linalg.norm(input[0].pos - center, dim=1) < radius)[0]
+
+        # Subselect the hierarchical partition based on the level-0 mask
+        input = input.select(0, mask)
+
+    # If `select` is provided, we will call NAG.select on the input data
     # and illustrate the selected/discarded pattern in the figure
     if select is not None and is_nag:
 

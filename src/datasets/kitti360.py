@@ -158,6 +158,14 @@ class KITTI360(BaseDataset):
         return STUFF_CLASSES
 
     @property
+    def class_colors(self):
+        """Colors for visualization, if not None, must have the same
+        length as `self.num_classes`. If None, the visualizer will use
+        the label values in the data to generate random colors.
+        """
+        return CLASS_COLORS
+
+    @property
     def all_base_cloud_ids(self):
         """Dictionary holding lists of paths to the clouds, for each
         stage.

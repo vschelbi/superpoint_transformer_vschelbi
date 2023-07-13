@@ -3,6 +3,7 @@ import re
 import sys
 import os.path as osp
 import torch
+import random
 import logging
 import hashlib
 import warnings
@@ -18,6 +19,7 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.data import NAG
 from src.transforms import NAGSelectByKey, NAGRemoveKeys, SampleXYTiling, \
     SampleRecursiveMainXYAxisTiling
+from src.visualization import show
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -48,6 +50,11 @@ class BaseDataset(InMemoryDataset):
         def stuff_classes(self):
             pass
 
+        def class_colors(self):
+            # Optional: only if you want to customize your color palette
+            # for visualization
+            pass
+
         def all_base_cloud_ids(self):
             pass
 
@@ -60,7 +67,7 @@ class BaseDataset(InMemoryDataset):
         def processed_to_raw_path(self):
             pass
 
-        def raw_file_structure(self) (optional):
+        def raw_file_structure(self):
             # Optional: only if your raw or processed file structure
             # differs from the default
             pass
@@ -306,6 +313,14 @@ class BaseDataset(InMemoryDataset):
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
         return [self.num_classes]
+
+    @property
+    def class_colors(self):
+        """Colors for visualization, if not None, must have the same
+        length as `self.num_classes`. If None, the visualizer will use
+        the label values in the data to generate random colors.
+        """
+        return
 
     def print_classes(self):
         """Show the class names, labels and type (thing, stuff, void).
@@ -836,3 +851,75 @@ class BaseDataset(InMemoryDataset):
         datasets with held-out test sets.
         """
         raise NotImplementedError
+
+    def show_examples(
+            self, label, radius=4, max_examples=5, shuffle=True, **kwargs):
+        """Interactive plots of some examples centered on points of the
+        provided `label`. At most one example per cloud/tile/scene in
+        the dataset will be shown.
+
+        :param label: int
+            Point label we are
+        :param radius: float
+            Radius of the spherical sampling to draw around the point of
+            interest
+        :param max_examples: int
+            Maximum number of samples to draw
+        :param shuffle: bool
+            If True, the candidate samples will be shuffled every time
+        :param kwargs:
+            Kwargs to be passed to the visualization `show()` function
+        :return:
+        """
+        assert label >= 0 and label <= self.num_classes, \
+            f"Label must be within [0, {self.num_classes + 1}]"
+
+        # Gather some clouds ids with the desired class
+        cloud_list = []
+        iterator = list(range(len(self)))
+        if shuffle:
+            random.shuffle(iterator)
+        for i_cloud in iterator:
+            if len(cloud_list) >= max_examples:
+                break
+            if (self[i_cloud][1].y.argmax(dim=1) == label).any():
+                cloud_list.append(i_cloud)
+
+        # If no cloud was found with the desired class, return here
+        if len(cloud_list) == 0:
+            print(
+                f"Could not find any cloud with points of label={label} in the "
+                f"dataset.")
+            return
+
+        # Display some found examples
+        for i, i_cloud in enumerate(cloud_list):
+            if i >= max_examples:
+                break
+
+            # Load the cloud
+            nag = self[i_cloud]
+
+            # Search for points with the desired label
+            point_idx = torch.where(nag[0].y.argmax(dim=1) == label)[0].tolist()
+
+            # Pick only on of the points as visualization center for the
+            # cloud at hand
+            if shuffle:
+                random.shuffle(point_idx)
+            i_point = point_idx[0]
+
+            # Draw the scene
+            center = nag[0].pos[i_point].cpu().tolist()
+            title = f"Label={label} - Cloud={i_cloud} - Center={center}"
+            print(f"\n{title}")
+            show(
+                nag,
+                center=center,
+                radius=radius,
+                title=title,
+                class_names=self.class_names,
+                class_colors=self.class_colors,
+                stuff_classes=self.stuff_classes,
+                num_classes=self.num_classes,
+                **kwargs)
