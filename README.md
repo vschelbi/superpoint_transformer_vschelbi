@@ -16,6 +16,8 @@ Official implementation for
 <br>
 [_Efficient 3D Semantic Segmentation with Superpoint Transformer_](http://arxiv.org/abs/2306.08045)
 <br>
+accepted at ICCV 2023
+<br>
 🚀⚡🔥
 <br>
 
@@ -61,7 +63,8 @@ between superpoints at multiple scales.
 
 ## 📰  Updates
 
-- **15.06.2023 Official release** 🌱
+- **14.07.2023** Our paper **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](http://arxiv.org/abs/2306.08045)** was accepted at **[ICCV 2023](https://iccv2023.thecvf.com/)** 🥳
+- **15.06.2023** Official release 🌱
 
 <br>
 
