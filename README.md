@@ -326,7 +326,7 @@ If your work uses all or part of the present code, please include the following 
 @inproceedings{robert2023spt,
   title={Efficient 3D Semantic Segmentation with Superpoint Transformer},
   author={Robert, Damien and Raguet, Hugo and Landrieu, Loic},
-  journal={arXiv preprint arXiv:2306.08045},
+  journal={Proceedings of the IEEE/CVF International Conference on Computer Vision},
   year={2023}
 }
 ```
