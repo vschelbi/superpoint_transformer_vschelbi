@@ -141,7 +141,7 @@ class PointSegmentationModule(LightningModule):
                 f"Class weights will be ignored...")
             return
 
-        # Set class weights for the
+        # Set class weights for the criterion
         weight = self.trainer.datamodule.train_dataset.get_class_weight()
         self.criterion.weight = weight.to(self.device)
 

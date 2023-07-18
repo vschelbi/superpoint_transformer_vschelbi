@@ -704,8 +704,8 @@ class BaseDataset(InMemoryDataset):
 
     def sanitized_read_single_raw_cloud(self, raw_cloud_path):
         """Wrapper around the actual `self.read_single_raw_cloud`. This
-        function ensures that the class labels returned by the reader
-        are sanitized.
+        function ensures that the semantic and instance segmentation
+        labels returned by the reader are sanitized.
 
         More specifically, we assume `[0, self.num_classes-1]` ARE ALL
         VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
@@ -717,6 +717,12 @@ class BaseDataset(InMemoryDataset):
         Hence, we actually have `self.num_classes + 1` labels in the
         data. This allows identifying the points to be ignored at metric
         computation time.
+
+        Besides, this function ensures that there is at most 1 instance
+        of each stuff (and void) class in each scene/cloud/tile, as
+        described in:
+          - https://arxiv.org/abs/1801.00868
+          - https://arxiv.org/abs/1905.01220
         """
         data = self.read_single_raw_cloud(raw_cloud_path)
 
