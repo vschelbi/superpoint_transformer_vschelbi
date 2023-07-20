@@ -574,16 +574,6 @@ def oracle_superpoint_clustering(
         centroid_level=centroid_level,
         smooth_affinity=smooth_affinity)(nag)
 
-    # Create the InstancePartitioner module
-    module = InstancePartitioner(
-        regularization=regularization,
-        spatial_weight=spatial_weight,
-        cutoff=cutoff,
-        parallel=parallel,
-        iterations=iterations,
-        trim=trim,
-        discrepancy_epsilon=discrepancy_epsilon)
-
     # Prepare input for instance graph partition
     # NB: we assign only to valid classes and ignore void
     node_y = nag[1].y[:, :num_classes].argmax(dim=1)
@@ -600,13 +590,20 @@ def oracle_superpoint_clustering(
     node_offset = node_offset * is_thing.view(-1, 1)
 
     # Instance graph partition
-    instance_index = module(
+    instance_index = instance_cut_pursuit(
         node_pos,
         node_offset,
         node_logits,
         node_size,
         edge_index,
-        edge_affinity)
+        edge_affinity,
+        regularization=regularization,
+        spatial_weight=spatial_weight,
+        cutoff=cutoff,
+        parallel=parallel,
+        iterations=iterations,
+        trim=trim,
+        discrepancy_epsilon=discrepancy_epsilon)
 
     # For each stuff class of each batch item, merge predictions
     # together

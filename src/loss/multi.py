@@ -43,8 +43,9 @@ class MultiLoss(nn.Module):
         return self.criteria[0].weight
 
     @weight.setter
-    def weight(self, weight):
+    def weight(self, weight, idx=None):
         """MultiLoss supports `weight` if all its criteria support it.
         """
         for i in range(len(self)):
-            self.criteria[i].weight = weight
+            if idx is None or i in idx:
+                self.criteria[i].weight = weight

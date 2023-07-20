@@ -4,6 +4,7 @@ import logging
 from copy import deepcopy
 from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
+import src
 from src.metrics import ConfusionMatrix
 from src.utils import loss_with_target_histogram, atomic_to_histogram, \
     init_weights, wandb_confusion_matrix, knn_2, garbage_collection_cuda
@@ -14,32 +15,136 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from src.data import NAG
 from src.transforms import NAGSaveNodeIndex
 
-
 log = logging.getLogger(__name__)
 
 
-class PointSegmentationModule(LightningModule):
+__all__ = ['SemanticSegmentationOutput', 'SemanticSegmentationModule']
+
+
+class SemanticSegmentationOutput:
+    """A simple holder for semantic segmentation model output. This
+    facilitates moving output data around, as well as
+    `SemanticSegmentationModule` inheritance.
+    """
+
+    def __init__(self, logits, y_hist=None):
+        self.logits = logits
+        self.y_hist = y_hist
+        if src.is_debug_enabled():
+            self.debug()
+
+    def debug(self):
+        """Runs a series of sanity checks on the attributes of self.
+        """
+        assert isinstance(self.logits, torch.Tensor) \
+               or all(isinstance(l, torch.Tensor) for l in self.logits)
+        if self.has_target:
+            if self.multi_stage:
+                assert len(self.y_hist) == len(self.logits)
+                assert all(
+                    y.shape[0] == l.shape[0]
+                    for y, l in zip(self.y_hist, self.logits))
+            else:
+                assert self.y_hist.shape[0] == self.logits.shape[0]
+
+    @property
+    def has_target(self):
+        """Check whether `self` contains target data for semantic
+        segmentation.
+        """
+        return self.y_hist is not None
+
+    @property
+    def multi_stage(self):
+        """If the semantic segmentation `logits` are stored in an
+        enumerable, then the model output is multi-stage.
+        """
+        return not isinstance(self.logits, torch.Tensor)
+
+    @property
+    def num_classes(self):
+        """Number for semantic classes in the output predictions.
+        """
+        logits = self.logits[0] if self.multi_stage else self.logits
+        return logits.shape[1]
+
+    @property
+    def num_nodes(self):
+        """Number for nodes/superpoints in the output predictions. By
+        default, for a hierarchical partition, this means counting the
+        number of level-1 nodes/superpoints.
+        """
+        logits = self.logits[0] if self.multi_stage else self.logits
+        return logits.shape[0]
+
+    @property
+    def preds(self):
+        """Final semantic segmentation predictions are the argmax of the
+        first-level partition logits.
+        """
+        logits = self.logits[0] if self.multi_stage else self.logits
+        return torch.argmax(logits, dim=1)
+
+    @property
+    def void_mask(self):
+        """Returns a mask on the level-1 nodes indicating which is void.
+        By convention, nodes/superpoints are void if they contain
+        more than 50% void points. By convention in this project, void
+        points have the label `num_classes`. In label histograms, void
+        points are counted in the last column.
+        """
+        if not self.has_target:
+            return
+
+        # For simplicity, we only return the mask for the level-1
+        y_hist = self.y_hist[0] if self.multi_stage else self.y_hist
+        total_count = y_hist.sum(dim=1)
+        void_count = y_hist[:, -1]
+        return void_count / total_count > 0.5
+
+
+class SemanticSegmentationModule(LightningModule):
     """A LightningModule for semantic segmentation of point clouds."""
 
+    _IGNORED_HYPERPARAMETERS = ['net', 'criterion']
+
     def __init__(
-            self, net, criterion, optimizer, scheduler, num_classes,
-            class_names=None, sampling_loss=False, loss_type=True,
-            weighted_loss=True, init_linear=None, init_rpe=None,
-            transformer_lr_scale=1, multi_stage_loss_lambdas=None,
-            gc_every_n_steps=0, **kwargs):
+            self,
+            net,
+            criterion,
+            optimizer,
+            scheduler,
+            num_classes,
+            class_names=None,
+            sampling_loss=False,
+            loss_type='ce_kl',
+            weighted_loss=True,
+            init_linear=None,
+            init_rpe=None,
+            transformer_lr_scale=1,
+            multi_stage_loss_lambdas=None,
+            gc_every_n_steps=0,
+            **kwargs):
         super().__init__()
 
         # Allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
-        self.save_hyperparameters(logger=False, ignore=['net', 'criterion'])
+        self.save_hyperparameters(
+            logger=False, ignore=self._IGNORED_HYPERPARAMETERS)
+
+        # Store the number of classes and the class names
+        self.num_classes = num_classes
+        self.class_names = class_names if class_names is not None \
+            else [f'class-{i}' for i in range(num_classes)]
 
         # Loss function. If `multi_stage_loss_lambdas`, a MultiLoss is
         # built based on the input criterion
         if isinstance(criterion, MultiLoss):
             self.criterion = criterion
         elif multi_stage_loss_lambdas is not None:
-            criteria = [deepcopy(criterion)
-                        for _ in range(len(multi_stage_loss_lambdas))]
+            criteria = [
+                deepcopy(criterion)
+                for _ in range(len(multi_stage_loss_lambdas))]
             self.criterion = MultiLoss(criteria, multi_stage_loss_lambdas)
         else:
             self.criterion = criterion
@@ -64,7 +169,7 @@ class PointSegmentationModule(LightningModule):
                 f"{len(self.net.out_dim)} stages, but {len(self.criterion)} " \
                 f"criteria in the loss."
 
-        # Segmentation head
+        # Initialize the model segmentation head (or heads)
         if self.multi_stage_loss:
             self.head = ModuleList([
                 Classifier(dim, num_classes) for dim in self.net.out_dim])
@@ -78,13 +183,10 @@ class PointSegmentationModule(LightningModule):
         self.net.apply(init)
         self.head.apply(init)
 
-        # Metric objects for calculating and averaging accuracy across
-        # batches. We add `ignore_index=num_classes` to account for
-        # unclassified/ignored points, which are given num_classes
-        # labels
-        self.num_classes = num_classes
-        self.class_names = class_names if class_names is not None \
-            else [f'class-{i}' for i in range(num_classes)]
+        # Metric objects for calculating scores on each dataset split.
+        # We add `ignore_index=num_classes` to account for
+        # void/unclassified/ignored points, which are given
+        # `num_classes` labels
         self.train_cm = ConfusionMatrix(num_classes)
         self.val_cm = ConfusionMatrix(num_classes)
         self.test_cm = ConfusionMatrix(num_classes)
@@ -105,9 +207,9 @@ class PointSegmentationModule(LightningModule):
 
     def forward(self, nag):
         x = self.net(nag)
-        if self.multi_stage_loss:
-            return [head(x_) for head, x_ in zip(self.head, x)]
-        return self.head(x)
+        logits = [head(x_) for head, x_ in zip(self.head, x)] \
+            if self.multi_stage_loss else self.head(x)
+        return SemanticSegmentationOutput(logits)
 
     @property
     def multi_stage_loss(self):
@@ -172,144 +274,150 @@ class PointSegmentationModule(LightningModule):
         self.gc_collect()
 
     def model_step(self, batch):
-        # Forward step on the input batch. If a (NAG, List(NAG)) is
-        # passed, the multi-run inference will be triggered
-        if isinstance(batch, NAG):
-            logits, preds, y_hist = self.step_single_run_inference(batch)
-        else:
-            logits, preds, y_hist = self.step_multi_run_inference(*batch)
+        # Forward step on the input batch. If a (NAG, Transform, int)
+        # tuple is passed, the multi-run inference will be triggered
+        output = self.step_single_run_inference(batch) \
+            if isinstance(batch, NAG) \
+            else self.step_multi_run_inference(*batch)
 
         # If the input batch does not have any labels (e.g. test set with
         # held-out labels), y_hist will be None and the loss will not be
         # computed
-        if y_hist is None:
-            return None, preds.detach(), None
+        if not output.has_target:
+            return None, output
 
         # Compute the loss either in a point-wise or segment-wise
         # fashion. Cross-Entropy with pointwise_loss is equivalent to
         # KL-divergence
         if self.multi_stage_loss:
             if self.hparams.loss_type == 'ce':
-                loss = self.criterion(logits, [y.argmax(dim=1) for y in y_hist])
-                y_hist = y_hist[0]
+                loss = self.criterion(
+                    output.logits, [y.argmax(dim=1) for y in output.y_hist])
+                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'wce':
                 y_hist_dominant = []
-                for y in y_hist:
+                for y in output.y_hist:
                     y_dominant = y.argmax(dim=1)
                     y_hist_dominant_ = torch.zeros_like(y)
                     y_hist_dominant_[:, y_dominant] = y.sum(dim=1)
                     y_hist_dominant.append(y_hist_dominant_)
                 loss = 0
                 enum = zip(
-                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist_dominant)
+                    self.criterion.lambdas,
+                    self.criterion.criteria,
+                    output.logits,
+                    y_hist_dominant)
                 for lamb, criterion, a, b in enum:
-                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
-                y_hist = y_hist[0]
+                    loss = loss + lamb * loss_with_target_histogram(
+                        criterion, a, b)
+                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'ce_kl':
                 loss = 0
                 enum = zip(
-                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
+                    self.criterion.lambdas,
+                    self.criterion.criteria,
+                    output.logits,
+                    output.y_hist)
                 for i, (lamb, criterion, a, b) in enumerate(enum):
                     if i == 0:
                         loss = loss + criterion(a, b.argmax(dim=1))
                         continue
-                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
-                y_hist = y_hist[0]
+                    loss = loss + lamb * loss_with_target_histogram(
+                        criterion, a, b)
+                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'wce_kl':
                 loss = 0
                 enum = zip(
-                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
+                    self.criterion.lambdas,
+                    self.criterion.criteria,
+                    output.logits,
+                    output.y_hist)
                 for i, (lamb, criterion, a, b) in enumerate(enum):
                     if i == 0:
                         y_dominant = b.argmax(dim=1)
                         y_hist_dominant = torch.zeros_like(b)
                         y_hist_dominant[:, y_dominant] = b.sum(dim=1)
-                        loss = loss + loss_with_target_histogram(criterion, a, y_hist_dominant)
+                        loss = loss + loss_with_target_histogram(
+                            criterion, a, y_hist_dominant)
                         continue
-                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
-                y_hist = y_hist[0]
+                    loss = loss + lamb * loss_with_target_histogram(
+                        criterion, a, b)
+                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'kl':
                 loss = 0
                 enum = zip(
-                    self.criterion.lambdas, self.criterion.criteria, logits, y_hist)
+                    self.criterion.lambdas,
+                    self.criterion.criteria,
+                    output.logits,
+                    output.y_hist)
                 for lamb, criterion, a, b in enum:
-                    loss = loss + lamb * loss_with_target_histogram(criterion, a, b)
-                y_hist = y_hist[0]
+                    loss = loss + lamb * loss_with_target_histogram(
+                        criterion, a, b)
+                output.y_hist = output.y_hist[0]
             else:
-                raise ValueError(f"Unknown multi-stage loss '{self.hparams.loss_type}'")
+                raise ValueError(
+                    f"Unknown multi-stage loss '{self.hparams.loss_type}'")
         else:
             if self.hparams.loss_type == 'ce':
-                loss = self.criterion(logits, y_hist.argmax(dim=1))
+                loss = self.criterion(output.logits, output.y_hist.argmax(dim=1))
             elif self.hparams.loss_type == 'wce':
-                y_dominant = y_hist.argmax(dim=1)
-                y_hist_dominant = torch.zeros_like(y_hist)
-                y_hist_dominant[:, y_dominant] = y_hist.sum(dim=1)
-                loss = loss_with_target_histogram(self.criterion, logits, y_hist_dominant)
+                y_dominant = output.y_hist.argmax(dim=1)
+                y_hist_dominant = torch.zeros_like(output.y_hist)
+                y_hist_dominant[:, y_dominant] = output.y_hist.sum(dim=1)
+                loss = loss_with_target_histogram(
+                    self.criterion, output.logits, y_hist_dominant)
             elif self.hparams.loss_type == 'kl':
-                loss = loss_with_target_histogram(self.criterion, logits, y_hist)
+                loss = loss_with_target_histogram(
+                    self.criterion, output.logits, output.y_hist)
             else:
-                raise ValueError(f"Unknown single-stage loss '{self.hparams.loss_type}'")
+                raise ValueError(
+                    f"Unknown single-stage loss '{self.hparams.loss_type}'")
 
-        return loss, preds.detach(), y_hist.detach()
+        return loss, output
 
     def step_single_run_inference(self, nag):
         """Single-run inference
         """
-        y_hist = self.step_get_y_hist(nag)
-        logits = self.forward(nag)
-        if self.multi_stage_loss:
-            preds = torch.argmax(logits[0], dim=1)
-        else:
-            preds = torch.argmax(logits, dim=1)
-        return logits, preds, y_hist
+        output = self.forward(nag)
+        output = self.get_target(nag, output)
+        return output
 
-    def step_multi_run_inference(self, nag, transform, num_runs):
+    def step_multi_run_inference(
+            self, nag, transform, num_runs, key='tta_node_id'):
         """Multi-run inference, typically with test-time augmentation.
         See `BaseDataModule.on_after_batch_transfer`
         """
         # Since the transform may change the sampling of the nodes, we
         # save their input id here before anything. This will allow us
         # to fuse the multiple predictions for each node
-        KEY = 'tta_node_id'
-        transform.transforms = [NAGSaveNodeIndex(key=KEY)] \
+        transform.transforms = [NAGSaveNodeIndex(key=key)] \
                                + transform.transforms
 
+        # Create empty output predictions, to be iteratively populated
+        # with the multiple predictions
+        output_multi = self._create_empty_output(nag)
+
         # Recover the target labels from the reference NAG
-        y_hist = self.step_get_y_hist(nag)
+        output_multi = self.get_target(nag, output_multi)
 
         # Build the global logits, in which the multi-run
         # logits will be accumulated, before computing their final
-        logits = None
         seen = torch.zeros(nag.num_points[1], dtype=torch.bool)
+
         for i_run in range(num_runs):
 
             # Apply transform
             nag_ = transform(nag.clone())
 
-            # Recover the node identifier that should have been
-            # implanted by `NAGSaveNodeIndex` and forward on the
-            # augmented data and update the global logits of the node
-            if self.multi_stage_loss:
-                out = self.forward(nag_)
-                if logits is None:
-                    num_classes = out[0].shape[1]
-                    logits = [
-                        torch.zeros(num_points, num_classes, device=nag.device)
-                        for num_points in nag.num_points[1:]]
-                for i in range(len(out)):
-                    node_id = nag_[i + 1][KEY]
-                    logits[i][node_id] += out[i]
-            else:
-                out = self.forward(nag_)
-                if logits is None:
-                    num_classes = out.shape[1]
-                    logits = torch.zeros(
-                        nag.num_points[1], num_classes, device=nag.device)
-                node_id = nag_[1][KEY]
-                logits[node_id] += out
+            # Forward pass
+            output = self.forward(nag_)
 
-            # Maintain the seen/unssen mask for level-1 nodes only
-            node_id = nag_[1][KEY]
+            # Update the output results
+            output_multi = self._update_output_multi(
+                output_multi, nag, output, nag_, key)
+
+            # Maintain the seen/unseen mask for level-1 nodes only
+            node_id = nag_[1][key]
             seen[node_id] = True
 
         # Restore the original transform inplace modification
@@ -340,27 +448,83 @@ class PointSegmentationModule(LightningModule):
                     f"{num_left_out}. These left out nodes will default to "
                     f"label-0 class prediction. Consider sampling less nodes "
                     f"in the augmentations, or increase the search radius")
-            if self.multi_stage_loss:
-                logits[0][unseen_idx] = logits[0][seen_idx][neighbors]
-            else:
-                logits[unseen_idx] = logits[seen_idx][neighbors]
 
-        # Compute the global prediction
-        preds = torch.argmax(logits, dim=1) if not self.multi_stage_loss \
-            else torch.argmax(logits[0], dim=1)
+            # Propagate the output to unseen neighbors
+            output_multi = self._propagate_output_to_unseen_neighbors(
+                output_multi, nag, seen, neighbors)
 
-        return logits, preds, y_hist
+        return output_multi
 
-    def step_get_y_hist(self, nag):
-        # Return None if the required labels cannot be found in the NAG
+    def _create_empty_output(self, nag):
+        """Local helper method to initialize an empty output for
+        multi-run prediction.
+        """
+        device = nag.device
+        num_classes = self.num_classes
+        if self.multi_stage_loss:
+            logits = [
+                torch.zeros(num_points, num_classes, device=device)
+                for num_points in nag.num_points[1:]]
+        else:
+            logits = torch.zeros(nag.num_points[1], num_classes, device=device)
+        return SemanticSegmentationOutput(logits)
+
+    @staticmethod
+    def _update_output_multi(output_multi, nag, output, nag_transformed, key):
+        """Local helper method to accumulate multiple predictions on
+        the same -or part of the same- point cloud.
+        """
+        # Recover the node identifier that should have been
+        # implanted by `NAGSaveNodeIndex` and forward on the
+        # augmented data and update the global logits of the node
+        if output.multi_stage:
+            for i in range(len(output.logits)):
+                node_id = nag_transformed[i + 1][key]
+                output_multi.logits[i][node_id] += output.logits[i]
+        else:
+            node_id = nag_transformed[1][key]
+            output_multi.logits[node_id] += output.logits
+        return output_multi
+
+    @staticmethod
+    def _propagate_output_to_unseen_neighbors(output, nag, seen, neighbors):
+        """Local helper method to propagate predictions to unseen
+        neighbors.
+        """
+        seen_idx = torch.where(seen)[0]
+        unseen_idx = torch.where(~seen)[0]
+        if output.multi_stage:
+            output.logits[0][unseen_idx] = output.logits[0][seen_idx][neighbors]
+        else:
+            output.logits[unseen_idx] = output.logits[seen_idx][neighbors]
+        return output
+
+    def get_target(self, nag, output):
+        """Recover the target histogram of labels from the NAG object.
+        The labels will be saved in `output.y_hist`.
+
+        If the `multi_stage_loss=True`, a list of label histograms
+        will be recovered (one for each prediction level).
+
+        If `sampling_loss=True`, the histogram(s) will be updated based
+        on the actual level-0 point sampling. That is, superpoints will
+        be supervised by the labels of the sampled points at train time,
+        rather than the true full-resolution label histogram.
+
+        If no labels are found in the NAG, `output.y_hist` will be None.
+        """
+        # Return if the required labels cannot be found in the NAG
         if self.hparams.sampling_loss and nag[0].y is None:
-            return
+            output.y_hist = None
+            return output
         elif self.multi_stage_loss:
             for i in range(1, nag.num_levels):
                 if nag[i].y is None:
-                    return
+                    output.y_hist = None
+                    return output
         elif nag[1].y is None:
-            return
+            output.y_hist = None
+            return output
 
         # Recover level-1 label histograms, either from the level-0
         # sampled points (i.e. sampling will affect the loss and metrics)
@@ -387,14 +551,17 @@ class PointSegmentationModule(LightningModule):
         else:
             y_hist = nag[1].y
 
-        return y_hist
+        # Store the label histogram in the output object
+        output.y_hist = y_hist
+
+        return output
 
     def training_step(self, batch, batch_idx):
-        loss, preds, targets = self.model_step(batch)
+        loss, output = self.model_step(batch)
 
         # update and log metrics
         self.train_loss(loss)
-        self.train_cm(preds, targets)
+        self.train_cm(output.preds.detach(), output.y_hist.detach())
         self.log(
             "train/loss", self.train_loss, on_step=False, on_epoch=True,
             prog_bar=True)
@@ -413,16 +580,17 @@ class PointSegmentationModule(LightningModule):
         self.train_cm.reset()
 
     def validation_step(self, batch, batch_idx):
-        loss, preds, targets = self.model_step(batch)
+        loss, output = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
-        self.val_cm(preds, targets)
+        self.val_cm(output.preds.detach(), output.y_hist.detach())
         self.log(
             "val/loss", self.val_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
     def on_validation_epoch_end(self):
+        # TODO: log metrics
         # `outputs` is a list of dicts returned from `validation_step()`
         miou = self.val_cm.miou()
         oa = self.val_cm.oa()
@@ -456,18 +624,18 @@ class PointSegmentationModule(LightningModule):
         self.submission_dir = self.trainer.datamodule.test_dataset.submission_dir
 
     def test_step(self, batch, batch_idx):
-        loss, preds, targets = self.model_step(batch)
+        loss, output = self.model_step(batch)
 
-        # If the input batch does not have any labels (e.g. test set with
-        # held-out labels), y_hist will be None and the loss will not be
-        # computed. In this case, we arbitrarily set the loss to 0 and
-        # do not update the confusion matrix
+        # If the input batch does not have any labels (e.g. test set
+        # with held-out labels), y_hist will be None and the loss will
+        # not be computed. In this case, we arbitrarily set the loss to
+        # 0 and do not update the confusion matrix
         loss = 0 if loss is None else loss
 
         # update and log metrics
         self.test_loss(loss)
-        if targets is not None:
-            self.test_cm(preds, targets)
+        if output.has_target:
+            self.test_cm(output.preds.detach(), output.y_hist.detach())
         self.log(
             "test/loss", self.test_loss, on_step=False, on_epoch=True,
             prog_bar=True)
@@ -476,11 +644,12 @@ class PointSegmentationModule(LightningModule):
         if self.trainer.datamodule.hparams.submit:
             nag = batch if isinstance(batch, NAG) else batch[0]
             l0_pos = nag[0].pos.detach().cpu()
-            l0_preds = preds[nag[0].super_index].detach().cpu()
+            l0_preds = output.preds[nag[0].super_index].detach().cpu()
             self.trainer.datamodule.test_dataset.make_submission(
                 batch_idx, l0_preds, l0_pos, submission_dir=self.submission_dir)
 
     def on_test_epoch_end(self):
+        # TODO: log metrics
         # `outputs` is a list of dicts returned from `test_step()`
         self.log("test/miou", self.test_cm.miou(), prog_bar=True)
         self.log("test/oa", self.test_cm.oa(), prog_bar=True)
@@ -489,12 +658,14 @@ class PointSegmentationModule(LightningModule):
             if seen:
                 self.log(f"test/iou_{name}", iou, prog_bar=True)
 
+        # TODO: log CM
         # Log confusion matrix to wandb
         if isinstance(self.logger, WandbLogger):
             self.logger.experiment.log({
                 "test/cm": wandb_confusion_matrix(
                     self.test_cm.confmat, class_names=self.class_names)})
 
+        # TODO: make submission
         if self.trainer.datamodule.hparams.submit:
             self.trainer.datamodule.test_dataset.finalize_submission(
                 self.submission_dir)
@@ -574,5 +745,5 @@ if __name__ == "__main__":
     import pyrootutils
 
     root = str(pyrootutils.setup_root(__file__, pythonpath=True))
-    cfg = omegaconf.OmegaConf.load(root + "/configs/model/s1.yaml")
+    cfg = omegaconf.OmegaConf.load(root + "/configs/model/spt-2.yaml")
     _ = hydra.utils.instantiate(cfg)

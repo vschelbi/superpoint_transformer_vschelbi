@@ -1,4 +1,4 @@
-_target_: src.models.segmentation.PointSegmentationModule
+_target_: src.models.segmentation.SemanticSegmentationModule
 
 num_classes: ${datamodule.num_classes}
 sampling_loss: False
@@ -31,7 +31,7 @@ criterion:
 
 # Parameters declared here to facilitate tuning configs. Those are only
 # used here for config interpolation but will/should actually fall in
-# the ignored kwargs of the PointSegmentationModule
+# the ignored kwargs of the SemanticSegmentationModule
 _point_mlp: [32, 64, 128]  # point encoder layers
 _node_mlp_out: 32  # size of level-1+ handcrafted node features after MLP, set to 'null' to use directly the raw features
 _h_edge_mlp_out: 32  # size of level-1+ handcrafted horizontal edge features after MLP, set to 'null' to use directly the raw features
