@@ -1,4 +1,4 @@
 from .multi import *
 from .lovasz import *
 from .focal import *
-from .wmse import *
+from .weighted_mean_squared_error import *

@@ -22,9 +22,9 @@ __all__ = ['SemanticSegmentationOutput', 'SemanticSegmentationModule']
 
 
 class SemanticSegmentationOutput:
-    """A simple holder for semantic segmentation model output. This
-    facilitates moving output data around, as well as
-    `SemanticSegmentationModule` inheritance.
+    """A simple holder for semantic segmentation model output, with a
+    few helper methods for manipulating the predictions and targets
+    (if any).
     """
 
     def __init__(self, logits, y_hist=None):
@@ -560,42 +560,73 @@ class SemanticSegmentationModule(LightningModule):
         loss, output = self.model_step(batch)
 
         # update and log metrics
-        self.train_loss(loss)
-        self.train_cm(output.preds.detach(), output.y_hist.detach())
-        self.log(
-            "train/loss", self.train_loss, on_step=False, on_epoch=True,
-            prog_bar=True)
+        self.train_step_update_metrics(loss, output)
+        self.train_step_log_metrics()
+
+        # Explicitly delete the output, for memory release
+        del output
 
         # return loss or backpropagation will fail
         return loss
 
+    def train_step_update_metrics(self, loss, output):
+        """Update train metrics after a single step, with the content of
+        the output object.
+        """
+        self.train_loss(loss)
+        self.train_cm(output.preds.detach(), output.y_hist.detach())
+
+    def train_step_log_metrics(self):
+        """Log train metrics after a single step with the content of the
+        output object.
+        """
+        self.log(
+            "train/loss", self.train_loss, on_step=False, on_epoch=True,
+            prog_bar=True)
+
     def on_train_epoch_end(self):
-        # `outputs` is a list of dicts returned from `training_step()`
+        # Log metrics
         self.log("train/miou", self.train_cm.miou(), prog_bar=True)
         self.log("train/oa", self.train_cm.oa(), prog_bar=True)
         self.log("train/macc", self.train_cm.macc(), prog_bar=True)
         for iou, seen, name in zip(*self.train_cm.iou(), self.class_names):
             if seen:
                 self.log(f"train/iou_{name}", iou, prog_bar=True)
+
+        # Reset metrics accumulated over the last epoch
         self.train_cm.reset()
 
     def validation_step(self, batch, batch_idx):
         loss, output = self.model_step(batch)
 
         # update and log metrics
+        self.validation_step_update_metrics(loss, output)
+        self.validation_step_log_metrics()
+
+        # Explicitly delete the output, for memory release
+        del output
+
+    def validation_step_update_metrics(self, loss, output):
+        """Update validation metrics with the content of the output
+        object.
+        """
         self.val_loss(loss)
         self.val_cm(output.preds.detach(), output.y_hist.detach())
+
+    def validation_step_log_metrics(self):
+        """Log validation metrics after a single step with the content
+        of the output object.
+        """
         self.log(
             "val/loss", self.val_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
     def on_validation_epoch_end(self):
-        # TODO: log metrics
-        # `outputs` is a list of dicts returned from `validation_step()`
         miou = self.val_cm.miou()
         oa = self.val_cm.oa()
         macc = self.val_cm.macc()
 
+        # Log metrics
         self.log("val/miou", miou, prog_bar=True)
         self.log("val/oa", oa, prog_bar=True)
         self.log("val/macc", macc, prog_bar=True)
@@ -603,17 +634,19 @@ class SemanticSegmentationModule(LightningModule):
             if seen:
                 self.log(f"val/iou_{name}", iou, prog_bar=True)
 
-        self.val_miou_best(miou)  # update best-so-far metric
-        self.val_oa_best(oa)  # update best-so-far metric
-        self.val_macc_best(macc)  # update best-so-far metric
+        # Update best-so-far metrics
+        self.val_miou_best(miou)
+        self.val_oa_best(oa)
+        self.val_macc_best(macc)
 
-        # log `*_best` metrics this way, using `.compute()` instead of
-        # passing the whole torchmetric object, because otherwise metric
-        # would be reset by lightning after each epoch
+        # Log best-so-far metrics, using `.compute()` instead of passing
+        # the whole torchmetrics object, because otherwise metric would
+        # be reset by lightning after each epoch
         self.log("val/miou_best", self.val_miou_best.compute(), prog_bar=True)
         self.log("val/oa_best", self.val_oa_best.compute(), prog_bar=True)
         self.log("val/macc_best", self.val_macc_best.compute(), prog_bar=True)
 
+        # Reset metrics accumulated over the last epoch
         self.val_cm.reset()
 
     def on_test_start(self):
@@ -633,12 +666,8 @@ class SemanticSegmentationModule(LightningModule):
         loss = 0 if loss is None else loss
 
         # update and log metrics
-        self.test_loss(loss)
-        if output.has_target:
-            self.test_cm(output.preds.detach(), output.y_hist.detach())
-        self.log(
-            "test/loss", self.test_loss, on_step=False, on_epoch=True,
-            prog_bar=True)
+        self.test_step_update_metrics(loss, output)
+        self.test_step_log_metrics()
 
         # Prepare submission for held-out test sets
         if self.trainer.datamodule.hparams.submit:
@@ -648,9 +677,27 @@ class SemanticSegmentationModule(LightningModule):
             self.trainer.datamodule.test_dataset.make_submission(
                 batch_idx, l0_preds, l0_pos, submission_dir=self.submission_dir)
 
+        # Explicitly delete the output, for memory release
+        del output
+
+    def test_step_update_metrics(self, loss, output):
+        """Update test metrics with the content of the output object.
+        """
+        if not output.has_target:
+            return
+        self.test_loss(loss)
+        self.test_cm(output.preds.detach(), output.y_hist.detach())
+
+    def test_step_log_metrics(self):
+        """Log test metrics after a single step with the content of the
+        output object.
+        """
+        self.log(
+            "test/loss", self.test_loss, on_step=False, on_epoch=True,
+            prog_bar=True)
+
     def on_test_epoch_end(self):
-        # TODO: log metrics
-        # `outputs` is a list of dicts returned from `test_step()`
+        # Log metrics
         self.log("test/miou", self.test_cm.miou(), prog_bar=True)
         self.log("test/oa", self.test_cm.oa(), prog_bar=True)
         self.log("test/macc", self.test_cm.macc(), prog_bar=True)
@@ -658,18 +705,18 @@ class SemanticSegmentationModule(LightningModule):
             if seen:
                 self.log(f"test/iou_{name}", iou, prog_bar=True)
 
-        # TODO: log CM
         # Log confusion matrix to wandb
         if isinstance(self.logger, WandbLogger):
             self.logger.experiment.log({
                 "test/cm": wandb_confusion_matrix(
                     self.test_cm.confmat, class_names=self.class_names)})
 
-        # TODO: make submission
+        # Finalize the submission
         if self.trainer.datamodule.hparams.submit:
             self.trainer.datamodule.test_dataset.finalize_submission(
                 self.submission_dir)
 
+        # Reset metrics accumulated over the last epoch
         self.test_cm.reset()
 
     def configure_optimizers(self):

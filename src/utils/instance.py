@@ -24,7 +24,7 @@ from cp_kmpp_d0_dist import cp_kmpp_d0_dist
 
 __all__ = [
     'generate_random_bbox_data', 'generate_random_segment_data',
-    'instance_cut_pursuit', 'oracle_superpoint_clustering']
+    'instance_cut_pursuit', 'oracle_superpoint_clustering', 'get_stuff_mask']
 
 
 _MAX_NUM_EDGES = 4294967295
@@ -630,3 +630,17 @@ def oracle_superpoint_clustering(
     instance_data = nag[1].obj.merge(final_instance_index)
 
     return instance_data
+
+
+def get_stuff_mask(y, stuff_classes):
+    """Helper function producing a boolean mask of size `y.shape[0]`
+    indicating which of the `y` (labels if 1D or logits/probas if 2D)
+    are among the `stuff_classes`.
+    """
+    # Get labels from y, in case y are logits
+    labels = y.long() if y.dim() == 1 else y.argmax(dim=1)
+
+    # Search the labels belonging to the set of stuff classes
+    stuff_classes = torch.astensor(
+        stuff_classes, dtype=labels.dtype, device=labels.device)
+    return torch.isin(labels, stuff_classes)
