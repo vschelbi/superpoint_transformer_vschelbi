@@ -65,7 +65,7 @@ class InstancePartitioner(nn.Module):
             node_logits,
             node_size,
             edge_index,
-            edge_affinity):
+            edge_affinity_logits):
         """
 
         :param node_pos: Tensor of shape [num_nodes, num_dim]
@@ -78,8 +78,9 @@ class InstancePartitioner(nn.Module):
             Size of each node
         :param edge_index: Tensor of shape [2, num_edges]
             Edges of the graph, in torch-geometric's format
-        :param edge_affinity: Tensor of shape [num_edges]
-            Predicted affinity each edge
+        :param edge_affinity_logits: Tensor of shape [num_edges]
+            Predicted affinity logits (ie in R+, before sigmoid) of each
+            edge
 
         :return: instance_index: Tensor of shape [num_nodes]
             Indicates which predicted instance each node belongs to
@@ -90,7 +91,8 @@ class InstancePartitioner(nn.Module):
             node_logits,
             node_size,
             edge_index,
-            edge_affinity,
+            edge_affinity_logits,
+            do_sigmoid_affinity=True,
             regularization=self.regularization,
             spatial_weight=self.spatial_weight,
             cutoff=self.cutoff,

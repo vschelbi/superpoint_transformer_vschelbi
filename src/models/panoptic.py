@@ -9,7 +9,7 @@ from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
 from src.models.segmentation import SemanticSegmentationOutput, \
     SemanticSegmentationModule
 from src.loss import OffsetLoss
-from src.nn import FFN
+from src.nn import FFN, InstancePartitioner
 
 log = logging.getLogger(__name__)
 
@@ -234,6 +234,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             node_offset_loss_lambda=1,
             gc_every_n_steps=0,
             min_instance_size=0,
+            partition_every_n_epochs=0,
+            partitioner_regularization=1e-2,
+            partitioner_spatial_weight=1,
+            partitioner_cutoff=1,
+            partitioner_parallel=True,
+            partitioner_iterations=10,
+            partitioner_discrepancy_epsilon=1e-3,
             **kwargs):
         super().__init__(
             net,
@@ -273,6 +280,23 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         init = lambda m: init_weights(m, linear=init_linear, rpe=init_rpe)
         self.edge_affinity_head.apply(init)
         self.node_offset_head.apply(init)
+
+        # Instance partition head. This module is only called when the
+        # actual instance/panoptic segmentation is required. At train
+        # time, it is not essential, since we do not propagate gradient
+        # to its parameters. However, we still tune its parameters to
+        # maximize instance/panoptic metrics on the train set. This
+        # tuning involves a simple grid-search on a small range of
+        # parameters and needs to be called at least once at the very
+        # end of training
+        self.partition_every_n_epochs = partition_every_n_epochs
+        self.partitioner = InstancePartitioner(
+            regularization=partitioner_regularization,
+            spatial_weight=partitioner_spatial_weight,
+            cutoff=partitioner_cutoff,
+            parallel=partitioner_parallel,
+            iterations=partitioner_iterations,
+            discrepancy_epsilon=partitioner_discrepancy_epsilon)
 
         # Metric objects for calculating instance segmentation scores on
         # each dataset split
@@ -355,6 +379,20 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_affinity_oa_best = MaxMetric()
         self.val_affinity_f1_best = MaxMetric()
 
+    @property
+    def needs_partition(self):
+        """Whether the `self.partitioner` should be called to compute
+        the actual panoptic segmentation. During training, the actual
+        partition is not really needed, as we do not learn to partition,
+        but learn to predict inputs for the partition step instead. For
+        this reason, we save compute and time during training by only
+        computing the partition once in a while with
+        `self.partition_every_n_epochs`.
+        """
+        nth_epoch = self.current_epoch % self.partition_every_n_epochs == 0
+        last_epoch = self.current_epoch == self.trainer.max_epochs - 1
+        return nth_epoch or last_epoch
+
     def forward(self, nag):
         # Extract features
         x = self.net(nag)
@@ -385,11 +423,67 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
         edge_affinity_logits = self.edge_affinity_head(x_edge)
 
-        return PanopticSegmentationOutput(
+        # Gather results in an output object
+        output = PanopticSegmentationOutput(
             semantic_pred,
             self.stuff_classes,
             edge_affinity_logits,
             node_offset_pred)
+
+        # Compute the panoptic partition, if need be. At train time, we may skip
+        # this step since we do not learn the partition directly
+
+        # TODO: how to get the node size ?
+
+        # TODO: change partition signature: only pass offsetted positions
+        #  (no need for both pos and offsets). OPTION: center the positions to
+        #  maintain in a reasonable float3d regime before partition
+
+        super_index = self._forward_partition(
+            nag[1].pos,
+            node_offset_pred,
+            semantic_pred[0] if self.multi_stage_loss else semantic_pred,
+            node_size,
+            nag[1].obj_edge_index,
+            edge_affinity_logits)
+
+        # TODO: what next ? we have the super index,
+        #  what do we build with it
+        #  - weighted merge logits + argmax to produce pred labels for merged segments
+        #  - compute new merging idx for only 1 prediction for each stuff class for each batch item
+        #  - merged instance data (merge based on partition + merge for only 1 stuff class)
+        #  --> Return : merged semantic labels + merged InstanceData + indexing to map level-1 nodes to the segments ?
+
+        return output
+
+    def _forward_partition(
+            self,
+            node_pos,
+            node_offset,
+            node_logits,
+            node_size,
+            edge_index,
+            edge_affinity_logits):
+        """Compute the panoptic partition based on the predicted node
+        offsets, node semantic logits, and edge affinity logits.
+        """
+        if not self.needs_partition:
+            return None
+
+        return self.partitioner(
+            node_pos,
+            node_offset,
+            node_logits,
+            node_size,
+            edge_index,
+            edge_affinity_logits)
+
+
+
+
+
+
+
 
     def on_fit_start(self):
         super().on_fit_start()

@@ -331,7 +331,8 @@ def instance_cut_pursuit(
         node_logits,
         node_size,
         edge_index,
-        edge_affinity,
+        edge_affinity_logits,
+        do_sigmoid_affinity=True,
         regularization=1e-2,
         spatial_weight=1,
         cutoff=1,
@@ -352,8 +353,14 @@ def instance_cut_pursuit(
         Size of each node
     :param edge_index: Tensor of shape [2, num_edges]
         Edges of the graph, in torch-geometric's format
-    :param edge_affinity: Tensor of shape [num_edges]
-        Predicted affinity each edge
+    :param edge_affinity_logits: Tensor of shape [num_edges]
+        Predicted affinity logits (ie in R+, before sigmoid) of each
+        edge
+    :param do_sigmoid_affinity: bool
+        If True, a sigmoid will be applied on the `edge_affinity_logits`
+        to convert the logits to [0, 1] affinities. If False, the input
+        `edge_affinity_logits` will be used as is when computing the
+        discrepancies
     :param regularization: float
         Regularization parameter for the partition
     :param spatial_weight: float
@@ -394,16 +401,16 @@ def instance_cut_pursuit(
         "`node_size` and `node_pos` must have the same number of points"
     assert edge_index.dim() == 2 and edge_index.shape[0] == 2, \
         "`edge_index` must be of shape `[2, num_edges]`"
-    assert edge_affinity.dim() == 1 and edge_index.shape[0] == 2, \
+    assert edge_affinity_logits.dim() == 1, \
         "`edge_affinity` must be of shape `[num_edges]`"
-    assert edge_affinity.shape[0] == edge_index.shape[1], \
+    assert edge_affinity_logits.shape[0] == edge_index.shape[1], \
         "`edge_affinity` and `edge_index` must have the same number of edges"
 
     device = node_pos.device
     num_nodes = node_pos.shape[0]
     num_dim = node_pos.shape[1]
     num_classes = node_logits.shape[1]
-    num_edges = edge_affinity.numel()
+    num_edges = edge_affinity_logits.numel()
 
     assert num_nodes < np.iinfo(np.uint32).max, \
         "Too many nodes for `uint32` indices"
@@ -419,8 +426,8 @@ def instance_cut_pursuit(
 
     # Trim the graph, if need be
     if trim:
-        edge_index, edge_affinity = to_trimmed(
-            edge_index, edge_attr=edge_affinity, reduce='mean')
+        edge_index, edge_affinity_logits = to_trimmed(
+            edge_index, edge_attr=edge_affinity_logits, reduce='mean')
 
     if verbose:
         print(
@@ -434,7 +441,9 @@ def instance_cut_pursuit(
             f"{_MAX_NUM_EDGES}. Please update the cut-pursuit source code to "
             f"accept a larger data type for `index_t`.")
 
-    # Convert affinities to discrepancies
+    # Convert affinity logits to discrepancies
+    edge_affinity = edge_affinity_logits.sigmoid() if do_sigmoid_affinity \
+        else edge_affinity_logits
     edge_discrepancy = 1 / (edge_affinity + discrepancy_epsilon)
 
     # Convert edges to forward-star (or CSR) representation
@@ -597,6 +606,7 @@ def oracle_superpoint_clustering(
         node_size,
         edge_index,
         edge_affinity,
+        do_sigmoid_affinity=False,
         regularization=regularization,
         spatial_weight=spatial_weight,
         cutoff=cutoff,
