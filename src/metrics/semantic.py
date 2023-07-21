@@ -52,6 +52,11 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         computing point-wise metrics from segment-wise predictions and
         label histograms.
 
+        NB: If target label histograms have more than `self.num_class`,
+            columns, only the first `self.num_class` columns will be
+            taken into account in the metrics, the extra columns will be
+            considered 'void'.
+
         :param preds: Tensor
             Predictions
         :param target: Tensor
@@ -106,6 +111,11 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         """Create a ConfusionMatrix from 2D tensors representing label
         histograms. The metrics are computed assuming the prediction
         associated with each histogram is the dominant label.
+
+        NB: If target label histograms have more than `self.num_class`,
+            columns, only the first `self.num_class` columns will be
+            taken into account in the metrics, the extra columns will be
+            considered 'void'.
         """
         assert h.ndim == 2
         assert not h.is_floating_point()
