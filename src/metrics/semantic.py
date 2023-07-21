@@ -1,10 +1,16 @@
-# Source: https://github.com/torch-points3d/torch-points3d
-
-import numpy as np
-import torch
 import os
+import torch
+import logging
+import numpy as np
 from torchmetrics.classification import MulticlassConfusionMatrix
 from torch_scatter import scatter_add
+
+
+log = logging.getLogger(__name__)
+
+
+__all__ = ['ConfusionMatrix']
+
 
 class ConfusionMatrix(MulticlassConfusionMatrix):
     """TorchMetrics's MulticlassConfusionMatrix but tailored to our
