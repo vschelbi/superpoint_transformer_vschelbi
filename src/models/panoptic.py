@@ -6,7 +6,7 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils import init_weights, get_stuff_mask
 from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
     WeightedMeanSquaredError
-from src.models.segmentation import SemanticSegmentationOutput, \
+from src.models.semantic import SemanticSegmentationOutput, \
     SemanticSegmentationModule
 from src.loss import OffsetLoss
 from src.nn import FFN, InstancePartitioner
@@ -435,7 +435,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # TODO: how to get the node size ?
 
-        # TODO: change partition signature: only pass offsetted positions
+        # TODO: change partition signature: only pass offset positions
         #  (no need for both pos and offsets). OPTION: center the positions to
         #  maintain in a reasonable float3d regime before partition
 
