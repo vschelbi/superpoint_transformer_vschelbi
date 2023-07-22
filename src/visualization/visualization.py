@@ -1,3 +1,4 @@
+import plotly.validators.layout.colorscale
 import torch
 import numpy as np
 import os.path as osp
@@ -43,6 +44,7 @@ def visualize_3d(
         v_edge_width=None,
         point_symbol='circle',
         centroid_symbol='circle',
+        colorscale='Agsunset',
         keys=None,
         **kwargs):
     """3D data interactive visualization.
@@ -128,6 +130,9 @@ def visualize_3d(
         Marker symbol used for centroids. Must be one of
         ['circle', 'circle-open', 'square', 'square-open', 'diamond',
         'diamond-open', 'cross', 'x']. Defaults to 'circle'
+    :param colorscale: str
+        Plotly colorscale used for coloring 1D features. See
+        https://plotly.com/python/builtin-colorscales for options
     :param kwargs
 
     :return:
@@ -457,8 +462,8 @@ def visualize_3d(
 
     # Draw a trace for 3D point cloud features
     if data_0.x is not None:
-        colors = feats_to_rgb(data_0.x, normalize=True)
-        colors = rgb_to_plotly_rgb(colors)
+        colors = feats_to_plotly_rgb(
+            data_0.x, normalize=True, colorscale=colorscale)
         trace_modes[i_point_trace]['Features 3D'] = {
             'marker.color': colors[data_0.selected], 'hovertext': None}
         trace_modes[i_unselected_point_trace]['Features 3D'] = {
@@ -471,8 +476,8 @@ def visualize_3d(
         keys = [keys]
     for key in keys:
         if getattr(data_0, key, None) is not None:
-            colors = feats_to_rgb(data_0[key], normalize=True)
-            colors = rgb_to_plotly_rgb(colors)
+            colors = feats_to_plotly_rgb(
+                data_0[key], normalize=True, colorscale=colorscale)
             trace_modes[i_point_trace][str(key).title()] = {
                 'marker.color': colors[data_0.selected], 'hovertext': None}
             trace_modes[i_unselected_point_trace][str(key).title()] = {
@@ -693,13 +698,15 @@ def visualize_3d(
             # implies that features are either direction-independent or
             # that the edge direction only changes the sign of the
             # feature
-            colors = feats_to_rgb(se_attr.abs(), normalize=True)
-            colors = rgb_to_plotly_rgb(colors).reshape((-1, 3))
+            colors = feats_to_plotly_rgb(
+                se_attr.abs(), normalize=True, colorscale=colorscale)
             colors = np.repeat(colors, 3, axis=0)
             edge_width = point_size if h_edge_width is None else h_edge_width
 
         else:
-            colors = np.zeros((edges.shape[0], 3))
+            colors = feats_to_plotly_rgb(
+                np.zeros(edges.shape[0]), normalize=True, colorscale=colorscale)
+            colors = np.repeat(colors, 3, axis=0)
             edge_width = point_size if h_edge_width is None else h_edge_width
 
         selected_edge = input[i_level + 1].selected[se].all(axis=0)
@@ -718,7 +725,7 @@ def visualize_3d(
                 mode='lines',
                 line=dict(
                     width=edge_width,
-                    color=colors[selected_edge],),
+                    color=colors[selected_edge]),
                 hoverinfo='skip',
                 showlegend=False,
                 visible=gap is not None, ))
