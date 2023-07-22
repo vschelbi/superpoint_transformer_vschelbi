@@ -189,7 +189,7 @@ class InstanceData(CSRData):
         if major_50_plus[is_major_void].all():
             return obj, count, y
 
-        # Assign the clusters with less than 50% overlap with their 
+        # Assign the clusters with less than 50% void overlap to their
         # second-best overlap
         count_no_void = res[0][:, 1]
         argmax_no_void = res[1][:, 1]

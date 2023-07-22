@@ -44,8 +44,10 @@ class Data(PyGData):
         return self['rgb'] if 'rgb' in self._store else None
 
     @property
-    def obj(self):
-        """Cluster object indicating the instance indices for each point."""
+    def obj(self) -> InstanceData:
+        """InstanceData object indicating the instance indices for each
+        node/point/superpoint in the Data.
+        """
         return self['obj'] if 'obj' in self._store else None
 
     @property
@@ -58,7 +60,7 @@ class Data(PyGData):
             else None
 
     @property
-    def sub(self):
+    def sub(self) -> Cluster:
         """Cluster object indicating subpoint indices for each point."""
         return self['sub'] if 'sub' in self._store else None
 
