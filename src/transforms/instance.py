@@ -200,18 +200,10 @@ class OnTheFlyInstanceGraph(Transform):
         # obj indices, `consecutive_cluster()` allows us to convert
         # `obj_idx` into proper indices to gather object positions from
         # `obj_pos`
-        sp_obj_idx_consec = consecutive_cluster(sp_obj_idx)[0]
+        joint_obj_idx = torch.cat((sp_obj_idx, obj_idx))
+        joint_obj_idx_consec = consecutive_cluster(joint_obj_idx)[0]
+        sp_obj_idx_consec = joint_obj_idx_consec[:sp_obj_idx.numel()]
         data.obj_pos = obj_pos[sp_obj_idx_consec]
-
-        # TODO: make sure we properly handle isolated nodes/empty graph.
-        #  Should not be a problem, since this is the easiest
-        #  instantiation setup !
-
-        # TODO: upon edge affinity prediction loss computation, need to
-        #  IGNORE THE VOID-VOID EDGES
-
-        # TODO: call this AFTER ALL BATCH RADIUS SAMPLING, TO AVOID
-        #  GLOBAL POSITIONS FOR STUFF. Careful in the config files !
 
         # Save in the data in the NAG structure
         nag._list[self.level] = data
