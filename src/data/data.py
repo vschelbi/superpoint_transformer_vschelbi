@@ -5,8 +5,6 @@ import warnings
 import numpy as np
 import os.path as osp
 from time import time
-from torch_scatter import scatter_sum
-from torch.nn.functional import one_hot
 from torch_geometric.data import Data as PyGData
 from torch_geometric.data import Batch as PyGBatch
 from torch_geometric.nn.pool.consecutive import consecutive_cluster

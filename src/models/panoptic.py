@@ -3,7 +3,8 @@ import logging
 from torchmetrics import MinMetric, MaxMetric, MeanMetric
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
-from src.utils import init_weights, get_stuff_mask
+from src.data import InstanceData
+from src.utils import init_weights, get_stuff_mask, scatter_mean_weighted
 from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
     WeightedMeanSquaredError
 from src.models.semantic import SemanticSegmentationOutput, \
@@ -30,10 +31,13 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             edge_affinity_logits,
             node_offset_pred,
             y_hist=None,
+            obj=None,
             obj_edge_index=None,
             obj_edge_affinity=None,
             pos=None,
             obj_pos=None,
+            obj_index_pred=None,
+            obj_logits=None,
             semantic_loss=None,
             node_offset_loss=None,
             edge_affinity_loss=None):
@@ -46,10 +50,13 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             else torch.empty(0, device=device).long()
         self.edge_affinity_logits = edge_affinity_logits
         self.node_offset_pred = node_offset_pred
+        self.obj = obj
         self.obj_edge_index = obj_edge_index
         self.obj_edge_affinity = obj_edge_affinity
         self.pos = pos
         self.obj_pos = obj_pos
+        self.obj_index_pred = obj_index_pred
+        self.obj_logits = obj_logits
         self.semantic_loss = semantic_loss
         self.node_offset_loss = node_offset_loss
         self.edge_affinity_loss = edge_affinity_loss
@@ -64,6 +71,13 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         assert self.node_offset_pred.shape[0] == self.num_nodes
         assert self.edge_affinity_logits.dim() == 1
 
+        if self.has_instance_pred:
+            assert self.obj_index_pred.dim() == 1
+            assert self.obj_index_pred.shape[0] == self.num_nodes
+            assert self.obj_logits.dim() == 2
+            assert self.obj_logits.shape[0] == self.obj_index_pred.max() + 1
+            assert self.obj_logits.shape[1] == self.num_classes
+
         # Instance targets
         items = [
             self.obj_edge_index, self.obj_edge_affinity, self.pos, self.obj_pos]
@@ -74,6 +88,8 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         if without_instance_targets:
             return
 
+        assert isinstance(self.obj, InstanceData)
+        assert self.obj.num_clusters == self.num_nodes
         assert self.obj_edge_index.dim() == 2
         assert self.obj_edge_index.shape[0] == 2
         assert self.obj_edge_index.shape[1] == self.num_edges
@@ -88,8 +104,19 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         segmentation.
         """
         items = [
-            self.obj_edge_index, self.obj_edge_affinity, self.pos, self.obj_pos]
+            self.obj,
+            self.obj_edge_index,
+            self.obj_edge_affinity,
+            self.pos,
+            self.obj_pos]
         return super().has_target and all(x is not None for x in items)
+
+    @property
+    def has_instance_pred(self):
+        """Check whether `self` contains predicted data for panoptic
+        segmentation: `obj_index_pred` and `obj_logits`.
+        """
+        return self.obj_index_pred is not None and self.obj_logits is not None
 
     @property
     def num_edges(self):
@@ -236,7 +263,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             min_instance_size=0,
             partition_every_n_epochs=0,
             partitioner_regularization=1e-2,
-            partitioner_spatial_weight=1,
+            partitioner_x_weight=1,
             partitioner_cutoff=1,
             partitioner_parallel=True,
             partitioner_iterations=10,
@@ -292,7 +319,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.partition_every_n_epochs = partition_every_n_epochs
         self.partitioner = InstancePartitioner(
             regularization=partitioner_regularization,
-            spatial_weight=partitioner_spatial_weight,
+            x_weight=partitioner_x_weight,
             cutoff=partitioner_cutoff,
             parallel=partitioner_parallel,
             iterations=partitioner_iterations,
@@ -393,7 +420,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         last_epoch = self.current_epoch == self.trainer.max_epochs - 1
         return nth_epoch or last_epoch
 
-    def forward(self, nag):
+    def forward(self, nag) -> PanopticSegmentationOutput:
         # Extract features
         x = self.net(nag)
 
@@ -408,7 +435,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         node_offset_pred = self.node_offset_head(x)
 
         # Forcefully set 0-offset for nodes with stuff predictions
-        is_stuff = get_stuff_mask(semantic_pred[0], self.stuff_classes)
+        node_logits = semantic_pred[0] if self.multi_stage_loss \
+            else semantic_pred
+        is_stuff = get_stuff_mask(node_logits, self.stuff_classes)
         node_offset_pred[is_stuff] = 0
 
         # TODO: offset soft-assigned to 0 based on the predicted
@@ -430,67 +459,65 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             edge_affinity_logits,
             node_offset_pred)
 
-        # Compute the panoptic partition, if need be. At train time, we may skip
-        # this step since we do not learn the partition directly
-
-        # TODO: how to get the node size ?
-
-        # TODO: change partition signature: only pass offset positions
-        #  (no need for both pos and offsets). OPTION: center the positions to
-        #  maintain in a reasonable float3d regime before partition
-
-        super_index = self._forward_partition(
-            nag[1].pos,
-            node_offset_pred,
-            semantic_pred[0] if self.multi_stage_loss else semantic_pred,
-            node_size,
-            nag[1].obj_edge_index,
-            edge_affinity_logits)
-
-        # TODO: what next ? we have the super index,
-        #  what do we build with it
-        #  - weighted merge logits + argmax to produce pred labels for merged segments
-        #  - compute new merging idx for only 1 prediction for each stuff class for each batch item
-        #  - merged instance data (merge based on partition + merge for only 1 stuff class)
-        #  --> Return : merged semantic labels + merged InstanceData + indexing to map level-1 nodes to the segments ?
+        # Compute the panoptic partition
+        output = self._forward_partition(nag, output)
 
         return output
 
-    def _forward_partition(
-            self,
-            node_pos,
-            node_offset,
-            node_logits,
-            node_size,
-            edge_index,
-            edge_affinity_logits):
+    def _forward_partition(self, nag, output) -> PanopticSegmentationOutput:
         """Compute the panoptic partition based on the predicted node
         offsets, node semantic logits, and edge affinity logits.
+
+        The partition will only be computed if required. In general,
+        during training, the actual partition is not needed for the
+        model to be supervised. We only run it once in a while to
+        evaluate the panoptic/instance segmentation metrics or tune
+        the partition hyperparameters on the train set.
+
+        :param nag: NAG object
+        :param output: PanopticSegmentationOutput
+
+        :return: output
         """
         if not self.needs_partition:
-            return None
+            return output
 
-        return self.partitioner(
-            node_pos,
-            node_offset,
+        # Recover some useful information from the NAG and
+        # PanopticSegmentationOutput objects
+        batch = nag[1].batch
+        node_x = nag[1].pos + output.node_offset_pred
+        node_size = nag.get_sub_size(1)
+        node_logits = output.logits[0] if output.multi_stage else output.logits
+        node_is_stuff = get_stuff_mask(node_logits, self.stuff_classes)
+        edge_index = nag[1].obj_edge_index
+        edge_affinity_logits = output.edge_affinity_logits
+
+        # Compute the instance partition
+        obj_index = self.partitioner(
+            batch,
+            node_x,
             node_logits,
+            node_is_stuff,
             node_size,
             edge_index,
             edge_affinity_logits)
 
+        # Compute the mean logits for each predicted object, weighted by
+        # the node sizes
+        obj_logits = scatter_mean_weighted(node_logits, obj_index, node_size)
 
+        # Store the results in the output object
+        output.obj_index_pred = obj_index
+        output.obj_logits = obj_logits
 
-
-
-
-
+        return output
 
     def on_fit_start(self):
         super().on_fit_start()
 
         # Get the LightningDataModule stuff classes and make sure it
         # matches self.stuff_classes. We could also forcefully update
-        # the LightningModule with this new information but it could
+        # the LightningModule with this new information, but it could
         # easily become tedious to track all places where stuff_classes
         # affects the LightningModule object.
         stuff_classes = self.trainer.datamodule.train_dataset.stuff_classes
@@ -615,6 +642,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         output.obj_edge_affinity = getattr(nag[1], 'obj_edge_affinity', None)
         output.pos = nag[1].pos
         output.obj_pos = getattr(nag[1], 'obj_pos', None)
+        output.obj = nag[1].obj
 
         return output
 

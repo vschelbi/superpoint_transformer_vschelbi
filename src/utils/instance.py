@@ -12,6 +12,7 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils.neighbors import knn_2
 from src.utils.graph import to_trimmed
 from src.utils.cpu import available_cpu_count
+from src.utils.scatter import scatter_mean_weighted
 
 src_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.append(src_folder)
@@ -301,8 +302,8 @@ def generate_random_segment_data(
     instance and semantic segmentation data. To make the images
     realistic, and to ensure that the instances form a PARTITION of the
     image, we rely on voronoi cells. Besides, to encourage a realistic
-    overlap between the predicted and and target instances, the
-    prediction cell centers are sampled near the target samples.
+    overlap between the predicted and target instances, the prediction
+    cell centers are sampled near the target samples.
     """
     tm_data = []
     spt_data = []
@@ -325,16 +326,15 @@ def generate_random_segment_data(
     return tm_data, spt_data
 
 
-def instance_cut_pursuit(
-        node_pos,
-        node_offset,
+def _instance_cut_pursuit(
+        node_x,
         node_logits,
         node_size,
         edge_index,
         edge_affinity_logits,
         do_sigmoid_affinity=True,
         regularization=1e-2,
-        spatial_weight=1,
+        x_weight=1,
         cutoff=1,
         parallel=True,
         iterations=10,
@@ -343,10 +343,8 @@ def instance_cut_pursuit(
         verbose=False):
     """Partition an instance graph using cut-pursuit.
 
-    :param node_pos: Tensor of shape [num_nodes, num_dim]
-        Node positions
-    :param node_offset: Tensor of shape [num_nodes, num_dim]
-        Predicted instance centroid offset for each node
+    :param node_x: Tensor of shape [num_nodes, num_dim]
+        Node features
     :param node_logits: Tensor of shape [num_nodes, num_classes]
         Predicted classification logits for each node
     :param node_size: Tensor of shape [num_nodes]
@@ -363,11 +361,11 @@ def instance_cut_pursuit(
         discrepancies
     :param regularization: float
         Regularization parameter for the partition
-    :param spatial_weight: float
-        Weight used to mitigate the impact of the point position in the
-        partition. The larger, the less spatial coordinates matter. This
-        can be loosely interpreted as the inverse of a maximum
-        superpoint radius
+    :param x_weight: float
+        Weight used to mitigate the impact of the point features in the
+        partition. The larger, the lesser features importance before
+        logits. This can be loosely interpreted as the inverse of a
+        maximum superpoint feature radius
     :param cutoff: float
         Minimum number of points in each cluster
     :param parallel: bool
@@ -385,20 +383,16 @@ def instance_cut_pursuit(
     """
 
     # Sanity checks
-    assert node_pos.dim() == 2, \
-        "`node_pos` must have shape `[num_nodes, num_dim]`"
-    assert node_offset.dim() == 2, \
-        "`node_offset` must have shape `[num_nodes, num_dim]`"
+    assert node_x.dim() == 2, \
+        "`node_x` must have shape `[num_nodes, num_dim]`"
     assert node_logits.dim() == 2, \
         "`node_logits` must have shape `[num_nodes, num_classes]`"
-    assert node_pos.shape == node_offset.shape, \
-        "`node_pos` and `node_offset` must have the same shape"
-    assert node_logits.shape[0] == node_pos.shape[0], \
-        "`node_logits` and `node_pos` must have the same number of points"
+    assert node_logits.shape[0] == node_x.shape[0], \
+        "`node_logits` and `node_x` must have the same number of points"
     assert node_size.dim() == 1, \
         "`node_size` must have shape `[num_nodes]`"
-    assert node_size.shape[0] == node_pos.shape[0], \
-        "`node_size` and `node_pos` must have the same number of points"
+    assert node_size.shape[0] == node_x.shape[0], \
+        "`node_size` and `node_x` must have the same number of points"
     assert edge_index.dim() == 2 and edge_index.shape[0] == 2, \
         "`edge_index` must be of shape `[2, num_edges]`"
     assert edge_affinity_logits.dim() == 1, \
@@ -406,9 +400,9 @@ def instance_cut_pursuit(
     assert edge_affinity_logits.shape[0] == edge_index.shape[1], \
         "`edge_affinity` and `edge_index` must have the same number of edges"
 
-    device = node_pos.device
-    num_nodes = node_pos.shape[0]
-    num_dim = node_pos.shape[1]
+    device = node_x.device
+    num_nodes = node_x.shape[0]
+    num_dim = node_x.shape[1]
     num_classes = node_logits.shape[1]
     num_edges = edge_affinity_logits.numel()
 
@@ -457,23 +451,24 @@ def instance_cut_pursuit(
     # Convert logits to class probabilities
     node_probas = torch.nn.functional.softmax(node_logits, dim=1)
 
-    # Mean-center the node positions, in case coordinates are very large
-    center_offset = node_pos.mean(dim=0)
-    node_pos = node_pos - center_offset.view(1, -1)
+    # Mean-center the node features, in case values have a very large
+    # mean. This is optional, but favors maintaining values in a
+    # reasonable float32 range
+    node_x = node_x - node_x.mean(dim=0).view(1, -1)
 
     # Build the node features as the concatenation of positions and
     # class probabilities
     # TODO: this is for `improve_merge` branch, need to adapt to new
     #  interface for L2+KL formulation
     loss_type = 1
-    x = torch.cat((node_pos + node_offset, node_probas), dim=1)
+    x = torch.cat((node_x, node_probas), dim=1)
     x = np.asfortranarray(x.cpu().numpy().T)
     node_size = node_size.float().cpu().numpy()
     coor_weights = np.ones(num_dim + num_classes, dtype=np.float32)
-    coor_weights[:num_dim] *= spatial_weight
+    coor_weights[:num_dim] *= x_weight
 
     # Partition computation
-    instance_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
+    obj_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
         loss_type,
         x,
         source_csr,
@@ -496,10 +491,121 @@ def instance_cut_pursuit(
         delta_t = (times[1:] - times[:-1]).round(2)
         print(f'Instance partition times: {delta_t}')
 
-    # Convert the instance_index to the input format
-    instance_index = torch.from_numpy(instance_index.astype('int64')).to(device)
+    # Convert the obj_index to the input format
+    obj_index = torch.from_numpy(obj_index.astype('int64')).to(device)
 
-    return instance_index
+    return obj_index
+
+
+def instance_cut_pursuit(
+        batch,
+        node_x,
+        node_logits,
+        node_is_stuff,
+        node_size,
+        edge_index,
+        edge_affinity_logits,
+        do_sigmoid_affinity=True,
+        regularization=1e-2,
+        x_weight=1,
+        cutoff=1,
+        parallel=True,
+        iterations=10,
+        trim=False,
+        discrepancy_epsilon=1e-3,
+        verbose=False):
+    """The forward step will compute the partition on the instance
+    graph, based on the node features, node logits, and edge
+    affinities. The partition segments will then be further merged
+    so that there is at most one instance of each stuff class per
+    batch item (ie per scene).
+
+    :param batch: Tensor of shape [num_nodes]
+        Batch index of each node
+    :param node_x: Tensor of shape [num_nodes, num_dim]
+        Predicted node embeddings
+    :param node_logits: Tensor of shape [num_nodes, num_classes]
+        Predicted classification logits for each node
+    :param node_is_stuff: Boolean Tensor of shape [num_nodes]
+        Boolean mask on the nodes predicted as 'stuff'
+    :param node_size: Tensor of shape [num_nodes]
+        Size of each node
+    :param edge_index: Tensor of shape [2, num_edges]
+        Edges of the graph, in torch-geometric's format
+    :param edge_affinity_logits: Tensor of shape [num_edges]
+        Predicted affinity logits (ie in R+, before sigmoid) of each
+        edge
+    :param do_sigmoid_affinity: bool
+        If True, a sigmoid will be applied on the `edge_affinity_logits`
+        to convert the logits to [0, 1] affinities. If False, the input
+        `edge_affinity_logits` will be used as is when computing the
+        discrepancies
+    :param regularization: float
+        Regularization parameter for the partition
+    :param x_weight: float
+        Weight used to mitigate the impact of the point features in the
+        partition. The larger, the lesser features importance before
+        logits. This can be loosely interpreted as the inverse of a
+        maximum superpoint feature radius
+    :param cutoff: float
+        Minimum number of points in each cluster
+    :param parallel: bool
+        Whether cut-pursuit should run in parallel
+    :param iterations: int
+        Maximum number of iterations for each partition
+    :param trim: bool
+        Whether the input graph should be trimmed. See `to_trimmed()`
+        documentation for more details on this operation
+    :param discrepancy_epsilon: float
+        Mitigates the maximum discrepancy. More precisely:
+        `affinity=0 ⇒ discrepancy=discrepancy_epsilon`
+    :param verbose: bool
+
+    :return: obj_index: Tensor of shape [num_nodes]
+        Indicates which predicted instance each node belongs to
+    """
+
+    # Actual partition, returns a tensor indicating which predicted
+    # object each node belongs to
+    obj_index = _instance_cut_pursuit(
+        node_x,
+        node_logits,
+        node_size,
+        edge_index,
+        edge_affinity_logits,
+        do_sigmoid_affinity=do_sigmoid_affinity,
+        regularization=regularization,
+        x_weight=x_weight,
+        cutoff=cutoff,
+        parallel=parallel,
+        iterations=iterations,
+        trim=trim,
+        discrepancy_epsilon=discrepancy_epsilon,
+        verbose=verbose)
+
+    # Compute the mean logits for each predicted object, weighted by
+    # the node sizes
+    obj_logits = scatter_mean_weighted(node_logits, obj_index, node_size)
+    obj_y = obj_logits.argmax(dim=1)
+
+    # Distribute the object-wise labels to the nodes
+    node_obj_y = obj_y[obj_index]
+
+    # Since we only want at most one prediction of each stuff class
+    # per batch item (ie per scene), we assign nodes predicted as a
+    # stuff class to new indices. These new indices are built in
+    # such a way that there can be only one instance of each stuff
+    # class per batch item
+    batch = batch if batch is not None else torch.zeros_like(obj_index)
+    num_batch_items = batch.max() + 1
+    final_obj_index = obj_index.clone()
+    final_obj_index[node_is_stuff] = \
+        obj_index.max() + 1 \
+        + node_obj_y[node_is_stuff] * num_batch_items \
+        + batch[node_is_stuff]
+    final_obj_index, perm = consecutive_cluster(final_obj_index)
+
+    return final_obj_index
 
 
 def oracle_superpoint_clustering(
@@ -514,7 +620,7 @@ def oracle_superpoint_clustering(
         centroid_level=1,
         smooth_affinity=True,
         regularization=1e-5,
-        spatial_weight=1e-1,
+        x_weight=1e-1,
         cutoff=1,
         parallel=True,
         iterations=10,
@@ -560,7 +666,7 @@ def oracle_superpoint_clustering(
     :param centroid_level:
     :param smooth_affinity:
     :param regularization:
-    :param spatial_weight:
+    :param x_weight:
     :param cutoff:
     :param parallel:
     :param iterations:
@@ -570,7 +676,6 @@ def oracle_superpoint_clustering(
     """
     # Local imports to avoid import loop errors
     from src.transforms import OnTheFlyInstanceGraph
-    from src.nn.instance import InstancePartitioner
 
     # Instance graph computation
     nag = OnTheFlyInstanceGraph(
@@ -586,8 +691,7 @@ def oracle_superpoint_clustering(
     # Prepare input for instance graph partition
     # NB: we assign only to valid classes and ignore void
     node_y = nag[1].y[:, :num_classes].argmax(dim=1)
-    node_pos = nag[1].pos
-    node_offset = nag[1].obj_pos - nag[1].pos
+    obj_pos = nag[1].obj_pos
     node_logits = one_hot(node_y, num_classes=num_classes).float()
     node_size = nag.get_sub_size(1)
     edge_index = nag[1].obj_edge_index
@@ -596,48 +700,32 @@ def oracle_superpoint_clustering(
     # Set node offset to 0 for stuff and void classes
     thing_classes = torch.tensor(thing_classes, device=nag.device)
     is_thing = torch.isin(node_y, thing_classes)
-    node_offset = node_offset * is_thing.view(-1, 1)
+    obj_pos[~is_thing] = nag[1].pos
+
+    # For each node, recover the index of the batch item it belongs to
+    batch = nag[1].batch if nag[1].batch is not None \
+        else torch.zeros(nag[1].num_nodes, dtype=torch.long, device=nag.device)
 
     # Instance graph partition
-    instance_index = instance_cut_pursuit(
-        node_pos,
-        node_offset,
+    obj_index = instance_cut_pursuit(
+        batch,
+        obj_pos,
         node_logits,
+        ~is_thing,
         node_size,
         edge_index,
         edge_affinity,
         do_sigmoid_affinity=False,
         regularization=regularization,
-        spatial_weight=spatial_weight,
+        x_weight=x_weight,
         cutoff=cutoff,
         parallel=parallel,
         iterations=iterations,
         trim=trim,
         discrepancy_epsilon=discrepancy_epsilon)
 
-    # For each stuff class of each batch item, merge predictions
-    # together
-    weighted_node_logits = softmax(
-        node_logits.float(), dim=1) * node_size.view(-1, 1)
-    instance_label = scatter_sum(
-        weighted_node_logits, instance_index, dim=0).argmax(dim=1)
-    pred_instance_label = instance_label[instance_index]
-
-    batch = nag[1].batch if nag[1].batch is not None \
-        else torch.zeros_like(instance_index)
-    num_batch_items = batch.max() + 1
-
-    is_thing = torch.isin(pred_instance_label, thing_classes)
-
-    final_instance_index = instance_index.clone()
-    final_instance_index[~is_thing] = \
-        instance_index.max() + 1 \
-        + pred_instance_label[~is_thing] * num_batch_items \
-        + batch[~is_thing]
-    final_instance_index = consecutive_cluster(final_instance_index)[0]
-
-    # Compute the instance data by merging nodes based on instance_index
-    instance_data = nag[1].obj.merge(final_instance_index)
+    # Compute the instance data by merging nodes based on obj_index
+    instance_data = nag[1].obj.merge(obj_index)
 
     return instance_data
 
