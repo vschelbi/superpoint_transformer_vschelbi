@@ -1,7 +1,7 @@
 import torch
 from src.data import NAG, InstanceData
 from src.transforms import Transform
-from src.utils import cluster_radius_nn_graph, knn_1_graph
+from src.utils import cluster_radius_nn_graph, knn_1_graph, to_trimmed
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
@@ -141,9 +141,6 @@ class OnTheFlyInstanceGraph(Transform):
     def _process(self, nag):
         data = nag[self.level]
 
-        if data.obj is None:
-            raise ValueError(f"Expected `Data.obj` to contain an InstanceData")
-
         # Build the edges on which the graph optimization will be run
         # for instance or panoptic segmentation.
         # Use the already-existing graph in `edge_index`
@@ -178,6 +175,16 @@ class OnTheFlyInstanceGraph(Transform):
         if obj_edge_index is None:
             obj_edge_index = torch.empty(
                 2, 0, dtype=torch.long, device=data.device)
+
+        # If the Data does not contain any InstanceData with instance
+        # annotations, set the target object positions and edge
+        # affinities to None and save the trimmed instance graph
+        if data.obj is None:
+            data.obj_edge_index = to_trimmed(obj_edge_index)
+            data.obj_edge_affinity = None
+            data.obj_pos = None
+            nag._list[self.level] = data
+            return nag
 
         # Compute the trimmed graph and the edge affinity scores
         data.obj_edge_index, data.obj_edge_affinity = data.obj.instance_graph(
