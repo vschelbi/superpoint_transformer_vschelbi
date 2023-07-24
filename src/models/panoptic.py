@@ -724,8 +724,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # Update instance and panoptic metrics
         if self.needs_partition:
             obj_score, obj_y, instance_data = output.instance_predictions
-            self.train_instance.update(obj_score, obj_y, instance_data)
-            self.train_panoptic.update(obj_y, instance_data)
+            obj_score = obj_score.detach().cpu()
+            obj_y = obj_y.detach().cpu()
+            self.train_instance.update(obj_score, obj_y, instance_data.cpu())
+            self.train_panoptic.update(obj_y, instance_data.cpu())
 
         # Update tracked losses
         self.train_semantic_loss(output.semantic_loss.detach().cpu())
@@ -817,8 +819,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # Update instance and panoptic metrics
         if self.needs_partition:
             obj_score, obj_y, instance_data = output.instance_predictions
-            self.val_instance.update(obj_score, obj_y, instance_data)
-            self.val_panoptic.update(obj_y, instance_data)
+            obj_score = obj_score.detach().cpu()
+            obj_y = obj_y.detach().cpu()
+            self.val_instance.update(obj_score, obj_y, instance_data.cpu())
+            self.val_panoptic.update(obj_y, instance_data.cpu())
 
         # Update tracked losses
         self.val_semantic_loss(output.semantic_loss.detach().cpu())
@@ -936,8 +940,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # Update instance and panoptic metrics
         if self.needs_partition:
             obj_score, obj_y, instance_data = output.instance_predictions
-            self.test_instance.update(obj_score, obj_y, instance_data)
-            self.test_panoptic.update(obj_y, instance_data)
+            obj_score = obj_score.detach().cpu()
+            obj_y = obj_y.detach().cpu()
+            self.test_instance.update(obj_score, obj_y, instance_data.cpu())
+            self.test_panoptic.update(obj_y, instance_data.cpu())
 
         # Update tracked losses
         self.test_semantic_loss(output.semantic_loss.detach().cpu())
