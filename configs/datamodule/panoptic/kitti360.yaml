@@ -1,0 +1,19 @@
+# @package datamodule
+defaults:
+  - /datamodule/semantic/kitti360.yaml
+
+# Whether the dataset produces instance labels. In any case, the
+# instance labels will be preprocessed, if any. However, `instance: False`
+# will avoid unwanted instance-related I/O operations, to save memory
+instance: True
+
+# Instantiation parameters. These are used for instance/panoptic
+# segmentation but will be skipped for semantic segmentation.
+# NB: setting instance_level < 0 will skip OnTheFlyInstanceGraph
+instance_level: 1
+instance_adjacency_mode: 'radius-centroid'
+instance_k_max: 30
+instance_radius: 3
+instance_centroid_mode: 'iou'
+instance_centroid_level: 1
+instance_smooth_affinity: True

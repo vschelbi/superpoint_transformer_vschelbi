@@ -6,8 +6,7 @@ from itertools import product
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.cm as cm
-from torch.nn.functional import one_hot, softmax
-from torch_scatter import scatter_sum
+from torch.nn.functional import one_hot
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils.neighbors import knn_2
 from src.utils.graph import to_trimmed
@@ -395,10 +394,12 @@ def _instance_cut_pursuit(
         "`node_size` and `node_x` must have the same number of points"
     assert edge_index.dim() == 2 and edge_index.shape[0] == 2, \
         "`edge_index` must be of shape `[2, num_edges]`"
+    edge_affinity_logits = edge_affinity_logits.squeeze()
     assert edge_affinity_logits.dim() == 1, \
-        "`edge_affinity` must be of shape `[num_edges]`"
+        "`edge_affinity_logits` must be of shape `[num_edges]`"
     assert edge_affinity_logits.shape[0] == edge_index.shape[1], \
-        "`edge_affinity` and `edge_index` must have the same number of edges"
+        "`edge_affinity_logits` and `edge_index` must have the same number " \
+        "of edges"
 
     device = node_x.device
     num_nodes = node_x.shape[0]
@@ -739,6 +740,6 @@ def get_stuff_mask(y, stuff_classes):
     labels = y.long() if y.dim() == 1 else y.argmax(dim=1)
 
     # Search the labels belonging to the set of stuff classes
-    stuff_classes = torch.astensor(
+    stuff_classes = torch.as_tensor(
         stuff_classes, dtype=labels.dtype, device=labels.device)
     return torch.isin(labels, stuff_classes)

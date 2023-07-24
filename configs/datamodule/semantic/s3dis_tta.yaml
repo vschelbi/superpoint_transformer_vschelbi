@@ -188,3 +188,15 @@ on_device_val_transform:
     # Add a `node_size` attribute to all segments, this is needed for
     # segment-wise position normalization with UnitSphereNorm
     - transform: NodeSize
+
+    # Compute the instance graph for instantiation
+    - transform: OnTheFlyInstanceGraph
+      params:
+        level: ${datamodule.instance_level}
+        num_classes: ${datamodule.num_classes}
+        adjacency_mode: ${datamodule.instance_adjacency_mode}
+        k_max: ${datamodule.instance_k_max}
+        radius: ${datamodule.instance_radius}
+        centroid_mode: ${datamodule.instance_centroid_mode}
+        centroid_level: ${datamodule.instance_centroid_level}
+        smooth_affinity: ${datamodule.instance_smooth_affinity}

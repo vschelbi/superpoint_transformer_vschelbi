@@ -282,6 +282,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
     def __init__(
             self,
             net,
+            partitioner,
             criterion,
             optimizer,
             scheduler,
@@ -302,12 +303,6 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             gc_every_n_steps=0,
             min_instance_size=0,
             partition_every_n_epochs=10,
-            partitioner_regularization=1e-2,
-            partitioner_x_weight=1,
-            partitioner_cutoff=1,
-            partitioner_parallel=True,
-            partitioner_iterations=10,
-            partitioner_discrepancy_epsilon=1e-3,
             **kwargs):
         super().__init__(
             net,
@@ -326,6 +321,18 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             gc_every_n_steps=0,
             **kwargs)
 
+        # Instance partition head, epects a fully-fledged
+        # InstancePartitioner module as input.
+        # This module is only called when the actual instance/panoptic
+        # segmentation is required. At train time, it is not essential,
+        # since we do not propagate gradient to its parameters. However,
+        # we still tune its parameters to maximize instance/panoptic
+        # metrics on the train set. This tuning involves a simple
+        # grid-search on a small range of parameters and needs to be
+        # called at least once at the very end of training
+        self.partition_every_n_epochs = partition_every_n_epochs
+        self.partitioner = partitioner
+
         # Store the stuff class indices
         self.stuff_classes = stuff_classes
 
@@ -338,7 +345,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             if node_offset_criterion is None else node_offset_criterion
 
         # Model heads for edge affinity and node offset predictions
-        self.edge_affinity_head = FFN(self.net.out_dim, hidden_dim=32, out_dim=1)
+        self.edge_affinity_head = FFN(self.net.out_dim * 2, hidden_dim=32, out_dim=1)
         self.node_offset_head = FFN(self.net.out_dim, hidden_dim=32, out_dim=3)
 
         # Custom weight initialization. In particular, this applies
@@ -347,23 +354,6 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         init = lambda m: init_weights(m, linear=init_linear, rpe=init_rpe)
         self.edge_affinity_head.apply(init)
         self.node_offset_head.apply(init)
-
-        # Instance partition head. This module is only called when the
-        # actual instance/panoptic segmentation is required. At train
-        # time, it is not essential, since we do not propagate gradient
-        # to its parameters. However, we still tune its parameters to
-        # maximize instance/panoptic metrics on the train set. This
-        # tuning involves a simple grid-search on a small range of
-        # parameters and needs to be called at least once at the very
-        # end of training
-        self.partition_every_n_epochs = partition_every_n_epochs
-        self.partitioner = InstancePartitioner(
-            regularization=partitioner_regularization,
-            x_weight=partitioner_x_weight,
-            cutoff=partitioner_cutoff,
-            parallel=partitioner_parallel,
-            iterations=partitioner_iterations,
-            discrepancy_epsilon=partitioner_discrepancy_epsilon)
 
         # Metric objects for calculating instance segmentation scores on
         # each dataset split
@@ -456,7 +446,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         computing the partition once in a while with
         `self.partition_every_n_epochs`.
         """
-        nth_epoch = self.current_epoch % self.partition_every_n_epochs == 0
+        nth_epoch = self.current_epoch % self.partition_every_n_epochs == 0 \
+            if self.partition_every_n_epochs > 0 else False
         last_epoch = self.current_epoch == self.trainer.max_epochs - 1
         return nth_epoch or last_epoch
 
@@ -1021,3 +1012,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.test_affinity_f1.reset()
 
 # TODO: gridsearch instance partition parameters
+
+if __name__ == "__main__":
+    import hydra
+    import omegaconf
+    import pyrootutils
+
+    root = str(pyrootutils.setup_root(__file__, pythonpath=True))
+    cfg = omegaconf.OmegaConf.load(root + "/configs/model/panoptic/spt-2.yaml")
+    _ = hydra.utils.instantiate(cfg)

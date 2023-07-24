@@ -831,6 +831,9 @@ class BaseDataset(InMemoryDataset):
 
         # Get the processed NAG directly from RAM
         if self.in_memory and not from_hdd:
+            # TODO: careful, this means the transforms are only run
+            #  once. So no augmentations, samplings, etc in the
+            #  transforms...
             return self.in_memory_data[idx]
 
         # Read the NAG from HDD

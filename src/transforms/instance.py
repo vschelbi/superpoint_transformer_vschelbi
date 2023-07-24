@@ -61,6 +61,10 @@ class OnTheFlyInstanceGraph(Transform):
     step.
 
     :param level: int
+        Partition level at which to compute the instance graph. Setting
+        `level=-1` or `level=None` will skip the present Transform (can
+        be useful for integrating this Transform in a pipeline and
+        optionally skip it)
     :param num_classes: int
         Number of classes in the dataset. Specifying `num_classes`
         allows identifying 'void' labels. By convention, we assume
@@ -139,6 +143,11 @@ class OnTheFlyInstanceGraph(Transform):
         self.smooth_affinity = smooth_affinity
 
     def _process(self, nag):
+        # Skip the transform. This mechanism can be useful for skipping
+        # this Transform in a pipeline
+        if self.level is None or self.level < 0:
+            return nag
+
         data = nag[self.level]
 
         # Build the edges on which the graph optimization will be run
