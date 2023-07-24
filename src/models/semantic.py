@@ -86,6 +86,13 @@ class SemanticSegmentationOutput:
         return torch.argmax(logits, dim=1)
 
     @property
+    def targets(self):
+        """Final semantic segmentation targets are the label histogram
+        of the first-level partition logits.
+        """
+        return self.y_hist[0] if self.multi_stage else self.y_hist
+
+    @property
     def void_mask(self):
         """Returns a mask on the level-1 nodes indicating which is void.
         By convention, nodes/superpoints are void if they contain
@@ -97,7 +104,7 @@ class SemanticSegmentationOutput:
             return
 
         # For simplicity, we only return the mask for the level-1
-        y_hist = self.y_hist[0] if self.multi_stage else self.y_hist
+        y_hist = self.targets
         total_count = y_hist.sum(dim=1)
         void_count = y_hist[:, -1]
         return void_count / total_count > 0.5
@@ -293,7 +300,6 @@ class SemanticSegmentationModule(LightningModule):
             if self.hparams.loss_type == 'ce':
                 loss = self.criterion(
                     output.logits, [y.argmax(dim=1) for y in output.y_hist])
-                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'wce':
                 y_hist_dominant = []
                 for y in output.y_hist:
@@ -310,7 +316,6 @@ class SemanticSegmentationModule(LightningModule):
                 for lamb, criterion, a, b in enum:
                     loss = loss + lamb * loss_with_target_histogram(
                         criterion, a, b)
-                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'ce_kl':
                 loss = 0
                 enum = zip(
@@ -324,7 +329,6 @@ class SemanticSegmentationModule(LightningModule):
                         continue
                     loss = loss + lamb * loss_with_target_histogram(
                         criterion, a, b)
-                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'wce_kl':
                 loss = 0
                 enum = zip(
@@ -342,7 +346,6 @@ class SemanticSegmentationModule(LightningModule):
                         continue
                     loss = loss + lamb * loss_with_target_histogram(
                         criterion, a, b)
-                output.y_hist = output.y_hist[0]
             elif self.hparams.loss_type == 'kl':
                 loss = 0
                 enum = zip(
@@ -353,7 +356,6 @@ class SemanticSegmentationModule(LightningModule):
                 for lamb, criterion, a, b in enum:
                     loss = loss + lamb * loss_with_target_histogram(
                         criterion, a, b)
-                output.y_hist = output.y_hist[0]
             else:
                 raise ValueError(
                     f"Unknown multi-stage loss '{self.hparams.loss_type}'")
@@ -574,7 +576,7 @@ class SemanticSegmentationModule(LightningModule):
         the output object.
         """
         self.train_loss(loss)
-        self.train_cm(output.preds.detach(), output.y_hist.detach())
+        self.train_cm(output.preds.detach(), output.targets.detach())
 
     def train_step_log_metrics(self):
         """Log train metrics after a single step with the content of the
@@ -611,7 +613,7 @@ class SemanticSegmentationModule(LightningModule):
         object.
         """
         self.val_loss(loss)
-        self.val_cm(output.preds.detach(), output.y_hist.detach())
+        self.val_cm(output.preds.detach(), output.targets.detach())
 
     def validation_step_log_metrics(self):
         """Log validation metrics after a single step with the content
@@ -686,7 +688,7 @@ class SemanticSegmentationModule(LightningModule):
         if not output.has_target:
             return
         self.test_loss(loss)
-        self.test_cm(output.preds.detach(), output.y_hist.detach())
+        self.test_cm(output.preds.detach(), output.targets.detach())
 
     def test_step_log_metrics(self):
         """Log test metrics after a single step with the content of the

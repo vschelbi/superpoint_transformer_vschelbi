@@ -23,3 +23,6 @@ logger:
   wandb:
     project: "spt_s3dis"
     name: "NANO"
+
+# metric based on which models will be selected
+optimized_metric: "val/pq"

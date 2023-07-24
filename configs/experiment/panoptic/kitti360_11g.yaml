@@ -56,3 +56,6 @@ logger:
   wandb:
     project: "spt_kitti360"
     name: "SPT-128"
+
+# metric based on which models will be selected
+optimized_metric: "val/pq"

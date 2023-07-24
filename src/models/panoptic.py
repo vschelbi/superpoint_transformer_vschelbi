@@ -151,7 +151,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             return
 
         mask = self.void_mask[self.obj_edge_index]
-        return mask[0] and mask[1]
+        return mask[0] & mask[1]
 
     @property
     def sanitized_node_offsets(self):
@@ -185,7 +185,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         idx = torch.where(~self.void_mask)[0]
 
         # Set target offsets to 0 when predicted semantic is stuff
-        y_hist = self.y_hist[0] if self.multi_stage else self.y_hist
+        y_hist = self.targets
         is_stuff = get_stuff_mask(y_hist, self.stuff_classes)
         node_offset = self.node_offset
         node_offset[is_stuff] = 0
@@ -211,7 +211,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             nodes (see `self.void_edge_mask`)
         """
         idx = torch.where(~self.void_edge_mask)[0]
-        return self.edge_affinity_logits[idx], self.edge_affinity[idx]
+        return self.edge_affinity_logits[idx], self.obj_edge_affinity[idx]
 
     @property
     def instance_predictions(self):
@@ -310,15 +310,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             optimizer,
             scheduler,
             num_classes,
-            class_names=None,
-            sampling_loss=False,
-            loss_type=True,
-            weighted_loss=True,
-            init_linear=None,
-            init_rpe=None,
-            transformer_lr_scale=1,
-            multi_stage_loss_lambdas=None,
-            gc_every_n_steps=0,
+            class_names=class_names,
+            sampling_loss=sampling_loss,
+            loss_type=loss_type,
+            weighted_loss=weighted_loss,
+            init_linear=init_linear,
+            init_rpe=init_rpe,
+            transformer_lr_scale=transformer_lr_scale,
+            multi_stage_loss_lambdas=multi_stage_loss_lambdas,
+            gc_every_n_steps=gc_every_n_steps,
             **kwargs)
 
         # Instance partition head, epects a fully-fledged
@@ -345,8 +345,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             if node_offset_criterion is None else node_offset_criterion
 
         # Model heads for edge affinity and node offset predictions
-        self.edge_affinity_head = FFN(self.net.out_dim * 2, hidden_dim=32, out_dim=1)
-        self.node_offset_head = FFN(self.net.out_dim, hidden_dim=32, out_dim=3)
+        # Initialize the model segmentation head (or heads)
+        out_dim = self.net.out_dim[0] if self.multi_stage_loss \
+            else self.net.out_dim
+        self.edge_affinity_head = FFN(out_dim * 2, hidden_dim=32, out_dim=1)
+        self.node_offset_head = FFN(out_dim, hidden_dim=32, out_dim=3)
 
         # Custom weight initialization. In particular, this applies
         # Xavier / Glorot initialization on Linear and RPE layers by

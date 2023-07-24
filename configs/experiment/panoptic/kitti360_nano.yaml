@@ -28,3 +28,6 @@ logger:
   wandb:
     project: "spt_kitti360"
     name: "NANO-32"
+
+# metric based on which models will be selected
+optimized_metric: "val/pq"
