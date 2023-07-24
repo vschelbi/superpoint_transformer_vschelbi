@@ -11,7 +11,7 @@ class OffsetLoss(torch.nn.MSELoss):
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, reduction='none' **kwargs)
+        super().__init__(*args, reduction='none', **kwargs)
 
     def forward(self, input, target, weight):
         assert weight.ge(0).all(), "Weights must be positive."
