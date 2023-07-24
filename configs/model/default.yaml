@@ -1,4 +1,4 @@
-_target_: src.models.segmentation.SemanticSegmentationModule
+_target_: src.models.semantic.SemanticSegmentationModule
 
 num_classes: ${datamodule.num_classes}
 sampling_loss: False
