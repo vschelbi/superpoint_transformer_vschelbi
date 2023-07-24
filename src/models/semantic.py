@@ -575,8 +575,8 @@ class SemanticSegmentationModule(LightningModule):
         """Update train metrics after a single step, with the content of
         the output object.
         """
-        self.train_loss(loss.detach().cpu())
-        self.train_cm(output.preds.detach().cpu(), output.targets.detach().cpu())
+        self.train_loss(loss.detach())
+        self.train_cm(output.preds.detach(), output.targets.detach())
 
     def train_step_log_metrics(self):
         """Log train metrics after a single step with the content of the
@@ -612,8 +612,8 @@ class SemanticSegmentationModule(LightningModule):
         """Update validation metrics with the content of the output
         object.
         """
-        self.val_loss(loss.detach().cpu())
-        self.val_cm(output.preds.detach().cpu(), output.targets.detach().cpu())
+        self.val_loss(loss.detach())
+        self.val_cm(output.preds.detach(), output.targets.detach())
 
     def validation_step_log_metrics(self):
         """Log validation metrics after a single step with the content
@@ -687,8 +687,8 @@ class SemanticSegmentationModule(LightningModule):
         """
         if not output.has_target:
             return
-        self.test_loss(loss.detach().cpu())
-        self.test_cm(output.preds.detach().cpu(), output.targets.detach().cpu())
+        self.test_loss(loss.detach())
+        self.test_cm(output.preds.detach(), output.targets.detach())
 
     def test_step_log_metrics(self):
         """Log test metrics after a single step with the content of the
