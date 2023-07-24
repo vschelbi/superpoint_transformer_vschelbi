@@ -19,7 +19,7 @@
 # (less diversity in the spherical samples)
 
 defaults:
-  - override /datamodule: s3dis.yaml
+  - override /datamodule: semantic/s3dis.yaml
   - override /model: semantic/spt-2.yaml
   - override /trainer: gpu.yaml
 

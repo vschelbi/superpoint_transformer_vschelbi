@@ -1,4 +1,0 @@
-defaults:
-  - kitti360.yaml
-
-graph_gap: [2, 6, 15]

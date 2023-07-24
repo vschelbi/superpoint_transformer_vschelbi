@@ -19,7 +19,7 @@
 # (less diversity in the spherical samples)
 
 defaults:
-  - override /datamodule: dales.yaml
+  - override /datamodule: semantic/dales.yaml
   - override /model: semantic/spt-2.yaml
   - override /trainer: gpu.yaml
 

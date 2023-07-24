@@ -4,7 +4,7 @@
 # python train.py experiment=semantic/kitti360
 
 defaults:
-  - override /datamodule: kitti360.yaml
+  - override /datamodule: semantic/kitti360.yaml
   - override /model: semantic/spt-2.yaml
   - override /trainer: gpu.yaml
 

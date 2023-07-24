@@ -4,7 +4,7 @@
 # python train.py experiment=semantic/dales_nano
 
 defaults:
-  - override /datamodule: dales_nano.yaml
+  - override /datamodule: semantic/dales_nano.yaml
   - override /model: semantic/nano-2.yaml
   - override /trainer: gpu.yaml
 

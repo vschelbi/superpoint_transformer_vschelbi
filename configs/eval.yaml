@@ -2,7 +2,7 @@
 
 defaults:
   - _self_
-  - datamodule: s3dis.yaml
+  - datamodule: semantic/s3dis.yaml
   - model: semantic/spt-2.yaml
   - logger: null
   - trainer: default.yaml

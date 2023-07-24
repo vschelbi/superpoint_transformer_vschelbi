@@ -1,0 +1,11 @@
+# @package datamodule
+defaults:
+  - /datamodule/semantic/kitti360.yaml
+
+# point features used for training
+point_hf:
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'elevation'
