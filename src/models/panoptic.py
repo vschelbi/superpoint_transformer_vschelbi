@@ -243,10 +243,9 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         # Compute the mean squared distance to the mean predicted offset
         # for each object
-        diff = (node_x - obj_x[self.obj_index_pred])
-        node_x_error = torch.einsum('nm, nm -> n', diff, diff)
+        node_x_error = ((node_x - obj_x[self.obj_index_pred])**2).sum(dim=1)
         obj_x_error = scatter_mean_weighted(
-            node_x_error, self.obj_index_pred, self.node_size)
+            node_x_error, self.obj_index_pred, self.node_size).squeeze()
 
         # Compute the node offset prediction score
         obj_x_score = 1 / (1 + obj_x_error)
@@ -258,8 +257,9 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         idx = ie.flatten()
         intra = intra.repeat(2)
         a = self.edge_affinity_preds.repeat(2)
-        obj_mean_intra = scatter_mean(a[intra], idx[intra])
-        obj_mean_inter = scatter_mean(a[~intra], idx[~intra])
+        n = self.obj_index_pred.max() + 1
+        obj_mean_intra = scatter_mean(a[intra], idx[intra], dim_size=n)
+        obj_mean_inter = scatter_mean(a[~intra], idx[~intra], dim_size=n)
 
         # Compute the inter-object and intra-object scores
         obj_intra_score = obj_mean_intra
@@ -449,6 +449,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         computing the partition once in a while with
         `self.partition_every_n_epochs`.
         """
+        # nth_epoch = self.current_epoch % self.partition_every_n_epochs == 0 \
+        #     if self.partition_every_n_epochs > 0 and self.current_epoch > 0 \
+        #     else False
         nth_epoch = self.current_epoch % self.partition_every_n_epochs == 0 \
             if self.partition_every_n_epochs > 0 else False
         last_epoch = self.current_epoch == self.trainer.max_epochs - 1
@@ -484,7 +487,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         x_edge = x[nag[1].obj_edge_index]
         x_edge = torch.cat(
             ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
-        edge_affinity_logits = self.edge_affinity_head(x_edge)
+        edge_affinity_logits = self.edge_affinity_head(x_edge).squeeze()
 
         # Gather results in an output object
         output = PanopticSegmentationOutput(
@@ -528,14 +531,16 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         edge_affinity_logits = output.edge_affinity_logits
 
         # Compute the instance partition
+        # NB: we detach the tensors here: this operation runs on CPU and
+        # is non-differentiable
         obj_index = self.partitioner(
             batch,
-            node_x,
-            node_logits,
-            node_is_stuff,
+            node_x.detach(),
+            node_logits.detach(),
+            node_is_stuff.detach(),
             node_size,
             edge_index,
-            edge_affinity_logits)
+            edge_affinity_logits.detach())
 
         # Store the results in the output object
         output.obj_index_pred = obj_index
@@ -787,7 +792,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("train/pqmod", pqmod, prog_bar=True)
             self.log("train/mprec", mprec, prog_bar=True)
             self.log("train/mrec", mrec, prog_bar=True)
-            enum = zip(map_per_class, pq_per_class, self.classe_names)
+            enum = zip(map_per_class, pq_per_class, self.class_names)
             for map_c, pq_c, name in enum:
                 self.log(f"train/map_{name}", map_c, prog_bar=True)
                 self.log(f"train/pq_{name}", pq_c, prog_bar=True)
@@ -880,7 +885,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("val/pqmod", pqmod, prog_bar=True)
             self.log("val/mprec", mprec, prog_bar=True)
             self.log("val/mrec", mrec, prog_bar=True)
-            enum = zip(map_per_class, pq_per_class, self.classe_names)
+            enum = zip(map_per_class, pq_per_class, self.class_names)
             for map_c, pq_c, name in enum:
                 self.log(f"val/map_{name}", map_c, prog_bar=True)
                 self.log(f"val/pq_{name}", pq_c, prog_bar=True)
@@ -999,7 +1004,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("test/pqmod", pqmod, prog_bar=True)
             self.log("test/mprec", mprec, prog_bar=True)
             self.log("test/mrec", mrec, prog_bar=True)
-            enum = zip(map_per_class, pq_per_class, self.classe_names)
+            enum = zip(map_per_class, pq_per_class, self.class_names)
             for map_c, pq_c, name in enum:
                 self.log(f"test/map_{name}", map_c, prog_bar=True)
                 self.log(f"test/pq_{name}", pq_c, prog_bar=True)

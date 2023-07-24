@@ -301,6 +301,12 @@ class CSRData:
                 return False
         return True
 
+    def __hash__(self):
+        """Hashing for an CSRData.
+        """
+        return hash((
+            self.__class__.__name__, self.pointers, *(v for v in self.values)))
+
 
 class CSRBatch(CSRData):
     """
