@@ -5,7 +5,7 @@
 
 defaults:
   - override /datamodule: s3dis.yaml
-  - override /model: spt.yaml
+  - override /model: semantic/spt.yaml
   - override /callbacks: default.yaml
   - override /trainer: default.yaml
 

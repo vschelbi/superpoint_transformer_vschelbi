@@ -1,5 +1,6 @@
+# @package model
 defaults:
-  - spt-2.yaml
+  - /model/semantic/spt-2.yaml
 
 _down_dim: [16, 16, 16, 16]
 _up_dim: [16, 16, 16]

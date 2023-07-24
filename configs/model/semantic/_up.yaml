@@ -1,5 +1,6 @@
+# @package model
 defaults:
-  - default.yaml
+  - /model/semantic/default.yaml
 
 # Partial spt config specifically for the decoder
 net:

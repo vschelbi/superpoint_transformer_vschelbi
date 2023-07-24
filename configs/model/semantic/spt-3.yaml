@@ -1,5 +1,6 @@
+# @package model
 defaults:
-  - spt.yaml
+  - /model/semantic/spt.yaml
 
 net:
   down_dim: ${eval:'${model._down_dim}[:3]'}

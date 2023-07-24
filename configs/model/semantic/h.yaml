@@ -1,5 +1,6 @@
+# @package model
 defaults:
-  - spt-2.yaml
+  - /model/semantic/spt.yaml
 
 net:
   down_num_blocks: 0

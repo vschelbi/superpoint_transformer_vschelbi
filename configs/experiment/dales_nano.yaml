@@ -5,7 +5,7 @@
 
 defaults:
   - override /datamodule: dales_nano.yaml
-  - override /model: nano-2.yaml
+  - override /model: semantic/nano-2.yaml
   - override /trainer: gpu.yaml
 
 # all parameters below will be merged with parameters from default configurations set above

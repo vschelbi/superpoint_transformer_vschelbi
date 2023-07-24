@@ -1,3 +1,5 @@
+# @package model
+
 _target_: src.models.semantic.SemanticSegmentationModule
 
 num_classes: ${datamodule.num_classes}

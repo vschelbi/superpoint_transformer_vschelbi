@@ -1,9 +1,10 @@
+# @package model
 defaults:
-  - default.yaml
-  - _point.yaml
-  - _down.yaml
-  - _up.yaml
-  - _attention.yaml
+  - /model/semantic/default.yaml
+  - /model/semantic/_point.yaml
+  - /model/semantic/_down.yaml
+  - /model/semantic/_up.yaml
+  - /model/semantic/_attention.yaml
 
 net:
   _target_: src.models.components.spt.SPT
