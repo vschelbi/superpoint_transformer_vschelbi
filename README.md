@@ -167,13 +167,13 @@ Use the following commands to evaluate SPT from a checkpoint file
 `checkpoint.ckpt`:
 ```bash
 # Evaluate SPT on S3DIS Fold 5
-python src/eval.py experiment=s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
+python src/eval.py experiment=semantic/s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
 
 # Evaluate SPT on KITTI-360 Val
-python src/eval.py experiment=kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
+python src/eval.py experiment=semantic/kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
 
 # Evaluate SPT on DALES
-python src/eval.py experiment=dales ckpt_path=/path/to/your/checkpoint.ckpt
+python src/eval.py experiment=semantic/dales ckpt_path=/path/to/your/checkpoint.ckpt
 ```
 
 > **Note**: The pretrained weights of the **SPT** and **SPT-nano** models for 
@@ -185,26 +185,26 @@ python src/eval.py experiment=dales ckpt_path=/path/to/your/checkpoint.ckpt
 Use the following commands to **train SPT on a 32G-GPU**:
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=s3dis datamodule.fold=5
+python src/train.py experiment=semantic/s3dis datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=kitti360 
+python src/train.py experiment=semantic/kitti360 
 
 # Train SPT on DALES
-python src/train.py experiment=dales
+python src/train.py experiment=semantic/dales
 ```
 
 Use the following to **train SPT on a 11G-GPU 💾** (training time and performance may vary):
 
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=s3dis_11g datamodule.fold=5
+python src/train.py experiment=semantic/s3dis_11g datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=kitti360_11g 
+python src/train.py experiment=semantic/kitti360_11g 
 
 # Train SPT on DALES
-python src/train.py experiment=dales_11g
+python src/train.py experiment=semantic/dales_11g
 ```
 
 > **Note**: Encountering CUDA Out-Of-Memory errors 💀💾 ? See our dedicated 
@@ -265,13 +265,13 @@ training SPT on an **11G-GPU 💾**:
 
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=s3dis_11g datamodule.fold=5
+python src/train.py experiment=semantic/s3dis_11g datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=kitti360_11g 
+python src/train.py experiment=semantic/kitti360_11g 
 
 # Train SPT on DALES
-python src/train.py experiment=dales_11g
+python src/train.py experiment=semantic/dales_11g
 ```
 
 ### CUDA Out-Of-Memory Errors

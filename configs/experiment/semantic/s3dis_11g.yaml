@@ -1,11 +1,11 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=dales_11g
+# python train.py experiment=semantic/s3dis_11g
 
 # This configuration allows training SPT on a single 11G GPU, with a
-# training procedure comparable with the default experiment/kitti360
-# configuration.
+# training procedure comparable with the default
+# experiment/semantic/s3dis configuration.
 # Among the multiple ways of reducing memory impact, we choose here to
 #   - divide the dataset into smaller tiles (facilitates preprocessing
 #     and inference on smaller GPUs)
@@ -19,7 +19,7 @@
 # (less diversity in the spherical samples)
 
 defaults:
-  - override /datamodule: dales.yaml
+  - override /datamodule: s3dis.yaml
   - override /model: semantic/spt-2.yaml
   - override /trainer: gpu.yaml
 
@@ -27,7 +27,7 @@ defaults:
 # this allows you to overwrite only specified parameters
 
 datamodule:
-  xy_tiling: 5  # split each floor into xy_tiling²=25 tiles, based on a regular XY grid. Reduces preprocessing- and inference-time GPU memory
+  pc_tiling: 3  # split each floor into 2^pc_tiling=8 tiles, based on their principal components. Reduces preprocessing- and inference-time GPU memory
   sample_graph_k: 2  # 2 spherical samples in each batch instead of 4. Reduces train-time GPU memory
 
 callbacks:
@@ -37,14 +37,14 @@ callbacks:
         2  # accumulate gradient every 2 batches, to make up for reduced batch size
 
 trainer:
-  max_epochs: 288  # to keep same nb of steps: 25/9x more tiles, 2-step gradient accumulation -> epochs * 2 * 9 / 25
+  max_epochs: 500  # to keep same nb of steps: 8x more tiles, 2-step gradient accumulation -> epochs/4
 
 model:
   optimizer:
-    lr: 0.01
-    weight_decay: 1e-4
+    lr: 0.1
+    weight_decay: 1e-2
 
 logger:
   wandb:
-    project: "spt_dales"
+    project: "spt_s3dis"
     name: "SPT-64"
