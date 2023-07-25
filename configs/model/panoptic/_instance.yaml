@@ -5,7 +5,7 @@ _target_: src.models.panoptic.PanopticSegmentationModule
 # Partial spt config specifically for the instance/panoptic partitioner
 partitioner:
   _target_: src.nn.instance.InstancePartitioner
-  regularization: 1e-2
+  regularization: 1
   x_weight: 1
   cutoff: 1
   parallel: True

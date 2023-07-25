@@ -4,8 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torch import Tensor, LongTensor
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-from torchmetrics.detection.mean_ap import MeanAveragePrecision, \
-    BaseMetricResults
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from torchmetrics.utilities.imports import _TORCHVISION_GREATER_EQUAL_0_8
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.data import InstanceData, InstanceBatch
@@ -16,6 +15,26 @@ log = logging.getLogger(__name__)
 
 
 __all__ = ['MeanAveragePrecision3D']
+
+
+class BaseMetricResults(dict):
+    """Base metric class, that allows fields for pre-defined metrics.
+    """
+
+    def __getattr__(self, key: str) -> Tensor:
+        # Using this you get the correct error message, an
+        # AttributeError instead of a KeyError
+        if key in self:
+            return self[key]
+        raise AttributeError(f"No such attribute: {key}")
+
+    def __setattr__(self, key: str, value: Tensor) -> None:
+        self[key] = value
+
+    def __delattr__(self, key: str) -> None:
+        if key in self:
+            del self[key]
+        raise AttributeError(f"No such attribute: {key}")
 
 
 class MAPMetricResults(BaseMetricResults):
@@ -595,9 +614,10 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # Compute the global indices of the prediction and ground truth
         # for the class at hand. These will be used to search for
         # relevant pairs
-        gt_class_idx = torch.where(is_gt_class)[0]
-        pred_class_idx = torch.where(is_pred_class)[0]
-        is_pair_gt_class = torch.isin(pair_gt_idx, gt_class_idx)
+        gt_idx = torch.where(is_gt_class)[0]
+        pred_idx = torch.where(is_pred_class)[0]
+        is_pair_gt_class = torch.isin(pair_gt_idx, gt_idx)
+        pair_idx = torch.where(is_pair_gt_class)[0]
 
         # Build the tensors used to track which ground truth and which
         # prediction has found a match, for each IoU threshold. This is
@@ -620,25 +640,44 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # gt_matches and gt_ignore. To this end, we will compute a
         # simple mapping. NB: we do not need to build such mapping for
         # prediction indices, because we will simply enumerate
-        # pred_class_idx, which provides both local and global indices
+        # pred_idx, which provides both local and global indices
         gt_idx_to_i_gt = torch.full_like(gt_semantic, -1)
-        gt_idx_to_i_gt[gt_class_idx] = torch.arange(num_gt, device=device)
+        gt_idx_to_i_gt[gt_idx] = torch.arange(num_gt, device=device)
+
+        # For each prediction with the class at hand, we will need to
+        # find the pairs involving this prediction and a target object
+        # with the class. To avoid excessive computations, we trim the
+        # predictions absent from the pairs and the pairs involving
+        # predictions we are not interested in
+        pair_pred_idx = pair_pred_idx[pair_idx]
+        pred_isin_pairs = torch.isin(pred_idx, pair_pred_idx)
+        pair_isin_preds = torch.isin(pair_pred_idx, pred_idx)
+        pred_idx = pred_idx[pred_isin_pairs]
+        pair_idx = pair_idx[pair_isin_preds]
+        pair_pred_idx = pair_pred_idx[pair_isin_preds]
+
+        # Then, to avoid searching through all the pairs for every new
+        # prediction index, we reorder the pairs by increasing
+        # prediction index. This allows the construction of pointers to
+        # easily address consecutive pairs involving each prediction.
+        # Since the tensor of prediction indices is sorted by
+        # construction, we can then easily get the pair indices
+        # involving each prediction
+        order = pair_pred_idx.argsort()
+        pair_idx = pair_idx[order]
+        pair_pred_idx = pair_pred_idx[order]
+        pred_ptr = sizes_to_pointers(pair_pred_idx.bincount()[pred_idx])
+        del order
 
         # Match each prediction to a ground truth
         # NB: the assumed pre-ordering of predictions by decreasing
         # score ensures we are assigning high-confidence predictions
         # first
-        for i_pred, pred_idx in enumerate(pred_class_idx):
+        for i, (j, pred_idx) in enumerate(zip(torch.where(pred_isin_pairs)[0], pred_idx)):
 
             # Get the indices of pairs which involve the prediction at
             # hand and whose ground truth has the class at hand
-            _pair_idx = torch.where(
-                (pair_pred_idx == pred_idx) & is_pair_gt_class)[0]
-
-            # Detection will be ignored if no candidate overlapping gt
-            # is found
-            if _pair_idx.numel() == 0:
-                continue
+            _pair_idx = pair_idx[pred_ptr[i]:pred_ptr[i + 1]]
 
             # Gather the pairs' ground truth information for candidate
             # ground truth matches
@@ -690,8 +729,8 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
             # index. From there, we can update the det_ignore,
             # det_matches and gt_matches.
             _iou_match_i_gt = _pair_i_gt[_iou_match_idx]
-            det_ignore[:, i_pred] = gt_ignore[_iou_match_i_gt] * _iou_match_ok
-            det_matches[:, i_pred] = _iou_match_ok
+            det_ignore[:, j] = gt_ignore[_iou_match_i_gt] * _iou_match_ok
+            det_matches[:, j] = _iou_match_ok
 
             #  Special attention must be paid to gt_matches in case the
             #  prediction tried to match an already-assigned gt. In

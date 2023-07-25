@@ -4,9 +4,9 @@ from torch_scatter import scatter_sum
 from torch import Tensor, LongTensor
 from typing import Any, List, Optional, Sequence
 from torchmetrics.metric import Metric
-from torchmetrics.detection.mean_ap import BaseMetricResults
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.data import InstanceData, InstanceBatch
+from src.metrics.mean_average_precision import BaseMetricResults
 
 
 log = logging.getLogger(__name__)
@@ -107,6 +107,7 @@ class PanopticQuality3D(Metric):
     """
     prediction_semantic: List[LongTensor]
     instance_data: List[InstanceData]
+    full_state_update = False
 
     def __init__(
             self,
