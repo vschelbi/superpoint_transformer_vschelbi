@@ -2,6 +2,13 @@
 
 _target_: src.models.panoptic.PanopticSegmentationModule
 
+# Stuff class indices must be specified for instantiation.
+# Concretely, stuff_classes is recovered from the datamodule config
+stuff_classes: ${datamodule.stuff_classes}
+
+# Minimum size for an instance to be taken into account in the metrics
+min_instance_size: ${datamodule.min_instance_size}
+
 # Partial spt config specifically for the instance/panoptic partitioner
 partitioner:
   _target_: src.nn.instance.InstancePartitioner
@@ -17,6 +24,7 @@ partitioner:
 # to 0, the partition will only be computed at the last training epoch
 partition_every_n_epochs: 10
 
-# Stuff class indices must be specified for instantiation.
-# Concretely, stuff_classes is recovered from the datamodule config
-stuff_classes: ${datamodule.stuff_classes}
+# Weights for combining the semantic segmentation loss with the node
+# offset and edge affinity losses
+edge_affinity_loss_lambda: 1
+node_offset_loss_lambda: 1

@@ -120,6 +120,7 @@ instance_radius: 5
 instance_centroid_mode: 'iou'
 instance_centroid_level: 1
 instance_smooth_affinity: True
+min_instance_size: 100
 
 # Preprocessing
 pre_transform:

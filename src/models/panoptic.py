@@ -11,7 +11,7 @@ from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
 from src.models.semantic import SemanticSegmentationOutput, \
     SemanticSegmentationModule
 from src.loss import OffsetLoss
-from src.nn import FFN, InstancePartitioner
+from src.nn import FFN
 
 log = logging.getLogger(__name__)
 
@@ -305,8 +305,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             node_offset_criterion=None,
             node_offset_loss_lambda=1,
             gc_every_n_steps=0,
-            min_instance_size=0,
-            partition_every_n_epochs=10,
+            min_instance_size=100,
+            partition_every_n_epochs=20,
             **kwargs):
         super().__init__(
             net,
@@ -453,13 +453,42 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         computing the partition once in a while with
         `self.partition_every_n_epochs`.
         """
-        # nth_epoch = self.current_epoch % self.partition_every_n_epochs == 0 \
-        #     if self.partition_every_n_epochs > 0 and self.current_epoch > 0 \
-        #     else False
-        nth_epoch = self.current_epoch % self.partition_every_n_epochs == 0 \
-            if self.partition_every_n_epochs > 0 else False
-        last_epoch = self.current_epoch == self.trainer.max_epochs - 1
-        return nth_epoch or last_epoch
+        # Get the current epoch. For the validation set, we alter the
+        # epoch number so that `partition_every_n_epochs` can align
+        # with `check_val_every_n_epoch`. Indeed, it seems the epoch
+        # number during the validation step is always one increment
+        # ahead
+        epoch = self.current_epoch - 1 if self.trainer.validating \
+            else self.current_epoch
+
+        # Come useful checks to decide whether the partition should be
+        # triggered
+        k = self.partition_every_n_epochs
+        last_epoch = epoch == self.trainer.max_epochs - 1
+        first_epoch = epoch == 0
+        kth_epoch = epoch % k == 0 if k > 0 else False
+
+        # For training, the partition is computed based on
+        # `partition_every_n_epochs`, or if we reached the last epoch.
+        # The first epoch will be skipped, because trained weights are
+        # unlikely to produce interesting inputs for the partition
+        if self.trainer.training:
+            return (kth_epoch and not first_epoch) or last_epoch
+
+        # For validation, we have the same behavior as training, with
+        # the difference that if `check_val_every_n_epoch` is larger
+        # than `partition_every_n_epochs`, we automatically trigger the
+        # partition
+        if self.trainer.validating:
+            k_val = self.trainer.check_val_every_n_epoch
+            nearest_multiple = epoch % k < k_val if k > 0 else False
+            if 0 < k <= k_val:
+                return not first_epoch or last_epoch
+            else:
+                return (nearest_multiple and not first_epoch) or last_epoch
+
+        # For all other Trainer stages, we run the partition by default
+        return True
 
     def forward(self, nag) -> PanopticSegmentationOutput:
         # Extract features
@@ -812,6 +841,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.train_offset_mse.reset()
         self.train_affinity_oa.reset()
         self.train_affinity_f1.reset()
+        self.train_instance.reset()
+        self.train_panoptic.reset()
 
     def validation_step_update_metrics(self, loss, output):
         """Update validation metrics with the content of the output
@@ -931,6 +962,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_offset_mse.reset()
         self.val_affinity_oa.reset()
         self.val_affinity_f1.reset()
+        self.val_instance.reset()
+        self.val_panoptic.reset()
 
     def test_step_update_metrics(self, loss, output):
         """Update test metrics with the content of the output object.
@@ -1028,6 +1061,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.test_offset_mse.reset()
         self.test_affinity_oa.reset()
         self.test_affinity_f1.reset()
+        self.test_instance.reset()
+        self.test_panoptic.reset()
 
 # TODO: gridsearch instance partition parameters
 

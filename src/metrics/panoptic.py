@@ -107,7 +107,7 @@ class PanopticQuality3D(Metric):
     """
     prediction_semantic: List[LongTensor]
     instance_data: List[InstanceData]
-    full_state_update = False
+    full_state_update: bool = False
 
     def __init__(
             self,

@@ -561,7 +561,7 @@ class SemanticSegmentationModule(LightningModule):
     def training_step(self, batch, batch_idx):
         loss, output = self.model_step(batch)
 
-        # update and log metrics
+        # Update and log metrics
         self.train_step_update_metrics(loss, output)
         self.train_step_log_metrics()
 
@@ -601,7 +601,7 @@ class SemanticSegmentationModule(LightningModule):
     def validation_step(self, batch, batch_idx):
         loss, output = self.model_step(batch)
 
-        # update and log metrics
+        # Update and log metrics
         self.validation_step_update_metrics(loss, output)
         self.validation_step_log_metrics()
 
@@ -667,7 +667,7 @@ class SemanticSegmentationModule(LightningModule):
         # 0 and do not update the confusion matrix
         loss = 0 if loss is None else loss
 
-        # update and log metrics
+        # Update and log metrics
         self.test_step_update_metrics(loss, output)
         self.test_step_log_metrics()
 
