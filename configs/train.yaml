@@ -58,4 +58,4 @@ seed: null
 
 # float32 precision operations (torch>=2.0)
 # see https://pytorch.org/docs/2.0/generated/torch.set_float32_matmul_precision.html
-float32_matmul_precision: highest
+float32_matmul_precision: high
