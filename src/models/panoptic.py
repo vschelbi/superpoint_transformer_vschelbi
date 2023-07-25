@@ -277,7 +277,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
     """
 
     _IGNORED_HYPERPARAMETERS = [
-        'net', 'criterion', 'edge_affinity_criterion', 'node_offset_criterion']
+        'net',
+        'partitioner',
+        'criterion',
+        'edge_affinity_criterion',
+        'node_offset_criterion']
 
     def __init__(
             self,
