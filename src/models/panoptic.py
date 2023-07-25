@@ -250,6 +250,8 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         # Compute the node offset prediction score
         obj_x_score = 1 / (1 + obj_x_error)
 
+        # TODO: should we take object size into account in the scoring ?
+
         # Compute, for each predicted object, the mean inter-object and
         # intra-object predicted edge affinity
         ie = self.obj_index_pred[self.obj_edge_index]

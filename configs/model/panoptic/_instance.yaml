@@ -6,7 +6,8 @@ _target_: src.models.panoptic.PanopticSegmentationModule
 # Concretely, stuff_classes is recovered from the datamodule config
 stuff_classes: ${datamodule.stuff_classes}
 
-# Minimum size for an instance to be taken into account in the metrics
+# Minimum size for an instance to be taken into account in the instance
+# segmentation metrics
 min_instance_size: ${datamodule.min_instance_size}
 
 # Partial spt config specifically for the instance/panoptic partitioner
