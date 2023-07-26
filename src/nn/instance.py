@@ -111,3 +111,14 @@ class InstancePartitioner(nn.Module):
             iterations=self.iterations,
             trim=self.trim,
             discrepancy_epsilon=self.discrepancy_epsilon)
+
+    def extra_repr(self) -> str:
+        keys = [
+            'regularization',
+            'x_weight',
+            'cutoff',
+            'parallel',
+            'iterations',
+            'trim',
+            'discrepancy_epsilon']
+        return ', '.join([f'{k}={getattr(self, k)}' for k in keys])
