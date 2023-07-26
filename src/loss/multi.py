@@ -1,7 +1,4 @@
-import torch
-import itertools
 from torch import nn
-from torch.nn.modules.module import Module, _EXTRA_STATE_KEY_SUFFIX
 
 
 __all__ = ['MultiLoss']
