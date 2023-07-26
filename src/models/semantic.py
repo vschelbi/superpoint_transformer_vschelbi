@@ -109,6 +109,9 @@ class SemanticSegmentationOutput:
         void_count = y_hist[:, -1]
         return void_count / total_count > 0.5
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
+
 
 class SemanticSegmentationModule(LightningModule):
     """A LightningModule for semantic segmentation of point clouds."""
