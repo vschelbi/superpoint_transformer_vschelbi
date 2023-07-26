@@ -23,7 +23,7 @@ partitioner:
 
 # Frequency at which the partition should be computed. If lower or equal
 # to 0, the partition will only be computed at the last training epoch
-partition_every_n_epochs: 10
+partition_every_n_epochs: -1
 
 # Weights for combining the semantic segmentation loss with the node
 # offset and edge affinity losses
