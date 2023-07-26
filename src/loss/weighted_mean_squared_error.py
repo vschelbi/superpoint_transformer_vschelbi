@@ -26,4 +26,4 @@ class OffsetLoss(torch.nn.MSELoss):
         loss = loss.sum(dim=1).view(-1, 1)
 
         # Compute the weighted mean
-        return (loss * (weight / weight.sum()).view(-1, 1)).mean()
+        return (loss * (weight / weight.sum()).view(-1, 1)).sum()

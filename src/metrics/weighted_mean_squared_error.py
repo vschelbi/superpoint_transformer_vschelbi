@@ -49,5 +49,5 @@ def _weighted_mean_squared_error_update(
     assert weight.numel() == preds.shape[0]
     _check_same_shape(preds, target)
     sum_squared_error = (weight.view(-1, 1) * (preds - target)**2).sum()
-    sum_weight = target.numel()
+    sum_weight = weight.sum()
     return sum_squared_error, sum_weight
