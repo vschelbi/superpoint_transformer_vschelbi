@@ -462,6 +462,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # ahead
         epoch = self.current_epoch + 1
 
+        # If no Trainer attached to the model, run the partition
+        if self._trainer is None:
+            return True
+
         # Come useful checks to decide whether the partition should be
         # triggered
         k = self.partition_every_n_epochs
@@ -773,9 +777,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             *[o.detach().cpu() for o in output.sanitized_node_offsets])
 
         # Update edge affinity metrics
-        ea = [o.detach().cpu() for o in output.sanitized_edge_affinities]
-        self.train_affinity_oa(ea[0], (ea[1] > 0.5).long())
-        self.train_affinity_f1(ea[0], (ea[1] > 0.5).long())
+        ea_pred, ea_target = output.sanitized_edge_affinities
+        ea_pred = ea_pred.detach().cpu()
+        ea_target_binary = (ea_target.detach().cpu() > 0.5).long()
+        self.train_affinity_oa(ea_pred, ea_target_binary)
+        self.train_affinity_f1(ea_pred, ea_target_binary)
 
     def train_step_log_metrics(self):
         """Log train metrics after a single step with the content of the
@@ -870,9 +876,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             *[o.detach().cpu() for o in output.sanitized_node_offsets])
 
         # Update edge affinity metrics
-        ea = [o.detach().cpu() for o in output.sanitized_edge_affinities]
-        self.val_affinity_oa(ea[0], (ea[1] > 0.5).long())
-        self.val_affinity_f1(ea[0], (ea[1] > 0.5).long())
+        ea_pred, ea_target = output.sanitized_edge_affinities
+        ea_pred = ea_pred.detach().cpu()
+        ea_target_binary = (ea_target.detach().cpu() > 0.5).long()
+        self.val_affinity_oa(ea_pred, ea_target_binary)
+        self.val_affinity_f1(ea_pred, ea_target_binary)
 
     def validation_step_log_metrics(self):
         """Log validation metrics after a single step with the content
@@ -993,9 +1001,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             *[o.detach().cpu() for o in output.sanitized_node_offsets])
 
         # Update edge affinity metrics
-        ea = [o.detach().cpu() for o in output.sanitized_edge_affinities]
-        self.test_affinity_oa(ea[0], (ea[1] > 0.5).long())
-        self.test_affinity_f1(ea[0], (ea[1] > 0.5).long())
+        ea_pred, ea_target = output.sanitized_edge_affinities
+        ea_pred = ea_pred.detach().cpu()
+        ea_target_binary = (ea_target.detach().cpu() > 0.5).long()
+        self.test_affinity_oa(ea_pred, ea_target_binary)
+        self.test_affinity_f1(ea_pred, ea_target_binary)
 
     def test_step_log_metrics(self):
         """Log test metrics after a single step with the content of the
