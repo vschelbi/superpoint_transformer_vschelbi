@@ -460,14 +460,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # with `check_val_every_n_epoch`. Indeed, it seems the epoch
         # number during the validation step is always one increment
         # ahead
-        epoch = self.current_epoch - 1 if self.trainer.validating \
-            else self.current_epoch
+        epoch = self.current_epoch + 1
 
         # Come useful checks to decide whether the partition should be
         # triggered
         k = self.partition_every_n_epochs
-        last_epoch = epoch == self.trainer.max_epochs - 1
-        first_epoch = epoch == 0
+        last_epoch = epoch == self.trainer.max_epochs
+        first_epoch = epoch == 1
         kth_epoch = epoch % k == 0 if k > 0 else False
 
         # For training, the partition is computed based on
