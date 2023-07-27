@@ -14,7 +14,7 @@ min_instance_size: ${datamodule.min_instance_size}
 partitioner:
   _target_: src.nn.instance.InstancePartitioner
   regularization: 1
-  x_weight: 1
+  x_weight: 1e-2
   cutoff: 1
   parallel: True
   iterations: 10
@@ -24,6 +24,14 @@ partitioner:
 # Frequency at which the partition should be computed. If lower or equal
 # to 0, the partition will only be computed at the last training epoch
 partition_every_n_epochs: -1
+
+# Edge affinity loss
+edge_affinity_criterion:
+  _target_: torch.nn.BCEWithLogitsLoss
+
+# Node offset loss
+node_offset_criterion:
+  _target_: src.loss.WeightedL2Loss
 
 # Weights for combining the semantic segmentation loss with the node
 # offset and edge affinity losses
