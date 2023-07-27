@@ -13,13 +13,13 @@ min_instance_size: ${datamodule.min_instance_size}
 # Partial spt config specifically for the instance/panoptic partitioner
 partitioner:
   _target_: src.nn.instance.InstancePartitioner
-  regularization: 1
+  regularization: 1e2
   x_weight: 1e-2
   cutoff: 1
   parallel: True
   iterations: 10
   trim: False
-  discrepancy_epsilon: 1e-3
+  discrepancy_epsilon: 10
 
 # Frequency at which the partition should be computed. If lower or equal
 # to 0, the partition will only be computed at the last training epoch
