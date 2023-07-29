@@ -10,7 +10,7 @@ from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
     WeightedL2Error, WeightedL1Error, L2Error, L1Error
 from src.models.semantic import SemanticSegmentationOutput, \
     SemanticSegmentationModule
-from src.loss import WeightedL2Loss
+from src.loss import WeightedL2Loss, BCEWithLogitsLoss
 from src.nn import FFN
 
 log = logging.getLogger(__name__)
@@ -200,7 +200,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         We return the edge affinity logits to the criterion and not
         the actual sigmoid-normalized predictions used for graph
         clustering. The reason for this is that we expect the edge
-        affinity loss to be computed using `torch.nn.BCEWithLogitsLoss`.
+        affinity loss to be computed using `BCEWithLogitsLoss`.
 
         We choose to exclude edges connecting nodes/superpoints with
         more than 50% 'void' points from edge affinity loss and metrics
@@ -345,7 +345,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # Loss functions for edge affinity and node offset predictions.
         # NB: the semantic loss is already accounted for in the
         # SemanticSegmentationModule constructor
-        self.edge_affinity_criterion = torch.nn.BCEWithLogitsLoss() \
+        self.edge_affinity_criterion = BCEWithLogitsLoss() \
             if edge_affinity_criterion is None else edge_affinity_criterion
         self.node_offset_criterion = WeightedL2Loss() \
             if node_offset_criterion is None else node_offset_criterion

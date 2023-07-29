@@ -27,7 +27,7 @@ partition_every_n_epochs: -1
 
 # Edge affinity loss
 edge_affinity_criterion:
-  _target_: torch.nn.BCEWithLogitsLoss
+  _target_: src.loss.BCEWithLogitsLoss
   pos_weight: 0.1
 
 # Node offset loss
