@@ -783,15 +783,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.train_panoptic.update(obj_y, instance_data.cpu())
 
         # Update tracked losses
-        self.train_semantic_loss(output.semantic_loss.detach().cpu())
-        self.train_node_offset_loss(output.node_offset_loss.detach().cpu())
-        self.train_edge_affinity_loss(output.edge_affinity_loss.detach().cpu())
+        self.train_semantic_loss(output.semantic_loss.detach())
+        self.train_node_offset_loss(output.node_offset_loss.detach())
+        self.train_edge_affinity_loss(output.edge_affinity_loss.detach())
 
         # Update node offset metrics
         node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
-        node_offset_pred = node_offset_pred.cpu()
-        node_offset = node_offset.cpu()
-        node_size = node_size.cpu()
+        node_offset_pred = node_offset_pred.detach()
+        node_offset = node_offset.detach()
+        node_size = node_size.detach()
         self.train_offset_wl2(node_offset_pred, node_offset, node_size)
         self.train_offset_wl1(node_offset_pred, node_offset, node_size)
         self.train_offset_l2(node_offset_pred, node_offset)
@@ -799,8 +799,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update edge affinity metrics
         ea_pred, ea_target = output.sanitized_edge_affinities
-        ea_pred = ea_pred.detach().cpu()
-        ea_target_binary = (ea_target.detach().cpu() > 0.5).long()
+        ea_pred = ea_pred.detach()
+        ea_target_binary = (ea_target.detach() > 0.5).long()
         self.train_affinity_oa(ea_pred, ea_target_binary)
         self.train_affinity_f1(ea_pred, ea_target_binary)
 
@@ -894,15 +894,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.val_panoptic.update(obj_y, instance_data.cpu())
 
         # Update tracked losses
-        self.val_semantic_loss(output.semantic_loss.detach().cpu())
-        self.val_node_offset_loss(output.node_offset_loss.detach().cpu())
-        self.val_edge_affinity_loss(output.edge_affinity_loss.detach().cpu())
+        self.val_semantic_loss(output.semantic_loss.detach())
+        self.val_node_offset_loss(output.node_offset_loss.detach())
+        self.val_edge_affinity_loss(output.edge_affinity_loss.detach())
 
         # Update node offset metrics
         node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
-        node_offset_pred = node_offset_pred.cpu()
-        node_offset = node_offset.cpu()
-        node_size = node_size.cpu()
+        node_offset_pred = node_offset_pred.detach()
+        node_offset = node_offset.detach()
+        node_size = node_size.detach()
         self.val_offset_wl2(node_offset_pred, node_offset, node_size)
         self.val_offset_wl1(node_offset_pred, node_offset, node_size)
         self.val_offset_l2(node_offset_pred, node_offset)
@@ -910,8 +910,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update edge affinity metrics
         ea_pred, ea_target = output.sanitized_edge_affinities
-        ea_pred = ea_pred.detach().cpu()
-        ea_target_binary = (ea_target.detach().cpu() > 0.5).long()
+        ea_pred = ea_pred.detach()
+        ea_target_binary = (ea_target.detach() > 0.5).long()
         self.val_affinity_oa(ea_pred, ea_target_binary)
         self.val_affinity_f1(ea_pred, ea_target_binary)
 
@@ -1040,15 +1040,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.test_panoptic.update(obj_y, instance_data.cpu())
 
         # Update tracked losses
-        self.test_semantic_loss(output.semantic_loss.detach().cpu())
-        self.test_node_offset_loss(output.node_offset_loss.detach().cpu())
-        self.test_edge_affinity_loss(output.edge_affinity_loss.detach().cpu())
+        self.test_semantic_loss(output.semantic_loss.detach())
+        self.test_node_offset_loss(output.node_offset_loss.detach())
+        self.test_edge_affinity_loss(output.edge_affinity_loss.detach())
 
         # Update node offset metrics
         node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
-        node_offset_pred = node_offset_pred.cpu()
-        node_offset = node_offset.cpu()
-        node_size = node_size.cpu()
+        node_offset_pred = node_offset_pred.detach()
+        node_offset = node_offset.detach()
+        node_size = node_size.detach()
         self.test_offset_wl2(node_offset_pred, node_offset, node_size)
         self.test_offset_wl1(node_offset_pred, node_offset, node_size)
         self.test_offset_l2(node_offset_pred, node_offset)
@@ -1056,8 +1056,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update edge affinity metrics
         ea_pred, ea_target = output.sanitized_edge_affinities
-        ea_pred = ea_pred.detach().cpu()
-        ea_target_binary = (ea_target.detach().cpu() > 0.5).long()
+        ea_pred = ea_pred.detach()
+        ea_target_binary = (ea_target.detach() > 0.5).long()
         self.test_affinity_oa(ea_pred, ea_target_binary)
         self.test_affinity_f1(ea_pred, ea_target_binary)
 
