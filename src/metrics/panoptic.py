@@ -32,6 +32,11 @@ class PanopticMetricResults(BaseMetricResults):
         'pq_per_class',
         'sq_per_class',
         'rq_per_class',
+        'precision_per_class',
+        'recall_per_class',
+        'tp_per_class',
+        'fp_per_class',
+        'fn_per_class',
         'pq_modified_per_class',
         'mean_precision',
         'mean_recall')
@@ -286,13 +291,18 @@ class PanopticQuality3D(Metric):
 
         # Precision & Recall
         precision = tp / pred_class_counts
+        precision[precision.isnan()] = 0
         recall = tp / gt_class_counts
+        fp = pred_class_counts - tp
+        fn = gt_class_counts - tp
 
         # SQ - Segmentation Quality
         sq = iou_sum / tp
+        sq[sq.isnan()] = 0
 
         # RQ - Recognition Quality
         rq = 2 * precision * recall / (precision + recall)
+        rq[rq.isnan()] = 0
 
         # PQ - Panoptic Quality
         pq = sq * rq
@@ -359,6 +369,11 @@ class PanopticQuality3D(Metric):
         metrics.pq_per_class = pq
         metrics.sq_per_class = sq
         metrics.rq_per_class = rq
+        metrics.precision_per_class = precision
+        metrics.recall_per_class = recall
+        metrics.tp_per_class = tp
+        metrics.fp_per_class = fp
+        metrics.fn_per_class = fn
         metrics.pq_modified_per_class = pq_mod
         metrics.mean_precision = precision.nanmean()
         metrics.mean_recall = recall.nanmean()
