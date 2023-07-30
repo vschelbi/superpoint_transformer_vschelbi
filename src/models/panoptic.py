@@ -1005,6 +1005,16 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             if self.needs_instance:
                 self.val_map_best(map)
 
+            # Log best-so-far metrics, using `.compute()` instead of passing
+            # the whole torchmetrics object, because otherwise metric would
+            # be reset by lightning after each epoch
+            self.log("val/val_pq_best", self.val_pq_best.compute(), prog_bar=True)
+            self.log("val/val_pqmod_best", self.val_pqmod_best.compute(), prog_bar=True)
+            self.log("val/val_mprec_best", self.val_mprec_best.compute(), prog_bar=True)
+            self.log("val/val_mrec_best", self.val_mrec_best.compute(), prog_bar=True)
+            if self.needs_instance:
+                self.log("val/val_map_best", self.val_map_best.compute(), prog_bar=True)
+
         # Compute the metrics tracked for model selection on validation
         offset_wl2 = self.val_offset_wl2.compute()
         offset_wl1 = self.val_offset_wl1.compute()
