@@ -10,6 +10,11 @@ stuff_classes: ${datamodule.stuff_classes}
 # segmentation metrics
 min_instance_size: ${datamodule.min_instance_size}
 
+# Make the point encoder slightly smaller than for the default SPT. This
+# may slightly affect semantic segmentation results but allows fitting
+# into 32G with the edge affinity head
+_point_mlp: [32, 64, 64]  # point encoder layers
+
 # Partial spt config specifically for the instance/panoptic partitioner
 partitioner:
   _target_: src.nn.instance.InstancePartitioner
