@@ -32,7 +32,7 @@ no_instance_on_train_set: True
 # Edge affinity loss
 edge_affinity_criterion:
   _target_: src.loss.BCEWithLogitsLoss
-  pos_weight: 0.1
+  pos_weight: null
 
 # Node offset loss
 node_offset_criterion:
