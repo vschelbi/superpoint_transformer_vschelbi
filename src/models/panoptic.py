@@ -307,7 +307,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             node_offset_loss_lambda=1,
             gc_every_n_steps=0,
             min_instance_size=100,
-            partition_every_n_epochs=20,
+            partition_every_n_epochs=50,
             no_instance_on_train_set=True,
             **kwargs):
         super().__init__(

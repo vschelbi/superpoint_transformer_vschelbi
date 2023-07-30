@@ -23,7 +23,7 @@ partitioner:
 
 # Frequency at which the partition should be computed. If lower or equal
 # to 0, the partition will only be computed at the last training epoch
-partition_every_n_epochs: -1
+partition_every_n_epochs: 50
 
 # If True, the instance segmentation metrics will not be computed on the
 # train set. This allows saving some computation and training time
