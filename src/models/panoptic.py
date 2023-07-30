@@ -308,6 +308,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             gc_every_n_steps=0,
             min_instance_size=100,
             partition_every_n_epochs=20,
+            no_instance_on_train_set=True,
             **kwargs):
         super().__init__(
             net,
@@ -336,6 +337,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # grid-search on a small range of parameters and needs to be
         # called at least once at the very end of training
         self.partition_every_n_epochs = partition_every_n_epochs
+        self.no_instance_on_train_set = no_instance_on_train_set
         self.partitioner = partitioner
 
         # Store the stuff class indices
@@ -363,6 +365,27 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.edge_affinity_head.apply(init)
         self.node_offset_head.apply(init)
 
+        # Metric objects for calculating panoptic segmentation scores on
+        # each dataset split
+        self.train_panoptic = PanopticQuality3D(
+            self.num_classes,
+            ignore_unseen_classes=True,
+            stuff_classes=self.stuff_classes,
+            compute_on_cpu=True,
+            **kwargs)
+        self.val_panoptic = PanopticQuality3D(
+            self.num_classes,
+            ignore_unseen_classes=True,
+            stuff_classes=self.stuff_classes,
+            compute_on_cpu=True,
+            **kwargs)
+        self.test_panoptic = PanopticQuality3D(
+            self.num_classes,
+            ignore_unseen_classes=True,
+            stuff_classes=self.stuff_classes,
+            compute_on_cpu=True,
+            **kwargs)
+        
         # Metric objects for calculating instance segmentation scores on
         # each dataset split
         self.train_instance = MeanAveragePrecision3D(
@@ -385,27 +408,6 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             min_size=min_instance_size,
             compute_on_cpu=True,
             remove_void=True,
-            **kwargs)
-
-        # Metric objects for calculating panoptic segmentation scores on
-        # each dataset split
-        self.train_panoptic = PanopticQuality3D(
-            self.num_classes,
-            ignore_unseen_classes=True,
-            stuff_classes=self.stuff_classes,
-            compute_on_cpu=True,
-            **kwargs)
-        self.val_panoptic = PanopticQuality3D(
-            self.num_classes,
-            ignore_unseen_classes=True,
-            stuff_classes=self.stuff_classes,
-            compute_on_cpu=True,
-            **kwargs)
-        self.test_panoptic = PanopticQuality3D(
-            self.num_classes,
-            ignore_unseen_classes=True,
-            stuff_classes=self.stuff_classes,
-            compute_on_cpu=True,
             **kwargs)
 
         # Metric objects for calculating node offset prediction scores
@@ -505,6 +507,21 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # For all other Trainer stages, we run the partition by default
         return True
+
+    @property
+    def needs_instance(self):
+        """Returns True if the instance segmentation metrics need to be
+        computed. In particular, since computing instance metrics can be
+        computationally costly, we may want to skip it during training
+        by setting `no_instance_on_train_set=True`
+        """
+        if self._trainer is None:
+            return self.needs_partition
+
+        if self.trainer.training and self.no_instance_on_train_set:
+            return False
+
+        return self.needs_partition
 
     def forward(self, nag) -> PanopticSegmentationOutput:
         # Extract features
@@ -615,8 +632,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # before training starts, so we need to make sure `*_best`
         # metrics do not store anything from these checks
         super().on_train_start()
-        self.val_instance.reset()
         self.val_panoptic.reset()
+        self.val_instance.reset()
         self.val_offset_wl2.reset()
         self.val_offset_wl1.reset()
         self.val_offset_l2.reset()
@@ -778,8 +795,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach().cpu()
-            self.train_instance.update(obj_score, obj_y, instance_data.cpu())
             self.train_panoptic.update(obj_y, instance_data.cpu())
+            if self.needs_instance:
+                self.train_instance.update(obj_score, obj_y, instance_data.cpu())
 
         # Update tracked losses
         self.train_semantic_loss(output.semantic_loss.detach())
@@ -824,14 +842,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         if self.needs_partition:
             # Compute the instance and panoptic metrics
-            instance_results = self.train_instance.compute()
             panoptic_results = self.train_panoptic.compute()
+            if self.needs_instance:
+                instance_results = self.train_instance.compute()
 
             # Gather tracked metrics
-            map = instance_results.map
-            map_50 = instance_results.map_50
-            map_75 = instance_results.map_75
-            map_per_class = instance_results.map_per_class
             pq = panoptic_results.pq
             sq = panoptic_results.sq
             rq = panoptic_results.rq
@@ -841,11 +856,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mprec = panoptic_results.mean_precision
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
+            if self.needs_instance:
+                map = instance_results.map
+                map_50 = instance_results.map_50
+                map_75 = instance_results.map_75
+                map_per_class = instance_results.map_per_class
 
             # Log metrics
-            self.log("train/map", map, prog_bar=True)
-            self.log("train/map_50", map_50, prog_bar=True)
-            self.log("train/map_75", map_75, prog_bar=True)
             self.log("train/pq", pq, prog_bar=True)
             self.log("train/sq", sq, prog_bar=True)
             self.log("train/rq", rq, prog_bar=True)
@@ -854,10 +871,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("train/pqmod", pqmod, prog_bar=True)
             self.log("train/mprec", mprec, prog_bar=True)
             self.log("train/mrec", mrec, prog_bar=True)
+            if self.needs_instance:
+                self.log("train/map", map, prog_bar=True)
+                self.log("train/map_50", map_50, prog_bar=True)
+                self.log("train/map_75", map_75, prog_bar=True)
             enum = zip(map_per_class, pq_per_class, self.class_names)
             for map_c, pq_c, name in enum:
-                self.log(f"train/map_{name}", map_c, prog_bar=True)
                 self.log(f"train/pq_{name}", pq_c, prog_bar=True)
+                if self.needs_instance:
+                    self.log(f"train/map_{name}", map_c, prog_bar=True)
 
         # Log metrics
         self.log("train/offset_wl2", self.train_offset_wl2.compute(), prog_bar=True)
@@ -874,8 +896,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.train_offset_l1.reset()
         self.train_affinity_oa.reset()
         self.train_affinity_f1.reset()
-        self.train_instance.reset()
         self.train_panoptic.reset()
+        self.train_instance.reset()
 
     def validation_step_update_metrics(self, loss, output):
         """Update validation metrics with the content of the output
@@ -889,8 +911,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach().cpu()
-            self.val_instance.update(obj_score, obj_y, instance_data.cpu())
             self.val_panoptic.update(obj_y, instance_data.cpu())
+            if self.needs_instance:
+                self.val_instance.update(obj_score, obj_y, instance_data.cpu())
 
         # Update tracked losses
         self.val_semantic_loss(output.semantic_loss.detach())
@@ -935,14 +958,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         if self.needs_partition:
             # Compute the instance and panoptic metrics
-            instance_results = self.val_instance.compute()
             panoptic_results = self.val_panoptic.compute()
+            if self.needs_instance:
+                instance_results = self.val_instance.compute()
 
             # Gather tracked metrics
-            map = instance_results.map
-            map_50 = instance_results.map_50
-            map_75 = instance_results.map_75
-            map_per_class = instance_results.map_per_class
             pq = panoptic_results.pq
             sq = panoptic_results.sq
             rq = panoptic_results.rq
@@ -952,11 +972,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mprec = panoptic_results.mean_precision
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
+            if self.needs_instance:
+                map = instance_results.map
+                map_50 = instance_results.map_50
+                map_75 = instance_results.map_75
+                map_per_class = instance_results.map_per_class
 
             # Log metrics
-            self.log("val/map", map, prog_bar=True)
-            self.log("val/map_50", map_50, prog_bar=True)
-            self.log("val/map_75", map_75, prog_bar=True)
             self.log("val/pq", pq, prog_bar=True)
             self.log("val/sq", sq, prog_bar=True)
             self.log("val/rq", rq, prog_bar=True)
@@ -965,17 +987,23 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("val/pqmod", pqmod, prog_bar=True)
             self.log("val/mprec", mprec, prog_bar=True)
             self.log("val/mrec", mrec, prog_bar=True)
+            if self.needs_instance:
+                self.log("val/map", map, prog_bar=True)
+                self.log("val/map_50", map_50, prog_bar=True)
+                self.log("val/map_75", map_75, prog_bar=True)
             enum = zip(map_per_class, pq_per_class, self.class_names)
             for map_c, pq_c, name in enum:
-                self.log(f"val/map_{name}", map_c, prog_bar=True)
                 self.log(f"val/pq_{name}", pq_c, prog_bar=True)
+                if self.needs_instance:
+                    self.log(f"val/map_{name}", map_c, prog_bar=True)
 
             # Update best-so-far metrics
-            self.val_map_best(map)
             self.val_pq_best(pq)
             self.val_pqmod_best(pqmod)
             self.val_mprec_best(mprec)
             self.val_mrec_best(mrec)
+            if self.needs_instance:
+                self.val_map_best(map)
 
         # Compute the metrics tracked for model selection on validation
         offset_wl2 = self.val_offset_wl2.compute()
@@ -1018,8 +1046,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_offset_l1.reset()
         self.val_affinity_oa.reset()
         self.val_affinity_f1.reset()
-        self.val_instance.reset()
         self.val_panoptic.reset()
+        self.val_instance.reset()
 
     def test_step_update_metrics(self, loss, output):
         """Update test metrics with the content of the output object.
@@ -1035,8 +1063,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach().cpu()
-            self.test_instance.update(obj_score, obj_y, instance_data.cpu())
             self.test_panoptic.update(obj_y, instance_data.cpu())
+            if self.needs_instance:
+                self.test_instance.update(obj_score, obj_y, instance_data.cpu())
 
         # Update tracked losses
         self.test_semantic_loss(output.semantic_loss.detach())
@@ -1081,14 +1110,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         if self.needs_partition:
             # Compute the instance and panoptic metrics
-            instance_results = self.test_instance.compute()
             panoptic_results = self.test_panoptic.compute()
+            if self.needs_instance:
+                instance_results = self.test_instance.compute()
 
             # Gather tracked metrics
-            map = instance_results.map
-            map_50 = instance_results.map_50
-            map_75 = instance_results.map_75
-            map_per_class = instance_results.map_per_class
             pq = panoptic_results.pq
             sq = panoptic_results.sq
             rq = panoptic_results.rq
@@ -1098,11 +1124,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mprec = panoptic_results.mean_precision
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
+            if self.needs_instance:
+                map = instance_results.map
+                map_50 = instance_results.map_50
+                map_75 = instance_results.map_75
+                map_per_class = instance_results.map_per_class
 
             # Log metrics
-            self.log("test/map", map, prog_bar=True)
-            self.log("test/map_50", map_50, prog_bar=True)
-            self.log("test/map_75", map_75, prog_bar=True)
             self.log("test/pq", pq, prog_bar=True)
             self.log("test/sq", sq, prog_bar=True)
             self.log("test/rq", rq, prog_bar=True)
@@ -1111,10 +1139,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("test/pqmod", pqmod, prog_bar=True)
             self.log("test/mprec", mprec, prog_bar=True)
             self.log("test/mrec", mrec, prog_bar=True)
+            if self.needs_instance:
+                self.log("test/map", map, prog_bar=True)
+                self.log("test/map_50", map_50, prog_bar=True)
+                self.log("test/map_75", map_75, prog_bar=True)
             enum = zip(map_per_class, pq_per_class, self.class_names)
             for map_c, pq_c, name in enum:
-                self.log(f"test/map_{name}", map_c, prog_bar=True)
                 self.log(f"test/pq_{name}", pq_c, prog_bar=True)
+                if self.needs_instance:
+                    self.log(f"test/map_{name}", map_c, prog_bar=True)
 
         # Log metrics
         self.log("test/offset_wl2", self.test_offset_wl2.compute(), prog_bar=True)
@@ -1131,8 +1164,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.test_offset_l1.reset()
         self.test_affinity_oa.reset()
         self.test_affinity_f1.reset()
-        self.test_instance.reset()
         self.test_panoptic.reset()
+        self.test_instance.reset()
 
     def load_state_dict(self, state_dict, strict=True):
         """Basic `load_state_dict` from `torch.nn.Module` with a bit of

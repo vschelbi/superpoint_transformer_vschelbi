@@ -25,6 +25,10 @@ partitioner:
 # to 0, the partition will only be computed at the last training epoch
 partition_every_n_epochs: -1
 
+# If True, the instance segmentation metrics will not be computed on the
+# train set. This allows saving some computation and training time
+no_instance_on_train_set: True
+
 # Edge affinity loss
 edge_affinity_criterion:
   _target_: src.loss.BCEWithLogitsLoss
