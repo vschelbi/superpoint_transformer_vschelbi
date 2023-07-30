@@ -87,6 +87,15 @@ class S3DISRoom(S3DIS):
             raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=True,
             xyz_room=True, align=self.align, is_val=True, verbose=False)
 
+    @property
+    def raw_file_names(self):
+        """The file paths to find in order to skip the download."""
+        room_folders = self.raw_file_names_3d
+        area_folders = [f'Area_{i + 1}' for i in range(6)]
+        alignment_files = [
+            osp.join(a, f"{a}_alignmentAngle.txt") for a in area_folders]
+        return room_folders + alignment_files
+
     def processed_to_raw_path(self, processed_path):
         """Given a processed cloud path from `self.processed_paths`,
         return the absolute path to the corresponding raw cloud.
