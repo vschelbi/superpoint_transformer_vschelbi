@@ -28,7 +28,7 @@ defaults:
 # this allows you to overwrite only specified parameters
 
 datamodule:
-  pc_tiling: 2  # split each floor into 2^pc_tiling=4 tiles, based on their principal components. Reduces preprocessing- and inference-time GPU memory
+  pc_tiling: 2  # split each cloud into 2^pc_tiling=4 tiles, based on their principal components. Reduces preprocessing- and inference-time GPU memory
   sample_graph_k: 2  # 2 spherical samples in each batch instead of 4. Reduces train-time GPU memory
 
 callbacks:

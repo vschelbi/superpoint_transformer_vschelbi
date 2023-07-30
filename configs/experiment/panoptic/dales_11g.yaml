@@ -27,7 +27,7 @@ defaults:
 # this allows you to overwrite only specified parameters
 
 datamodule:
-  xy_tiling: 5  # split each floor into xy_tiling²=25 tiles, based on a regular XY grid. Reduces preprocessing- and inference-time GPU memory
+  xy_tiling: 5  # split each cloud into xy_tiling²=25 tiles, based on a regular XY grid. Reduces preprocessing- and inference-time GPU memory
   sample_graph_k: 2  # 2 spherical samples in each batch instead of 4. Reduces train-time GPU memory
 
 callbacks:
