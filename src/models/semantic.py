@@ -768,8 +768,8 @@ class SemanticSegmentationModule(LightningModule):
                 "reduce_on_plateau": reduce_on_plateau}}
 
     def load_state_dict(self, state_dict, strict=True):
-        """Basic `load_state_dict` from `torch.nn.Module` with a little
-        bit of acrobatics due to `criterion.weight`.
+        """Basic `load_state_dict` from `torch.nn.Module` with a bit of
+        acrobatics due to `criterion.weight`.
 
         This attribute, when present in the `state_dict`, causes
         `load_state_dict` to crash. More precisely, `criterion.weight`

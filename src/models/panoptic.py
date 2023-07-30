@@ -15,7 +15,6 @@ from src.nn import FFN
 
 log = logging.getLogger(__name__)
 
-
 __all__ = ['PanopticSegmentationOutput', 'PanopticSegmentationModule']
 
 
@@ -243,7 +242,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         # Compute the mean squared distance to the mean predicted offset
         # for each object
-        node_x_error = ((node_x - obj_x[self.obj_index_pred])**2).sum(dim=1)
+        node_x_error = ((node_x - obj_x[self.obj_index_pred]) ** 2).sum(dim=1)
         obj_x_error = scatter_mean_weighted(
             node_x_error, self.obj_index_pred, self.node_size).squeeze()
 
@@ -680,7 +679,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         edge_id_cat = consecutive_cluster(torch.cat((edge_id_1, edge_id_2)))[0]
         edge_id_1 = edge_id_cat[:edge_id_1.numel()]
         edge_id_2 = edge_id_cat[edge_id_1.numel():]
-        pivot = torch.zeros(base**2, device=output.edge_affinity_logits)
+        pivot = torch.zeros(base ** 2, device=output.edge_affinity_logits)
         pivot[edge_id_1] = output_multi.edge_affinity_logits
         # TODO: this is INCORRECT accumulation of node offsets. Need to
         #  define the mean, not the mean of the successive predictions
@@ -1134,6 +1133,33 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.test_affinity_f1.reset()
         self.test_instance.reset()
         self.test_panoptic.reset()
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Basic `load_state_dict` from `torch.nn.Module` with a bit of
+        acrobatics due to `criterion.weight`.
+
+        This attribute, when present in the `state_dict`, causes
+        `load_state_dict` to crash. More precisely, `criterion.weight`
+        is holding the per-class weights for classification losses.
+        """
+        # Special treatment for BCEWithLogitsLoss
+        if self.edge_affinity_criterion.pos_weight is not None:
+            pos_weight_bckp = self.edge_affinity_criterion.pos_weight
+            self.edge_affinity_criterion.pos_weight = None
+
+        if 'edge_affinity_criterion.pos_weight' in state_dict.keys():
+            pos_weight = state_dict.pop('edge_affinity_criterion.pos_weight')
+        else:
+            pos_weight = None
+
+        # Load the state_dict
+        super().load_state_dict(state_dict, strict=strict)
+
+        # If need be, assign the class weights to the criterion
+        if self.edge_affinity_criterion.pos_weight is not None:
+            self.edge_affinity_criterion.pos_weight = pos_weight \
+                if pos_weight is not None else pos_weight_bckp
+
 
 # TODO: gridsearch instance partition parameters
 
