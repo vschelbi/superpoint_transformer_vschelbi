@@ -875,10 +875,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 self.log("train/map", map, prog_bar=True)
                 self.log("train/map_50", map_50, prog_bar=True)
                 self.log("train/map_75", map_75, prog_bar=True)
-            enum = zip(map_per_class, pq_per_class, self.class_names)
-            for map_c, pq_c, name in enum:
+            for pq_c, name in zip(pq_per_class, self.class_names):
                 self.log(f"train/pq_{name}", pq_c, prog_bar=True)
-                if self.needs_instance:
+            if self.needs_instance:
+                for map_c, name in zip(map_per_class, self.class_names):
                     self.log(f"train/map_{name}", map_c, prog_bar=True)
 
         # Log metrics
@@ -991,10 +991,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 self.log("val/map", map, prog_bar=True)
                 self.log("val/map_50", map_50, prog_bar=True)
                 self.log("val/map_75", map_75, prog_bar=True)
-            enum = zip(map_per_class, pq_per_class, self.class_names)
-            for map_c, pq_c, name in enum:
+            for pq_c, name in zip(pq_per_class, self.class_names):
                 self.log(f"val/pq_{name}", pq_c, prog_bar=True)
-                if self.needs_instance:
+            if self.needs_instance:
+                for map_c, name in zip(map_per_class, self.class_names):
                     self.log(f"val/map_{name}", map_c, prog_bar=True)
 
             # Update best-so-far metrics
@@ -1143,10 +1143,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 self.log("test/map", map, prog_bar=True)
                 self.log("test/map_50", map_50, prog_bar=True)
                 self.log("test/map_75", map_75, prog_bar=True)
-            enum = zip(map_per_class, pq_per_class, self.class_names)
-            for map_c, pq_c, name in enum:
+            for pq_c, name in zip(pq_per_class, self.class_names):
                 self.log(f"test/pq_{name}", pq_c, prog_bar=True)
-                if self.needs_instance:
+            if self.needs_instance:
+                for map_c, name in zip(map_per_class, self.class_names):
                     self.log(f"test/map_{name}", map_c, prog_bar=True)
 
         # Log metrics
