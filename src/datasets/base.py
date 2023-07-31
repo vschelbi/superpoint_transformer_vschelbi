@@ -64,9 +64,6 @@ class BaseDataset(InMemoryDataset):
         def read_single_raw_cloud(self):
             pass
 
-        def processed_to_raw_path(self):
-            pass
-
         def raw_file_structure(self):
             # Optional: only if your raw or processed file structure
             # differs from the default

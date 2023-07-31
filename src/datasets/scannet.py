@@ -257,6 +257,27 @@ class ScanNet(BaseDataset):
         """
         return self.id_to_base_id(id)
 
+    def processed_to_raw_path(self, processed_path):
+        """Given a processed cloud path from `self.processed_paths`,
+        return the absolute path to the corresponding raw cloud.
+
+        Overwrite this method if your raw data does not follow the
+        default structure.
+        """
+        # Extract useful information from <path>
+        stage, hash_dir, scans_dir, scan_name = \
+            osp.splitext(processed_path)[0].split('/')[-4:]
+        cloud_id = osp.join(scans_dir, scan_name)
+
+        # Remove the tiling in the cloud_id, if any
+        base_cloud_id = self.id_to_base_id(cloud_id)
+
+        # Read the raw cloud data
+        raw_ext = osp.splitext(self.raw_file_names_3d[0])[1]
+        raw_path = osp.join(self.raw_dir, base_cloud_id + raw_ext)
+
+        return raw_path
+
     @property
     def raw_file_names(self):
         """The file paths to find in order to skip the download."""
