@@ -444,7 +444,7 @@ class BaseDataset(InMemoryDataset):
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
-        return osp.join(self.id_to_base_id(id) + '.ply')
+        return self.id_to_base_id(id) + '.ply'
 
     @property
     def pre_transform_hash(self):
@@ -536,10 +536,10 @@ class BaseDataset(InMemoryDataset):
     def download_warning(self, interactive=False):
         # Warning message for the user about to download
         log.info(
-            f"WARNING: You are about to download {self.__class__.__name__} "
-            f"data.")
+            f"WARNING: You must download the raw data for the "
+            f"{self.__class__.__name__} dataset.")
         if self.raw_file_structure is not None:
-            log.info("Files will be organized in the following structure:")
+            log.info("Files must be organized in the following structure:")
             log.info(self.raw_file_structure)
         log.info("")
         if interactive:

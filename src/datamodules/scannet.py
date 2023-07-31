@@ -1,20 +1,13 @@
 import logging
 from src.datamodules.base import BaseDataModule
-from src.datasets import S3DISRoom, MiniS3DISRoom
-
-
-# Occasional Dataloader issues with S3DISRoomDataModule on some
-# machines. Hack to solve this:
-# https://stackoverflow.com/questions/73125231/pytorch-dataloaders-bad-file-descriptor-and-eof-for-workers0
-import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
+from src.datasets import ScanNet, MiniScanNet
 
 
 log = logging.getLogger(__name__)
 
 
-class S3DISRoomDataModule(BaseDataModule):
-    """LightningDataModule for room-wise S3DIS dataset.
+class ScanNetDataModule(BaseDataModule):
+    """LightningDataModule for ScanNet dataset.
 
     A DataModule implements 5 key methods:
 
@@ -40,8 +33,8 @@ class S3DISRoomDataModule(BaseDataModule):
     Read the docs:
         https://pytorch-lightning.readthedocs.io/en/latest/data/datamodule.html
     """
-    _DATASET_CLASS = S3DISRoom
-    _MINIDATASET_CLASS = MiniS3DISRoom
+    _DATASET_CLASS = ScanNet
+    _MINIDATASET_CLASS = MiniScanNet
 
 
 if __name__ == "__main__":
@@ -50,6 +43,6 @@ if __name__ == "__main__":
     import pyrootutils
 
     root = str(pyrootutils.setup_root(__file__, pythonpath=True))
-    cfg = omegaconf.OmegaConf.load(root + "/configs/datamodule/s3dis_room.yaml")
+    cfg = omegaconf.OmegaConf.load(root + "/configs/datamodule/scannet.yaml")
     cfg.data_dir = root + "/data"
     _ = hydra.utils.instantiate(cfg)

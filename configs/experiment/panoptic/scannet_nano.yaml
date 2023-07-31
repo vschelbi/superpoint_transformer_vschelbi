@@ -1,0 +1,35 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=panoptic/s3dis_nano
+
+defaults:
+  - override /datamodule: panoptic/s3dis_nano.yaml
+  - override /model: panoptic/nano-2.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+trainer:
+  max_epochs: 2000
+
+model:
+  optimizer:
+    lr: 0.1
+    weight_decay: 1e-2
+
+logger:
+  wandb:
+    project: "spt_s3dis"
+    name: "NANO"
+
+# metric based on which models will be selected
+optimized_metric: "val/pq"
+
+callbacks:
+  model_checkpoint:
+    every_n_epochs:  ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
+
+  early_stopping:
+    strict: False
