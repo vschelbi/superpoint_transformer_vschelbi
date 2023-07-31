@@ -377,7 +377,8 @@ def visualize_3d(
     # labels and stuff_classes/void_classes also passed, the stuff/void
     # annotations will be treated accordingly
     if data_0.obj is not None and (class_names is None or data_0.y is None):
-        obj = data_0.obj.major(num_classes=num_classes)[0]
+        obj = data_0.obj if isinstance(data_0.obj, torch.Tensor) \
+            else data_0.obj.major(num_classes=num_classes)[0]
         colors = int_to_plotly_rgb(obj)
         text = np.array([f"Object {o}" for o in obj])
         trace_modes[i_point_trace]['Objects'] = {
