@@ -30,12 +30,6 @@ datamodule:
   xy_tiling: 3  # split each cloud into xy_tiling^2=9 tiles, based on a regular XY grid. Reduces preprocessing- and inference-time GPU memory
   sample_graph_k: 2  # 2 spherical samples in each batch instead of 4. Reduces train-time GPU memory
 
-callbacks:
-  gradient_accumulator:
-    scheduling:
-      0:
-        2  # accumulate gradient every 2 batches, to make up for reduced batch size
-
 trainer:
   max_epochs: 500  # to keep same nb of steps: 8x more tiles, 2-step gradient accumulation -> epochs/4
 
@@ -51,3 +45,15 @@ logger:
 
 # metric based on which models will be selected
 optimized_metric: "val/pq"
+
+callbacks:
+  model_checkpoint:
+    every_n_epochs:  ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
+
+  early_stopping:
+    strict: False
+
+  gradient_accumulator:
+    scheduling:
+      0:
+        2  # accumulate gradient every 2 batches, to make up for reduced batch size
