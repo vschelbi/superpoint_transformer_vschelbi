@@ -38,14 +38,14 @@ def read_scannet_scan(
 
     Expects the data to be saved under the following structure:
 
-        raw/
+        └── raw/
             ├── scannetv2-labels.combined.tsv
             ├── scans/
             │   └── {{scan_name}}/
-            │       ├── {{scan_name}}_vh_clean_2.ply
             │       ├── {{scan_name}}.aggregation.json
             │       ├── {{scan_name}}.txt
-            │       └── {{scan_name}}_vh_clean_2.0.010000.segs.json
+            │       ├── {{scan_name}}_vh_clean_2.0.010000.segs.json
+            │       └── {{scan_name}}_vh_clean_2.ply
             └── scans_test/
                 └── {{scan_name}}/
                     └── {{scan_name}}_vh_clean_2.ply
@@ -241,10 +241,10 @@ class ScanNet(BaseDataset):
             ├── scannetv2-labels.combined.tsv
             ├── scans/
             │   └── {{scan_name}}/
-            │       ├── {{scan_name}}_vh_clean_2.ply
             │       ├── {{scan_name}}.aggregation.json
             │       ├── {{scan_name}}.txt
-            │       └── {{scan_name}}_vh_clean_2.0.010000.segs.json
+            │       ├── {{scan_name}}_vh_clean_2.0.010000.segs.json
+            │       └── {{scan_name}}_vh_clean_2.ply
             └── scans_test/
                 └── {{scan_name}}/
                     └── {{scan_name}}_vh_clean_2.ply
