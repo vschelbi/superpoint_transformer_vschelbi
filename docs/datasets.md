@@ -8,12 +8,12 @@ for more details.
 ## Supported datasets
 <div align="center">
 
-| Dataset                                                                                                                 |                                                           Download from ?                                                            | Which files ?                                        | Where to ? |
-|:------------------------------------------------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------:|:-----------------------------------------------------|:----|
-| [S3DIS](http://buildingparser.stanford.edu/dataset.html)                                                                |         [link](https://docs.google.com/forms/d/e/1FAIpQLScDimvNMCGhy_rmBA2gHfDu3naktRm6A8BPwAWWDv-Uhm6Shw/viewform?c=0&w=1)          | `Stanford3dDataset_v1.2.zip`                         | `data/s3dis/` |
-| [KITTI-360](https://www.cvlibs.net/datasets/kitti-360/index.php)                                                        |                                    [link](http://www.cvlibs.net/datasets/kitti-360/download.php)                                     | `data_3d_semantics.zip` `data_3d_semantics_test.zip` | `data/kitti360/` |
-| [DALES](https://udayton.edu/engineering/research/centers/vision_lab/research/was_data_analysis_and_processing/dale.php) | [link](https://docs.google.com/forms/d/e/1FAIpQLSefhHMMvN0Uwjnj_vWQgYSvtFOtaoGFWsTIcRuBTnP09NHR7A/viewform?fbzx=5530674395784263977) | `DALESObjects.tar.gz`                                | `data/dales/` |
-
+| Dataset                                                                                                                 |                                                           Download from ?                                                            | Which files ?                                                                                                         | Where to ?          |
+|:------------------------------------------------------------------------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------:|:----------------------------------------------------------------------------------------------------------------------|:--------------------|
+| [S3DIS](http://buildingparser.stanford.edu/dataset.html)                                                                |         [link](https://docs.google.com/forms/d/e/1FAIpQLScDimvNMCGhy_rmBA2gHfDu3naktRm6A8BPwAWWDv-Uhm6Shw/viewform?c=0&w=1)          | `Stanford3dDataset_v1.2.zip`                                                                                          | `data/s3dis/`       |
+| [KITTI-360](https://www.cvlibs.net/datasets/kitti-360/index.php)                                                        |                                    [link](http://www.cvlibs.net/datasets/kitti-360/download.php)                                     | `data_3d_semantics.zip` `data_3d_semantics_test.zip`                                                                  | `data/kitti360/`    |
+| [DALES](https://udayton.edu/engineering/research/centers/vision_lab/research/was_data_analysis_and_processing/dale.php) | [link](https://docs.google.com/forms/d/e/1FAIpQLSefhHMMvN0Uwjnj_vWQgYSvtFOtaoGFWsTIcRuBTnP09NHR7A/viewform?fbzx=5530674395784263977) | `DALESObjects.tar.gz`                                                                                                 | `data/dales/`       |
+| [ScanNet v2](http://www.scan-net.org)                                                                                   | [link](https://www.scan-net.org/ScanNet)                                                                                             | `scannetv2-labels.combined.tsv`, `*.aggregation.json`, `*.txt`, `*_vh_clean_2.0.010000.segs.json`, `*_vh_clean_2.ply` | `data/scannet/raw/` |
 </div>
 
 
@@ -96,6 +96,35 @@ for more details.
 <br>
 </details>
 
+<details>
+<summary><b>ScanNet data directory structure.</b></summary>
+<br><br>
+
+```
+└── data
+    └── scannet                                                     # Structure for ScanNet
+        ├── raw                                                     # Raw, downloaded dataset files
+        │   ├── scannetv2-labels.combined.tsv                         # Label mapping file
+        │   ├── scans                                                 # Train/val scans
+        │   │   └── {{scan_name}}                                       # Raw scan directory
+        │   │       ├── {{scan_name}}.aggregation.json
+        │   │       ├── {{scan_name}}.txt
+        │   │       ├── {{scan_name}}_vh_clean_2.0.010000.segs.json
+        │   │       └── {{scan_name}}_vh_clean_2.ply
+        │   └── scans_test                                            # Test scans
+        │       └── {{scan_name}}                                       # Raw scan directory
+        │           └── {{scan_name}}_vh_clean_2.ply
+        └── processed                                               # Preprocessed data
+            └── {{train, val, test}}                                  # Dataset splits
+                └── {{preprocessing_hash}}                              # Preprocessing folder
+                    └── {{scans, scans_test}}                             # 'scans' or 'scans_test' if test split
+                        └── {{scan_name}}.h5                                # Preprocessed scan file
+
+```
+
+<br>
+</details>
+
 > **Note**: **Already have the dataset on your machine ?** Save memory 💾 by 
 > simply symlinking or copying the files to `data/<dataset_name>/raw/`, following the 
 > [above-described `data/` structure](#structure-of-the-data-directory).
@@ -109,7 +138,7 @@ Following `torch_geometric`'s `Dataset` behaviour:
 2. Missing files in `data/<dataset_name>/raw` structure<br>
 ➡ **Automatic** unzipping of the downloaded dataset in `data/<dataset_name>`
 3. Missing downloaded dataset in `data/<dataset_name>` structure<br>
-➡ ~~**Automatic**~~ **manual** download to `data/<dataset_name>`
+➡ ~~**Automatic**~~ **Manual** download to `data/<dataset_name>`
 
 > **Warning**: We **do not support ❌ automatic download**, for compliance 
 >reasons.
