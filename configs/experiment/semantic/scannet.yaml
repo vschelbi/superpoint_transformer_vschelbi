@@ -21,6 +21,8 @@ model:
     weight_decay: 1e-4
   scheduler:
     num_warmup: 2
+  _node_mlp_out: 64
+  _h_edge_mlp_out: 64
 
 logger:
   wandb:
