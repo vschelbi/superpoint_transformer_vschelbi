@@ -439,9 +439,7 @@ def _instance_cut_pursuit(
     # Convert affinity logits to discrepancies
     edge_affinity = edge_affinity_logits.sigmoid() if do_sigmoid_affinity \
         else edge_affinity_logits
-    # edge_discrepancy = edge_affinity
-    # edge_discrepancy = edge_affinity**2
-    edge_discrepancy = 1 / (1 - edge_affinity + discrepancy_epsilon)
+    edge_discrepancy = edge_affinity / (1 - edge_affinity + discrepancy_epsilon)
 
     # Convert edges to forward-star (or CSR) representation
     source_csr, target, reindex = edge_list_to_forward_star(
