@@ -12,15 +12,24 @@ defaults:
 # this allows you to overwrite only specified parameters
 
 trainer:
-  max_epochs: 30
+  max_epochs: 60
   check_val_every_n_epoch: 1
 
 model:
   optimizer:
     lr: 0.01
     weight_decay: 1e-4
+
   scheduler:
     num_warmup: 2
+
+  _node_mlp_out: 32
+  _h_edge_mlp_out: 32
+  _down_dim: [ 32, 32, 32, 32 ]
+  _up_dim: [ 32, 32, 32 ]
+  net:
+    no_ffn: False
+    down_ffn_ratio: 1
 
 logger:
   wandb:

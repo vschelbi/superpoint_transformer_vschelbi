@@ -12,19 +12,27 @@ defaults:
 # this allows you to overwrite only specified parameters
 
 trainer:
-  max_epochs: 30
+  max_epochs: 60
   check_val_every_n_epoch: 1
 
 model:
   optimizer:
     lr: 0.01
     weight_decay: 1e-4
+
   scheduler:
     num_warmup: 2
+
   _node_mlp_out: 64
   _h_edge_mlp_out: 64
+  _down_dim: [ 128, 128, 128, 128 ]
+  _up_dim: [ 128, 128, 128 ]
+  net:
+    no_ffn: False
+    down_ffn_ratio: 1
+
 
 logger:
   wandb:
     project: "spt_scannet"
-    name: "SPT-64"
+    name: "SPT-128"
