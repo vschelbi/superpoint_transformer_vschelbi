@@ -39,7 +39,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             obj_pos=None,
             obj_index_pred=None,
             semantic_loss=None,
-            node_offset_loss=None,
+            # node_offset_loss=None,
             edge_affinity_loss=None):
         # We set the child class attributes before calling the parent
         # class constructor, because the parent constructor calls
@@ -49,7 +49,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             if stuff_classes is not None \
             else torch.empty(0, device=device).long()
         self.edge_affinity_logits = edge_affinity_logits
-        self.node_offset_pred = node_offset_pred
+        # self.node_offset_pred = node_offset_pred
         self.node_size = node_size
         self.obj = obj
         self.obj_edge_index = obj_edge_index
@@ -67,8 +67,8 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         super().debug()
 
         # Instance predictions
-        assert self.node_offset_pred.dim() == 2
-        assert self.node_offset_pred.shape[0] == self.num_nodes
+        # assert self.node_offset_pred.dim() == 2
+        # assert self.node_offset_pred.shape[0] == self.num_nodes
         assert self.edge_affinity_logits.dim() == 1
 
         # Node properties
@@ -96,8 +96,8 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         assert self.obj_edge_index.shape[1] == self.num_edges
         assert self.obj_edge_affinity.dim() == 1
         assert self.obj_edge_affinity.shape[0] == self.num_edges
-        assert self.pos.shape == self.node_offset_pred.shape
-        assert self.obj_pos.shape == self.node_offset_pred.shape
+        # assert self.pos.shape == self.node_offset_pred.shape
+        # assert self.obj_pos.shape == self.node_offset_pred.shape
 
     @property
     def has_target(self):
@@ -125,13 +125,13 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         """
         return self.edge_affinity_logits.shape[1]
 
-    @property
-    def node_offset(self):
-        """Target node offset: `offset = obj_pos - pos`.
-        """
-        if not self.has_target:
-            return
-        return self.obj_pos - self.pos
+    # @property
+    # def node_offset(self):
+    #     """Target node offset: `offset = obj_pos - pos`.
+    #     """
+    #     if not self.has_target:
+    #         return
+    #     return self.obj_pos - self.pos
 
     @property
     def edge_affinity_preds(self):
@@ -152,44 +152,44 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         mask = self.void_mask[self.obj_edge_index]
         return mask[0] & mask[1]
 
-    @property
-    def sanitized_node_offsets(self):
-        """Return the predicted and target node offsets, along with node
-        size, sanitized for node offset loss and metrics computation.
-
-        By convention, we want stuff nodes to have 0 offset. Two
-        reasons for that:
-          - defining a stuff target center is ambiguous
-          - by predicting 0 offsets, the corresponding nodes are
-            likely to be isolated by the superpoint clustering step.
-            This is what we want, because the predictions will be
-            merged as a post-processing step, to ensure there is a
-            most one prediction per batch item for each stuff class
-
-        Besides, we choose to exclude nodes/superpoints with more than
-        50% 'void' points from node offset loss and metrics computation.
-
-        To this end, the present function does the following:
-          - ASSUME predicted offsets are 0 when predicted semantic class
-            is of type 'stuff'
-          - set target offsets to 0 when target semantic class is of
-            type 'stuff'
-          - remove predicted and target offsets for 'void' nodes (see
-            `self.void_mask`)
-        """
-        if not self.has_target:
-            return None, None, None
-
-        # We exclude the void nodes from loss computation
-        idx = torch.where(~self.void_mask)[0]
-
-        # Set target offsets to 0 when predicted semantic is stuff
-        y_hist = self.targets
-        is_stuff = get_stuff_mask(y_hist, self.stuff_classes)
-        node_offset = self.node_offset
-        node_offset[is_stuff] = 0
-
-        return self.node_offset_pred[idx], node_offset[idx], self.node_size[idx]
+    # @property
+    # def sanitized_node_offsets(self):
+    #     """Return the predicted and target node offsets, along with node
+    #     size, sanitized for node offset loss and metrics computation.
+    #
+    #     By convention, we want stuff nodes to have 0 offset. Two
+    #     reasons for that:
+    #       - defining a stuff target center is ambiguous
+    #       - by predicting 0 offsets, the corresponding nodes are
+    #         likely to be isolated by the superpoint clustering step.
+    #         This is what we want, because the predictions will be
+    #         merged as a post-processing step, to ensure there is a
+    #         most one prediction per batch item for each stuff class
+    #
+    #     Besides, we choose to exclude nodes/superpoints with more than
+    #     50% 'void' points from node offset loss and metrics computation.
+    #
+    #     To this end, the present function does the following:
+    #       - ASSUME predicted offsets are 0 when predicted semantic class
+    #         is of type 'stuff'
+    #       - set target offsets to 0 when target semantic class is of
+    #         type 'stuff'
+    #       - remove predicted and target offsets for 'void' nodes (see
+    #         `self.void_mask`)
+    #     """
+    #     if not self.has_target:
+    #         return None, None, None
+    #
+    #     # We exclude the void nodes from loss computation
+    #     idx = torch.where(~self.void_mask)[0]
+    #
+    #     # Set target offsets to 0 when predicted semantic is stuff
+    #     y_hist = self.targets
+    #     is_stuff = get_stuff_mask(y_hist, self.stuff_classes)
+    #     node_offset = self.node_offset
+    #     node_offset[is_stuff] = 0
+    #
+    #     return self.node_offset_pred[idx], node_offset[idx], self.node_size[idx]
 
     @property
     def sanitized_edge_affinities(self):
@@ -329,7 +329,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             gc_every_n_steps=gc_every_n_steps,
             **kwargs)
 
-        # Instance partition head, epects a fully-fledged
+        # Instance partition head, expects a fully-fledged
         # InstancePartitioner module as input.
         # This module is only called when the actual instance/panoptic
         # segmentation is required. At train time, it is not essential,
@@ -350,22 +350,22 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # SemanticSegmentationModule constructor
         self.edge_affinity_criterion = BCEWithLogitsLoss() \
             if edge_affinity_criterion is None else edge_affinity_criterion
-        self.node_offset_criterion = WeightedL2Loss() \
-            if node_offset_criterion is None else node_offset_criterion
+        # self.node_offset_criterion = WeightedL2Loss() \
+        #     if node_offset_criterion is None else node_offset_criterion
 
         # Model heads for edge affinity and node offset predictions
         # Initialize the model segmentation head (or heads)
         out_dim = self.net.out_dim[0] if self.multi_stage_loss \
             else self.net.out_dim
         self.edge_affinity_head = FFN(out_dim * 2, hidden_dim=32, out_dim=1)
-        self.node_offset_head = FFN(out_dim, hidden_dim=32, out_dim=3)
+        # self.node_offset_head = FFN(out_dim, hidden_dim=32, out_dim=3)
 
         # Custom weight initialization. In particular, this applies
         # Xavier / Glorot initialization on Linear and RPE layers by
         # default, but can be tuned
         init = lambda m: init_weights(m, linear=init_linear, rpe=init_rpe)
         self.edge_affinity_head.apply(init)
-        self.node_offset_head.apply(init)
+        # self.node_offset_head.apply(init)
 
         # Metric objects for calculating panoptic segmentation scores on
         # each dataset split
@@ -420,18 +420,18 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Metric objects for calculating node offset prediction scores
         # on each dataset split
-        self.train_offset_wl2 = WeightedL2Error()
-        self.train_offset_wl1 = WeightedL1Error()
-        self.train_offset_l2 = L2Error()
-        self.train_offset_l1 = L1Error()
-        self.val_offset_wl2 = WeightedL2Error()
-        self.val_offset_wl1 = WeightedL1Error()
-        self.val_offset_l2 = L2Error()
-        self.val_offset_l1 = L1Error()
-        self.test_offset_wl2 = WeightedL2Error()
-        self.test_offset_wl1 = WeightedL1Error()
-        self.test_offset_l2 = L2Error()
-        self.test_offset_l1 = L1Error()
+        # self.train_offset_wl2 = WeightedL2Error()
+        # self.train_offset_wl1 = WeightedL1Error()
+        # self.train_offset_l2 = L2Error()
+        # self.train_offset_l1 = L1Error()
+        # self.val_offset_wl2 = WeightedL2Error()
+        # self.val_offset_wl1 = WeightedL1Error()
+        # self.val_offset_l2 = L2Error()
+        # self.val_offset_l1 = L1Error()
+        # self.test_offset_wl2 = WeightedL2Error()
+        # self.test_offset_wl1 = WeightedL1Error()
+        # self.test_offset_l2 = L2Error()
+        # self.test_offset_l1 = L1Error()
 
         # Metric objects for calculating edge affinity prediction scores
         # on each dataset split
