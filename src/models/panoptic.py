@@ -801,9 +801,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         if self.needs_partition:
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
-            obj_y = obj_y.detach().cpu()
+            obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
-            self.train_panoptic.update(obj_y, instance_data.cpu())
+            self.train_panoptic.update(obj_y.cpu(), instance_data.cpu())
             self.train_semantic(obj_y, obj_hist)
             if self.needs_instance:
                 self.train_instance.update(obj_score, obj_y, instance_data.cpu())
@@ -926,9 +926,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         if self.needs_partition:
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
-            obj_y = obj_y.detach().cpu()
+            obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
-            self.val_panoptic.update(obj_y, instance_data.cpu())
+            self.val_panoptic.update(obj_y.cpu(), instance_data.cpu())
             self.val_semantic(obj_y, obj_hist)
             if self.needs_instance:
                 self.val_instance.update(obj_score, obj_y, instance_data.cpu())
@@ -1097,9 +1097,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         if self.needs_partition:
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
-            obj_y = obj_y.detach().cpu()
+            obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
-            self.test_panoptic.update(obj_y, instance_data.cpu())
+            self.test_panoptic.update(obj_y.cpu(), instance_data.cpu())
             self.test_semantic(obj_y, obj_hist)
             if self.needs_instance:
                 self.test_instance.update(obj_score, obj_y, instance_data.cpu())
