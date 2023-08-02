@@ -700,6 +700,27 @@ class InstanceData(CSRData):
             print(f'InstanceData.load init           : {time() - start:0.5f}s')
         return out
 
+    def target_label_histogram(self, num_classes):
+        """Compute the target histogram for semantic segmentation. That
+        is, for each cluster, the histogram of pointwise labels of its
+        overlaps. When joined with cluster-wise semantic predictions,
+        this histogram can be passed to a ConfusionMatrix metric.
+
+        :param num_classes: int
+            Number of valid classes. By convention, we assume
+            `y ∈ [0, num_classes-1]` are VALID LABELS, while
+            `y < 0` AND `y >= num_classes` ARE VOID LABELS
+
+        :return: Tensor of shape [num_clusters, num_classes + 1]
+        """
+        # Set all void labels to `num_classes`, if any
+        y = self.y.clone()
+        y[(y < 0) | (y > num_classes)] = num_classes
+
+        # Accumulate all pair labels into pre-cluster label histograms
+        y_hist = one_hot(y, num_classes=num_classes + 1) * self.count.view(-1, 1)
+        return scatter_sum(y_hist, self.indices, dim=0)
+
     def semantic_segmentation_oracle(
             self, num_classes, *metric_args, **metric_kwargs):
         """Compute the oracle performance for semantic segmentation,
@@ -718,21 +739,16 @@ class InstanceData(CSRData):
 
         :return: mIoU, pre-class IoU, OA, mAcc
         """
-        # Set all void labels to `num_classes`, if any
-        y = self.y.clone()
-        y[(y < 0) | (y > num_classes)] = num_classes
-
-        # Accumulate all pair labels into pre-cluster label histograms
-        y_hist = one_hot(y, num_classes=num_classes + 1) * self.count.view(-1, 1)
-        cluster_hist = scatter_sum(y_hist, self.indices, dim=0)
+        # Compute the label histogram for each cluster
+        y_hist = self.target_label_histogram(num_classes)
 
         # We expect the network to predict the most frequent label. For
         # clusters where the dominant label is 'void', we expect the
         # network to predict the second most frequent label. In the
         # event where the cluster is 100% 'void', the metric will ignore
         # the prediction, regardless its value
-        pred = cluster_hist[:, :num_classes].argmax(dim=1)
-        target = cluster_hist
+        pred = y_hist[:, :num_classes].argmax(dim=1)
+        target = y_hist
 
         # Performance evaluation
         from src.metrics import ConfusionMatrix

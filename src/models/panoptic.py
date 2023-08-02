@@ -7,7 +7,7 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.data import InstanceData
 from src.utils import init_weights, get_stuff_mask, scatter_mean_weighted
 from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
-    WeightedL2Error, WeightedL1Error, L2Error, L1Error
+    WeightedL2Error, WeightedL1Error, L2Error, L1Error, ConfusionMatrix
 from src.models.semantic import SemanticSegmentationOutput, \
     SemanticSegmentationModule
 from src.loss import WeightedL2Loss, BCEWithLogitsLoss
@@ -385,7 +385,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             stuff_classes=self.stuff_classes,
             compute_on_cpu=True,
             **kwargs)
-        
+
+        # Metric objects for calculating semantic segmentation scores on
+        # predicted instances on each dataset split
+        self.train_semantic = ConfusionMatrix(self.num_classes)
+        self.val_semantic = ConfusionMatrix(self.num_classes)
+        self.test_semantic = ConfusionMatrix(self.num_classes)
+
         # Metric objects for calculating instance segmentation scores on
         # each dataset split
         self.train_instance = MeanAveragePrecision3D(
@@ -633,6 +639,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # metrics do not store anything from these checks
         super().on_train_start()
         self.val_panoptic.reset()
+        self.val_semantic.reset()
         self.val_instance.reset()
         self.val_offset_wl2.reset()
         self.val_offset_wl1.reset()
@@ -795,7 +802,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach().cpu()
+            obj_hist = instance_data.target_label_histogram(self.num_classes)
             self.train_panoptic.update(obj_y, instance_data.cpu())
+            self.train_semantic(obj_y, obj_hist)
             if self.needs_instance:
                 self.train_instance.update(obj_score, obj_y, instance_data.cpu())
 
@@ -871,6 +880,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("train/pqmod", pqmod, prog_bar=True)
             self.log("train/mprec", mprec, prog_bar=True)
             self.log("train/mrec", mrec, prog_bar=True)
+            self.log("train/instance_miou", self.train_semantic.miou(), prog_bar=True)
+            self.log("train/instance_oa", self.train_semantic.oa(), prog_bar=True)
+            self.log("train/instance_macc", self.train_semantic.macc(), prog_bar=True)
+            for iou, seen, name in zip(*self.train_semantic.iou(), self.class_names):
+                if seen:
+                    self.log(f"train/instance_iou_{name}", iou, prog_bar=True)
             if self.needs_instance:
                 self.log("train/map", map, prog_bar=True)
                 self.log("train/map_50", map_50, prog_bar=True)
@@ -897,6 +912,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.train_affinity_oa.reset()
         self.train_affinity_f1.reset()
         self.train_panoptic.reset()
+        self.train_semantic.reset()
         self.train_instance.reset()
 
     def validation_step_update_metrics(self, loss, output):
@@ -911,7 +927,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach().cpu()
+            obj_hist = instance_data.target_label_histogram(self.num_classes)
             self.val_panoptic.update(obj_y, instance_data.cpu())
+            self.val_semantic(obj_y, obj_hist)
             if self.needs_instance:
                 self.val_instance.update(obj_score, obj_y, instance_data.cpu())
 
@@ -987,6 +1005,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("val/pqmod", pqmod, prog_bar=True)
             self.log("val/mprec", mprec, prog_bar=True)
             self.log("val/mrec", mrec, prog_bar=True)
+            self.log("val/instance_miou", self.val_semantic.miou(), prog_bar=True)
+            self.log("val/instance_oa", self.val_semantic.oa(), prog_bar=True)
+            self.log("val/instance_macc", self.val_semantic.macc(), prog_bar=True)
+            for iou, seen, name in zip(*self.val_semantic.iou(), self.class_names):
+                if seen:
+                    self.log(f"val/instance_iou_{name}", iou, prog_bar=True)
             if self.needs_instance:
                 self.log("val/map", map, prog_bar=True)
                 self.log("val/map_50", map_50, prog_bar=True)
@@ -1057,6 +1081,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_affinity_oa.reset()
         self.val_affinity_f1.reset()
         self.val_panoptic.reset()
+        self.val_semantic.reset()
         self.val_instance.reset()
 
     def test_step_update_metrics(self, loss, output):
@@ -1073,7 +1098,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             obj_score, obj_y, instance_data = output.instance_predictions
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach().cpu()
+            obj_hist = instance_data.target_label_histogram(self.num_classes)
             self.test_panoptic.update(obj_y, instance_data.cpu())
+            self.test_semantic(obj_y, obj_hist)
             if self.needs_instance:
                 self.test_instance.update(obj_score, obj_y, instance_data.cpu())
 
@@ -1149,6 +1176,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("test/pqmod", pqmod, prog_bar=True)
             self.log("test/mprec", mprec, prog_bar=True)
             self.log("test/mrec", mrec, prog_bar=True)
+            self.log("test/instance_miou", self.test_semantic.miou(), prog_bar=True)
+            self.log("test/instance_oa", self.test_semantic.oa(), prog_bar=True)
+            self.log("test/instance_macc", self.test_semantic.macc(), prog_bar=True)
+            for iou, seen, name in zip(*self.test_semantic.iou(), self.class_names):
+                if seen:
+                    self.log(f"test/instance_iou_{name}", iou, prog_bar=True)
             if self.needs_instance:
                 self.log("test/map", map, prog_bar=True)
                 self.log("test/map_50", map_50, prog_bar=True)
@@ -1175,6 +1208,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.test_affinity_oa.reset()
         self.test_affinity_f1.reset()
         self.test_panoptic.reset()
+        self.test_semantic.reset()
         self.test_instance.reset()
 
     def load_state_dict(self, state_dict, strict=True):
