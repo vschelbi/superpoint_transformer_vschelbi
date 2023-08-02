@@ -29,7 +29,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             logits,
             stuff_classes,
             edge_affinity_logits,
-            node_offset_pred,
+            # node_offset_pred,
             node_size,
             y_hist=None,
             obj=None,
@@ -58,7 +58,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         self.obj_pos = obj_pos
         self.obj_index_pred = obj_index_pred
         self.semantic_loss = semantic_loss
-        self.node_offset_loss = node_offset_loss
+        # self.node_offset_loss = node_offset_loss
         self.edge_affinity_loss = edge_affinity_loss
         super().__init__(logits, y_hist=y_hist)
 
@@ -234,20 +234,20 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         # Compute the predicted semantic label and proba for each node
         obj_semantic_score, obj_y = obj_logits.softmax(dim=1).max(dim=1)
 
-        # Compute the mean node offset, weighted by node sizes, for each
-        # object
-        node_x = self.pos + self.node_offset_pred
-        obj_x = scatter_mean_weighted(
-            node_x, self.obj_index_pred, self.node_size)
-
-        # Compute the mean squared distance to the mean predicted offset
-        # for each object
-        node_x_error = ((node_x - obj_x[self.obj_index_pred]) ** 2).sum(dim=1)
-        obj_x_error = scatter_mean_weighted(
-            node_x_error, self.obj_index_pred, self.node_size).squeeze()
-
-        # Compute the node offset prediction score
-        obj_x_score = 1 / (1 + obj_x_error)
+        # # Compute the mean node offset, weighted by node sizes, for each
+        # # object
+        # node_x = self.pos + self.node_offset_pred
+        # obj_x = scatter_mean_weighted(
+        #     node_x, self.obj_index_pred, self.node_size)
+        #
+        # # Compute the mean squared distance to the mean predicted offset
+        # # for each object
+        # node_x_error = ((node_x - obj_x[self.obj_index_pred]) ** 2).sum(dim=1)
+        # obj_x_error = scatter_mean_weighted(
+        #     node_x_error, self.obj_index_pred, self.node_size).squeeze()
+        #
+        # # Compute the node offset prediction score
+        # obj_x_score = 1 / (1 + obj_x_error)
 
         # TODO: should we take object size into account in the scoring ?
 
@@ -267,8 +267,10 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         obj_inter_score = 1 / (1 + obj_mean_inter)
 
         # Final prediction score is the product of individual scores
-        obj_score = \
-            obj_semantic_score * obj_x_score * obj_intra_score * obj_inter_score
+        # TODO : cleanly remove offset
+        # obj_score = \
+        #     obj_semantic_score * obj_x_score * obj_intra_score * obj_inter_score
+        obj_score = obj_semantic_score * obj_intra_score * obj_inter_score
 
         return obj_score, obj_y, instance_data
 
@@ -443,13 +445,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # For averaging losses across batches
         self.train_semantic_loss = MeanMetric()
         self.train_edge_affinity_loss = MeanMetric()
-        self.train_node_offset_loss = MeanMetric()
+        # self.train_node_offset_loss = MeanMetric()
         self.val_semantic_loss = MeanMetric()
         self.val_edge_affinity_loss = MeanMetric()
-        self.val_node_offset_loss = MeanMetric()
+        # self.val_node_offset_loss = MeanMetric()
         self.test_semantic_loss = MeanMetric()
         self.test_edge_affinity_loss = MeanMetric()
-        self.test_node_offset_loss = MeanMetric()
+        # self.test_node_offset_loss = MeanMetric()
 
         # For tracking best-so-far validation metrics
         self.val_map_best = MaxMetric()
@@ -457,10 +459,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_pqmod_best = MaxMetric()
         self.val_mprec_best = MaxMetric()
         self.val_mrec_best = MaxMetric()
-        self.val_offset_wl2_best = MinMetric()
-        self.val_offset_wl1_best = MinMetric()
-        self.val_offset_l2_best = MinMetric()
-        self.val_offset_l1_best = MinMetric()
+        # self.val_offset_wl2_best = MinMetric()
+        # self.val_offset_wl1_best = MinMetric()
+        # self.val_offset_l2_best = MinMetric()
+        # self.val_offset_l1_best = MinMetric()
         self.val_affinity_oa_best = MaxMetric()
         self.val_affinity_f1_best = MaxMetric()
 
@@ -541,13 +543,16 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         x = x[0] if self.multi_stage_loss else x
 
         # Compute node offset predictions
-        node_offset_pred = self.node_offset_head(x)
+        # node_offset_pred = self.node_offset_head(x)
 
-        # Forcefully set 0-offset for nodes with stuff predictions
-        node_logits = semantic_pred[0] if self.multi_stage_loss \
-            else semantic_pred
-        is_stuff = get_stuff_mask(node_logits, self.stuff_classes)
-        node_offset_pred[is_stuff] = 0
+        # # Forcefully set 0-offset for nodes with stuff predictions
+        # node_logits = semantic_pred[0] if self.multi_stage_loss \
+        #     else semantic_pred
+        # is_stuff = get_stuff_mask(node_logits, self.stuff_classes)
+        # node_offset_pred[is_stuff] = 0
+
+        # TODO: OPTIONALLY REMOVE OFFSET
+        # node_offset_pred = node_offset_pred * 0
 
         # TODO: offset soft-assigned to 0 based on the predicted
         #  stuff/thing probas. A stuff/thing classification loss could
@@ -566,7 +571,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             semantic_pred,
             self.stuff_classes,
             edge_affinity_logits,
-            node_offset_pred,
+            # node_offset_pred,
             nag.get_sub_size(1))
 
         # Compute the panoptic partition
@@ -595,7 +600,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # Recover some useful information from the NAG and
         # PanopticSegmentationOutput objects
         batch = nag[1].batch
-        node_x = nag[1].pos + output.node_offset_pred
+        # node_x = nag[1].pos + output.node_offset_pred
+        node_x = nag[1].pos
         node_size = nag.get_sub_size(1)
         node_logits = output.logits[0] if output.multi_stage else output.logits
         node_is_stuff = get_stuff_mask(node_logits, self.stuff_classes)
@@ -641,10 +647,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_panoptic.reset()
         self.val_semantic.reset()
         self.val_instance.reset()
-        self.val_offset_wl2.reset()
-        self.val_offset_wl1.reset()
-        self.val_offset_l2.reset()
-        self.val_offset_l1.reset()
+        # self.val_offset_wl2.reset()
+        # self.val_offset_wl1.reset()
+        # self.val_offset_l2.reset()
+        # self.val_offset_l1.reset()
         self.val_affinity_oa.reset()
         self.val_affinity_f1.reset()
         self.val_map_best.reset()
@@ -663,14 +669,14 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # Prepare empty edge affinity and node offset outputs
         num_edges = nag[1].obj_edge_index.shape[1]
         edge_affinity_logits = torch.zeros(num_edges, device=nag.device)
-        node_offset_pred = torch.zeros_like(nag[1].pos)
+        # node_offset_pred = torch.zeros_like(nag[1].pos)
         node_size = nag.get_sub_size(1)
 
         return PanopticSegmentationOutput(
             output_semseg.logits,
             self.stuff_classes,
             edge_affinity_logits,
-            node_offset_pred,
+            # node_offset_pred,
             node_size)
 
     @staticmethod
@@ -772,21 +778,25 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             return None, output
 
         # Compute the node offset loss, weighted by the node size
-        node_offset_loss = self.node_offset_criterion(
-            *output.sanitized_node_offsets)
+        # node_offset_loss = self.node_offset_criterion(
+        #     *output.sanitized_node_offsets)
 
         # Compute the edge affinity loss
         edge_affinity_loss = self.edge_affinity_criterion(
             *output.sanitized_edge_affinities)
 
         # Combine the losses together
+        # TODO: remove node offset cleanly
+        # loss = semantic_loss \
+        #        + self.hparams.edge_affinity_loss_lambda * edge_affinity_loss \
+        #        + self.hparams.node_offset_loss_lambda * node_offset_loss
         loss = semantic_loss \
-               + self.hparams.edge_affinity_loss_lambda * edge_affinity_loss \
-               + self.hparams.node_offset_loss_lambda * node_offset_loss
+               + self.hparams.edge_affinity_loss_lambda * edge_affinity_loss
 
         # Save individual losses in the output object
         output.semantic_loss = semantic_loss
-        output.node_offset_loss = node_offset_loss
+        # TODO: remove node offset cleanly
+        # output.node_offset_loss = 0
         output.edge_affinity_loss = edge_affinity_loss
 
         return loss, output
@@ -810,18 +820,18 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update tracked losses
         self.train_semantic_loss(output.semantic_loss.detach())
-        self.train_node_offset_loss(output.node_offset_loss.detach())
+        # self.train_node_offset_loss(output.node_offset_loss.detach())
         self.train_edge_affinity_loss(output.edge_affinity_loss.detach())
 
         # Update node offset metrics
-        node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
-        node_offset_pred = node_offset_pred.detach()
-        node_offset = node_offset.detach()
-        node_size = node_size.detach()
-        self.train_offset_wl2(node_offset_pred, node_offset, node_size)
-        self.train_offset_wl1(node_offset_pred, node_offset, node_size)
-        self.train_offset_l2(node_offset_pred, node_offset)
-        self.train_offset_l1(node_offset_pred, node_offset)
+        # node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
+        # node_offset_pred = node_offset_pred.detach()
+        # node_offset = node_offset.detach()
+        # node_size = node_size.detach()
+        # self.train_offset_wl2(node_offset_pred, node_offset, node_size)
+        # self.train_offset_wl1(node_offset_pred, node_offset, node_size)
+        # self.train_offset_l2(node_offset_pred, node_offset)
+        # self.train_offset_l1(node_offset_pred, node_offset)
 
         # Update edge affinity metrics
         ea_pred, ea_target = output.sanitized_edge_affinities
@@ -838,9 +848,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.log(
             "train/semantic_loss", self.train_semantic_loss, on_step=False,
             on_epoch=True, prog_bar=True)
-        self.log(
-            "train/node_offset_loss", self.train_node_offset_loss, on_step=False,
-            on_epoch=True, prog_bar=True)
+        # self.log(
+        #     "train/node_offset_loss", self.train_node_offset_loss, on_step=False,
+        #     on_epoch=True, prog_bar=True)
         self.log(
             "train/edge_affinity_loss", self.train_edge_affinity_loss, on_step=False,
             on_epoch=True, prog_bar=True)
@@ -897,18 +907,18 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                     self.log(f"train/map_{name}", map_c, prog_bar=True)
 
         # Log metrics
-        self.log("train/offset_wl2", self.train_offset_wl2.compute(), prog_bar=True)
-        self.log("train/offset_wl1", self.train_offset_wl1.compute(), prog_bar=True)
-        self.log("train/offset_l2", self.train_offset_l2.compute(), prog_bar=True)
-        self.log("train/offset_l1", self.train_offset_l1.compute(), prog_bar=True)
+        # self.log("train/offset_wl2", self.train_offset_wl2.compute(), prog_bar=True)
+        # self.log("train/offset_wl1", self.train_offset_wl1.compute(), prog_bar=True)
+        # self.log("train/offset_l2", self.train_offset_l2.compute(), prog_bar=True)
+        # self.log("train/offset_l1", self.train_offset_l1.compute(), prog_bar=True)
         self.log("train/affinity_oa", self.train_affinity_oa.compute(), prog_bar=True)
         self.log("train/affinity_f1", self.train_affinity_f1.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
-        self.train_offset_wl2.reset()
-        self.train_offset_wl1.reset()
-        self.train_offset_l2.reset()
-        self.train_offset_l1.reset()
+        # self.train_offset_wl2.reset()
+        # self.train_offset_wl1.reset()
+        # self.train_offset_l2.reset()
+        # self.train_offset_l1.reset()
         self.train_affinity_oa.reset()
         self.train_affinity_f1.reset()
         self.train_panoptic.reset()
@@ -935,18 +945,18 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update tracked losses
         self.val_semantic_loss(output.semantic_loss.detach())
-        self.val_node_offset_loss(output.node_offset_loss.detach())
+        # self.val_node_offset_loss(output.node_offset_loss.detach())
         self.val_edge_affinity_loss(output.edge_affinity_loss.detach())
 
         # Update node offset metrics
-        node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
-        node_offset_pred = node_offset_pred.detach()
-        node_offset = node_offset.detach()
-        node_size = node_size.detach()
-        self.val_offset_wl2(node_offset_pred, node_offset, node_size)
-        self.val_offset_wl1(node_offset_pred, node_offset, node_size)
-        self.val_offset_l2(node_offset_pred, node_offset)
-        self.val_offset_l1(node_offset_pred, node_offset)
+        # node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
+        # node_offset_pred = node_offset_pred.detach()
+        # node_offset = node_offset.detach()
+        # node_size = node_size.detach()
+        # self.val_offset_wl2(node_offset_pred, node_offset, node_size)
+        # self.val_offset_wl1(node_offset_pred, node_offset, node_size)
+        # self.val_offset_l2(node_offset_pred, node_offset)
+        # self.val_offset_l1(node_offset_pred, node_offset)
 
         # Update edge affinity metrics
         ea_pred, ea_target = output.sanitized_edge_affinities
@@ -963,9 +973,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.log(
             "val/semantic_loss", self.val_semantic_loss, on_step=False,
             on_epoch=True, prog_bar=True)
-        self.log(
-            "val/node_offset_loss", self.val_node_offset_loss, on_step=False,
-            on_epoch=True, prog_bar=True)
+        # self.log(
+        #     "val/node_offset_loss", self.val_node_offset_loss, on_step=False,
+        #     on_epoch=True, prog_bar=True)
         self.log(
             "val/edge_affinity_loss", self.val_edge_affinity_loss, on_step=False,
             on_epoch=True, prog_bar=True)
@@ -1040,44 +1050,44 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 self.log("val/val_map_best", self.val_map_best.compute(), prog_bar=True)
 
         # Compute the metrics tracked for model selection on validation
-        offset_wl2 = self.val_offset_wl2.compute()
-        offset_wl1 = self.val_offset_wl1.compute()
-        offset_l2 = self.val_offset_l2.compute()
-        offset_l1 = self.val_offset_l1.compute()
+        # offset_wl2 = self.val_offset_wl2.compute()
+        # offset_wl1 = self.val_offset_wl1.compute()
+        # offset_l2 = self.val_offset_l2.compute()
+        # offset_l1 = self.val_offset_l1.compute()
         affinity_oa = self.val_affinity_oa.compute()
         affinity_f1 = self.val_affinity_f1.compute()
 
         # Log metrics
-        self.log("val/offset_wl2", offset_wl2, prog_bar=True)
-        self.log("val/offset_wl1", offset_wl1, prog_bar=True)
-        self.log("val/offset_l2", offset_l2, prog_bar=True)
-        self.log("val/offset_l1", offset_l1, prog_bar=True)
+        # self.log("val/offset_wl2", offset_wl2, prog_bar=True)
+        # self.log("val/offset_wl1", offset_wl1, prog_bar=True)
+        # self.log("val/offset_l2", offset_l2, prog_bar=True)
+        # self.log("val/offset_l1", offset_l1, prog_bar=True)
         self.log("val/affinity_oa", affinity_oa, prog_bar=True)
         self.log("val/affinity_f1", affinity_f1, prog_bar=True)
 
         # Update best-so-far metrics
-        self.val_offset_wl2_best(offset_wl2)
-        self.val_offset_wl1_best(offset_wl1)
-        self.val_offset_l2_best(offset_l2)
-        self.val_offset_l1_best(offset_l1)
+        # self.val_offset_wl2_best(offset_wl2)
+        # self.val_offset_wl1_best(offset_wl1)
+        # self.val_offset_l2_best(offset_l2)
+        # self.val_offset_l1_best(offset_l1)
         self.val_affinity_oa_best(affinity_oa)
         self.val_affinity_f1_best(affinity_f1)
 
         # Log best-so-far metrics, using `.compute()` instead of passing
         # the whole torchmetrics object, because otherwise metric would
         # be reset by lightning after each epoch
-        self.log("val/offset_wl2_best", self.val_offset_wl2_best.compute(), prog_bar=True)
-        self.log("val/offset_wl1_best", self.val_offset_wl1_best.compute(), prog_bar=True)
-        self.log("val/offset_l2_best", self.val_offset_l2_best.compute(), prog_bar=True)
-        self.log("val/offset_l1_best", self.val_offset_l1_best.compute(), prog_bar=True)
+        # self.log("val/offset_wl2_best", self.val_offset_wl2_best.compute(), prog_bar=True)
+        # self.log("val/offset_wl1_best", self.val_offset_wl1_best.compute(), prog_bar=True)
+        # self.log("val/offset_l2_best", self.val_offset_l2_best.compute(), prog_bar=True)
+        # self.log("val/offset_l1_best", self.val_offset_l1_best.compute(), prog_bar=True)
         self.log("val/affinity_oa_best", self.val_affinity_oa_best.compute(), prog_bar=True)
         self.log("val/affinity_f1_best", self.val_affinity_f1_best.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
-        self.val_offset_wl2.reset()
-        self.val_offset_wl1.reset()
-        self.val_offset_l2.reset()
-        self.val_offset_l1.reset()
+        # self.val_offset_wl2.reset()
+        # self.val_offset_wl1.reset()
+        # self.val_offset_l2.reset()
+        # self.val_offset_l1.reset()
         self.val_affinity_oa.reset()
         self.val_affinity_f1.reset()
         self.val_panoptic.reset()
@@ -1106,18 +1116,18 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update tracked losses
         self.test_semantic_loss(output.semantic_loss.detach())
-        self.test_node_offset_loss(output.node_offset_loss.detach())
+        # self.test_node_offset_loss(output.node_offset_loss.detach())
         self.test_edge_affinity_loss(output.edge_affinity_loss.detach())
 
         # Update node offset metrics
-        node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
-        node_offset_pred = node_offset_pred.detach()
-        node_offset = node_offset.detach()
-        node_size = node_size.detach()
-        self.test_offset_wl2(node_offset_pred, node_offset, node_size)
-        self.test_offset_wl1(node_offset_pred, node_offset, node_size)
-        self.test_offset_l2(node_offset_pred, node_offset)
-        self.test_offset_l1(node_offset_pred, node_offset)
+        # node_offset_pred, node_offset, node_size = output.sanitized_node_offsets
+        # node_offset_pred = node_offset_pred.detach()
+        # node_offset = node_offset.detach()
+        # node_size = node_size.detach()
+        # self.test_offset_wl2(node_offset_pred, node_offset, node_size)
+        # self.test_offset_wl1(node_offset_pred, node_offset, node_size)
+        # self.test_offset_l2(node_offset_pred, node_offset)
+        # self.test_offset_l1(node_offset_pred, node_offset)
 
         # Update edge affinity metrics
         ea_pred, ea_target = output.sanitized_edge_affinities
@@ -1134,9 +1144,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.log(
             "test/semantic_loss", self.test_semantic_loss, on_step=False,
             on_epoch=True, prog_bar=True)
-        self.log(
-            "test/node_offset_loss", self.test_node_offset_loss, on_step=False,
-            on_epoch=True, prog_bar=True)
+        # self.log(
+        #     "test/node_offset_loss", self.test_node_offset_loss, on_step=False,
+        #     on_epoch=True, prog_bar=True)
         self.log(
             "test/edge_affinity_loss", self.test_edge_affinity_loss, on_step=False,
             on_epoch=True, prog_bar=True)
@@ -1193,18 +1203,18 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                     self.log(f"test/map_{name}", map_c, prog_bar=True)
 
         # Log metrics
-        self.log("test/offset_wl2", self.test_offset_wl2.compute(), prog_bar=True)
-        self.log("test/offset_wl1", self.test_offset_wl1.compute(), prog_bar=True)
-        self.log("test/offset_l2", self.test_offset_l2.compute(), prog_bar=True)
-        self.log("test/offset_l1", self.test_offset_l1.compute(), prog_bar=True)
+        # self.log("test/offset_wl2", self.test_offset_wl2.compute(), prog_bar=True)
+        # self.log("test/offset_wl1", self.test_offset_wl1.compute(), prog_bar=True)
+        # self.log("test/offset_l2", self.test_offset_l2.compute(), prog_bar=True)
+        # self.log("test/offset_l1", self.test_offset_l1.compute(), prog_bar=True)
         self.log("test/affinity_oa", self.test_affinity_oa.compute(), prog_bar=True)
         self.log("test/affinity_f1", self.test_affinity_f1.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
-        self.test_offset_wl2.reset()
-        self.test_offset_wl1.reset()
-        self.test_offset_l2.reset()
-        self.test_offset_l1.reset()
+        # self.test_offset_wl2.reset()
+        # self.test_offset_wl1.reset()
+        # self.test_offset_l2.reset()
+        # self.test_offset_l1.reset()
         self.test_affinity_oa.reset()
         self.test_affinity_f1.reset()
         self.test_panoptic.reset()
