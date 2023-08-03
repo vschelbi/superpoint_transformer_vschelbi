@@ -19,6 +19,10 @@ model:
     lr: 0.1
     weight_decay: 1e-2
 
+  partitioner:
+    regularization: 20
+    x_weight: 0.05
+
 logger:
   wandb:
     project: "spt_s3dis"

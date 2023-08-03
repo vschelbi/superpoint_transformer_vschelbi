@@ -18,8 +18,8 @@ _point_mlp: [32, 64, 64]  # point encoder layers
 # Instance/panoptic partitioner module
 partitioner:
   _target_: src.nn.instance.InstancePartitioner
-  regularization: 10
-  x_weight: 0.1
+  regularization: 20
+  x_weight: 0.01
   cutoff: 1
   parallel: True
   iterations: 10
