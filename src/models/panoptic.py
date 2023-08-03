@@ -465,6 +465,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.val_offset_l1_best = MinMetric()
         self.val_affinity_oa_best = MaxMetric()
         self.val_affinity_f1_best = MaxMetric()
+        self.val_instance_miou_best = MaxMetric()
+        self.val_instance_oa_best = MaxMetric()
+        self.val_instance_macc_best = MaxMetric()
 
     @property
     def needs_partition(self):
@@ -658,6 +661,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_pqmod_best.reset()
         self.val_mprec_best.reset()
         self.val_mrec_best.reset()
+        # self.val_offset_wl2_best.reset()
+        # self.val_offset_wl1_best.reset()
+        # self.val_offset_l2_best.reset()
+        # self.val_offset_l1_best.reset()
+        self.val_affinity_oa_best.reset()
+        self.val_affinity_f1_best.reset()
+        self.val_instance_miou_best.reset()
+        self.val_instance_oa_best.reset()
+        self.val_instance_macc_best.reset()
 
     def _create_empty_output(self, nag):
         """Local helper method to initialize an empty output for
@@ -1015,9 +1027,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("val/pqmod", pqmod, prog_bar=True)
             self.log("val/mprec", mprec, prog_bar=True)
             self.log("val/mrec", mrec, prog_bar=True)
-            self.log("val/instance_miou", self.val_semantic.miou(), prog_bar=True)
-            self.log("val/instance_oa", self.val_semantic.oa(), prog_bar=True)
-            self.log("val/instance_macc", self.val_semantic.macc(), prog_bar=True)
+            instance_miou = self.val_semantic.miou()
+            instance_oa = self.val_semantic.oa()
+            instance_macc = self.val_semantic.macc()
+            self.log("val/instance_miou", instance_miou, prog_bar=True)
+            self.log("val/instance_oa", instance_oa, prog_bar=True)
+            self.log("val/instance_macc", instance_macc, prog_bar=True)
             for iou, seen, name in zip(*self.val_semantic.iou(), self.class_names):
                 if seen:
                     self.log(f"val/instance_iou_{name}", iou, prog_bar=True)
@@ -1072,6 +1087,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.val_offset_l1_best(offset_l1)
         self.val_affinity_oa_best(affinity_oa)
         self.val_affinity_f1_best(affinity_f1)
+        self.val_instance_miou_best(instance_miou)
+        self.val_instance_oa_best(instance_oa)
+        self.val_instance_macc_best(instance_macc)
 
         # Log best-so-far metrics, using `.compute()` instead of passing
         # the whole torchmetrics object, because otherwise metric would
@@ -1082,6 +1100,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.log("val/offset_l1_best", self.val_offset_l1_best.compute(), prog_bar=True)
         self.log("val/affinity_oa_best", self.val_affinity_oa_best.compute(), prog_bar=True)
         self.log("val/affinity_f1_best", self.val_affinity_f1_best.compute(), prog_bar=True)
+        self.log("val/instance_miou_best", self.val_instance_miou_best.compute(), prog_bar=True)
+        self.log("val/instance_oa_best", self.val_instance_oa_best.compute(), prog_bar=True)
+        self.log("val/instance_macc_best", self.val_instance_macc_best.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
         # self.val_offset_wl2.reset()
