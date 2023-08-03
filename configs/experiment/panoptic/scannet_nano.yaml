@@ -30,6 +30,12 @@ model:
     no_ffn: False
     down_ffn_ratio: 1
 
+  partitioner:
+    regularization: 20
+    x_weight: 0.05
+
+  partition_every_n_epochs: 10
+
 logger:
   wandb:
     project: "spt_scannet"

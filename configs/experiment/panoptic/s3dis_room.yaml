@@ -19,6 +19,8 @@ model:
     lr: 0.1
     weight_decay: 1e-2
 
+  partition_every_n_epochs: 10
+
 logger:
   wandb:
     project: "spt_s3dis_room"

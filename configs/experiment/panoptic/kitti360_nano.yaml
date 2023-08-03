@@ -24,6 +24,12 @@ model:
   _node_mlp_out: 32
   _h_edge_mlp_out: 32
 
+  partitioner:
+    regularization: 20
+    x_weight: 0.05
+
+  partition_every_n_epochs: 10
+
 logger:
   wandb:
     project: "spt_kitti360"

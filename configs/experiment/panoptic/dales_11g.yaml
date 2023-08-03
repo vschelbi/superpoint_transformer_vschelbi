@@ -38,6 +38,12 @@ model:
     lr: 0.01
     weight_decay: 1e-4
 
+  partitioner:
+    regularization: 20
+    x_weight: 0.05
+
+  partition_every_n_epochs: 20
+
 logger:
   wandb:
     project: "spt_dales"

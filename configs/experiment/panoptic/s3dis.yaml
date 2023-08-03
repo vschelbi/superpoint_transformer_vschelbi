@@ -23,6 +23,8 @@ model:
     regularization: 20
     x_weight: 0.05
 
+  partition_every_n_epochs: 10
+
 logger:
   wandb:
     project: "spt_s3dis"
