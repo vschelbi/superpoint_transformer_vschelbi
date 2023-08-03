@@ -459,15 +459,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_pqmod_best = MaxMetric()
         self.val_mprec_best = MaxMetric()
         self.val_mrec_best = MaxMetric()
+        self.val_instance_miou_best = MaxMetric()
+        self.val_instance_oa_best = MaxMetric()
+        self.val_instance_macc_best = MaxMetric()
         # self.val_offset_wl2_best = MinMetric()
         # self.val_offset_wl1_best = MinMetric()
         # self.val_offset_l2_best = MinMetric()
         # self.val_offset_l1_best = MinMetric()
         self.val_affinity_oa_best = MaxMetric()
         self.val_affinity_f1_best = MaxMetric()
-        self.val_instance_miou_best = MaxMetric()
-        self.val_instance_oa_best = MaxMetric()
-        self.val_instance_macc_best = MaxMetric()
 
     @property
     def needs_partition(self):
@@ -661,15 +661,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.val_pqmod_best.reset()
         self.val_mprec_best.reset()
         self.val_mrec_best.reset()
+        self.val_instance_miou_best.reset()
+        self.val_instance_oa_best.reset()
+        self.val_instance_macc_best.reset()
         # self.val_offset_wl2_best.reset()
         # self.val_offset_wl1_best.reset()
         # self.val_offset_l2_best.reset()
         # self.val_offset_l1_best.reset()
         self.val_affinity_oa_best.reset()
         self.val_affinity_f1_best.reset()
-        self.val_instance_miou_best.reset()
-        self.val_instance_oa_best.reset()
-        self.val_instance_macc_best.reset()
 
     def _create_empty_output(self, nag):
         """Local helper method to initialize an empty output for
@@ -1053,6 +1053,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.val_mrec_best(mrec)
             if self.needs_instance:
                 self.val_map_best(map)
+            self.val_instance_miou_best(instance_miou)
+            self.val_instance_oa_best(instance_oa)
+            self.val_instance_macc_best(instance_macc)
 
             # Log best-so-far metrics, using `.compute()` instead of passing
             # the whole torchmetrics object, because otherwise metric would
@@ -1063,6 +1066,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("val/val_mrec_best", self.val_mrec_best.compute(), prog_bar=True)
             if self.needs_instance:
                 self.log("val/val_map_best", self.val_map_best.compute(), prog_bar=True)
+            self.log("val/instance_miou_best", self.val_instance_miou_best.compute(), prog_bar=True)
+            self.log("val/instance_oa_best", self.val_instance_oa_best.compute(), prog_bar=True)
+            self.log("val/instance_macc_best", self.val_instance_macc_best.compute(), prog_bar=True)
 
         # Compute the metrics tracked for model selection on validation
         # offset_wl2 = self.val_offset_wl2.compute()
@@ -1087,9 +1093,6 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.val_offset_l1_best(offset_l1)
         self.val_affinity_oa_best(affinity_oa)
         self.val_affinity_f1_best(affinity_f1)
-        self.val_instance_miou_best(instance_miou)
-        self.val_instance_oa_best(instance_oa)
-        self.val_instance_macc_best(instance_macc)
 
         # Log best-so-far metrics, using `.compute()` instead of passing
         # the whole torchmetrics object, because otherwise metric would
@@ -1100,9 +1103,6 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.log("val/offset_l1_best", self.val_offset_l1_best.compute(), prog_bar=True)
         self.log("val/affinity_oa_best", self.val_affinity_oa_best.compute(), prog_bar=True)
         self.log("val/affinity_f1_best", self.val_affinity_f1_best.compute(), prog_bar=True)
-        self.log("val/instance_miou_best", self.val_instance_miou_best.compute(), prog_bar=True)
-        self.log("val/instance_oa_best", self.val_instance_oa_best.compute(), prog_bar=True)
-        self.log("val/instance_macc_best", self.val_instance_macc_best.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
         # self.val_offset_wl2.reset()
