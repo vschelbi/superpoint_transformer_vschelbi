@@ -98,7 +98,7 @@ except FileNotFoundError:
 
 # Move the appropriate working directory
 os.chdir(osp.join(DEPENDENCIES_DIR, 'parallel_cut_pursuit/python'))
-name = "cp_kmpp_d0_dist_cpy"
+name = "cp_d0_dist_cpy"
 
 if not osp.exists("bin"):
     os.mkdir("bin")
@@ -136,7 +136,7 @@ with open(filepath, 'w') as f:
 mod = Extension(
     name,
     # list source files
-    ["cpython/cp_kmpp_d0_dist_cpy.cpp", "../src/cp_kmpp_d0_dist.cpp",
+    ["cpython/cp_d0_dist_cpy.cpp", "../src/cp_d0_dist.cpp",
      "../src/cut_pursuit_d0.cpp", "../src/cut_pursuit.cpp",
      "../src/maxflow.cpp"],
     include_dirs=include_dirs,
