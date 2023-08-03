@@ -244,6 +244,10 @@ class S3DIS(BaseDataset):
         Root directory where the dataset should be saved.
     fold : `int`
         Integer in [1, ..., 6] indicating the Test Area
+    with_stuff: `bool`
+        By default, S3DIS does not have any stuff class. If `with_stuff`
+        is True, the 'ceiling', 'wall', and 'floor' classes will be
+        treated as stuff
     stage : {'train', 'val', 'test', 'trainval'}, optional
     transform : `callable`, optional
         transform function operating on data.
@@ -263,9 +267,21 @@ class S3DIS(BaseDataset):
     _aligned_zip_name = ALIGNED_ZIP_NAME
     _unzip_name = UNZIP_NAME
 
-    def __init__(self, *args, fold=5, **kwargs):
+    def __init__(self, *args, fold=5, with_stuff=False, **kwargs):
         self.fold = fold
+        self.with_stuff = with_stuff
         super().__init__(*args, val_mixed_in_train=True, **kwargs)
+
+    @property
+    def pre_transform_hash(self):
+        """Produce a unique but stable hash based on the dataset's
+        `pre_transform` attributes (as exposed by `_repr`).
+
+        For S3DIS, we want the hash to detect if the stuff classes are
+        the default ones.
+        """
+        suffix = '_with_stuff' if self.with_stuff else ''
+        return super().pre_transform_hash + suffix
 
     @property
     def class_names(self):
@@ -304,7 +320,7 @@ class S3DIS(BaseDataset):
         VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
         `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
         """
-        return STUFF_CLASSES
+        return STUFF_CLASSES_MODIFIED if self.with_stuff else STUFF_CLASSES
 
     @property
     def class_colors(self):
@@ -407,7 +423,7 @@ class S3DIS(BaseDataset):
 ########################################################################
 
 class MiniS3DIS(S3DIS):
-    """A mini version of S3DIS with only 2 areas per stage for
+    """A mini version of S3DIS with only 1 area per stage for
     experimentation.
     """
     _NUM_MINI = 1

@@ -434,7 +434,7 @@ class MeanAveragePrecision3D(MeanAveragePrecision):
         # classes whose labels appear at least once in the predicted
         # semantic label or in the ground truth semantic labels.
         # By default, all labels in `[0, self.num_classes-1]` are
-        # considered valid and all labels outside of this range will be
+        # considered valid and all labels outside this range will be
         # considered 'void' and ignored.
         # Besides, if `stuff_classes` was provided, the corresponding
         # labels are ignored
