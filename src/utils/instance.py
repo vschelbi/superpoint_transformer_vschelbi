@@ -19,7 +19,7 @@ sys.path.append(osp.join(src_folder, "dependencies/grid_graph/python/bin"))
 sys.path.append(osp.join(src_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
 
 from grid_graph import edge_list_to_forward_star
-from cp_kmpp_d0_dist import cp_kmpp_d0_dist
+from cp_d0_dist import cp_d0_dist
 
 
 __all__ = [
@@ -332,8 +332,10 @@ def _instance_cut_pursuit(
         edge_index,
         edge_affinity_logits,
         do_sigmoid_affinity=True,
+        loss_type='l2_kl',
         regularization=1e-2,
         x_weight=1,
+        p_weight=1,
         cutoff=1,
         parallel=True,
         iterations=10,
@@ -358,13 +360,20 @@ def _instance_cut_pursuit(
         to convert the logits to [0, 1] affinities. If False, the input
         `edge_affinity_logits` will be used as is when computing the
         discrepancies
+    :param loss_type: str
+        Rules the loss applied on the node features. Accepts one of
+        'l2' (L2 loss on node features and probas),
+        'l2_kl' (L2 loss on node features and Kullback-Leibler
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
         Weight used to mitigate the impact of the point features in the
         partition. The larger, the lesser features importance before
-        logits. This can be loosely interpreted as the inverse of a
-        maximum superpoint feature radius
+        the probas
+    :param p_weight: float
+        Weight used to mitigate the impact of the point probas in the
+        partition. The larger, the lesser features importance before
+        the features
     :param cutoff: float
         Minimum number of points in each cluster
     :param parallel: bool
@@ -400,11 +409,15 @@ def _instance_cut_pursuit(
     assert edge_affinity_logits.shape[0] == edge_index.shape[1], \
         "`edge_affinity_logits` and `edge_index` must have the same number " \
         "of edges"
+    loss_type = loss_type.lower()
+    assert loss_type in ['l2', 'l2_kl'], \
+        "`loss_type` must be one of ['l2', 'l2_kl']"
 
     device = node_x.device
     num_nodes = node_x.shape[0]
-    num_dim = node_x.shape[1]
-    num_classes = node_logits.shape[1]
+    x_dim = node_x.shape[1]
+    p_dim = node_logits.shape[1]
+    dim = x_dim + p_dim
     num_edges = edge_affinity_logits.numel()
 
     assert num_nodes < np.iinfo(np.uint32).max, \
@@ -459,18 +472,24 @@ def _instance_cut_pursuit(
 
     # Build the node features as the concatenation of positions and
     # class probabilities
-    # TODO: this is for `improve_merge` branch, need to adapt to new
-    #  interface for L2+KL formulation
-    loss_type = 1
     x = torch.cat((node_x, node_probas), dim=1)
     x = np.asfortranarray(x.cpu().numpy().T)
     node_size = node_size.float().cpu().numpy()
-    coor_weights = np.ones(num_dim + num_classes, dtype=np.float32)
-    coor_weights[:num_dim] *= x_weight
+
+    # The `loss` term will decide which portion of `x` should be treated
+    # with L2 loss and which should be treated with Kullback-Leibler
+    # divergence
+    l2_dim = dim if loss_type == 'l2' else x_dim
+
+    # Weighting to apply on the features and probas
+    coor_weights_dim = dim if loss_type == 'l2' else x_dim + 1
+    coor_weights = np.ones(coor_weights_dim, dtype=np.float32)
+    coor_weights[:x_dim] *= x_weight
+    coor_weights[x_dim:] *= p_weight
 
     # Partition computation
-    obj_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
-        loss_type,
+    obj_index, x_c, cluster, edges, times = cp_d0_dist(
+        l2_dim,
         x,
         source_csr,
         target,
@@ -508,8 +527,10 @@ def instance_cut_pursuit(
         edge_index,
         edge_affinity_logits,
         do_sigmoid_affinity=True,
+        loss_type='l2_kl',
         regularization=1e-2,
         x_weight=1,
+        p_weight=1,
         cutoff=1,
         parallel=True,
         iterations=10,
@@ -542,13 +563,21 @@ def instance_cut_pursuit(
         to convert the logits to [0, 1] affinities. If False, the input
         `edge_affinity_logits` will be used as is when computing the
         discrepancies
+    :param loss_type: str
+        Rules the loss applied on the node features. Accepts one of
+        'l2' (L2 loss on node features and probas),
+        'l2_kl' (L2 loss on node features and Kullback-Leibler
+        divergence on node probas)
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
         Weight used to mitigate the impact of the point features in the
         partition. The larger, the lesser features importance before
-        logits. This can be loosely interpreted as the inverse of a
-        maximum superpoint feature radius
+        the probas
+    :param p_weight: float
+        Weight used to mitigate the impact of the point probas in the
+        partition. The larger, the lesser features importance before
+        the features
     :param cutoff: float
         Minimum number of points in each cluster
     :param parallel: bool
@@ -576,8 +605,10 @@ def instance_cut_pursuit(
         edge_index,
         edge_affinity_logits,
         do_sigmoid_affinity=do_sigmoid_affinity,
+        loss_type=loss_type,
         regularization=regularization,
         x_weight=x_weight,
+        p_weight=p_weight,
         cutoff=cutoff,
         parallel=parallel,
         iterations=iterations,
@@ -621,8 +652,10 @@ def oracle_superpoint_clustering(
         centroid_mode='iou',
         centroid_level=1,
         smooth_affinity=True,
+        loss_type='l2_kl',
         regularization=1e-5,
         x_weight=1e-1,
+        p_weight=1e-1,
         cutoff=1,
         parallel=True,
         iterations=10,
@@ -667,8 +700,10 @@ def oracle_superpoint_clustering(
     :param centroid_mode:
     :param centroid_level:
     :param smooth_affinity:
+    :param loss_type:
     :param regularization:
     :param x_weight:
+    :param p_weight:
     :param cutoff:
     :param parallel:
     :param iterations:
@@ -702,7 +737,7 @@ def oracle_superpoint_clustering(
     # Set node offset to 0 for stuff and void classes
     thing_classes = torch.tensor(thing_classes, device=nag.device)
     is_thing = torch.isin(node_y, thing_classes)
-    obj_pos[~is_thing] = nag[1].pos
+    obj_pos[~is_thing] = nag[1].pos[~is_thing]
 
     # For each node, recover the index of the batch item it belongs to
     batch = nag[1].batch if nag[1].batch is not None \
@@ -718,8 +753,10 @@ def oracle_superpoint_clustering(
         edge_index,
         edge_affinity,
         do_sigmoid_affinity=False,
+        loss_type=loss_type,
         regularization=regularization,
         x_weight=x_weight,
+        p_weight=p_weight,
         cutoff=cutoff,
         parallel=parallel,
         iterations=iterations,
