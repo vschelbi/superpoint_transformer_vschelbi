@@ -21,13 +21,19 @@ class InstancePartitioner(nn.Module):
         Currently, this implementation is non-differentiable and runs on
         CPU.
 
+    :param loss_type: str
+        Rules the loss applied on the node features. Accepts one of
+        'l2' (L2 loss on node features and probas),
+        'l2_kl' (L2 loss on node features and Kullback-Leibler
+        divergence on node probas)
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
         Weight used to mitigate the impact of the point position in the
-        partition. The larger, the less spatial coordinates matter. This
-        can be loosely interpreted as the inverse of a maximum
-        superpoint radius
+        partition. The larger, the less spatial coordinates matter
+    :param p_weight: float
+        Weight used to mitigate the impact of the point probas in the
+        partition. The larger, the greater the impact
     :param cutoff: float
         Minimum number of points in each cluster
     :param parallel: bool
@@ -45,16 +51,20 @@ class InstancePartitioner(nn.Module):
 
     def __init__(
             self,
+            loss_type='l2_kl',
             regularization=1e-2,
             x_weight=1,
+            p_weight=1,
             cutoff=1,
             parallel=True,
             iterations=10,
             trim=False,
             discrepancy_epsilon=1e-3):
         super().__init__()
+        self.loss_type = loss_type
         self.regularization = regularization
         self.x_weight = x_weight
+        self.p_weight = p_weight
         self.cutoff = cutoff
         self.parallel = parallel
         self.iterations = iterations
@@ -104,8 +114,10 @@ class InstancePartitioner(nn.Module):
             edge_index,
             edge_affinity_logits,
             do_sigmoid_affinity=True,
+            loss_type=self.loss_type,
             regularization=self.regularization,
             x_weight=self.x_weight,
+            p_weight=self.p_weight,
             cutoff=self.cutoff,
             parallel=self.parallel,
             iterations=self.iterations,

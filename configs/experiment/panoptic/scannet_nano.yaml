@@ -31,8 +31,10 @@ model:
     down_ffn_ratio: 1
 
   partitioner:
+    loss_type: 'l2_kl'
     regularization: 20
     x_weight: 0.05
+    p_weight: 1
 
   partition_every_n_epochs: 10
 

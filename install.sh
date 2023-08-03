@@ -119,7 +119,7 @@ echo
 echo "⭐ Installing Parallel Cut-Pursuit"
 echo
 # Clone parallel-cut-pursuit and grid-graph repos
-git clone -b improve_merge https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/dependencies/parallel_cut_pursuit
+git clone -b improve_merge_2 https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/dependencies/parallel_cut_pursuit
 git clone https://gitlab.com/1a7r0ch3/grid-graph.git src/dependencies/grid_graph
 
 # Compile the projects

@@ -364,6 +364,7 @@ def _instance_cut_pursuit(
         Rules the loss applied on the node features. Accepts one of
         'l2' (L2 loss on node features and probas),
         'l2_kl' (L2 loss on node features and Kullback-Leibler
+        divergence on node probas)
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
