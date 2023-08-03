@@ -228,6 +228,10 @@ def _group_data(
     # Keys for which voxel aggregation will be based on majority voting
     _LAST_KEYS = ['batch', SaveNodeIndex.KEY]
 
+    # Keys to be treated as normal vectors, for which the unit-norm must
+    # be preserved
+    _NORMAL_KEYS = ['normal']
+
     # Supported mode for aggregation
     _MODES = ['mean', 'last']
     assert mode in _MODES
@@ -303,6 +307,10 @@ def _group_data(
         # averaged across the clusters
         else:
             data[key] = scatter_mean(item, cluster, dim=0)
+
+        # For normals, make sure to re-normalize the mean-normal
+        if key in _NORMAL_KEYS:
+            data[key] = data[key] / data[key].norm(dim=1).view(-1, 1)
 
         # Convert back to boolean if need be
         if is_item_bool:

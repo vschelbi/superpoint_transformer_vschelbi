@@ -31,9 +31,10 @@ def read_scannet_scan(
         scan_dir,
         xyz=True,
         rgb=True,
+        normal=True,
         semantic=True,
         instance=True,
-        remap=False):
+        remap=True):
     """Read a ScanNet scan.
 
     Expects the data to be saved under the following structure:
@@ -57,6 +58,8 @@ def read_scannet_scan(
         Whether XYZ coordinates should be saved in the output Data.pos
     :param rgb: bool
         Whether RGB colors should be saved in the output Data.rgb
+    :param normal: bool
+        Whether normals should be saved in the output Data.normal
     :param semantic: bool
         Whether semantic labels should be saved in the output Data.y
     :param instance: bool
@@ -91,22 +94,24 @@ def read_scannet_scan(
     # Read the scan. Different reading methods for train/val scanes and
     # test scans
     if stage_dirname == 'scans':
-        pos, color, y, obj = read_one_scan(stage_dir, scan_name, label_map_file)
+        pos, color, n, y, obj = read_one_scan(stage_dir, scan_name, label_map_file)
         y = torch.from_numpy(NYU40_2_SCANNET)[y] if remap else y
-        data = Data(pos=pos, rgb=color, y=y)
+        data = Data(pos=pos, rgb=color, normal=n, y=y)
         idx = torch.arange(data.num_points)
         obj = consecutive_cluster(obj)[0]
         count = torch.ones_like(obj)
         data.obj = InstanceData(idx, obj, count, y, dense=True)
     else:
-        pos, color = read_one_test_scan(stage_dir, scan_name)
-        data = Data(pos=pos, rgb=color)
+        pos, color, n = read_one_test_scan(stage_dir, scan_name)
+        data = Data(pos=pos, rgb=color, normal=n)
 
     # Remove unneeded attributes
     if not xyz:
         data.pos = None
     if not rgb:
         data.rgb = None
+    if not normal:
+        data.normal = None
     if not semantic:
         data.y = None
     if not instance:
@@ -231,7 +236,13 @@ class ScanNet(BaseDataset):
         This applies to both `Data.y` and `Data.obj.y`.
         """
         return read_scannet_scan(
-            raw_cloud_path, semantic=True, instance=True, remap=True)
+            raw_cloud_path,
+            xyz=True,
+            rgb=True,
+            normal=True,
+            semantic=True,
+            instance=True,
+            remap=True)
 
     @property
     def raw_file_structure(self):

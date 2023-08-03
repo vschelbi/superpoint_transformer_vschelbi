@@ -36,34 +36,31 @@ def read_label_mapping(filename, label_from="raw_category", label_to="nyu40id"):
     return mapping
 
 
-def read_mesh_vertices(filename):
-    """read XYZ for each vertex."""
-    assert osp.isfile(filename)
-    with open(filename, "rb") as f:
-        plydata = PlyData.read(f)
-        num_verts = plydata["vertex"].count
-        vertices = np.zeros(shape=[num_verts, 3], dtype=np.float32)
-        vertices[:, 0] = plydata["vertex"].data["x"]
-        vertices[:, 1] = plydata["vertex"].data["y"]
-        vertices[:, 2] = plydata["vertex"].data["z"]
-    return vertices
-
-
-def read_mesh_vertices_rgb(filename):
+def read_mesh_vertices(filename, rgb=True, normal=True):
     """read XYZ RGB for each vertex.
     Note: RGB values are in 0-255
     """
     assert osp.isfile(filename)
+
     with open(filename, "rb") as f:
         plydata = PlyData.read(f)
         num_verts = plydata["vertex"].count
-        vertices = np.zeros(shape=[num_verts, 6], dtype=np.float32)
+        vertices = np.zeros(shape=[num_verts, 9], dtype=np.float32)
         vertices[:, 0] = plydata["vertex"].data["x"]
         vertices[:, 1] = plydata["vertex"].data["y"]
         vertices[:, 2] = plydata["vertex"].data["z"]
-        vertices[:, 3] = plydata["vertex"].data["red"]
-        vertices[:, 4] = plydata["vertex"].data["green"]
-        vertices[:, 5] = plydata["vertex"].data["blue"]
+        if rgb:
+            vertices[:, 3] = plydata["vertex"].data["red"]
+            vertices[:, 4] = plydata["vertex"].data["green"]
+            vertices[:, 5] = plydata["vertex"].data["blue"]
+
+    if normal:
+        import open3d
+        mesh = open3d.io.read_triangle_mesh(filename)
+        if not mesh.has_vertex_normals():
+            mesh.compute_vertex_normals()
+        vertices[:, 6:9] = np.asarray(mesh.vertex_normals)
+
     return vertices
 
 
@@ -119,7 +116,7 @@ def export(mesh_file, agg_file, seg_file, meta_file, label_map_file, output_file
     box as (cx,cy,cz,dx,dy,dz,semantic_label)
     """
     label_map = read_label_mapping(label_map_file, label_from="raw_category", label_to="nyu40id")
-    mesh_vertices = read_mesh_vertices_rgb(mesh_file)
+    mesh_vertices = read_mesh_vertices(mesh_file, rgb=True, normal=True)
 
     # Load scene axis alignment matrix
     axis_align_matrix = read_axis_align_matrix(meta_file).numpy()
@@ -201,18 +198,20 @@ def read_one_scan(scannet_dir, scan_name, label_map_file):
 
     # Return values as tensors
     pos = torch.from_numpy(mesh_vertices[:, :3])
-    rgb = to_float_rgb(torch.from_numpy(mesh_vertices[:, 3:]))
+    rgb = to_float_rgb(torch.from_numpy(mesh_vertices[:, 3:6]))
+    normal = torch.from_numpy(mesh_vertices[:, 6:9])
     y = torch.from_numpy(semantic_labels)
     obj = torch.from_numpy(instance_labels)
 
-    return pos, rgb, y, obj
+    return pos, rgb, normal, y, obj
 
 
 def read_one_test_scan(scannet_dir, scan_name):
     mesh_file = osp.join(scannet_dir, scan_name, scan_name + "_vh_clean_2.ply")
-    mesh_vertices = read_mesh_vertices_rgb(mesh_file)
+    mesh_vertices = read_mesh_vertices(mesh_file, rgb=True, normal=True)
 
     pos = torch.from_numpy(mesh_vertices[:, :3])
-    rgb = to_float_rgb(torch.from_numpy(mesh_vertices[:, 3:]))
+    rgb = to_float_rgb(torch.from_numpy(mesh_vertices[:, 3:6]))
+    normal = torch.from_numpy(mesh_vertices[:, 6:9])
 
-    return pos, rgb
+    return pos, rgb, normal

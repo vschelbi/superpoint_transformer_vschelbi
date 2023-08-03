@@ -84,6 +84,7 @@ pip install hydra-submitit-launcher
 pip install rich
 pip install torch_tb_profiler
 pip install wandb
+pip install open3d
 pip install gdown
 
 #*********************************
