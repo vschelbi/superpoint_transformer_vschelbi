@@ -11,6 +11,10 @@ instance: True
 # 'ceiling', 'wall', and 'floor' should be treated as 'stuff'
 with_stuff: True
 
+# For now, we also need to specify the stuff labels here, not for the
+# datamodule, but rather for the model config to catch
+stuff_classes: [0, 1, 2]
+
 # Instantiation parameters. These are used for instance/panoptic
 # segmentation but will be skipped for semantic segmentation.
 # NB: setting instance_level < 0 will skip OnTheFlyInstanceGraph
