@@ -91,7 +91,7 @@ def read_scannet_scan(
             "'raw_dir/{scans, scans_test}/scan_name' structure, but parent "
             f"directory is {stage_dirname}")
 
-    # Read the scan. Different reading methods for train/val scanes and
+    # Read the scan. Different reading methods for train/val scans and
     # test scans
     if stage_dirname == 'scans':
         pos, color, n, y, obj = read_one_scan(stage_dir, scan_name, label_map_file)
@@ -104,6 +104,12 @@ def read_scannet_scan(
     else:
         pos, color, n = read_one_test_scan(stage_dir, scan_name)
         data = Data(pos=pos, rgb=color, normal=n)
+
+    # Sometimes the returned normals may be 0. Since normals are assumed
+    # to have unit-norm, and to avoid downstream errors, we arbitrarily
+    # choose to set those problematic normals [0, 0, 1]
+    idx = torch.where(n.norm(dim=1) == 0)[0]
+    n[idx] = torch.tensor([0, 0, 1], dtype=torch.float)
 
     # Remove unneeded attributes
     if not xyz:

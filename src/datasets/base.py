@@ -708,7 +708,7 @@ class BaseDataset(InMemoryDataset):
         VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
         while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
 
-        To this end, this function maps all labels outside of
+        To this end, this function maps all labels outside
         `[0, self.num_classes-1]` to `y = self.num_classes`.
 
         Hence, we actually have `self.num_classes + 1` labels in the
