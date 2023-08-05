@@ -607,7 +607,6 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         node_x = nag[1].pos
         node_size = nag.get_sub_size(1)
         node_logits = output.logits[0] if output.multi_stage else output.logits
-        node_is_stuff = get_stuff_mask(node_logits, self.stuff_classes)
         edge_index = nag[1].obj_edge_index
         edge_affinity_logits = output.edge_affinity_logits
 
@@ -618,7 +617,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             batch,
             node_x.detach(),
             node_logits.detach(),
-            node_is_stuff.detach(),
+            self.stuff_classes,
             node_size,
             edge_index,
             edge_affinity_logits.detach())

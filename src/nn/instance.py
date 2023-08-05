@@ -76,7 +76,7 @@ class InstancePartitioner(nn.Module):
             batch,
             node_x,
             node_logits,
-            node_is_stuff,
+            stuff_classes,
             node_size,
             edge_index,
             edge_affinity_logits):
@@ -92,8 +92,10 @@ class InstancePartitioner(nn.Module):
             Predicted node embeddings
         :param node_logits: Tensor of shape [num_nodes, num_classes]
             Predicted classification logits for each node
-        :param node_is_stuff: Boolean Tensor of shape [num_nodes]
-            Boolean mask on the nodes predicted as 'stuff'
+        :param stuff_classes: List or Tensor
+            List of 'stuff' class labels. These are used for merging
+            stuff segments together to ensure there is at most one
+            predicted instance of each 'stuff' class per batch item
         :param node_size: Tensor of shape [num_nodes]
             Size of each node
         :param edge_index: Tensor of shape [2, num_edges]
@@ -109,7 +111,7 @@ class InstancePartitioner(nn.Module):
             batch,
             node_x,
             node_logits,
-            node_is_stuff,
+            stuff_classes,
             node_size,
             edge_index,
             edge_affinity_logits,

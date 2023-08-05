@@ -523,7 +523,7 @@ def instance_cut_pursuit(
         batch,
         node_x,
         node_logits,
-        node_is_stuff,
+        stuff_classes,
         node_size,
         edge_index,
         edge_affinity_logits,
@@ -550,8 +550,10 @@ def instance_cut_pursuit(
         Predicted node embeddings
     :param node_logits: Tensor of shape [num_nodes, num_classes]
         Predicted classification logits for each node
-    :param node_is_stuff: Boolean Tensor of shape [num_nodes]
-        Boolean mask on the nodes predicted as 'stuff'
+    :param stuff_classes: List or Tensor
+        List of 'stuff' class labels. These are used for merging
+        stuff segments together to ensure there is at most one
+        predicted instance of each 'stuff' class per batch item
     :param node_size: Tensor of shape [num_nodes]
         Size of each node
     :param edge_index: Tensor of shape [2, num_edges]
@@ -622,8 +624,14 @@ def instance_cut_pursuit(
     obj_logits = scatter_mean_weighted(node_logits, obj_index, node_size)
     obj_y = obj_logits.argmax(dim=1)
 
+    # Identify, out of the predicted objects, which are of type stuff.
+    # These will need to be merged to ensure there as most one instance
+    # of each stuff class in each scene
+    obj_is_stuff = get_stuff_mask(obj_y, stuff_classes)
+
     # Distribute the object-wise labels to the nodes
     node_obj_y = obj_y[obj_index]
+    node_is_stuff = obj_is_stuff[obj_index]
 
     # Since we only want at most one prediction of each stuff class
     # per batch item (ie per scene), we assign nodes predicted as a
@@ -645,13 +653,15 @@ def instance_cut_pursuit(
 def oracle_superpoint_clustering(
         nag,
         num_classes,
-        thing_classes,
+        stuff_classes,
         level=1,
         k_max=30,
         radius=3,
         adjacency_mode='radius-centroid',
         centroid_mode='iou',
         centroid_level=1,
+        with_offset=False,
+        with_affinity=True,
         smooth_affinity=True,
         loss_type='l2_kl',
         regularization=1e-5,
@@ -690,9 +700,8 @@ def oracle_superpoint_clustering(
     :param num_classes: int
         Number of classes in the dataset, allows differentiating between
         valid and void classes
-    :param thing_classes: List[int]
-        List of labels for 'thing' classes. The remaining labels are
-        either 'stuff' of 'void'
+    :param stuff_classes: List[int]
+        List of labels for 'stuff' classes
     :param level: int
         Level at which to compute the superpoint clustering
     :param k_max:
@@ -700,6 +709,8 @@ def oracle_superpoint_clustering(
     :param adjacency_mode:
     :param centroid_mode:
     :param centroid_level:
+    :param with_offset:
+    :param with_affinity:
     :param smooth_affinity:
     :param loss_type:
     :param regularization:
@@ -729,16 +740,24 @@ def oracle_superpoint_clustering(
     # Prepare input for instance graph partition
     # NB: we assign only to valid classes and ignore void
     node_y = nag[1].y[:, :num_classes].argmax(dim=1)
-    obj_pos = nag[1].obj_pos
     node_logits = one_hot(node_y, num_classes=num_classes).float()
     node_size = nag.get_sub_size(1)
     edge_index = nag[1].obj_edge_index
-    edge_affinity = nag[1].obj_edge_affinity
 
-    # Set node offset to 0 for stuff and void classes
-    thing_classes = torch.tensor(thing_classes, device=nag.device)
-    is_thing = torch.isin(node_y, thing_classes)
-    obj_pos[~is_thing] = nag[1].pos[~is_thing]
+    # Prepare edge weights. If affinities are not used, we set all edge
+    # weights to 0.5
+    edge_affinity = nag[1].obj_edge_affinity if with_affinity \
+        else torch.full(edge_index.shape[1], 0.5, device=nag.device)
+
+    # Prepare node position features. If offsets are used, the oracle
+    # perfectly predicts the offset to the object center for each node,
+    # except for stuff and void classes, whose offset is set to 0
+    if with_offset:
+        node_x = nag[1].obj_pos
+        is_stuff = get_stuff_mask(node_y, stuff_classes)
+        node_x[is_stuff] = nag[1].pos[is_stuff]
+    else:
+        node_x = nag[1].pos
 
     # For each node, recover the index of the batch item it belongs to
     batch = nag[1].batch if nag[1].batch is not None \
@@ -747,9 +766,9 @@ def oracle_superpoint_clustering(
     # Instance graph partition
     obj_index = instance_cut_pursuit(
         batch,
-        obj_pos,
+        node_x,
         node_logits,
-        ~is_thing,
+        stuff_classes,
         node_size,
         edge_index,
         edge_affinity,
