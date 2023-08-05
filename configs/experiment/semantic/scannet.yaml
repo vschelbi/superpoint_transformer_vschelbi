@@ -30,6 +30,7 @@ model:
   net:
     no_ffn: False
     down_ffn_ratio: 1
+    down_num_heads: 32
 
 
 logger:

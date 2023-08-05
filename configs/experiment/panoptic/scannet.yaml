@@ -30,6 +30,7 @@ model:
   net:
     no_ffn: False
     down_ffn_ratio: 1
+    down_num_heads: 32
 
   partitioner:
     loss_type: 'l2_kl'
@@ -37,7 +38,7 @@ model:
     x_weight: 0.05
     p_weight: 1
 
-  partition_every_n_epochs: 10
+  partition_every_n_epochs: 5
 
 logger:
   wandb:
@@ -49,7 +50,7 @@ optimized_metric: "val/pq"
 
 callbacks:
   model_checkpoint:
-    every_n_epochs:  ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
+    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
 
   early_stopping:
     strict: False

@@ -45,7 +45,7 @@ optimized_metric: "val/pq"
 
 callbacks:
   model_checkpoint:
-    every_n_epochs:  ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
+    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
 
   early_stopping:
     strict: False
