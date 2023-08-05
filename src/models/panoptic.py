@@ -134,7 +134,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         performance comparison of partition settings.
         """
         return self.has_instance_pred \
-               and not isinstance(self.obj_index_pred, list)
+               and not isinstance(self.obj_index_pred, torch.Tensor)
 
     @property
     def num_edges(self):
@@ -928,8 +928,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             if self.needs_instance:
                 self.train_instance.update(obj_score, obj_y, instance_data.cpu())
         elif self.needs_partition:
+            logits = output.logits[0] if output.multi_stage else output.logits
             storage = PartitionParameterSearchStorage(
-                    output.logits.detach().cpu(),
+                    logits.detach().cpu(),
                     self.stuff_classes,
                     output.node_size.detach().cpu(),
                     output.edge_affinity_logits.detach().cpu(),
