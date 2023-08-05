@@ -34,9 +34,14 @@ partitioner:
 # to 0, the partition will only be computed at the last training epoch
 partition_every_n_epochs: 50
 
+# If True, the instance metrics will never be computed. If only panoptic
+# metrics are of interest, this can save considerable training and
+# evaluation time, as instance metrics computation is relatively slow
+no_instance_metrics: True
+
 # If True, the instance segmentation metrics will not be computed on the
 # train set. This allows saving some computation and training time
-no_instance_on_train_set: True
+no_instance_metrics_on_train_set: True
 
 # Edge affinity loss
 edge_affinity_criterion:

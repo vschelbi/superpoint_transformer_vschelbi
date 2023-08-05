@@ -558,7 +558,7 @@ class BaseDataset(InMemoryDataset):
             warnings.warn(
                 "The `pre_filter` argument differs from the one used in "
                 "the pre-processed version of this dataset. If you want to "
-                "make use of another pre-fitering technique, make sure to "
+                "make use of another pre-filtering technique, make sure to "
                 "delete '{self.processed_dir}' first")
 
         if files_exist(self.processed_paths):  # pragma: no cover

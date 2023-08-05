@@ -1,8 +1,7 @@
-import torch
 from torch import nn
+from copy import copy
+from itertools import product
 from src.utils.instance import instance_cut_pursuit
-from src.utils.scatter import scatter_mean_weighted
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 __all__ = ['InstancePartitioner']
@@ -90,7 +89,8 @@ class InstancePartitioner(nn.Module):
             stuff_classes,
             node_size,
             edge_index,
-            edge_affinity_logits):
+            edge_affinity_logits,
+            grid=None):
         """The forward step will compute the partition on the instance
         graph, based on the node features, node logits, and edge
         affinities. The partition segments will then be further merged
@@ -114,10 +114,30 @@ class InstancePartitioner(nn.Module):
         :param edge_affinity_logits: Tensor of shape [num_edges]
             Predicted affinity logits (ie in R+, before sigmoid) of each
             edge
+        :param grid: Dict
+            A dictionary containing settings for grid-searching optimal
+            partition parameters
 
-        :return: obj_index: Tensor of shape [num_nodes]
-            Indicates which predicted instance each node belongs to
+        :return: obj_index: Tensor of shape [num_nodes] (or List(Dict, Tensor))
+            Indicates which predicted instance each node belongs to. If
+            a grid is passed as input, a list containing partition
+            settings and partition index tensors will be returned
         """
+        # If grid is passed, multiple partition will be computed on the
+        # parameter grid
+        if grid is not None and len(grid) > 0:
+            return self._grid_forward(
+                batch,
+                node_x,
+                node_logits,
+                stuff_classes,
+                node_size,
+                edge_index,
+                edge_affinity_logits,
+                grid)
+
+        # If not grid searching optimal partition parameters, simply run
+        # the partition with the current parameters
         return instance_cut_pursuit(
             batch,
             node_x,
@@ -138,6 +158,62 @@ class InstancePartitioner(nn.Module):
             discrepancy_epsilon=self.discrepancy_epsilon,
             temperature=self.temperature,
             dampening=self.dampening)
+
+    def _grid_forward(
+            self,
+            batch,
+            node_x,
+            node_logits,
+            stuff_classes,
+            node_size,
+            edge_index,
+            edge_affinity_logits,
+            grid):
+        """Run multiple forward calls for grid-searching optimal
+        settings.
+        """
+        # If a grid dictionary was passed, make sure all keys in the
+        # grid are supported attributes
+        keys = list(grid.keys())
+        for k in keys:
+            if k not in self.__dict__:
+                raise ValueError(
+                    f"'{k}' is not {self.__class__.__name__} attribute")
+
+        # Backup the current attributes
+        attr_bckp = copy(self.__dict__)
+
+        # Compute the grid search on the Cartesian product of the sets
+        # of explored values
+        grid_outputs = []
+        for values in product(*grid.values()):
+
+            # Update self attributes with grid values
+            for k, v in zip(keys, values):
+                setattr(self, k, v)
+
+            # Compute the partition
+            obj_index = self.forward(
+                batch,
+                node_x,
+                node_logits,
+                stuff_classes,
+                node_size,
+                edge_index,
+                edge_affinity_logits,
+                grid=None)
+
+            # Store the partition index for the current settings. The
+            # results are stored in a tuple whose first element is a
+            # dictionary of settings for self, and the second is the
+            # output partition index
+            grid_outputs.append({k: v for k, v in zip(keys, values)}, obj_index)
+
+        # Restore the initial attributes
+        for k, v in attr_bckp.items():
+            setattr(self, k, v)
+
+        return grid_outputs
 
     def extra_repr(self) -> str:
         keys = [

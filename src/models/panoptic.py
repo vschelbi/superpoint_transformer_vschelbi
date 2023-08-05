@@ -1,16 +1,16 @@
 import torch
 import logging
 from torch_scatter import scatter_mean
-from torchmetrics import MinMetric, MaxMetric, MeanMetric
+from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.data import InstanceData
-from src.utils import init_weights, get_stuff_mask, scatter_mean_weighted
+from src.utils import init_weights, scatter_mean_weighted
 from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
-    WeightedL2Error, WeightedL1Error, L2Error, L1Error, ConfusionMatrix
+    ConfusionMatrix
 from src.models.semantic import SemanticSegmentationOutput, \
     SemanticSegmentationModule
-from src.loss import WeightedL2Loss, BCEWithLogitsLoss
+from src.loss import BCEWithLogitsLoss
 from src.nn import FFN
 
 log = logging.getLogger(__name__)
@@ -76,8 +76,16 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         assert self.node_size.shape[0] == self.num_nodes
 
         if self.has_instance_pred:
-            assert self.obj_index_pred.dim() == 1
-            assert self.obj_index_pred.shape[0] == self.num_nodes
+            if not self.has_multi_instance_pred:
+                assert self.obj_index_pred.dim() == 1
+                assert self.obj_index_pred.shape[0] == self.num_nodes
+            else:
+                assert isinstance(self.obj_index_pred, list)
+                item = self.obj_index_pred[0]
+                assert isinstance(item[0], dict)
+                assert isinstance(item[1], torch.Tensor)
+                assert item[1].dim() == 1
+                assert item[1].shape[0] == self.num_nodes
 
         # Instance targets
         items = [
@@ -118,6 +126,15 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         segmentation `obj_index_pred`.
         """
         return self.obj_index_pred is not None
+
+    @property
+    def has_multi_instance_pred(self):
+        """Check whether `self` contains predicted data for panoptic
+        segmentation `obj_index_pred` as a list of results for
+        performance comparison of partition settings.
+        """
+        return self.has_instance_pred \
+               and not isinstance(self.obj_index_pred, list)
 
     @property
     def num_edges(self):
@@ -212,8 +229,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         idx = torch.where(~self.void_edge_mask)[0]
         return self.edge_affinity_logits[idx], self.obj_edge_affinity[idx]
 
-    @property
-    def instance_predictions(self):
+    def get_instance_predictions(self):
         """Return the predicted InstanceData, and the predicted instance
         semantic label and score.
         """
@@ -275,6 +291,74 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         return obj_score, obj_y, instance_data
 
 
+class PartitionParameterSearchStorage:
+    """A class to hold the output results of multiple partitions, when
+    searching for the optimal partition parameter settings. Since
+    metrics are only computed at the end of an epoch, we cannot compute
+    the optimal parameter settings at each batch. On the other hand, we
+    cannot store the whole content of the `PanopticSegmentationOutput`
+    of each batch. This holder is used to store the strict necessary
+    from the `PanopticSegmentationOutput` of each batch, to be able to
+    call `PanopticSegmentationOutput.get_instance_predictions()` at
+    the end of an epoch and pass its output to an instance or panoptic
+    segmentation metric object.
+
+    NB: make sure the input is detached and on CPU, you do not want to
+    blow up your GPU memory. Still, for very large datasets, this
+    approach will be RAM-hungry. If this causes CPU memory errors, you
+    will need to save your predicted data in temp files on disk.
+    """
+    def __init__(
+            self,
+            logits,
+            stuff_classes,
+            node_size,
+            edge_affinity_logits,
+            obj,
+            obj_index_pred):
+        self.stuff_classes = stuff_classes
+        self.logits = logits
+        self.node_size = node_size
+        self.edge_affinity_logits = edge_affinity_logits
+        self.obj = obj
+        self.obj_index_pred = obj_index_pred
+
+    @property
+    def settings(self):
+        """This assumes all items in `self.obj_index_pred` follow the
+        output format of `InstancePartitioner._grid_forward()`.
+        """
+        return [v[0] for v in self.obj_index_pred]
+
+    @property
+    def num_settings(self):
+        """This assumes all items in `self.obj_index_pred` follow the
+        output format of `InstancePartitioner._grid_forward()`.
+        """
+        return len(self.settings)
+
+    def get_instance_predictions(self, setting):
+        """Return the predicted InstanceData, and the predicted instance
+        semantic label and score, for a given batch item and a given
+        partition setting.
+        """
+        # Recover the index of the setting in the stored results
+        i_setting = self.settings.index(setting) \
+            if not isinstance(setting, int) else setting
+
+        # Recover the batch's partition results
+        output = PanopticSegmentationOutput(
+            self.logits,
+            self.stuff_classes,
+            self.edge_affinity_logits,
+            self.node_size,
+            obj=self.obj,
+            obj_index_pred=self.obj_index_pred[i_setting][1])
+
+        # Compute inputs for an instance or panoptic segmentation metric
+        return output.get_instance_predictions()
+
+
 class PanopticSegmentationModule(SemanticSegmentationModule):
     """A LightningModule for panoptic segmentation of point clouds.
     """
@@ -310,7 +394,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             gc_every_n_steps=0,
             min_instance_size=100,
             partition_every_n_epochs=50,
-            no_instance_on_train_set=True,
+            no_instance_metrics=True,
+            no_instance_metrics_on_train_set=True,
             **kwargs):
         super().__init__(
             net,
@@ -339,7 +424,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # grid-search on a small range of parameters and needs to be
         # called at least once at the very end of training
         self.partition_every_n_epochs = partition_every_n_epochs
-        self.no_instance_on_train_set = no_instance_on_train_set
+        self.no_instance_metrics = no_instance_metrics
+        self.no_instance_metrics_on_train_set = no_instance_metrics_on_train_set
         self.partitioner = partitioner
 
         # Store the stuff class indices
@@ -417,6 +503,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             compute_on_cpu=True,
             remove_void=True,
             **kwargs)
+
+        # Storage to accumulate multiple batch partition predictions, to
+        # be used when searching for the best partition setting
+        self.train_multi_partition_storage = []
 
         # Metric objects for calculating node offset prediction scores
         # on each dataset split
@@ -524,17 +614,21 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         """Returns True if the instance segmentation metrics need to be
         computed. In particular, since computing instance metrics can be
         computationally costly, we may want to skip it during training
-        by setting `no_instance_on_train_set=True`
+        by setting `no_instance_metrics_on_train_set=True`, or all the
+        time by setting `no_instance_metrics=True`.
         """
+        if self.no_instance_metrics:
+            return False
+
         if self._trainer is None:
             return self.needs_partition
 
-        if self.trainer.training and self.no_instance_on_train_set:
+        if self.trainer.training and self.no_instance_metrics_on_train_set:
             return False
 
         return self.needs_partition
 
-    def forward(self, nag) -> PanopticSegmentationOutput:
+    def forward(self, nag, grid=None) -> PanopticSegmentationOutput:
         # Extract features
         x = self.net(nag)
 
@@ -578,11 +672,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             nag.get_sub_size(1))
 
         # Compute the panoptic partition
-        output = self._forward_partition(nag, output)
+        output = self._forward_partition(nag, output, grid=grid)
 
         return output
 
-    def _forward_partition(self, nag, output) -> PanopticSegmentationOutput:
+    def _forward_partition(self, nag, output, grid=None) -> PanopticSegmentationOutput:
         """Compute the panoptic partition based on the predicted node
         offsets, node semantic logits, and edge affinity logits.
 
@@ -594,6 +688,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         :param nag: NAG object
         :param output: PanopticSegmentationOutput
+        :param grid: Dict
+            A dictionary containing settings for grid-searching optimal
+            partition parameters
 
         :return: output
         """
@@ -620,7 +717,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.stuff_classes,
             node_size,
             edge_index,
-            edge_affinity_logits.detach())
+            edge_affinity_logits.detach(),
+            grid=grid)
 
         # Store the results in the output object
         output.obj_index_pred = obj_index
@@ -669,6 +767,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.val_offset_l1_best.reset()
         self.val_affinity_oa_best.reset()
         self.val_affinity_f1_best.reset()
+        self.train_multi_partition_storage = []
 
     def _create_empty_output(self, nag):
         """Local helper method to initialize an empty output for
@@ -819,8 +918,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         super().train_step_update_metrics(loss, output)
 
         # Update instance and panoptic metrics
-        if self.needs_partition:
-            obj_score, obj_y, instance_data = output.instance_predictions
+        if self.needs_partition and not output.has_multi_instance_pred:
+            obj_score, obj_y, instance_data = output.get_instance_predictions()
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
@@ -828,6 +927,15 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.train_semantic(obj_y, obj_hist)
             if self.needs_instance:
                 self.train_instance.update(obj_score, obj_y, instance_data.cpu())
+        elif self.needs_partition:
+            storage = PartitionParameterSearchStorage(
+                    output.logits.detach().cpu(),
+                    self.stuff_classes,
+                    output.node_size.detach().cpu(),
+                    output.edge_affinity_logits.detach().cpu(),
+                    output.obj.cpu(),
+                    [(v[0], v[1].detach().cpu()) for v in output.obj_index_pred])
+            self.train_multi_partition_storage.append(storage)
 
         # Update tracked losses
         self.train_semantic_loss(output.semantic_loss.detach())
@@ -871,6 +979,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         super().on_train_epoch_end()
 
         if self.needs_partition:
+            # If multiple partitions settings were tested during the
+            # epoch, this will search for the best one, update the
+            # internal states of train metrics with related predictions,
+            # and update the partitioner's settings
+            setting = self._compute_best_partition_settings()[0]
+
             # Compute the instance and panoptic metrics
             panoptic_results = self.train_panoptic.compute()
             if self.needs_instance:
@@ -916,6 +1030,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             if self.needs_instance:
                 for map_c, name in zip(map_per_class, self.class_names):
                     self.log(f"train/map_{name}", map_c, prog_bar=True)
+            if setting is not None:
+                for k, v in setting.items():
+                    self.log(f"partition_settings/{k}", v, prog_bar=True)
 
         # Log metrics
         # self.log("train/offset_wl2", self.train_offset_wl2.compute(), prog_bar=True)
@@ -936,6 +1053,103 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         self.train_semantic.reset()
         self.train_instance.reset()
 
+    def _compute_best_partition_settings(self, monitor='pq', maximize=True):
+        """Compute the best partition settings from
+        `self.train_multi_partition_storage`. This will have the
+        following internal effects:
+          - `self.partitioner` will be updated with the settings which
+            produced the best metrics on the epoch
+          - `self.train_panoptic` will be updated with the batch
+            predictions with the best settings
+          - `self.train_instance` will be updated with the batch
+            predictions with the best settings, if required
+
+        :param monitor: str
+            The metric based on which we will select the best settings
+        :param maximize: bool
+            Whether the monitored metric should be maximized or
+            minimized
+        :return:
+        """
+        # Nothing happens if multi-partition was not activated during
+        # the epoch
+        if len(self.train_multi_partition_storage) == 0:
+            return None, None
+
+        # Reset the instance and panoptic metrics, these will be used to
+        # compute metric performance
+        self.train_panoptic.reset()
+        self.train_instance.reset()
+
+        # Check whether the metric to monitor is for the semantic or
+        # panoptic segmentation task
+        if monitor in self.train_panoptic.__slots__:
+            task = 'panoptic'
+            meter = self.train_panoptic
+        elif monitor in self.train_instance.__slots__:
+            task = 'instance'
+            meter = self.train_instance
+        else:
+            raise ValueError(f"Unknown metric, cannot monitor '{monitor}'.")
+        if task == 'instance' and not self.needs_instance:
+            raise ValueError(
+                'Cannot compute the best partition settings on the train set '
+                'based on instance metrics if `self.needs_instance` is False')
+
+        # Recover from the first PartitionParameterSearchStorage, which
+        # settings were explored
+        settings = self.train_multi_partition_storage[0].settings
+
+        # Compute the metric for each partition setting while tracking
+        # the best setting
+        best_metric = -torch.inf if maximize else torch.inf
+        best_setting = None
+        for s in settings:
+
+            # Accumulate batch predictions in the meter
+            for storage in self.train_multi_partition_storage:
+                obj_score, obj_y, instance_data = \
+                    storage.get_instance_predictions(s)
+                if task == 'panoptic':
+                    meter.update(obj_y, instance_data)
+                else:
+                    meter.update(obj_score, obj_y, instance_data)
+
+            # Compute the monitored metric on the whole epoch
+            metric = getattr(meter.compute(), monitor)
+
+            # Update the best metric and settings
+            condition = (metric > best_metric) if maximize \
+                else (metric < best_setting)
+            if condition:
+                best_metric = metric
+                best_setting = s
+
+            # Reset the meter to avoid mixing predictions of different
+            # settings
+            meter.reset()
+
+        # Update the partitioner with the best metrics
+        for k, v in best_setting.items():
+            setattr(self.partitioner, k, v)
+
+        # Update the train meters with the data for computation of
+        # logged metrics with the accumulated data from the best
+        # setting, thus mimicking a normal epoch with a single partition
+        # prediction per batch
+        for storage in self.train_multi_partition_storage:
+            obj_score, obj_y, instance_data = \
+                storage.get_instance_predictions(best_setting)
+            obj_hist = instance_data.target_label_histogram(self.num_classes)
+            self.train_panoptic.update(obj_y, instance_data)
+            self.train_semantic(
+                obj_y.to(self.train_semantic.device),
+                obj_hist.to(self.train_semantic.device))
+            if self.needs_instance:
+                self.train_instance.update(obj_score, obj_y, instance_data)
+
+        return best_setting, best_metric
+
     def validation_step_update_metrics(self, loss, output):
         """Update validation metrics with the content of the output
         object.
@@ -945,7 +1159,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update instance and panoptic metrics
         if self.needs_partition:
-            obj_score, obj_y, instance_data = output.instance_predictions
+            obj_score, obj_y, instance_data = output.get_instance_predictions()
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
@@ -1117,15 +1331,17 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
     def test_step_update_metrics(self, loss, output):
         """Update test metrics with the content of the output object.
         """
-        if not output.has_target:
-            return
-
         # Update semantic segmentation metrics
         super().test_step_update_metrics(loss, output)
 
+        # If the test set misses targets, we keep track of it, to skip
+        # metrics computation on the test set
+        if not self.test_has_target:
+            return
+
         # Update instance and panoptic metrics
         if self.needs_partition:
-            obj_score, obj_y, instance_data = output.instance_predictions
+            obj_score, obj_y, instance_data = output.get_instance_predictions()
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
@@ -1161,6 +1377,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         output object.
         """
         super().test_step_log_metrics()
+
+        # If the test set misses targets, we keep track of it, to skip
+        # metrics computation on the test set
+        if not self.test_has_target:
+            return
+
         self.log(
             "test/semantic_loss", self.test_semantic_loss, on_step=False,
             on_epoch=True, prog_bar=True)
@@ -1174,6 +1396,19 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
     def on_test_epoch_end(self):
         # Log semantic segmentation metrics and reset confusion matrix
         super().on_test_epoch_end()
+
+        # If test set misses target data, reset metrics and skip logging
+        if not self.test_has_target:
+            # self.test_offset_wl2.reset()
+            # self.test_offset_wl1.reset()
+            # self.test_offset_l2.reset()
+            # self.test_offset_l1.reset()
+            self.test_affinity_oa.reset()
+            self.test_affinity_f1.reset()
+            self.test_panoptic.reset()
+            self.test_semantic.reset()
+            self.test_instance.reset()
+            return
 
         if self.needs_partition:
             # Compute the instance and panoptic metrics

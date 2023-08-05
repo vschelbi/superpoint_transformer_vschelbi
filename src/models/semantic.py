@@ -211,6 +211,12 @@ class SemanticSegmentationModule(LightningModule):
         self.val_oa_best = MaxMetric()
         self.val_macc_best = MaxMetric()
 
+        # For tracking whether the test set has target labels. By
+        # default, we assume the test set to have labels. But if a
+        # single test batch misses labels, this will be set to False and
+        # all test metrics computation will be skipped
+        self.test_has_target = True
+
         # Explicitly call the garbage collector after a certain number
         # of steps
         self.gc_every_n_steps = int(gc_every_n_steps)
@@ -290,7 +296,7 @@ class SemanticSegmentationModule(LightningModule):
             if isinstance(batch, NAG) \
             else self.step_multi_run_inference(*batch)
 
-        # If the input batch does not have any labels (e.g. test set with
+        # If the input batch does not have labels (e.g. test set with
         # held-out labels), y_hist will be None and the loss will not be
         # computed
         if not output.has_target:
@@ -671,6 +677,11 @@ class SemanticSegmentationModule(LightningModule):
         # 0 and do not update the confusion matrix
         loss = 0 if loss is None else loss
 
+        # If the test set misses targets, we keep track of it, to skip
+        # metrics computation on the test set
+        if not output.has_target:
+            self.test_has_target = False
+
         # Update and log metrics
         self.test_step_update_metrics(loss, output)
         self.test_step_log_metrics()
@@ -689,8 +700,11 @@ class SemanticSegmentationModule(LightningModule):
     def test_step_update_metrics(self, loss, output):
         """Update test metrics with the content of the output object.
         """
-        if not output.has_target:
+        # If the test set misses targets, we keep track of it, to skip
+        # metrics computation on the test set
+        if not self.test_has_target:
             return
+
         self.test_loss(loss.detach())
         self.test_cm(output.preds.detach(), output.targets.detach())
 
@@ -698,11 +712,26 @@ class SemanticSegmentationModule(LightningModule):
         """Log test metrics after a single step with the content of the
         output object.
         """
+        # If the test set misses targets, we keep track of it, to skip
+        # metrics computation on the test set
+        if not self.test_has_target:
+            return
+
         self.log(
             "test/loss", self.test_loss, on_step=False, on_epoch=True,
             prog_bar=True)
 
     def on_test_epoch_end(self):
+        # Finalize the submission
+        if self.trainer.datamodule.hparams.submit:
+            self.trainer.datamodule.test_dataset.finalize_submission(
+                self.submission_dir)
+
+        # If test set misses target data, reset metrics and skip logging
+        if not self.test_has_target:
+            self.test_cm.reset()
+            return
+
         # Log metrics
         self.log("test/miou", self.test_cm.miou(), prog_bar=True)
         self.log("test/oa", self.test_cm.oa(), prog_bar=True)
@@ -716,11 +745,6 @@ class SemanticSegmentationModule(LightningModule):
             self.logger.experiment.log({
                 "test/cm": wandb_confusion_matrix(
                     self.test_cm.confmat, class_names=self.class_names)})
-
-        # Finalize the submission
-        if self.trainer.datamodule.hparams.submit:
-            self.trainer.datamodule.test_dataset.finalize_submission(
-                self.submission_dir)
 
         # Reset metrics accumulated over the last epoch
         self.test_cm.reset()
