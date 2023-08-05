@@ -27,6 +27,8 @@ partitioner:
   iterations: 10
   trim: False
   discrepancy_epsilon: 1e-4
+  temperature: 1
+  dampening: 0
 
 # Frequency at which the partition should be computed. If lower or equal
 # to 0, the partition will only be computed at the last training epoch

@@ -341,6 +341,8 @@ def _instance_cut_pursuit(
         iterations=10,
         trim=False,
         discrepancy_epsilon=1e-3,
+        temperature=1,
+        dampening=0,
         verbose=False):
     """Partition an instance graph using cut-pursuit.
 
@@ -362,18 +364,18 @@ def _instance_cut_pursuit(
         discrepancies
     :param loss_type: str
         Rules the loss applied on the node features. Accepts one of
-        'l2' (L2 loss on node features and probas),
+        'l2' (L2 loss on node features and probabilities),
         'l2_kl' (L2 loss on node features and Kullback-Leibler
-        divergence on node probas)
+        divergence on node probabilities)
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
-        Weight used to mitigate the impact of the point features in the
+        Weight used to mitigate the impact of the node features in the
         partition. The larger, the lesser features importance before
-        the probas
+        the probabilities
     :param p_weight: float
-        Weight used to mitigate the impact of the point probas in the
-        partition. The larger, the lesser features importance before
+        Weight used to mitigate the impact of the node probabilities in
+        the partition. The larger, the lesser features importance before
         the features
     :param cutoff: float
         Minimum number of points in each cluster
@@ -386,7 +388,14 @@ def _instance_cut_pursuit(
         documentation for more details on this operation
     :param discrepancy_epsilon: float
         Mitigates the maximum discrepancy. More precisely:
-        `affinity=0 ⇒ discrepancy=discrepancy_epsilon`
+        `affinity=1 ⇒ discrepancy=1/discrepancy_epsilon`
+    :param temperature: float
+        Temperature used in the softmax when converting node logits to
+        probabilities
+    :param dampening: float
+        Dampening applied to the node probabilities to mitigate the
+        impact of near-zero probabilities in the Kullback-Leibler
+        divergence
     :param verbose: bool
     :return:
     """
@@ -413,6 +422,10 @@ def _instance_cut_pursuit(
     loss_type = loss_type.lower()
     assert loss_type in ['l2', 'l2_kl'], \
         "`loss_type` must be one of ['l2', 'l2_kl']"
+    assert 0 < discrepancy_epsilon, \
+        "`discrepancy_epsilon` must be strictly positive"
+    assert 0 < temperature, "`temperature` must be strictly positive"
+    assert 0 <= dampening <= 1, "`dampening` must be in [0, 1]"
 
     device = node_x.device
     num_nodes = node_x.shape[0]
@@ -464,7 +477,14 @@ def _instance_cut_pursuit(
         if edge_discrepancy is not None else regularization
 
     # Convert logits to class probabilities
-    node_probas = torch.nn.functional.softmax(node_logits, dim=1)
+    node_probas = torch.nn.functional.softmax(node_logits / temperature, dim=1)
+
+    # Apply some dampening to the probability distributions. This brings
+    # the distributions closer to a uniform distribution, limiting the
+    # impact of near-zero probabilities in the Kullback-Leibler
+    # divergence in the partition
+    num_classes = node_probas.shape[1]
+    node_probas = dampening * node_probas + (1 - dampening) / num_classes
 
     # Mean-center the node features, in case values have a very large
     # mean. This is optional, but favors maintaining values in a
@@ -482,7 +502,7 @@ def _instance_cut_pursuit(
     # divergence
     l2_dim = dim if loss_type == 'l2' else x_dim
 
-    # Weighting to apply on the features and probas
+    # Weighting to apply on the features and probabilities
     coor_weights_dim = dim if loss_type == 'l2' else x_dim + 1
     coor_weights = np.ones(coor_weights_dim, dtype=np.float32)
     coor_weights[:x_dim] *= x_weight
@@ -537,6 +557,8 @@ def instance_cut_pursuit(
         iterations=10,
         trim=False,
         discrepancy_epsilon=1e-3,
+        temperature=1,
+        dampening=0,
         verbose=False):
     """The forward step will compute the partition on the instance
     graph, based on the node features, node logits, and edge
@@ -568,18 +590,18 @@ def instance_cut_pursuit(
         discrepancies
     :param loss_type: str
         Rules the loss applied on the node features. Accepts one of
-        'l2' (L2 loss on node features and probas),
+        'l2' (L2 loss on node features and probabilities),
         'l2_kl' (L2 loss on node features and Kullback-Leibler
-        divergence on node probas)
+        divergence on node probabilities)
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
-        Weight used to mitigate the impact of the point features in the
+        Weight used to mitigate the impact of the node features in the
         partition. The larger, the lesser features importance before
-        the probas
+        the probabilities
     :param p_weight: float
-        Weight used to mitigate the impact of the point probas in the
-        partition. The larger, the lesser features importance before
+        Weight used to mitigate the impact of the node probabilities in
+        the partition. The larger, the lesser features importance before
         the features
     :param cutoff: float
         Minimum number of points in each cluster
@@ -592,7 +614,14 @@ def instance_cut_pursuit(
         documentation for more details on this operation
     :param discrepancy_epsilon: float
         Mitigates the maximum discrepancy. More precisely:
-        `affinity=0 ⇒ discrepancy=discrepancy_epsilon`
+        `affinity=1 ⇒ discrepancy=1/discrepancy_epsilon`
+    :param temperature: float
+        Temperature used in the softmax when converting node logits to
+        probabilities
+    :param dampening: float
+        Dampening applied to the node probabilities to mitigate the
+        impact of near-zero probabilities in the Kullback-Leibler
+        divergence
     :param verbose: bool
 
     :return: obj_index: Tensor of shape [num_nodes]
@@ -617,6 +646,8 @@ def instance_cut_pursuit(
         iterations=iterations,
         trim=trim,
         discrepancy_epsilon=discrepancy_epsilon,
+        temperature=temperature,
+        dampening=dampening,
         verbose=verbose)
 
     # Compute the mean logits for each predicted object, weighted by
@@ -671,8 +702,9 @@ def oracle_superpoint_clustering(
         parallel=True,
         iterations=10,
         trim=False,
-        discrepancy_epsilon=1e-1
-):
+        discrepancy_epsilon=1e-1,
+        temperature=1,
+        dampening=0):
     """Compute an oracle for superpoint clustering for instance and
     panoptic segmentation. This is a proxy for the highest achievable
     graph clustering performance with the superpoint partition at hand
@@ -721,6 +753,8 @@ def oracle_superpoint_clustering(
     :param iterations:
     :param trim:
     :param discrepancy_epsilon:
+    :param temperature:
+    :param dampening:
     :return:
     """
     # Local imports to avoid import loop errors
@@ -739,8 +773,10 @@ def oracle_superpoint_clustering(
 
     # Prepare input for instance graph partition
     # NB: we assign only to valid classes and ignore void
+    # NB2: `instance_cut_pursuit()` expects logits, which it converts to
+    # probabilities using a softmax, hence the `one_hot * 10`
     node_y = nag[1].y[:, :num_classes].argmax(dim=1)
-    node_logits = one_hot(node_y, num_classes=num_classes).float()
+    node_logits = one_hot(node_y, num_classes=num_classes).float() * 10
     node_size = nag.get_sub_size(1)
     edge_index = nag[1].obj_edge_index
 
@@ -781,7 +817,9 @@ def oracle_superpoint_clustering(
         parallel=parallel,
         iterations=iterations,
         trim=trim,
-        discrepancy_epsilon=discrepancy_epsilon)
+        discrepancy_epsilon=discrepancy_epsilon,
+        temperature=temperature,
+        dampening=dampening)
 
     # Compute the instance data by merging nodes based on obj_index
     instance_data = nag[1].obj.merge(obj_index)
@@ -791,8 +829,8 @@ def oracle_superpoint_clustering(
 
 def get_stuff_mask(y, stuff_classes):
     """Helper function producing a boolean mask of size `y.shape[0]`
-    indicating which of the `y` (labels if 1D or logits/probas if 2D)
-    are among the `stuff_classes`.
+    indicating which of the `y` (labels if 1D or logits/probabilities if
+    2D) are among the `stuff_classes`.
     """
     # Get labels from y, in case y are logits
     labels = y.long() if y.dim() == 1 else y.argmax(dim=1)

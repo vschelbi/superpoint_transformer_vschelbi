@@ -23,17 +23,17 @@ class InstancePartitioner(nn.Module):
 
     :param loss_type: str
         Rules the loss applied on the node features. Accepts one of
-        'l2' (L2 loss on node features and probas),
+        'l2' (L2 loss on node features and probabilities),
         'l2_kl' (L2 loss on node features and Kullback-Leibler
-        divergence on node probas)
+        divergence on node probabilities)
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
-        Weight used to mitigate the impact of the point position in the
+        Weight used to mitigate the impact of the node position in the
         partition. The larger, the less spatial coordinates matter
     :param p_weight: float
-        Weight used to mitigate the impact of the point probas in the
-        partition. The larger, the greater the impact
+        Weight used to mitigate the impact of the node probabilities in
+        the partition. The larger, the greater the impact
     :param cutoff: float
         Minimum number of points in each cluster
     :param parallel: bool
@@ -45,7 +45,14 @@ class InstancePartitioner(nn.Module):
         documentation for more details on this operation
     :param discrepancy_epsilon: float
         Mitigates the maximum discrepancy. More precisely:
-        `affinity=0 ⇒ discrepancy=discrepancy_epsilon`
+        `affinity=1 ⇒ discrepancy=1/discrepancy_epsilon`
+    :param temperature: float
+        Temperature used in the softmax when converting node logits to
+        probabilities
+    :param dampening: float
+        Dampening applied to the node probabilities to mitigate the
+        impact of near-zero probabilities in the Kullback-Leibler
+        divergence
     :return:
     """
 
@@ -59,7 +66,9 @@ class InstancePartitioner(nn.Module):
             parallel=True,
             iterations=10,
             trim=False,
-            discrepancy_epsilon=1e-3):
+            discrepancy_epsilon=1e-3,
+            temperature=1,
+            dampening=0):
         super().__init__()
         self.loss_type = loss_type
         self.regularization = regularization
@@ -70,6 +79,8 @@ class InstancePartitioner(nn.Module):
         self.iterations = iterations
         self.trim = trim
         self.discrepancy_epsilon = discrepancy_epsilon
+        self.temperature = temperature
+        self.dampening = dampening
 
     def forward(
             self,
@@ -124,7 +135,9 @@ class InstancePartitioner(nn.Module):
             parallel=self.parallel,
             iterations=self.iterations,
             trim=self.trim,
-            discrepancy_epsilon=self.discrepancy_epsilon)
+            discrepancy_epsilon=self.discrepancy_epsilon,
+            temperature=self.temperature,
+            dampening=self.dampening)
 
     def extra_repr(self) -> str:
         keys = [
