@@ -484,7 +484,7 @@ def _instance_cut_pursuit(
     # impact of near-zero probabilities in the Kullback-Leibler
     # divergence in the partition
     num_classes = node_probas.shape[1]
-    node_probas = dampening * node_probas + (1 - dampening) / num_classes
+    node_probas = (1 - dampening) * node_probas + dampening / num_classes
 
     # Mean-center the node features, in case values have a very large
     # mean. This is optional, but favors maintaining values in a
