@@ -50,14 +50,14 @@ logger:
     name: "SPT-64"
 
 # metric based on which models will be selected
-optimized_metric: "val/pq"
+#optimized_metric: "val/pq"
 
 callbacks:
-  model_checkpoint:
-    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
-
-  early_stopping:
-    strict: False
+#  model_checkpoint:
+#    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
+#
+#  early_stopping:
+#    strict: False
 
   gradient_accumulator:
     scheduling:
