@@ -13,4 +13,3 @@ segment_mean_hf:
   - 'verticality'
   - 'elevation'
   - 'rgb'
-  - 'normal'

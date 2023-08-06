@@ -33,7 +33,6 @@ point_hf:
   - 'verticality'
   - 'elevation'
   - 'rgb'
-  - 'normal'
 
 # segment-wise features computed at preprocessing
 segment_base_hf: []
