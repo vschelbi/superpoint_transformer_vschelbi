@@ -13,7 +13,7 @@ instance: True
 instance_level: 1
 instance_adjacency_mode: 'radius'
 instance_k_max: 30
-instance_radius: 3
+instance_radius: 10
 instance_centroid_mode: 'iou'
 instance_centroid_level: 1
 instance_smooth_affinity: True
