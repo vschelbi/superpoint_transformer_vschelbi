@@ -308,6 +308,7 @@ def visualize_3d(
     maxi = data_0.pos.max(dim=0).values
     colors = (data_0.pos - mini) / (maxi - mini + 1e-6)
     colors = rgb_to_plotly_rgb(colors)
+    data_0.pos_colors = colors
 
     fig.add_trace(
         go.Scatter3d(
@@ -350,6 +351,7 @@ def visualize_3d(
     if data_0.rgb is not None:
         colors = data_0.rgb
         colors = rgb_to_plotly_rgb(colors)
+        data_0.rgb_colors = colors
         trace_modes[i_point_trace]['RGB'] = {
             'marker.color': colors[data_0.selected], 'hovertext': None}
         trace_modes[i_unselected_point_trace]['RGB'] = {
@@ -362,6 +364,7 @@ def visualize_3d(
         y = y.argmax(1).numpy() if y.dim() == 2 else y.numpy()
         colors = class_colors[y] if class_colors is not None \
             else int_to_plotly_rgb(torch.LongTensor(y))
+        data_0.y_colors = colors
         if class_names is None:
             text = np.array([f"Class {i}" for i in range(y.max() + 1)])
         else:
@@ -381,6 +384,7 @@ def visualize_3d(
         obj = data_0.obj if isinstance(data_0.obj, torch.Tensor) \
             else data_0.obj.major(num_classes=num_classes)[0]
         colors = int_to_plotly_rgb(obj)
+        data_0.obj_colors = colors
         text = np.array([f"Object {o}" for o in obj])
         trace_modes[i_point_trace]['Objects'] = {
             'marker.color': colors[data_0.selected],
@@ -435,6 +439,7 @@ def visualize_3d(
         text = text_thing
         colors[is_stuff] = colors_stuff[is_stuff]
         text[is_stuff] = text_stuff[is_stuff]
+        data_0.obj_colors = colors
 
         # Create trace modes
         trace_modes[i_point_trace]['Objects'] = {
@@ -448,9 +453,10 @@ def visualize_3d(
         # labels and stuff_classes/void_classes also passed, the
         # stuff/void predictions will be treated accordingly. This
         # expects `data_0.obj_pred` to be an InstanceData object
-        if data_0.obj_pred is not None and class_names is None:
+        if getattr(data_0, 'obj_pred', None) is not None and class_names is None:
             obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
             colors = int_to_plotly_rgb(obj)
+            data_0.obj_pred_colors = colors
             text = np.array([f"Object {o}" for o in obj])
             trace_modes[i_point_trace]['Panoptic Prediction'] = {
                 'marker.color': colors[data_0.selected],
@@ -458,7 +464,7 @@ def visualize_3d(
             trace_modes[i_unselected_point_trace]['Panoptic Prediction'] = {
                 'marker.color': colors[~data_0.selected],
                 'hovertext': text[~data_0.selected]}
-        elif data_0.obj_pred is not None:
+        elif getattr(data_0, 'obj_pred', None) is not None:
             # Colors and text for thing points
             obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
             colors_thing = int_to_plotly_rgb(obj)
@@ -523,6 +529,7 @@ def visualize_3d(
             text = text_thing
             colors[is_stuff] = colors_stuff[is_stuff]
             text[is_stuff] = text_stuff[is_stuff]
+            data_0.obj_pred_colors = colors
 
             # Create trace modes
             trace_modes[i_point_trace]['Panoptic Prediction'] = {
@@ -560,6 +567,7 @@ def visualize_3d(
             pred[is_void] = y_gt[is_void]
 
         colors = class_colors[pred] if class_colors is not None else None
+        data_0.pred_colors = colors
         if class_names is None:
             text = np.array([f"Class {i}" for i in range(pred.max() + 1)])
         else:
@@ -576,6 +584,7 @@ def visualize_3d(
     if data_0.x is not None:
         colors = feats_to_plotly_rgb(
             data_0.x, normalize=True, colorscale=colorscale)
+        data_0.x_colors = colors
         trace_modes[i_point_trace]['Features 3D'] = {
             'marker.color': colors[data_0.selected], 'hovertext': None}
         trace_modes[i_unselected_point_trace]['Features 3D'] = {
@@ -590,6 +599,7 @@ def visualize_3d(
         if getattr(data_0, key, None) is not None:
             colors = feats_to_plotly_rgb(
                 data_0[key], normalize=True, colorscale=colorscale)
+            data_0[f"{key}_colors"] = colors
             trace_modes[i_point_trace][str(key).title()] = {
                 'marker.color': colors[data_0.selected], 'hovertext': None}
             trace_modes[i_unselected_point_trace][str(key).title()] = {
@@ -600,6 +610,7 @@ def visualize_3d(
         colors = data_0.super_sampling
         colors = int_to_plotly_rgb(colors)
         colors[data_0.super_sampling == -1] = 230
+        data_0.super_sampling_colors = colors
         trace_modes[i_point_trace]['Super sampling'] = {
             'marker.color': colors[data_0.selected], 'hovertext': None}
         trace_modes[i_unselected_point_trace]['Super sampling'] = {
@@ -626,6 +637,7 @@ def visualize_3d(
         # assumes only it is the trace holding all level-0 points and on
         # which all other colors modes are defined
         colors = int_to_plotly_rgb(super_index)
+        data_0[f"{i_level}_level_colors"] = colors
         text = np.array([f"↑: {i}" for i in super_index])
         trace_modes[i_point_trace][f"Level {i_level + 1}"] = {
             'marker.color': colors[data_0.selected],
@@ -1011,7 +1023,7 @@ def figure_html(fig):
 
 
 def show(
-        input, path=None, title=None, no_output=True, **kwargs):
+        input, path=None, title=None, no_output=True, pt_path=None, **kwargs):
     """Interactive data visualization.
 
     :param input: Data or NAG object
@@ -1020,8 +1032,7 @@ def show(
     :param title: str
         Figure title
     :param no_output: bool
-        Set to True if you want to return the 3D and 2D Plotly figure
-        objects
+        Set to True if you want to return the 3D Plotly figure objects
     :param kwargs:
     :return:
     """
@@ -1046,6 +1057,23 @@ def show(
     if path is not None:
         with open(path, "w") as f:
             f.write(fig_html)
+
+    # Save to a .pt file for other downstream tasks.
+    # NB: we only save the 'pos' and all data attributes containing
+    # 'color', the rest is discarded
+    # NB: we save a dictionary, to limit dependencies
+    if pt_path is not None:
+        if osp.isdir(pt_path):
+            pt_path = osp.join(pt_path, f"viz_data.pt")
+        else:
+            pt_path = osp.splitext(pt_path)[0] + '.pt'
+
+        data = {}
+        for key in out_3d['data'].keys:
+            if key == 'pos' or 'color' in key:
+                data[key] = out_3d['data'][key]
+
+        torch.save(data, pt_path)
 
     if not no_output:
         return out_3d
