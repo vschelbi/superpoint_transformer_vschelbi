@@ -452,7 +452,7 @@ def visualize_3d(
         # labels and stuff_classes/void_classes also passed, the
         # stuff/void predictions will be treated accordingly. This
         # expects `data_0.obj_pred` to be an InstanceData object
-        if data_0.obj_pred is not None and class_names is None:
+        if getattr(data_0, 'obj_pred', None) is not None and class_names is None:
             obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
             colors = int_to_plotly_rgb(obj)
             data_0.obj_pred_colors = colors
@@ -463,7 +463,7 @@ def visualize_3d(
             trace_modes[i_unselected_point_trace]['Panoptic Prediction'] = {
                 'marker.color': colors[~data_0.selected],
                 'hovertext': text[~data_0.selected]}
-        elif data_0.obj_pred is not None:
+        elif getattr(data_0, 'obj_pred', None) is not None:
             # Colors and text for thing points
             obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
             colors_thing = int_to_plotly_rgb(obj)
