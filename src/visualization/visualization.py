@@ -396,7 +396,7 @@ def visualize_3d(
         # For simplicity, we merge void_classes into the stuff_classes,
         # the expected behavior is the same, except that we will ensure
         # that the hover text distinguishes between stuff and void
-        stuff_classes = stuff_classes if stuff_classes else []
+        stuff_classes = stuff_classes if stuff_classes is not None else []
         void_classes = [num_classes] if num_classes else []
         stuff_classes = list(set(stuff_classes).union(set(void_classes)))
 
@@ -442,6 +442,74 @@ def visualize_3d(
         trace_modes[i_unselected_point_trace]['Objects'] = {
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
+
+        # Color the points with predicted instance labels. If semantic
+        # labels and stuff_classes/void_classes also passed, the
+        # stuff/void predictions will be treated accordingly. This
+        # expects `data_0.obj_pred` to be an InstanceData object
+        if data_0.obj_pred is not None and class_names is None:
+            obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
+            colors = int_to_plotly_rgb(obj)
+            text = np.array([f"Object {o}" for o in obj])
+            trace_modes[i_point_trace]['Panoptic Prediction'] = {
+                'marker.color': colors[data_0.selected],
+                'hovertext': text[data_0.selected]}
+            trace_modes[i_unselected_point_trace]['Panoptic Prediction'] = {
+                'marker.color': colors[~data_0.selected],
+                'hovertext': text[~data_0.selected]}
+        elif data_0.obj_pred is not None:
+            # Colors and text for thing points
+            obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
+            colors_thing = int_to_plotly_rgb(obj)
+            text_thing = np.array([f"Object {o}" for o in obj])
+
+            # For simplicity, we merge void_classes into the stuff_classes,
+            # the expected behavior is the same, except that we will ensure
+            # that the hover text distinguishes between stuff and void
+            stuff_classes = stuff_classes if stuff_classes is not None else []
+            void_classes = [num_classes] if num_classes else []
+            stuff_classes = list(set(stuff_classes).union(set(void_classes)))
+
+            # Colors and text for stuff points
+            colors_stuff = class_colors[y] if class_colors is not None \
+                else int_to_plotly_rgb(torch.LongTensor(y))
+            if class_names is None:
+                text_stuff = np.array([
+                    f"{'Void' if i in void_classes else 'Stuff'} - Class {i}"
+                    for i in range(y.max() + 1)])
+            else:
+                text_stuff = np.array([
+                    f"{'Void' if i in void_classes else 'Stuff'} - {str.title(c)}"
+                    for i, c in enumerate(class_names)])
+            text_stuff = text_stuff[y]
+
+            # Apply alpha-whitening on stuff points
+            colors_stuff = colors_stuff.astype('float')
+            white = np.full((colors_stuff.shape[0], 3), 255, dtype='float')
+            colors_stuff = colors_stuff * alpha_stuff + white * (1 - alpha_stuff)
+            colors_stuff = colors_stuff.astype('int64')
+
+            # Compute mask for stuff points
+            stuff_classes = np.asarray([i for i in stuff_classes if i <= y.max()])
+            is_stuff = np.zeros(y.max() + 1, dtype='bool')
+            for i in stuff_classes:
+                if i < is_stuff.shape[0]:
+                    is_stuff[i] = True
+            is_stuff = is_stuff[y]
+
+            # Merge thing and stuff colors and text
+            colors = colors_thing
+            text = text_thing
+            colors[is_stuff] = colors_stuff[is_stuff]
+            text[is_stuff] = text_stuff[is_stuff]
+
+            # Create trace modes
+            trace_modes[i_point_trace]['Panoptic Prediction'] = {
+                'marker.color': colors[data_0.selected],
+                'hovertext': text[data_0.selected]}
+            trace_modes[i_unselected_point_trace]['Panoptic Prediction'] = {
+                'marker.color': colors[~data_0.selected],
+                'hovertext': text[~data_0.selected]}
 
     # Color the points with predicted semantic labels. If labels are
     # expressed as histograms, keep the most frequent one
