@@ -1,7 +1,7 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=panoptic/s3dis
+# python train.py experiment=panoptic/s3dis_room
 
 defaults:
   - override /datamodule: panoptic/s3dis_room.yaml
@@ -18,6 +18,12 @@ model:
   optimizer:
     lr: 0.1
     weight_decay: 1e-2
+
+  partitioner:
+    regularization: 20
+    x_weight: 1e-3
+    discrepancy_epsilon: 1e-2
+    dampening: 1e-2
 
   partition_every_n_epochs: 10
 
