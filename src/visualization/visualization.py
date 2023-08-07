@@ -24,6 +24,7 @@ def visualize_3d(
         class_colors=None,
         stuff_classes=None,
         num_classes=None,
+        hide_void_pred=False,
         voxel=-1,
         max_points=50000,
         point_size=3,
@@ -469,6 +470,26 @@ def visualize_3d(
             stuff_classes = stuff_classes if stuff_classes is not None else []
             void_classes = [num_classes] if num_classes else []
             stuff_classes = list(set(stuff_classes).union(set(void_classes)))
+
+            # If the ground truth labels are available, we use them to
+            # identify void points in the predictions
+            if data_0.y is not None and hide_void_pred:
+                # Get the target label
+                y_gt = data_0.y
+                y_gt = y_gt.argmax(1) if y_gt.dim() == 2 else y_gt
+
+                # Create a mask over the points identifying those whose
+                # ground truth label is void
+                is_void = np.zeros(y_gt.max() + 1, dtype='bool')
+                for i in void_classes:
+                    if i < is_void.shape[0]:
+                        is_void[i] = True
+                is_void = is_void[y_gt]
+
+                # Set the predicted label to void if the ground truth is
+                # void, this avoids visualizing predictions on void
+                # labels
+                y[is_void] = y_gt[is_void]
 
             # Colors and text for stuff points
             colors_stuff = class_colors[y] if class_colors is not None \
