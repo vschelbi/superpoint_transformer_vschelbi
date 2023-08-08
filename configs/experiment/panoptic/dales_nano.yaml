@@ -26,7 +26,7 @@ model:
     p_weight: 1
     discrepancy_epsilon: 1e-1
 
-  partition_every_n_epochs: 20
+  partition_every_n_epochs: -1
 
 logger:
   wandb:

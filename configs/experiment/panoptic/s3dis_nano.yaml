@@ -25,7 +25,7 @@ model:
     discrepancy_epsilon: 1e-6
     dampening: 2e-1
 
-  partition_every_n_epochs: 10
+  partition_every_n_epochs: -1
 
 logger:
   wandb:

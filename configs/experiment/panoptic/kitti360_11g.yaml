@@ -53,7 +53,7 @@ model:
     p_weight: 1
     dampening: 5e-2
 
-  partition_every_n_epochs: 10
+  partition_every_n_epochs: -1
 
 logger:
   wandb:
