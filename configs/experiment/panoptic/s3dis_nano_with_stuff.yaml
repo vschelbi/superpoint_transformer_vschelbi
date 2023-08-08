@@ -1,7 +1,7 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=panoptic/s3dis_nano
+# python train.py experiment=panoptic/s3dis_nano_with_stuff
 
 defaults:
   - override /datamodule: panoptic/s3dis_nano_with_stuff.yaml

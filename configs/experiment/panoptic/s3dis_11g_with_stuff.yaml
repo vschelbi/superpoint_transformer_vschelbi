@@ -1,7 +1,7 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=panoptic/s3dis_11g
+# python train.py experiment=panoptic/s3dis_11g_with_stuff
 
 # This configuration allows training SPT on a single 11G GPU, with a
 # training procedure comparable with the default
