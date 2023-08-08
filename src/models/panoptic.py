@@ -1274,12 +1274,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             # Log best-so-far metrics, using `.compute()` instead of passing
             # the whole torchmetrics object, because otherwise metric would
             # be reset by lightning after each epoch
-            self.log("val/val_pq_best", self.val_pq_best.compute(), prog_bar=True)
-            self.log("val/val_pqmod_best", self.val_pqmod_best.compute(), prog_bar=True)
-            self.log("val/val_mprec_best", self.val_mprec_best.compute(), prog_bar=True)
-            self.log("val/val_mrec_best", self.val_mrec_best.compute(), prog_bar=True)
+            self.log("val/pq_best", self.val_pq_best.compute(), prog_bar=True)
+            self.log("val/pqmod_best", self.val_pqmod_best.compute(), prog_bar=True)
+            self.log("val/mprec_best", self.val_mprec_best.compute(), prog_bar=True)
+            self.log("val/mrec_best", self.val_mrec_best.compute(), prog_bar=True)
             if self.needs_instance:
-                self.log("val/val_map_best", self.val_map_best.compute(), prog_bar=True)
+                self.log("val/map_best", self.val_map_best.compute(), prog_bar=True)
             self.log("val/instance_miou_best", self.val_instance_miou_best.compute(), prog_bar=True)
             self.log("val/instance_oa_best", self.val_instance_oa_best.compute(), prog_bar=True)
             self.log("val/instance_macc_best", self.val_instance_macc_best.compute(), prog_bar=True)
