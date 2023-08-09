@@ -36,7 +36,7 @@ callbacks:
 
 trainer:
   max_epochs: 100  # to keep the same number of steps -> epochs unchanged
-  check_val_every_n_epoch: 1
+  check_val_every_n_epoch: 2
 
 model:
   optimizer:

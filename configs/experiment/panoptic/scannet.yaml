@@ -13,7 +13,7 @@ defaults:
 
 trainer:
   max_epochs: 100
-  check_val_every_n_epoch: 1
+  check_val_every_n_epoch: 2
 
 model:
   optimizer:
@@ -38,6 +38,8 @@ model:
     x_weight: 0
     p_weight: 1
     discrepancy_epsilon: 0.1
+
+  edge_affinity_loss_lambda: 10
 
   partition_every_n_epochs: -1
 
