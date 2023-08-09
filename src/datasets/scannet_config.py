@@ -1692,7 +1692,7 @@ CLASS_NAMES = [
     "sink",
     "bathtub",
     "otherfurniture",
-    'ignored']
+    "ignored"]
 
 # For instance segmentation
 MIN_OBJECT_SIZE = 100
