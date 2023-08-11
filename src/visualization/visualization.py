@@ -370,10 +370,51 @@ def visualize_3d(
         else:
             text = np.array([str.title(c) for c in class_names])
         text = text[y]
-        trace_modes[i_point_trace]['Labels'] = {
+        trace_modes[i_point_trace]['Semantic'] = {
             'marker.color': colors[data_0.selected],
             'hovertext': text[data_0.selected]}
-        trace_modes[i_unselected_point_trace]['Labels'] = {
+        trace_modes[i_unselected_point_trace]['Semantic'] = {
+            'marker.color': colors[~data_0.selected],
+            'hovertext': text[~data_0.selected]}
+
+    # Color the points with predicted semantic labels. If labels are
+    # expressed as histograms, keep the most frequent one
+    if data_0.pred is not None:
+        pred = data_0.pred
+        pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
+
+        # If the ground truth labels are available, we use them to
+        # identify void points in the predictions
+        if data_0.y is not None and hide_void_pred:
+            # Get the target label
+            y_gt = data_0.y
+            y_gt = y_gt.argmax(1) if y_gt.dim() == 2 else y_gt
+
+            # Create a mask over the points identifying those whose
+            # ground truth label is void
+            is_void = np.zeros(y_gt.max() + 1, dtype='bool')
+            void_classes = [num_classes] if num_classes else []
+            for i in void_classes:
+                if i < is_void.shape[0]:
+                    is_void[i] = True
+            is_void = is_void[y_gt]
+
+            # Set the predicted label to void if the ground truth is
+            # void, this avoids visualizing predictions on void
+            # labels
+            pred[is_void] = y_gt[is_void]
+
+        colors = class_colors[pred] if class_colors is not None else None
+        data_0.pred_colors = colors
+        if class_names is None:
+            text = np.array([f"Class {i}" for i in range(pred.max() + 1)])
+        else:
+            text = np.array([str.title(c) for c in class_names])
+        text = text[pred]
+        trace_modes[i_point_trace]['Semantic Pred.'] = {
+            'marker.color': colors[data_0.selected],
+            'hovertext': text[data_0.selected]}
+        trace_modes[i_unselected_point_trace]['Semantic Pred.'] = {
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
 
@@ -386,10 +427,10 @@ def visualize_3d(
         colors = int_to_plotly_rgb(obj)
         data_0.obj_colors = colors
         text = np.array([f"Object {o}" for o in obj])
-        trace_modes[i_point_trace]['Objects'] = {
+        trace_modes[i_point_trace]['Panoptic'] = {
             'marker.color': colors[data_0.selected],
             'hovertext': text[data_0.selected]}
-        trace_modes[i_unselected_point_trace]['Objects'] = {
+        trace_modes[i_unselected_point_trace]['Panoptic'] = {
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
     elif data_0.obj is not None:
@@ -442,108 +483,40 @@ def visualize_3d(
         data_0.obj_colors = colors
 
         # Create trace modes
-        trace_modes[i_point_trace]['Objects'] = {
+        trace_modes[i_point_trace]['Panoptic'] = {
             'marker.color': colors[data_0.selected],
             'hovertext': text[data_0.selected]}
-        trace_modes[i_unselected_point_trace]['Objects'] = {
+        trace_modes[i_unselected_point_trace]['Panoptic'] = {
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
 
-        # Color the points with predicted instance labels. If semantic
-        # labels and stuff_classes/void_classes also passed, the
-        # stuff/void predictions will be treated accordingly. This
-        # expects `data_0.obj_pred` to be an InstanceData object
-        if getattr(data_0, 'obj_pred', None) is not None and class_names is None:
-            obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
-            colors = int_to_plotly_rgb(obj)
-            data_0.obj_pred_colors = colors
-            text = np.array([f"Object {o}" for o in obj])
-            trace_modes[i_point_trace]['Panoptic Prediction'] = {
-                'marker.color': colors[data_0.selected],
-                'hovertext': text[data_0.selected]}
-            trace_modes[i_unselected_point_trace]['Panoptic Prediction'] = {
-                'marker.color': colors[~data_0.selected],
-                'hovertext': text[~data_0.selected]}
-        elif getattr(data_0, 'obj_pred', None) is not None:
-            # Colors and text for thing points
-            obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
-            colors_thing = int_to_plotly_rgb(obj)
-            text_thing = np.array([f"Object {o}" for o in obj])
+    # Color the points with predicted instance labels. If semantic
+    # labels and stuff_classes/void_classes also passed, the
+    # stuff/void predictions will be treated accordingly. This
+    # expects `data_0.obj_pred` to be an InstanceData object
+    if getattr(data_0, 'obj_pred', None) is not None and class_names is None:
+        obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
+        colors = int_to_plotly_rgb(obj)
+        data_0.obj_pred_colors = colors
+        text = np.array([f"Object {o}" for o in obj])
+        trace_modes[i_point_trace]['Panoptic Pred.'] = {
+            'marker.color': colors[data_0.selected],
+            'hovertext': text[data_0.selected]}
+        trace_modes[i_unselected_point_trace]['Panoptic Pred.'] = {
+            'marker.color': colors[~data_0.selected],
+            'hovertext': text[~data_0.selected]}
+    elif getattr(data_0, 'obj_pred', None) is not None:
+        # Colors and text for thing points
+        obj, _, y = data_0.obj_pred.major(num_classes=num_classes)
+        colors_thing = int_to_plotly_rgb(obj)
+        text_thing = np.array([f"Object {o}" for o in obj])
 
-            # For simplicity, we merge void_classes into the stuff_classes,
-            # the expected behavior is the same, except that we will ensure
-            # that the hover text distinguishes between stuff and void
-            stuff_classes = stuff_classes if stuff_classes is not None else []
-            void_classes = [num_classes] if num_classes else []
-            stuff_classes = list(set(stuff_classes).union(set(void_classes)))
-
-            # If the ground truth labels are available, we use them to
-            # identify void points in the predictions
-            if data_0.y is not None and hide_void_pred:
-                # Get the target label
-                y_gt = data_0.y
-                y_gt = y_gt.argmax(1) if y_gt.dim() == 2 else y_gt
-
-                # Create a mask over the points identifying those whose
-                # ground truth label is void
-                is_void = np.zeros(y_gt.max() + 1, dtype='bool')
-                for i in void_classes:
-                    if i < is_void.shape[0]:
-                        is_void[i] = True
-                is_void = is_void[y_gt]
-
-                # Set the predicted label to void if the ground truth is
-                # void, this avoids visualizing predictions on void
-                # labels
-                y[is_void] = y_gt[is_void]
-
-            # Colors and text for stuff points
-            colors_stuff = class_colors[y] if class_colors is not None \
-                else int_to_plotly_rgb(torch.LongTensor(y))
-            if class_names is None:
-                text_stuff = np.array([
-                    f"{'Void' if i in void_classes else 'Stuff'} - Class {i}"
-                    for i in range(y.max() + 1)])
-            else:
-                text_stuff = np.array([
-                    f"{'Void' if i in void_classes else 'Stuff'} - {str.title(c)}"
-                    for i, c in enumerate(class_names)])
-            text_stuff = text_stuff[y]
-
-            # Apply alpha-whitening on stuff points
-            colors_stuff = colors_stuff.astype('float')
-            white = np.full((colors_stuff.shape[0], 3), 255, dtype='float')
-            colors_stuff = colors_stuff * alpha_stuff + white * (1 - alpha_stuff)
-            colors_stuff = colors_stuff.astype('int64')
-
-            # Compute mask for stuff points
-            stuff_classes = np.asarray([i for i in stuff_classes if i <= y.max()])
-            is_stuff = np.zeros(y.max() + 1, dtype='bool')
-            for i in stuff_classes:
-                if i < is_stuff.shape[0]:
-                    is_stuff[i] = True
-            is_stuff = is_stuff[y]
-
-            # Merge thing and stuff colors and text
-            colors = colors_thing
-            text = text_thing
-            colors[is_stuff] = colors_stuff[is_stuff]
-            text[is_stuff] = text_stuff[is_stuff]
-            data_0.obj_pred_colors = colors
-
-            # Create trace modes
-            trace_modes[i_point_trace]['Panoptic Prediction'] = {
-                'marker.color': colors[data_0.selected],
-                'hovertext': text[data_0.selected]}
-            trace_modes[i_unselected_point_trace]['Panoptic Prediction'] = {
-                'marker.color': colors[~data_0.selected],
-                'hovertext': text[~data_0.selected]}
-
-    # Color the points with predicted semantic labels. If labels are
-    # expressed as histograms, keep the most frequent one
-    if data_0.pred is not None:
-        pred = data_0.pred
-        pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
+        # For simplicity, we merge void_classes into the stuff_classes,
+        # the expected behavior is the same, except that we will ensure
+        # that the hover text distinguishes between stuff and void
+        stuff_classes = stuff_classes if stuff_classes is not None else []
+        void_classes = [num_classes] if num_classes else []
+        stuff_classes = list(set(stuff_classes).union(set(void_classes)))
 
         # If the ground truth labels are available, we use them to
         # identify void points in the predictions
@@ -555,7 +528,6 @@ def visualize_3d(
             # Create a mask over the points identifying those whose
             # ground truth label is void
             is_void = np.zeros(y_gt.max() + 1, dtype='bool')
-            void_classes = [num_classes] if num_classes else []
             for i in void_classes:
                 if i < is_void.shape[0]:
                     is_void[i] = True
@@ -564,19 +536,47 @@ def visualize_3d(
             # Set the predicted label to void if the ground truth is
             # void, this avoids visualizing predictions on void
             # labels
-            pred[is_void] = y_gt[is_void]
+            y[is_void] = y_gt[is_void]
 
-        colors = class_colors[pred] if class_colors is not None else None
-        data_0.pred_colors = colors
+        # Colors and text for stuff points
+        colors_stuff = class_colors[y] if class_colors is not None \
+            else int_to_plotly_rgb(torch.LongTensor(y))
         if class_names is None:
-            text = np.array([f"Class {i}" for i in range(pred.max() + 1)])
+            text_stuff = np.array([
+                f"{'Void' if i in void_classes else 'Stuff'} - Class {i}"
+                for i in range(y.max() + 1)])
         else:
-            text = np.array([str.title(c) for c in class_names])
-        text = text[pred]
-        trace_modes[i_point_trace]['Predictions'] = {
+            text_stuff = np.array([
+                f"{'Void' if i in void_classes else 'Stuff'} - {str.title(c)}"
+                for i, c in enumerate(class_names)])
+        text_stuff = text_stuff[y]
+
+        # Apply alpha-whitening on stuff points
+        colors_stuff = colors_stuff.astype('float')
+        white = np.full((colors_stuff.shape[0], 3), 255, dtype='float')
+        colors_stuff = colors_stuff * alpha_stuff + white * (1 - alpha_stuff)
+        colors_stuff = colors_stuff.astype('int64')
+
+        # Compute mask for stuff points
+        stuff_classes = np.asarray([i for i in stuff_classes if i <= y.max()])
+        is_stuff = np.zeros(y.max() + 1, dtype='bool')
+        for i in stuff_classes:
+            if i < is_stuff.shape[0]:
+                is_stuff[i] = True
+        is_stuff = is_stuff[y]
+
+        # Merge thing and stuff colors and text
+        colors = colors_thing
+        text = text_thing
+        colors[is_stuff] = colors_stuff[is_stuff]
+        text[is_stuff] = text_stuff[is_stuff]
+        data_0.obj_pred_colors = colors
+
+        # Create trace modes
+        trace_modes[i_point_trace]['Panoptic Pred.'] = {
             'marker.color': colors[data_0.selected],
             'hovertext': text[data_0.selected]}
-        trace_modes[i_unselected_point_trace]['Predictions'] = {
+        trace_modes[i_unselected_point_trace]['Panoptic Pred.'] = {
             'marker.color': colors[~data_0.selected],
             'hovertext': text[~data_0.selected]}
 
@@ -946,7 +946,7 @@ def visualize_3d(
             dict(
                 buttons=[dict(
                     method='restyle',
-                    label='Errors',
+                    label='Semantic Errors',
                     visible=True,
                     args=[
                         {'visible': True, 'marker.color': error_color},
