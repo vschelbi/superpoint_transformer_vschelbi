@@ -16,7 +16,7 @@ cd $HERE
 # Installation of Superpoint Transformer in a conda environment
 echo "_____________________________________________"
 echo
-echo "         ☁ Superpoint Transformer 🤖         "
+echo "         🧩 Superpoint Transformer 🤖         "
 echo "                  Installer                  "
 echo
 echo "_____________________________________________"
