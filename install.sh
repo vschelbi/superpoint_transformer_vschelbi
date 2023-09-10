@@ -109,8 +109,17 @@ echo
 git clone https://github.com/drprojects/point_geometric_features.git src/dependencies/point_geometric_features
 cd src/dependencies/point_geometric_features
 conda install -c omnia eigen3 -y
+bash ./install.sh
 python python/setup.py build_ext --include-dirs=$CONDA_PREFIX/include
 cd ../../..
+
+echo
+echo
+echo "⭐ Installing Point Geometric Features"
+echo
+conda install -c omnia eigen3 -y
+export EIGEN_LIB_PATH="$CONDA_PREFIX/include"
+python -m pip install git+https://github.com/drprojects/point_geometric_features
 
 echo
 echo
