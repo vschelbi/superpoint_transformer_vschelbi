@@ -114,6 +114,14 @@ python -m pip install git+https://github.com/drprojects/point_geometric_features
 
 echo
 echo
+echo "⭐ Installing Point Geometric Features"
+echo
+conda install -c omnia eigen3 -y
+export EIGEN_LIB_PATH="$CONDA_PREFIX/include"
+python -m pip install git+https://github.com/drprojects/point_geometric_features
+
+echo
+echo
 echo "⭐ Installing Parallel Cut-Pursuit"
 echo
 # Clone parallel-cut-pursuit and grid-graph repos
