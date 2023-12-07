@@ -589,13 +589,13 @@ class Data(PyGData):
             if k == 'pos':
                 save_tensor(val, f, k, fp_dtype=pos_dtype)
             elif k == 'y' and val.dim() > 1 and y_to_csr:
-                sg = f.create_group(f"{f.name}/'_csr_'/{k}")
+                sg = f.create_group(f"{f.name}/_csr_/{k}")
                 save_dense_to_csr(val, sg, fp_dtype=fp_dtype)
             elif k == 'sub' and isinstance(val, Cluster):
-                sg = f.create_group(f"{f.name}/'_cluster_'/'sub'")
+                sg = f.create_group(f"{f.name}/_cluster_/sub")
                 val.save(sg, fp_dtype=fp_dtype)
             elif k == 'obj' and isinstance(val, InstanceData):
-                sg = f.create_group(f"{f.name}/'_obj_'/'obj'")
+                sg = f.create_group(f"{f.name}/_obj_/obj")
                 val.save(sg, fp_dtype=fp_dtype)
             elif k in ['rgb', 'mean_rgb']:
                 if val.is_floating_point():
