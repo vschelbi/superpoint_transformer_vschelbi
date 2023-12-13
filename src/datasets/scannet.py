@@ -283,7 +283,7 @@ class ScanNet(BaseDataset):
         """
         # Extract useful information from <path>
         stage, hash_dir, scans_dir, scan_name = \
-            osp.splitext(processed_path)[0].split('/')[-4:]
+            osp.splitext(processed_path)[0].split(os.sep)[-4:]
         cloud_id = osp.join(scans_dir, scan_name)
 
         # Remove the tiling in the cloud_id, if any

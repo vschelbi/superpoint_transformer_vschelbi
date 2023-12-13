@@ -1,7 +1,4 @@
 import numpy as np
-import os.path as osp
-from collections import namedtuple
-from src.datasets import IGNORE_LABEL as IGNORE
 
 
 ########################################################################

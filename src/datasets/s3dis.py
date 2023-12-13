@@ -5,6 +5,7 @@ import torch
 import shutil
 import logging
 import pandas as pd
+import os.path as osp
 from src.datasets import BaseDataset
 from src.data import Data, Batch, InstanceData
 from src.datasets.s3dis_config import *
