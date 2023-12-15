@@ -4,7 +4,6 @@ from torch_scatter import scatter_add, scatter_mean, scatter_min
 from itertools import combinations_with_replacement
 from src.utils.edge import edge_wise_points
 from torch_geometric.utils import coalesce
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 __all__ = [
