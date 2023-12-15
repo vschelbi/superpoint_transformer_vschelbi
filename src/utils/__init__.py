@@ -26,3 +26,5 @@ from .wandb import *
 from .parameter import *
 from .graph import *
 from .instance import *
+from .output_panoptic import *
+from .output_semantic import *

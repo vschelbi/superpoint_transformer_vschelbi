@@ -1,7 +1,10 @@
 import sys
 import torch
 import numpy as np
+import pandas as pd
 import os.path as osp
+from tqdm import tqdm
+from copy import deepcopy
 from itertools import product
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -12,6 +15,8 @@ from src.utils.neighbors import knn_2
 from src.utils.graph import to_trimmed
 from src.utils.cpu import available_cpu_count
 from src.utils.scatter import scatter_mean_weighted
+from src.utils.instance import get_stuff_mask
+
 
 src_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.append(src_folder)
@@ -24,7 +29,8 @@ from cp_d0_dist import cp_d0_dist
 
 __all__ = [
     'generate_random_bbox_data', 'generate_random_segment_data',
-    'instance_cut_pursuit', 'oracle_superpoint_clustering', 'get_stuff_mask']
+    'instance_cut_pursuit', 'oracle_superpoint_clustering', 'get_stuff_mask',
+    'compute_panoptic_metrics', 'grid_search_panoptic_partition']
 
 
 _MAX_NUM_EDGES = 4294967295
@@ -370,7 +376,7 @@ def _instance_cut_pursuit(
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
-        Weight used to mitigate the impact of the node features in the
+        Weight used to mitigate the impact of the node position in the
         partition. The larger, the lesser features importance before
         the probabilities
     :param p_weight: float
@@ -596,7 +602,7 @@ def instance_cut_pursuit(
     :param regularization: float
         Regularization parameter for the partition
     :param x_weight: float
-        Weight used to mitigate the impact of the node features in the
+        Weight used to mitigate the impact of the node position in the
         partition. The larger, the lesser features importance before
         the probabilities
     :param p_weight: float
@@ -685,26 +691,10 @@ def oracle_superpoint_clustering(
         nag,
         num_classes,
         stuff_classes,
-        level=1,
-        k_max=30,
-        radius=3,
-        adjacency_mode='radius-centroid',
-        centroid_mode='iou',
-        centroid_level=1,
         with_offset=False,
         with_affinity=True,
-        smooth_affinity=True,
-        loss_type='l2_kl',
-        regularization=1e-5,
-        x_weight=1e-1,
-        p_weight=1e-1,
-        cutoff=1,
-        parallel=True,
-        iterations=10,
-        trim=False,
-        discrepancy_epsilon=1e-1,
-        temperature=1,
-        dampening=0):
+        graph_kwargs=None,
+        partition_kwargs=None):
     """Compute an oracle for superpoint clustering for instance and
     panoptic segmentation. This is a proxy for the highest achievable
     graph clustering performance with the superpoint partition at hand
@@ -734,42 +724,29 @@ def oracle_superpoint_clustering(
         valid and void classes
     :param stuff_classes: List[int]
         List of labels for 'stuff' classes
-    :param level: int
-        Level at which to compute the superpoint clustering
-    :param k_max:
-    :param radius:
-    :param adjacency_mode:
-    :param centroid_mode:
-    :param centroid_level:
-    :param with_offset:
-    :param with_affinity:
-    :param smooth_affinity:
-    :param loss_type:
-    :param regularization:
-    :param x_weight:
-    :param p_weight:
-    :param cutoff:
-    :param parallel:
-    :param iterations:
-    :param trim:
-    :param discrepancy_epsilon:
-    :param temperature:
-    :param dampening:
+    :param with_offset: bool
+        Whether offset prediction should be used. If so, the oracle
+        perfectly predicts the offset to the object center for each
+        node, except for stuff and void classes, whose offset is set
+        to 0
+    :param with_affinity: bool
+        Whether affinity prediction should be used. If not, we set all
+        edge weights to 0.5
+    :param graph_kwargs: dict
+        Dictionary of kwargs to be passed to the graph constructor
+        `OnTheFlyInstanceGraph()`
+    :param partition_kwargs: dict
+        Dictionary of kwargs to be passed to the partition function
+        `instance_cut_pursuit()`
     :return:
     """
-    # Local imports to avoid import loop errors
+    # Local import to avoid import loop errors
     from src.transforms import OnTheFlyInstanceGraph
 
     # Instance graph computation
-    nag = OnTheFlyInstanceGraph(
-        level=level,
-        num_classes=num_classes,
-        adjacency_mode=adjacency_mode,
-        k_max=k_max,
-        radius=radius,
-        centroid_mode=centroid_mode,
-        centroid_level=centroid_level,
-        smooth_affinity=smooth_affinity)(nag)
+    graph_kwargs = {} if graph_kwargs is None else graph_kwargs
+    graph_kwargs = dict(graph_kwargs, **dict(level=1, num_classes=num_classes))
+    nag = OnTheFlyInstanceGraph(**graph_kwargs)(nag)
 
     # Prepare input for instance graph partition
     # NB: we assign only to valid classes and ignore void
@@ -800,6 +777,8 @@ def oracle_superpoint_clustering(
         else torch.zeros(nag[1].num_nodes, dtype=torch.long, device=nag.device)
 
     # Instance graph partition
+    partition_kwargs = {} if partition_kwargs is None else partition_kwargs
+    partition_kwargs = dict(partition_kwargs, **dict(do_sigmoid_affinity=False))
     obj_index = instance_cut_pursuit(
         batch,
         node_x,
@@ -808,18 +787,7 @@ def oracle_superpoint_clustering(
         node_size,
         edge_index,
         edge_affinity,
-        do_sigmoid_affinity=False,
-        loss_type=loss_type,
-        regularization=regularization,
-        x_weight=x_weight,
-        p_weight=p_weight,
-        cutoff=cutoff,
-        parallel=parallel,
-        iterations=iterations,
-        trim=trim,
-        discrepancy_epsilon=discrepancy_epsilon,
-        temperature=temperature,
-        dampening=dampening)
+        **partition_kwargs)
 
     # Compute the instance data by merging nodes based on obj_index
     instance_data = nag[1].obj.merge(obj_index)
@@ -839,3 +807,453 @@ def get_stuff_mask(y, stuff_classes):
     stuff_classes = torch.as_tensor(
         stuff_classes, dtype=labels.dtype, device=labels.device)
     return torch.isin(labels, stuff_classes)
+
+
+def compute_panoptic_metrics(
+        model,
+        datamodule,
+        stage='val',
+        graph_kwargs=None,
+        partition_kwargs=None,
+        verbose=True):
+    """Helper function to compute the semantic, instance, panoptic
+    segmentation metrics of a model on a given dataset, for given
+    instance graph and partition parameters.
+    """
+    # Local imports to avoid import loop errors
+    from src.data import NAGBatch
+
+    # Pick among train, val, and test datasets. It is important to note that
+    # the train dataset produces augmented spherical samples of large
+    # scenes, while the val and test dataset
+    if stage == 'train':
+        dataset = datamodule.train_dataset
+        dataloader = datamodule.train_dataloader()
+    elif stage == 'val':
+        dataset = datamodule.val_dataset
+        dataloader = datamodule.val_dataloader()
+    elif stage == 'test':
+        dataset = datamodule.test_dataset
+        dataloader = datamodule.test_dataloader()
+    else:
+        raise ValueError(f"Unknown stage : {stage}")
+
+    # Prevent `NAGAddKeysTo` from removing attributes to allow
+    # visualizing them after model inference
+    dataset = _set_attribute_preserving_transforms(dataset)
+
+    # Set the instance graph construction parameters
+    dataset = _set_graph_construction_parameters(dataset, graph_kwargs)
+
+    # Set the partitioner parameters
+    model = _set_partitioner_parameters(model, partition_kwargs)
+
+    # Load a dataset item. This will return the hierarchical partition
+    # of an entire tile, within a NAG object
+    with torch.no_grad():
+        for nag_list in tqdm(dataloader):
+            nag = NAGBatch.from_nag_list([nag.cuda() for nag in nag_list])
+
+            # Apply on-device transforms on the NAG object. For the
+            # train dataset, this will select a spherical sample of the
+            # larger tile and apply some data augmentations. For the
+            # validation and test datasets, this will prepare an entire
+            # tile for inference
+            nag = dataset.on_device_transform(nag)
+
+            # nag_list = [nag.cuda() for nag in nag_list]
+            # nag = NAGBatch.from_nag_list(nag_list)
+            # nag = dataset.on_device_transform(nag.cuda())
+
+            model.validation_step(nag, None)
+
+        # Actions taken from on_validation_epoch_end()
+        # panoptic_results = model.val_panoptic.compute()
+        # instance_miou = model.val_semantic.miou()
+        # instance_oa = model.val_semantic.oa()
+        # instance_macc = model.val_semantic.macc()
+        panoptic = deepcopy(model.val_panoptic)
+        instance = deepcopy(model.val_instance)
+        semantic = deepcopy(model.val_semantic)
+        model.val_affinity_oa.reset()
+        model.val_affinity_f1.reset()
+        model.val_panoptic.reset()
+        model.val_semantic.reset()
+        model.val_instance.reset()
+
+    if not verbose:
+        return panoptic, instance, semantic
+
+    for k, v in panoptic.compute().items():
+        print(f"{k:<22}: {v}")
+    print()
+    if not model.no_instance_metrics:
+        for k, v in instance.compute().items():
+            print(f"{k:<22}: {v}")
+        print()
+    print(f"mIoU                  : {semantic.miou().cpu().item()}")
+
+    return panoptic, instance, semantic
+
+
+def _set_attribute_preserving_transforms(dataset):
+    """For the sake of visualization, we require that `NAGAddKeysTo`
+    does not remove input `Data` attributes after moving them to `Data.x`,
+    so we may visualize them.
+    """
+    # Local imports to avoid import loop errors
+    from src.transforms import NAGAddKeysTo
+
+    for t in dataset.on_device_transform.transforms:
+        if isinstance(t, NAGAddKeysTo):
+            t.delete_after = False
+
+    return dataset
+
+
+def _set_graph_construction_parameters(dataset, graph_kwargs):
+    """Searches for the last occurrence of `OnTheFlyInstanceGraph` among
+    the `on_device_transform` of the dataset and modifies the graph
+    construction parameters passed in the `graph_kwargs` dictionary.
+    """
+    if graph_kwargs is None:
+        return dataset
+
+    # Local imports to avoid import loop errors
+    from src.transforms import OnTheFlyInstanceGraph
+
+    # Search for the `OnTheFlyInstanceGraph` instance graph construction
+    # transform among the on-device transforms
+    i_transform = None
+    for i, transform in enumerate(dataset.on_device_transform.transforms):
+        if isinstance(transform, OnTheFlyInstanceGraph):
+            i_transform = i
+
+    # Set OnTheFlyInstanceGraph parameters if need be
+    if i_transform is not None and graph_kwargs is not None:
+        for k, v in graph_kwargs.items():
+            setattr(dataset.on_device_transform.transforms[i_transform], k, v)
+
+    return dataset
+
+
+def _set_partitioner_parameters(model, partition_kwargs):
+    """Modifies the `model.partitioner` parameters with parameters
+    passed in the `partition_kwargs` dictionary.
+    """
+    if partition_kwargs is None:
+        return model
+
+    # Set partitioner parameters if need be
+    if partition_kwargs is not None:
+        for k, v in partition_kwargs.items():
+            setattr(model.partitioner, k, v)
+
+    return model
+
+
+def _forward_multi_partition(
+        model,
+        nag,
+        partition_kwargs,
+        ignore_offsets=False,
+        ignore_pos=False,
+        ignore_affinities=False):
+    """Local helper to compute multiple instance partitions from the
+    same input data, based on diverse partition parameter settings.
+    """
+    # Local import to avoid import loop errors
+    from src.models.panoptic import PanopticSegmentationOutput
+
+    if ignore_pos:
+        ignore_offsets = True
+
+    with torch.no_grad():
+
+        # Extract features
+        x = model.net(nag)
+
+        # Compute level-1 or multi-level semantic predictions
+        semantic_pred = [head(x_) for head, x_ in zip(model.head, x)] \
+            if model.multi_stage_loss else model.head(x)
+
+        # Recover level-1 features only
+        x = x[0] if model.multi_stage_loss else x
+
+        # Compute node offset predictions
+        if not ignore_offsets:
+            node_offset_pred = model.node_offset_head(x)
+
+            # Forcefully set 0-offset for nodes with stuff predictions
+            node_logits = semantic_pred[0] if model.multi_stage_loss \
+                else semantic_pred
+            is_stuff = get_stuff_mask(node_logits, model.stuff_classes)
+            node_offset_pred[is_stuff] = 0
+
+        # TODO: offset soft-assigned to 0 based on the predicted
+        #  stuff/thing probas. A stuff/thing classification loss could
+        #  provide additional supervision
+
+        # Compute edge affinity predictions
+        # NB: we make edge features symmetric, since we want to compute
+        # edge affinity, which is not directed
+        x_edge = x[nag[1].obj_edge_index]
+        x_edge = torch.cat(
+            ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
+        edge_affinity_logits = model.edge_affinity_head(x_edge).squeeze()
+
+        # if ignore_offsets:
+        #     node_offset_pred = node_offset_pred * 0
+
+        if ignore_pos:
+            pos_bckp = nag[1].pos.clone()
+            nag[1].pos *= 0
+
+        if ignore_affinities:
+            edge_affinity_logits = edge_affinity_logits * 0 + 0.5
+
+        # Make sure each element of `partition_kwargs` is a list,
+        # to facilitate computing Cartesian product of the lists for
+        # grid search
+        partition_kwargs = {
+            k: v if isinstance(v, list) else [v]
+            for k, v in partition_kwargs.items()}
+
+        enum = [
+            {k: v for k, v in zip(partition_kwargs.keys(), values)}
+            for values in product(*partition_kwargs.values())]
+
+        partitions = {}
+        for kwargs in tqdm(enum):
+            model = _set_partitioner_parameters(model, kwargs)
+
+            # Gather results in an output object
+            output = PanopticSegmentationOutput(
+                semantic_pred,
+                model.stuff_classes,
+                edge_affinity_logits,
+                # node_offset_pred,
+                nag.get_sub_size(1))
+
+            # Compute the panoptic partition
+            output = model._forward_partition(nag, output)
+
+            # Store the predicted partition wrt the parameter values
+            # (can't directly store kwargs dict because unhashable)
+            partitions[tuple(kwargs.values())] = output.obj_index_pred
+
+        output = model.get_target(nag, output)
+
+        if ignore_offsets:
+            output.obj_pos = nag[1].pos
+
+    return output, partitions
+
+
+def grid_search_panoptic_partition(
+        model,
+        dataset,
+        i_cloud=0,
+        graph_kwargs=None,
+        partition_kwargs=None,
+        ignore_offsets=False,
+        ignore_pos=False,
+        ignore_affinities=False,
+        panoptic=True,
+        instance=False):
+    """Runs a grid search on the partition parameters to find the best
+    setup on a given sample `dataset[i_cloud]`.
+
+    :param model: PanopticSegmentationModule
+    :param dataset: BaseDataset
+    :param i_cloud: int
+        The grid search will be computed on `dataset[i_cloud]`
+    :param graph_kwargs: dict
+        Dictionary of parameters to be passed to the instance graph
+        constructor `OnTheFlyInstanceGraph`. NB: the grid search does
+        not cover these parameters---only a single value can be passed
+        for each parameter
+    :param partition_kwargs: dict
+        Dictionary of parameters to be passed to `model.partitioner`.
+        Passing a list of values for a given parameter will trigger the
+        grid search across these values. Beware of the combinatorial
+        explosion !
+    :param ignore_offsets: bool
+        Whether the node offsets predicted by the model should be
+        ignored in the partition. If so, all offsets will be set to 0
+    :param ignore_pos: bool
+        Whether the node positions should be ignored in the partition.
+        If so, all node positions will be set to 0. Incidentally, all
+        node offsets will be set to 0
+    :param ignore_affinities: bool
+        Whether the edge affinities predicted by the model should be
+        ignored. If so, all edge weights will be set to 0.5
+    :param panoptic: bool
+        Whether panoptic segmentation metrics should be computed
+    :param instance: bool
+        Whether instance segmentation metrics should be computed
+    :return:
+    """
+    # TODO: grid search on the whole dataset rather than a single cloud
+
+    # Local import to avoid import loop errors
+    from src.metrics import PanopticQuality3D, MeanAveragePrecision3D
+
+    assert panoptic or instance, \
+        "At least 'panoptic' or 'instance' must be True"
+
+    # Prevent `NAGAddKeysTo` from removing attributes to allow
+    # visualizing them after model inference
+    dataset = _set_attribute_preserving_transforms(dataset)
+
+    # Set the instance graph construction parameters
+    dataset = _set_graph_construction_parameters(dataset, graph_kwargs)
+
+    # Load a dataset item. This will return the hierarchical partition
+    # of an entire tile, within a NAG object
+    nag = dataset[i_cloud]
+
+    # Apply on-device transforms on the NAG object. For the train
+    # dataset, this will select a spherical sample of the larger tile
+    # and apply some data augmentations. For the validation and test
+    # datasets, this will prepare an entire tile for inference
+    nag = dataset.on_device_transform(nag.cuda())
+
+    # Compute the partition for each parameterization
+    output, partitions = _forward_multi_partition(
+        model,
+        nag,
+        partition_kwargs,
+        ignore_offsets=ignore_offsets,
+        ignore_pos=ignore_pos,
+        ignore_affinities=ignore_affinities)
+
+    # Get the target labels
+    output = model.get_target(nag, output)
+
+    # Create the metrics tracking objects
+    instance_metrics = MeanAveragePrecision3D(
+        model.num_classes,
+        stuff_classes=model.stuff_classes,
+        min_size=model.hparams.min_instance_size,
+        compute_on_cpu=True,
+        remove_void=True)
+
+    panoptic_metrics = PanopticQuality3D(
+        model.num_classes,
+        ignore_unseen_classes=True,
+        stuff_classes=model.stuff_classes,
+        compute_on_cpu=True)
+
+    # Compute and print metric results for each partition setup
+    results = {}
+    results_data = []
+    best_pq = -1
+    best_map = -1
+    best_pq_params = None
+    best_map_params = None
+    for (kwargs_values), obj_index_pred in partitions.items():
+
+        # Reconstruct the kwargs dict from the kwargs values
+        kwargs = {k: v for k, v in zip(partition_kwargs.keys(), kwargs_values)}
+
+        output.obj_index_pred = obj_index_pred
+
+        obj_score, obj_y, instance_data = output.get_instance_predictions()
+        obj_score = obj_score.detach().cpu()
+        obj_y = obj_y.detach().cpu()
+
+        if panoptic:
+            panoptic_metrics.update(obj_y, instance_data.cpu())
+            panoptic_results = panoptic_metrics.compute()
+            panoptic_metrics.reset()
+            if panoptic_results.pq > best_pq:
+                best_pq_params = tuple(kwargs.values())
+                best_pq = panoptic_results.pq
+        else:
+            panoptic_results = None
+
+        if instance:
+            instance_metrics.update(obj_score, obj_y, instance_data.cpu())
+            instance_results = instance_metrics.compute()
+            instance_metrics.reset()
+            if instance_results.map > best_map:
+                best_map_params = tuple(kwargs.values())
+                best_map = instance_results.map
+        else:
+            instance_results = None
+
+        # Store the panoptic and instance metric results for the
+        # parameters at hand
+        results[tuple(kwargs.values())] = (panoptic_results, instance_results)
+
+        # Track the results to build a global summary DataFrame
+        results_data.append([
+            *kwargs.values(),
+            round(panoptic_results.pq.item() * 100, 2),
+            round(panoptic_results.sq.item() * 100, 2),
+            round(panoptic_results.rq.item() * 100, 2),
+            round(instance_results.map.item() * 100, 2) if instance_results else None,
+            round(instance_results.map_50.item() * 100, 2) if instance_results else None])
+
+    # Print a DataFrame summarizing the results
+    with pd.option_context('display.precision', 2):
+        print(pd.DataFrame(
+            data=results_data,
+            columns=[
+                *[x[:6] for x in partition_kwargs.keys()], 'PQ', 'SQ', 'RQ',
+                'mAP', 'mAP 50']))
+    print()
+
+    # Print more details about the best panoptic setup
+    if panoptic and best_pq_params is not None:
+
+        # Print global results
+        print(f"\nBest panoptic setup: PQ={100 * best_pq:0.2f}")
+        with pd.option_context('display.precision', 2):
+            print(pd.DataFrame(
+                data=[best_pq_params],
+                columns=[x[:6] for x in partition_kwargs.keys()]))
+        print()
+
+        # Print per-class results
+        res = results[best_pq_params][0]
+        with pd.option_context('display.precision', 2):
+            print(pd.DataFrame(
+                data=torch.column_stack([
+                    res.pq_per_class.mul(100),
+                    res.sq_per_class.mul(100),
+                    res.rq_per_class.mul(100),
+                    res.precision_per_class.mul(100),
+                    res.recall_per_class.mul(100),
+                    res.tp_per_class,
+                    res.fp_per_class,
+                    res.fn_per_class]),
+                index=dataset.class_names[:-1],
+                columns=['PQ', 'SQ', 'RQ', 'PREC.', 'REC.', 'TP', 'FP', 'FN']))
+        print()
+
+        # Store the best panoptic partition indexing in the output
+        output.obj_index_pred = partitions[best_pq_params]
+
+    # Print more details about the best instance setup
+    if instance and best_map_params is not None:
+
+        # Print global results
+        print(f"\nBest instance setup: mAP={100 * best_map:0.2f}")
+        with pd.option_context('display.precision', 2):
+            print(pd.DataFrame(
+                data=[best_map_params],
+                columns=[x[:6] for x in partition_kwargs.keys()]))
+        print()
+
+        # Print per-class results
+        res = results[best_map_params][1]
+        with pd.option_context('display.precision', 2):
+            print(pd.DataFrame(
+                data=torch.column_stack(res.map_per_class.mul(100)),
+                index=dataset.class_names[:-1],
+                columns=['mAP']))
+        print()
+
+    return output, partitions, results
