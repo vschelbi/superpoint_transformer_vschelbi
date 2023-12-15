@@ -15,7 +15,6 @@ from src.utils.neighbors import knn_2
 from src.utils.graph import to_trimmed
 from src.utils.cpu import available_cpu_count
 from src.utils.scatter import scatter_mean_weighted
-from src.utils.instance import get_stuff_mask
 
 
 src_folder = osp.dirname(osp.dirname(osp.abspath(__file__)))
