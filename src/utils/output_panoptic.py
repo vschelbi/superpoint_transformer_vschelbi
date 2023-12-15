@@ -282,7 +282,8 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         # TODO : cleanly remove offset
         # obj_score = \
         #     obj_semantic_score * obj_x_score * obj_intra_score * obj_inter_score
-        obj_score = obj_semantic_score * obj_intra_score * obj_inter_score
+        # obj_score = obj_semantic_score * obj_intra_score * obj_inter_score
+        obj_score = obj_semantic_score
 
         return obj_score, obj_y, instance_data
 
