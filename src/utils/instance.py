@@ -1202,7 +1202,7 @@ def grid_search_panoptic_partition(
             data=results_data,
             columns=[
                 *[
-                    x[:max_len] - 1 + '.' if len(x) > max_len else x
+                    x[:max_len - 1] + '.' if len(x) > max_len else x
                     for x in partition_kwargs.keys()
                 ], 'PQ', 'SQ', 'RQ', 'mAP', 'mAP 50']))
     print()
