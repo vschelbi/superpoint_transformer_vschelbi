@@ -1196,12 +1196,15 @@ def grid_search_panoptic_partition(
             round(instance_results.map_50.item() * 100, 2) if instance_results else None])
 
     # Print a DataFrame summarizing the results
+    max_len = 6
     with pd.option_context('display.precision', 2):
         print(pd.DataFrame(
             data=results_data,
             columns=[
-                *[x[:6] for x in partition_kwargs.keys()], 'PQ', 'SQ', 'RQ',
-                'mAP', 'mAP 50']))
+                *[
+                    x[:max_len] - 1 + '.' if len(x) > max_len else x
+                    for x in partition_kwargs.keys()
+                ], 'PQ', 'SQ', 'RQ', 'mAP', 'mAP 50']))
     print()
 
     # Print more details about the best panoptic setup
