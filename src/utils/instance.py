@@ -1101,6 +1101,9 @@ def grid_search_panoptic_partition(
     assert panoptic or instance, \
         "At least 'panoptic' or 'instance' must be True"
 
+    # Limit the column header size for printed tables
+    max_len = 6
+
     # Prevent `NAGAddKeysTo` from removing attributes to allow
     # visualizing them after model inference
     dataset = _set_attribute_preserving_transforms(dataset)
@@ -1196,7 +1199,6 @@ def grid_search_panoptic_partition(
             round(instance_results.map_50.item() * 100, 2) if instance_results else None])
 
     # Print a DataFrame summarizing the results
-    max_len = 6
     with pd.option_context('display.precision', 2):
         print(pd.DataFrame(
             data=results_data,
@@ -1215,7 +1217,11 @@ def grid_search_panoptic_partition(
         with pd.option_context('display.precision', 2):
             print(pd.DataFrame(
                 data=[best_pq_params],
-                columns=[x[:6] for x in partition_kwargs.keys()]))
+                columns=[
+                    x[:max_len - 1] + '.' if len(x) > max_len else x
+                    for x in partition_kwargs.keys()
+                ]))
+
         print()
 
         # Print per-class results
@@ -1246,7 +1252,10 @@ def grid_search_panoptic_partition(
         with pd.option_context('display.precision', 2):
             print(pd.DataFrame(
                 data=[best_map_params],
-                columns=[x[:6] for x in partition_kwargs.keys()]))
+                columns=[
+                    x[:max_len - 1] + '.' if len(x) > max_len else x
+                    for x in partition_kwargs.keys()
+                ]))
         print()
 
         # Print per-class results
