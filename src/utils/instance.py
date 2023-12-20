@@ -957,12 +957,21 @@ def _forward_multi_partition(
         partition_kwargs,
         ignore_offsets=False,
         ignore_pos=False,
-        ignore_affinities=False):
+        ignore_affinities=False,
+        oracle_affinities=False,
+        oracle_semantics=False):
     """Local helper to compute multiple instance partitions from the
     same input data, based on diverse partition parameter settings.
     """
     # Local import to avoid import loop errors
     from src.models.panoptic import PanopticSegmentationOutput
+
+    # Make sure each element of `partition_kwargs` is a list,
+    # to facilitate computing Cartesian product of the lists for
+    # grid search
+    partition_kwargs = {
+        k: v if isinstance(v, list) else [v]
+        for k, v in partition_kwargs.items()}
 
     if ignore_pos:
         ignore_offsets = True
@@ -1011,17 +1020,21 @@ def _forward_multi_partition(
         if ignore_affinities:
             edge_affinity_logits = edge_affinity_logits * 0 + 0.5
 
-        # Make sure each element of `partition_kwargs` is a list,
-        # to facilitate computing Cartesian product of the lists for
-        # grid search
-        partition_kwargs = {
-            k: v if isinstance(v, list) else [v]
-            for k, v in partition_kwargs.items()}
+        if oracle_affinities:
+            edge_affinity_logits = \
+                getattr(nag[1], 'obj_edge_affinity', edge_affinity_logits)
+            partition_kwargs['do_sigmoid_affinity'] = [False]
 
+        if oracle_semantics:
+            if model.multi_stage_loss:
+                semantic_pred[0] = nag[1].y
+            else:
+                semantic_pred = nag[1].y
+
+        # Compute the partition on the Cartesian product of parameters
         enum = [
             {k: v for k, v in zip(partition_kwargs.keys(), values)}
             for values in product(*partition_kwargs.values())]
-
         partitions = {}
         for kwargs in tqdm(enum):
             model = _set_partitioner_parameters(model, kwargs)
@@ -1058,6 +1071,8 @@ def grid_search_panoptic_partition(
         ignore_offsets=False,
         ignore_pos=False,
         ignore_affinities=False,
+        oracle_affinities=False,
+        oracle_semantics=False,
         panoptic=True,
         instance=False):
     """Runs a grid search on the partition parameters to find the best
@@ -1071,7 +1086,7 @@ def grid_search_panoptic_partition(
         Dictionary of parameters to be passed to the instance graph
         constructor `OnTheFlyInstanceGraph`. NB: the grid search does
         not cover these parameters---only a single value can be passed
-        for each parameter
+        for each of these parameters
     :param partition_kwargs: dict
         Dictionary of parameters to be passed to `model.partitioner`.
         Passing a list of values for a given parameter will trigger the
@@ -1087,6 +1102,12 @@ def grid_search_panoptic_partition(
     :param ignore_affinities: bool
         Whether the edge affinities predicted by the model should be
         ignored. If so, all edge weights will be set to 0.5
+    :param oracle_affinities: bool
+        If True, the target affinities will be used instead of the
+        predicted ones. This overwrites `ignore_affinities`
+    :param oracle_semantics: bool
+        If True, the target semantic predictions will be used instead of
+        the predicted ones
     :param panoptic: bool
         Whether panoptic segmentation metrics should be computed
     :param instance: bool
@@ -1128,7 +1149,9 @@ def grid_search_panoptic_partition(
         partition_kwargs,
         ignore_offsets=ignore_offsets,
         ignore_pos=ignore_pos,
-        ignore_affinities=ignore_affinities)
+        ignore_affinities=ignore_affinities,
+        oracle_affinities=oracle_affinities,
+        oracle_semantics=oracle_semantics)
 
     # Get the target labels
     output = model.get_target(nag, output)
