@@ -1023,7 +1023,10 @@ def _forward_multi_partition(
         if oracle_affinities:
             edge_affinity_logits = \
                 getattr(nag[1], 'obj_edge_affinity', edge_affinity_logits)
-            partition_kwargs['do_sigmoid_affinity'] = [False]
+            if 'do_sigmoid_affinity' in partition_kwargs.keys():
+                partition_kwargs['do_sigmoid_affinity'] = [False]
+            else:
+                model.partitioner.do_sigmoid_affinity = False
 
         if oracle_semantics:
             if model.multi_stage_loss:
