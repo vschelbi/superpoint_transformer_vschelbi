@@ -36,6 +36,10 @@ class NAG:
         Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
         (i.e. level-0 points are themselves clusters of '-1' level
         absent from the NAG object).
+
+        Note2: if 'low=0' and the level-0 node possess a 'node_size'
+        attribute, this will be used to represent the size of level-0
+        nodes
         """
         assert -1 <= low < high < self.num_levels
         assert 0 <= low or self[0].is_super
