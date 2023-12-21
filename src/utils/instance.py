@@ -337,7 +337,6 @@ def _instance_cut_pursuit(
         node_size,
         edge_index,
         edge_affinity_logits,
-        do_sigmoid_affinity=True,
         loss_type='l2_kl',
         regularization=1e-2,
         x_weight=1,
@@ -363,11 +362,6 @@ def _instance_cut_pursuit(
     :param edge_affinity_logits: Tensor of shape [num_edges]
         Predicted affinity logits (ie in R+, before sigmoid) of each
         edge
-    :param do_sigmoid_affinity: bool
-        If True, a sigmoid will be applied on the `edge_affinity_logits`
-        to convert the logits to [0, 1] affinities. If False, the input
-        `edge_affinity_logits` will be used as is when computing the
-        discrepancies
     :param loss_type: str
         Rules the loss applied on the node features. Accepts one of
         'l2' (L2 loss on node features and probabilities),
@@ -470,8 +464,7 @@ def _instance_cut_pursuit(
             f"accept a larger data type for `index_t`.")
 
     # Convert affinity logits to discrepancies
-    edge_affinity = edge_affinity_logits.sigmoid() if do_sigmoid_affinity \
-        else edge_affinity_logits
+    edge_affinity = edge_affinity_logits.sigmoid()
     edge_discrepancy = edge_affinity / (1 - edge_affinity + discrepancy_epsilon)
 
     # Convert edges to forward-star (or CSR) representation
@@ -553,7 +546,6 @@ def instance_cut_pursuit(
         node_size,
         edge_index,
         edge_affinity_logits,
-        do_sigmoid_affinity=True,
         loss_type='l2_kl',
         regularization=1e-2,
         x_weight=1,
@@ -589,11 +581,6 @@ def instance_cut_pursuit(
     :param edge_affinity_logits: Tensor of shape [num_edges]
         Predicted affinity logits (ie in R+, before sigmoid) of each
         edge
-    :param do_sigmoid_affinity: bool
-        If True, a sigmoid will be applied on the `edge_affinity_logits`
-        to convert the logits to [0, 1] affinities. If False, the input
-        `edge_affinity_logits` will be used as is when computing the
-        discrepancies
     :param loss_type: str
         Rules the loss applied on the node features. Accepts one of
         'l2' (L2 loss on node features and probabilities),
@@ -642,7 +629,6 @@ def instance_cut_pursuit(
         node_size,
         edge_index,
         edge_affinity_logits,
-        do_sigmoid_affinity=do_sigmoid_affinity,
         loss_type=loss_type,
         regularization=regularization,
         x_weight=x_weight,
@@ -740,6 +726,9 @@ def oracle_superpoint_clustering(
         `instance_cut_pursuit()`
     :return:
     """
+
+    # TODO: maybe remove this function, redundant with grid_search_panoptic_partition
+
     # Local import to avoid import loop errors
     from src.transforms import OnTheFlyInstanceGraph
     from src.models.panoptic import PanopticSegmentationOutput
@@ -821,9 +810,6 @@ def oracle_superpoint_clustering(
     # Compute the metrics on the oracle partition
     panoptic_metrics.update(obj_y, instance_data.cpu())
     results = panoptic_metrics.compute()
-
-    # TODO: remove all do_sigmoid and use logit just when needed
-    # TODO: fix inverse affinity labels to affinity logits with torch.special.logits
 
     return results
 
@@ -1049,15 +1035,10 @@ def _forward_multi_partition(
             nag[1].pos *= 0
 
         if ignore_affinities and not oracle_affinities:
-            edge_affinity_logits = edge_affinity_logits * 0 + 0.5
+            edge_affinity_logits = edge_affinity_logits * 0
 
         if oracle_affinities:
-            edge_affinity_logits = \
-                getattr(nag[1], 'obj_edge_affinity', edge_affinity_logits)
-            if 'do_sigmoid_affinity' in partition_kwargs.keys():
-                partition_kwargs['do_sigmoid_affinity'] = [False]
-            else:
-                model.partitioner.do_sigmoid_affinity = False
+            edge_affinity_logits = torch.special.logit(nag[1].obj_edge_affinity)
 
         if oracle_semantics:
 

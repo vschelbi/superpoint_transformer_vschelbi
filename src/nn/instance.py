@@ -146,7 +146,6 @@ class InstancePartitioner(nn.Module):
             node_size,
             edge_index,
             edge_affinity_logits,
-            do_sigmoid_affinity=True,
             loss_type=self.loss_type,
             regularization=self.regularization,
             x_weight=self.x_weight,
