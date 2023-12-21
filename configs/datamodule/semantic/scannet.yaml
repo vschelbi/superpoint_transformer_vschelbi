@@ -233,6 +233,10 @@ test_transform: ${datamodule.val_transform}
 # GPU-based train transforms
 on_device_train_transform:
 
+    # Add a `node_size` attribute to all segments, this is needed for
+    # segment-wise position normalization with UnitSphereNorm
+    - transform: NodeSize
+
     # Apply sampling transforms first to reduce the number of nodes and
     # edges. These operations are compute-intensive and are the reason
     # why these transforms are not performed on CPU
@@ -400,10 +404,6 @@ on_device_train_transform:
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
 
-    # Add a `node_size` attribute to all segments, this is needed for
-    # segment-wise position normalization with UnitSphereNorm
-    - transform: NodeSize
-
     # Compute the instance graph for instantiation
     - transform: OnTheFlyInstanceGraph
       params:
@@ -418,6 +418,10 @@ on_device_train_transform:
 
 # GPU-based val transforms
 on_device_val_transform:
+
+    # Add a `node_size` attribute to all segments, this is needed for
+    # segment-wise position normalization with UnitSphereNorm
+    - transform: NodeSize
 
     # Apply sampling transforms first to reduce the number of nodes and
     # edges. These operations are compute-intensive and are the reason
@@ -476,10 +480,6 @@ on_device_val_transform:
 
     # Add self-loops in the horizontal graph
     - transform: NAGAddSelfLoops
-
-    # Add a `node_size` attribute to all segments, this is needed for
-    # segment-wise position normalization with UnitSphereNorm
-    - transform: NodeSize
 
     # Compute the instance graph for instantiation
     - transform: OnTheFlyInstanceGraph
