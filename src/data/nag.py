@@ -43,7 +43,10 @@ class NAG:
         # Sizes are computed in a bottom-up fashion. Note this scatter
         # operation assumes all levels of hierarchy use dense,
         # consecutive indices which are consistent between levels
-        sub_sizes = self[low + 1].sub.sizes
+        if low == 0 and getattr(self[low + 1], 'node_size', None) is not None:
+            sub_sizes = self[low + 1].node_size
+        else:
+            sub_sizes = self[low + 1].sub.sizes
         for i in range(low + 1, high):
             sub_sizes = scatter_sum(sub_sizes, self[i].super_index, dim=0)
         return sub_sizes
