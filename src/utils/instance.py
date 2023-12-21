@@ -959,7 +959,8 @@ def _forward_multi_partition(
         ignore_pos=False,
         ignore_affinities=False,
         oracle_affinities=False,
-        oracle_semantics=False):
+        oracle_semantics=False,
+        oracle_offsets=False):
     """Local helper to compute multiple instance partitions from the
     same input data, based on diverse partition parameter settings.
     """
@@ -1010,14 +1011,14 @@ def _forward_multi_partition(
             ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
         edge_affinity_logits = model.edge_affinity_head(x_edge).squeeze()
 
-        # if ignore_offsets:
+        # if ignore_offsets and not oracle_offsets:
         #     node_offset_pred = node_offset_pred * 0
 
-        if ignore_pos:
+        if ignore_pos and not oracle_offsets:
             pos_bckp = nag[1].pos.clone()
             nag[1].pos *= 0
 
-        if ignore_affinities:
+        if ignore_affinities and not oracle_affinities:
             edge_affinity_logits = edge_affinity_logits * 0 + 0.5
 
         if oracle_affinities:
@@ -1033,6 +1034,10 @@ def _forward_multi_partition(
                 semantic_pred[0] = nag[1].y
             else:
                 semantic_pred = nag[1].y
+
+        if oracle_offsets:
+            is_stuff = get_stuff_mask(nag[1].y, model.stuff_classes)
+            nag[1].pos[~is_stuff] = nag[1].obj_pos[~is_stuff]
 
         # Compute the partition on the Cartesian product of parameters
         enum = [
@@ -1076,6 +1081,7 @@ def grid_search_panoptic_partition(
         ignore_affinities=False,
         oracle_affinities=False,
         oracle_semantics=False,
+        oracle_offsets=False,
         panoptic=True,
         instance=False):
     """Runs a grid search on the partition parameters to find the best
@@ -1111,6 +1117,10 @@ def grid_search_panoptic_partition(
     :param oracle_semantics: bool
         If True, the target semantic predictions will be used instead of
         the predicted ones
+    :param oracle_offsets: bool
+        If True, the target offset predictions will be used instead of
+        the predicted ones. This overwrites `ignore_offsets` and
+        `ignore_pos`
     :param panoptic: bool
         Whether panoptic segmentation metrics should be computed
     :param instance: bool
@@ -1154,7 +1164,8 @@ def grid_search_panoptic_partition(
         ignore_pos=ignore_pos,
         ignore_affinities=ignore_affinities,
         oracle_affinities=oracle_affinities,
-        oracle_semantics=oracle_semantics)
+        oracle_semantics=oracle_semantics,
+        oracle_offsets=oracle_offsets)
 
     # Get the target labels
     output = model.get_target(nag, output)
