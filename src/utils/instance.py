@@ -22,6 +22,7 @@ sys.path.append(src_folder)
 sys.path.append(osp.join(src_folder, "dependencies/grid_graph/python/bin"))
 sys.path.append(osp.join(src_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
 
+
 from grid_graph import edge_list_to_forward_star
 from cp_d0_dist import cp_d0_dist
 
@@ -741,6 +742,8 @@ def oracle_superpoint_clustering(
     """
     # Local import to avoid import loop errors
     from src.transforms import OnTheFlyInstanceGraph
+    from src.models.panoptic import PanopticSegmentationOutput
+    from src.metrics import PanopticQuality3D
 
     # Instance graph computation
     graph_kwargs = {} if graph_kwargs is None else graph_kwargs
@@ -750,16 +753,16 @@ def oracle_superpoint_clustering(
     # Prepare input for instance graph partition
     # NB: we assign only to valid classes and ignore void
     # NB2: `instance_cut_pursuit()` expects logits, which it converts to
-    # probabilities using a softmax, hence the `one_hot * 10`
+    # probabilities using a softmax, hence the `one_hot * 100`
     node_y = nag[1].y[:, :num_classes].argmax(dim=1)
-    node_logits = one_hot(node_y, num_classes=num_classes).float() * 10
+    node_logits = one_hot(node_y, num_classes=num_classes).float() * 100
     node_size = nag.get_sub_size(1)
     edge_index = nag[1].obj_edge_index
 
-    # Prepare edge weights. If affinities are not used, we set all edge
-    # weights to 0.5
-    edge_affinity = nag[1].obj_edge_affinity if with_affinity \
-        else torch.full(edge_index.shape[1], 0.5, device=nag.device)
+    # Prepare edge affinity logits. If affinities are not used, we set
+    # all edge affinity logits to 0 (ie 0.5 sigmoid-ed weights)
+    edge_affinity_logits = torch.special.logit(nag[1].obj_edge_affinity) \
+        if with_affinity else torch.zeros(edge_index.shape[1], device=nag.device)
 
     # Prepare node position features. If offsets are used, the oracle
     # perfectly predicts the offset to the object center for each node,
@@ -777,7 +780,6 @@ def oracle_superpoint_clustering(
 
     # Instance graph partition
     partition_kwargs = {} if partition_kwargs is None else partition_kwargs
-    partition_kwargs = dict(partition_kwargs, **dict(do_sigmoid_affinity=False))
     obj_index = instance_cut_pursuit(
         batch,
         node_x,
@@ -785,13 +787,45 @@ def oracle_superpoint_clustering(
         stuff_classes,
         node_size,
         edge_index,
-        edge_affinity,
+        edge_affinity_logits,
         **partition_kwargs)
 
-    # Compute the instance data by merging nodes based on obj_index
-    instance_data = nag[1].obj.merge(obj_index)
+    # Gather results in an output object
+    output = PanopticSegmentationOutput(
+        node_logits,
+        stuff_classes,
+        edge_affinity_logits,
+        # node_offset_pred,
+        node_size)
 
-    return instance_data
+    # Store the panoptic segmentation results in the output object
+    output.obj_edge_index = getattr(nag[1], 'obj_edge_index', None)
+    output.obj_edge_affinity = getattr(nag[1], 'obj_edge_affinity', None)
+    output.pos = nag[1].pos
+    output.obj_pos = getattr(nag[1], 'obj_pos', None)
+    output.obj = nag[1].obj
+    output.y_hist = nag[1].y
+    output.obj_index_pred = obj_index
+
+    # Create the metrics tracking objects
+    panoptic_metrics = PanopticQuality3D(
+        num_classes,
+        ignore_unseen_classes=True,
+        stuff_classes=stuff_classes,
+        compute_on_cpu=True)
+
+    # Recover the predicted instance score, semantic label and instance
+    # partition
+    obj_score, obj_y, instance_data = output.get_instance_predictions()
+
+    # Compute the metrics on the oracle partition
+    panoptic_metrics.update(obj_y, instance_data.cpu())
+    results = panoptic_metrics.compute()
+
+    # TODO: remove all do_sigmoid and use logit just when needed
+    # TODO: fix inverse affinity labels to affinity logits with torch.special.logits
+
+    return results
 
 
 def get_stuff_mask(y, stuff_classes):
@@ -859,10 +893,6 @@ def compute_panoptic_metrics(
             # validation and test datasets, this will prepare an entire
             # tile for inference
             nag = dataset.on_device_transform(nag)
-
-            # nag_list = [nag.cuda() for nag in nag_list]
-            # nag = NAGBatch.from_nag_list(nag_list)
-            # nag = dataset.on_device_transform(nag.cuda())
 
             model.validation_step(nag, None)
 
@@ -1030,10 +1060,20 @@ def _forward_multi_partition(
                 model.partitioner.do_sigmoid_affinity = False
 
         if oracle_semantics:
+
+            # Oracle predicts perfect semantic logits for each node
+            # NB: we assign only to valid classes and ignore void
+            # NB2: `instance_cut_pursuit()` expects logits, which it
+            # converts to probabilities using a softmax, hence the
+            # `one_hot * 10`
+            node_y = nag[1].y[:, :model.num_classes].argmax(dim=1)
+            node_logits = one_hot(
+                node_y, num_classes=model.num_classes).float() * 10
+
             if model.multi_stage_loss:
-                semantic_pred[0] = nag[1].y
+                semantic_pred[0] = node_logits
             else:
-                semantic_pred = nag[1].y
+                semantic_pred = node_logits
 
         if oracle_offsets:
             is_stuff = get_stuff_mask(nag[1].y, model.stuff_classes)
