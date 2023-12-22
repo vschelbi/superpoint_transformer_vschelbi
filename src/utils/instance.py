@@ -677,8 +677,7 @@ def oracle_superpoint_clustering(
         nag,
         num_classes,
         stuff_classes,
-        with_offset=False,
-        with_affinity=True,
+        mode='pas',
         graph_kwargs=None,
         partition_kwargs=None):
     """Compute an oracle for superpoint clustering for instance and
@@ -710,14 +709,19 @@ def oracle_superpoint_clustering(
         valid and void classes
     :param stuff_classes: List[int]
         List of labels for 'stuff' classes
-    :param with_offset: bool
-        Whether offset prediction should be used. If so, the oracle
-        perfectly predicts the offset to the object center for each
-        node, except for stuff and void classes, whose offset is set
-        to 0
-    :param with_affinity: bool
-        Whether affinity prediction should be used. If not, we set all
-        edge weights to 0.5
+    :param mode: str
+        String characterizing whether edge affinities, node semantics,
+        positions and offsets should be used in the graph clustering.
+        'p': use node position.
+        'o': use oracle offset.
+        'a': use oracle edge affinities.
+        's': use oracle node semantics.
+        In contrast, not setting 'p', nor 'o' is equivalent to setting
+        all nodes positions and offsets to 0.
+        Similarly, not setting 'a' will set the same weight to all the
+        edges.
+        Finally, not setting 's' will set the same class to all the
+        nodes.
     :param graph_kwargs: dict
         Dictionary of kwargs to be passed to the graph constructor
         `OnTheFlyInstanceGraph()`
@@ -739,29 +743,46 @@ def oracle_superpoint_clustering(
     graph_kwargs = dict(graph_kwargs, **dict(level=1, num_classes=num_classes))
     nag = OnTheFlyInstanceGraph(**graph_kwargs)(nag)
 
-    # Prepare input for instance graph partition
+    # Get node target semantics, size and instance graph
+    node_y = nag[1].y[:, :num_classes].argmax(dim=1)
+    node_size = nag.get_sub_size(1)
+    edge_index = nag[1].obj_edge_index
+
+    # Prepare input for instance graph partition. If 's' is used, the
+    # oracle will assign the target semantic label to each node
     # NB: we assign only to valid classes and ignore void
     # NB2: `instance_cut_pursuit()` expects logits, which it converts to
     # probabilities using a softmax, hence the `one_hot * 100`
-    node_y = nag[1].y[:, :num_classes].argmax(dim=1)
-    node_logits = one_hot(node_y, num_classes=num_classes).float() * 100
-    node_size = nag.get_sub_size(1)
-    edge_index = nag[1].obj_edge_index
+    if 's' in mode.lower():
+        node_logits = one_hot(node_y, num_classes=num_classes).float() * 100
+
+    # Otherwise, the nodes will all have the same logits and the
+    # semantics will not influence the partition
+    else:
+        node_logits = torch.ones(
+            nag[1].num_nodes, num_classes, dtype='float', device=nag.device)
 
     # Prepare edge affinity logits. If affinities are not used, we set
     # all edge affinity logits to 0 (ie 0.5 sigmoid-ed weights)
     edge_affinity_logits = torch.special.logit(nag[1].obj_edge_affinity) \
-        if with_affinity else torch.zeros(edge_index.shape[1], device=nag.device)
+        if 'a' in mode.lower() \
+        else torch.zeros(edge_index.shape[1], device=nag.device)
 
-    # Prepare node position features. If offsets are used, the oracle
+    # Prepare node position features. If 'o' is used, the oracle
     # perfectly predicts the offset to the object center for each node,
     # except for stuff and void classes, whose offset is set to 0
-    if with_offset:
+    if 'o' in mode.lower():
         node_x = nag[1].obj_pos
         is_stuff = get_stuff_mask(node_y, stuff_classes)
         node_x[is_stuff] = nag[1].pos[is_stuff]
-    else:
+
+    # If 'p' only node positions are used
+    elif 'p' in mode.lower():
         node_x = nag[1].pos
+
+    # Otherwise, positions and offsets are not used in the partition
+    else:
+        node_x = nag[1].pos * 0
 
     # For each node, recover the index of the batch item it belongs to
     batch = nag[1].batch if nag[1].batch is not None \
@@ -971,12 +992,7 @@ def _forward_multi_partition(
         model,
         nag,
         partition_kwargs,
-        ignore_offsets=False,
-        ignore_pos=False,
-        ignore_affinities=False,
-        oracle_affinities=False,
-        oracle_semantics=False,
-        oracle_offsets=False):
+        mode='pas'):
     """Local helper to compute multiple instance partitions from the
     same input data, based on diverse partition parameter settings.
     """
@@ -990,9 +1006,6 @@ def _forward_multi_partition(
         k: v if isinstance(v, list) else [v]
         for k, v in partition_kwargs.items()}
 
-    if ignore_pos:
-        ignore_offsets = True
-
     with torch.no_grad():
 
         # Extract features
@@ -1004,16 +1017,6 @@ def _forward_multi_partition(
 
         # Recover level-1 features only
         x = x[0] if model.multi_stage_loss else x
-
-        # Compute node offset predictions
-        if not ignore_offsets:
-            node_offset_pred = model.node_offset_head(x)
-
-            # Forcefully set 0-offset for nodes with stuff predictions
-            node_logits = semantic_pred[0] if model.multi_stage_loss \
-                else semantic_pred
-            is_stuff = get_stuff_mask(node_logits, model.stuff_classes)
-            node_offset_pred[is_stuff] = 0
 
         # TODO: offset soft-assigned to 0 based on the predicted
         #  stuff/thing probas. A stuff/thing classification loss could
@@ -1027,36 +1030,52 @@ def _forward_multi_partition(
             ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
         edge_affinity_logits = model.edge_affinity_head(x_edge).squeeze()
 
-        # if ignore_offsets and not oracle_offsets:
-        #     node_offset_pred = node_offset_pred * 0
-
-        if ignore_pos and not oracle_offsets:
-            pos_bckp = nag[1].pos.clone()
-            nag[1].pos *= 0
-
-        if ignore_affinities and not oracle_affinities:
+        # Ignore predicted affinities (sets all edge affinity logits to
+        # 0, which will set edge weights to 0.5 for the partition)
+        if 'a' not in mode.lower():
             edge_affinity_logits = edge_affinity_logits * 0
 
-        if oracle_affinities:
+        # Oracle edge affinities
+        elif 'A' in mode:
             edge_affinity_logits = torch.special.logit(nag[1].obj_edge_affinity)
 
-        if oracle_semantics:
+        # Ignore predicted semantic labels
+        if 's' not in mode.lower():
+            partition_kwargs['p_weight'] = 0
 
-            # Oracle predicts perfect semantic logits for each node
-            # NB: we assign only to valid classes and ignore void
-            # NB2: `instance_cut_pursuit()` expects logits, which it
-            # converts to probabilities using a softmax, hence the
-            # `one_hot * 10`
+        # Oracle node semantics predicts perfect semantic logits for
+        # each node
+        # NB: we assign only to valid classes and ignore void
+        # NB2: `instance_cut_pursuit()` expects logits, which it
+        # converts to probabilities using a softmax, hence the
+        # `one_hot * 10`
+        elif 'S' in mode:
             node_y = nag[1].y[:, :model.num_classes].argmax(dim=1)
             node_logits = one_hot(
                 node_y, num_classes=model.num_classes).float() * 10
-
             if model.multi_stage_loss:
                 semantic_pred[0] = node_logits
             else:
                 semantic_pred = node_logits
 
-        if oracle_offsets:
+        # Ignore positions and predicted offsets
+        if 'p' not in mode.lower() and 'o' not in mode.lower():
+            partition_kwargs['x_weight'] = 0
+
+        # Compute node offset predictions
+        elif 'o' in mode:
+            node_offset_pred = model.node_offset_head(x)
+
+            # Forcefully set 0-offset for nodes with stuff predictions
+            node_logits = semantic_pred[0] if model.multi_stage_loss \
+                else semantic_pred
+            is_stuff = get_stuff_mask(node_logits, model.stuff_classes)
+            node_offset_pred[is_stuff] = 0
+
+        # Oracle node offsets sets perfect offsets for all nodes and
+        # keeps node centroid for nodes with target stuff label
+        # (ie 0-offset)
+        elif 'O':
             is_stuff = get_stuff_mask(nag[1].y, model.stuff_classes)
             nag[1].pos[~is_stuff] = nag[1].obj_pos[~is_stuff]
 
@@ -1085,9 +1104,6 @@ def _forward_multi_partition(
 
         output = model.get_target(nag, output)
 
-        if ignore_offsets:
-            output.obj_pos = nag[1].pos
-
     return output, partitions
 
 
@@ -1097,12 +1113,7 @@ def grid_search_panoptic_partition(
         i_cloud=0,
         graph_kwargs=None,
         partition_kwargs=None,
-        ignore_offsets=False,
-        ignore_pos=False,
-        ignore_affinities=False,
-        oracle_affinities=False,
-        oracle_semantics=False,
-        oracle_offsets=False,
+        mode='pas',
         panoptic=True,
         instance=False):
     """Runs a grid search on the partition parameters to find the best
@@ -1122,26 +1133,22 @@ def grid_search_panoptic_partition(
         Passing a list of values for a given parameter will trigger the
         grid search across these values. Beware of the combinatorial
         explosion !
-    :param ignore_offsets: bool
-        Whether the node offsets predicted by the model should be
-        ignored in the partition. If so, all offsets will be set to 0
-    :param ignore_pos: bool
-        Whether the node positions should be ignored in the partition.
-        If so, all node positions will be set to 0. Incidentally, all
-        node offsets will be set to 0
-    :param ignore_affinities: bool
-        Whether the edge affinities predicted by the model should be
-        ignored. If so, all edge weights will be set to 0.5
-    :param oracle_affinities: bool
-        If True, the target affinities will be used instead of the
-        predicted ones. This overwrites `ignore_affinities`
-    :param oracle_semantics: bool
-        If True, the target semantic predictions will be used instead of
-        the predicted ones
-    :param oracle_offsets: bool
-        If True, the target offset predictions will be used instead of
-        the predicted ones. This overwrites `ignore_offsets` and
-        `ignore_pos`
+    :param mode: str
+        String characterizing whether edge affinities, node semantics,
+        positions and offsets should be used in the graph clustering.
+        'p': use node position.
+        'o': use predicted node offset.
+        'O': use oracle offset.
+        'a': use predicted edge affinity.
+        'A': use oracle edge affinities.
+        's': use predicted node semantics.
+        'S': use oracle node semantics.
+        In contrast, not setting 'p', 'o', nor 'O' is equivalent to
+        setting all node positions and offsets to 0.
+        Similarly, not setting 'a' nor 'A' will set the same weight to
+        all the edges.
+        Finally, not setting 's', nor 'S' will set the same class to all
+        the nodes.
     :param panoptic: bool
         Whether panoptic segmentation metrics should be computed
     :param instance: bool
@@ -1181,12 +1188,7 @@ def grid_search_panoptic_partition(
         model,
         nag,
         partition_kwargs,
-        ignore_offsets=ignore_offsets,
-        ignore_pos=ignore_pos,
-        ignore_affinities=ignore_affinities,
-        oracle_affinities=oracle_affinities,
-        oracle_semantics=oracle_semantics,
-        oracle_offsets=oracle_offsets)
+        mode=mode)
 
     # Get the target labels
     output = model.get_target(nag, output)
