@@ -39,10 +39,10 @@ model:
     weight_decay: 1e-2
 
   partitioner:
-    regularization: 20
+    regularization: 10
     x_weight: 1e-3
-    discrepancy_epsilon: 1e-2
-    dampening: 1e-2
+    cutoff: 300
+    discrepancy_epsilon: 1e-4
 
   partition_every_n_epochs: -1
 

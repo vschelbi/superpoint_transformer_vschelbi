@@ -121,7 +121,7 @@ class OnTheFlyInstanceGraph(Transform):
             self,
             level=1,
             num_classes=None,
-            adjacency_mode='radius-centroid',
+            adjacency_mode='radius',
             k_max=30,
             radius=1,
             use_batch=True,

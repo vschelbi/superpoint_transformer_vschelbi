@@ -65,7 +65,7 @@ class InstancePartitioner(nn.Module):
             parallel=True,
             iterations=10,
             trim=False,
-            discrepancy_epsilon=1e-3,
+            discrepancy_epsilon=1e-4,
             temperature=1,
             dampening=0):
         super().__init__()

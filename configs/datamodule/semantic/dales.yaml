@@ -114,7 +114,7 @@ drop_to_mean: False
 # segmentation but will be skipped for semantic segmentation.
 # NB: setting instance_level < 0 will skip OnTheFlyInstanceGraph
 instance_level: -1
-instance_adjacency_mode: 'radius-centroid'
+instance_adjacency_mode: 'radius'
 instance_k_max: 30
 instance_radius: 5
 instance_centroid_mode: 'iou'
