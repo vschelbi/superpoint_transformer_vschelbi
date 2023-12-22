@@ -3,6 +3,7 @@ import sys
 import torch
 import shutil
 import logging
+import os.path as osp
 from plyfile import PlyData
 from src.datasets import BaseDataset
 from src.data import Data, InstanceData
