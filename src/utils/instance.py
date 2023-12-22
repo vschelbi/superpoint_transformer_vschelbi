@@ -348,7 +348,7 @@ def _instance_cut_pursuit(
         parallel=True,
         iterations=10,
         trim=False,
-        discrepancy_epsilon=1e-3,
+        discrepancy_epsilon=1e-4,
         temperature=1,
         dampening=0,
         verbose=False):
@@ -557,7 +557,7 @@ def instance_cut_pursuit(
         parallel=True,
         iterations=10,
         trim=False,
-        discrepancy_epsilon=1e-3,
+        discrepancy_epsilon=1e-4,
         temperature=1,
         dampening=0,
         verbose=False):
@@ -940,6 +940,7 @@ def compute_panoptic_metrics(
 
 def compute_metrics_s3dis_6fold(
         fold_ckpt,
+        experiment_config,
         stage='val',
         graph_kwargs=None,
         partition_kwargs=None,
@@ -951,6 +952,9 @@ def compute_metrics_s3dis_6fold(
     :param fold_ckpt: dict
         Dictionary with S3DIS folds as keys and checkpoint paths as
         values
+    :param experiment_config: str
+        Experiment config to use for inference. For instance for S3DIS
+        with stuff panoptic segmentation: 'panoptic/s3dis_with_stuff'
     :param stage: str
     :param graph_kwargs: dict
     :param partition_kwargs: dict
@@ -981,7 +985,7 @@ def compute_metrics_s3dis_6fold(
 
         # Parse the configs using hydra
         cfg = init_config(overrides=[
-            "experiment=panoptic/s3dis_with_stuff",
+            f"experiment={experiment_config}",
             f"datamodule.fold={fold}",
             f"ckpt_path={ckpt_path}"])
 
