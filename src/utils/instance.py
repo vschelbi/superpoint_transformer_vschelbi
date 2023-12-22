@@ -753,14 +753,12 @@ def oracle_superpoint_clustering(
     # NB: we assign only to valid classes and ignore void
     # NB2: `instance_cut_pursuit()` expects logits, which it converts to
     # probabilities using a softmax, hence the `one_hot * 100`
-    if 's' in mode.lower():
-        node_logits = one_hot(node_y, num_classes=num_classes).float() * 100
+    node_logits = one_hot(node_y, num_classes=num_classes).float() * 100
 
     # Otherwise, the nodes will all have the same logits and the
     # semantics will not influence the partition
-    else:
-        node_logits = torch.ones(
-            nag[1].num_nodes, num_classes, dtype='float', device=nag.device)
+    if 's' not in mode.lower():
+        partition_kwargs['p_weight'] = 0
 
     # Prepare edge affinity logits. If affinities are not used, we set
     # all edge affinity logits to 0 (ie 0.5 sigmoid-ed weights)
@@ -782,6 +780,7 @@ def oracle_superpoint_clustering(
 
     # Otherwise, positions and offsets are not used in the partition
     else:
+        partition_kwargs['x_weight'] = 0
         node_x = nag[1].pos * 0
 
     # For each node, recover the index of the batch item it belongs to
@@ -886,7 +885,7 @@ def compute_panoptic_metrics(
     dataset = _set_graph_construction_parameters(dataset, graph_kwargs)
 
     # Set the partitioner parameters
-    model = _set_partitioner_parameters(model, partition_kwargs)
+    model, backup_kwargs = _set_partitioner_parameters(model, partition_kwargs)
 
     # Load a dataset item. This will return the hierarchical partition
     # of an entire tile, within a NAG object
@@ -916,6 +915,9 @@ def compute_panoptic_metrics(
         model.val_panoptic.reset()
         model.val_semantic.reset()
         model.val_instance.reset()
+
+    # Restore the partitioner initial kwargs
+    model, _ = _set_partitioner_parameters(model, backup_kwargs)
 
     if not verbose:
         return panoptic, instance, semantic
@@ -977,15 +979,18 @@ def _set_partitioner_parameters(model, partition_kwargs):
     """Modifies the `model.partitioner` parameters with parameters
     passed in the `partition_kwargs` dictionary.
     """
+    backup_kwargs = {}
+
     if partition_kwargs is None:
-        return model
+        return model, backup_kwargs
 
     # Set partitioner parameters if need be
     if partition_kwargs is not None:
         for k, v in partition_kwargs.items():
+            backup_kwargs[k] = getattr(model.partitioner, k, None)
             setattr(model.partitioner, k, v)
 
-    return model
+    return model, backup_kwargs
 
 
 def _forward_multi_partition(
@@ -1075,17 +1080,20 @@ def _forward_multi_partition(
         # Oracle node offsets sets perfect offsets for all nodes and
         # keeps node centroid for nodes with target stuff label
         # (ie 0-offset)
-        elif 'O':
+        elif 'O' in mode:
             is_stuff = get_stuff_mask(nag[1].y, model.stuff_classes)
             nag[1].pos[~is_stuff] = nag[1].obj_pos[~is_stuff]
 
         # Compute the partition on the Cartesian product of parameters
+        partition_keys = list(partition_kwargs.keys())
         enum = [
-            {k: v for k, v in zip(partition_kwargs.keys(), values)}
+            {k: v for k, v in zip(partition_keys, values)}
             for values in product(*partition_kwargs.values())]
         partitions = {}
         for kwargs in tqdm(enum):
-            model = _set_partitioner_parameters(model, kwargs)
+
+            # Apply the kwargs to the partitioner
+            model, backup_kwargs = _set_partitioner_parameters(model, kwargs)
 
             # Gather results in an output object
             output = PanopticSegmentationOutput(
@@ -1102,9 +1110,12 @@ def _forward_multi_partition(
             # (can't directly store kwargs dict because unhashable)
             partitions[tuple(kwargs.values())] = output.obj_index_pred
 
+            # Restore the initial partitioner kwargs
+            model, _ = _set_partitioner_parameters(model, backup_kwargs)
+
         output = model.get_target(nag, output)
 
-    return output, partitions
+    return output, partitions, partition_keys
 
 
 def grid_search_panoptic_partition(
@@ -1184,7 +1195,7 @@ def grid_search_panoptic_partition(
     nag = dataset.on_device_transform(nag.cuda())
 
     # Compute the partition for each parameterization
-    output, partitions = _forward_multi_partition(
+    output, partitions, partition_keys = _forward_multi_partition(
         model,
         nag,
         partition_kwargs,
@@ -1217,7 +1228,7 @@ def grid_search_panoptic_partition(
     for (kwargs_values), obj_index_pred in partitions.items():
 
         # Reconstruct the kwargs dict from the kwargs values
-        kwargs = {k: v for k, v in zip(partition_kwargs.keys(), kwargs_values)}
+        kwargs = {k: v for k, v in zip(partition_keys, kwargs_values)}
 
         output.obj_index_pred = obj_index_pred
 
@@ -1265,7 +1276,7 @@ def grid_search_panoptic_partition(
             columns=[
                 *[
                     x[:max_len - 1] + '.' if len(x) > max_len else x
-                    for x in partition_kwargs.keys()
+                    for x in partition_keys
                 ], 'PQ', 'SQ', 'RQ', 'mAP', 'mAP 50']))
     print()
 
@@ -1279,8 +1290,7 @@ def grid_search_panoptic_partition(
                 data=[best_pq_params],
                 columns=[
                     x[:max_len - 1] + '.' if len(x) > max_len else x
-                    for x in partition_kwargs.keys()
-                ]))
+                    for x in partition_keys]))
 
         print()
 
@@ -1314,8 +1324,7 @@ def grid_search_panoptic_partition(
                 data=[best_map_params],
                 columns=[
                     x[:max_len - 1] + '.' if len(x) > max_len else x
-                    for x in partition_kwargs.keys()
-                ]))
+                    for x in partition_keys]))
         print()
 
         # Print per-class results
