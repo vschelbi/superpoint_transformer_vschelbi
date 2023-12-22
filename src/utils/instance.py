@@ -1,4 +1,5 @@
 import sys
+import hydra
 import torch
 import numpy as np
 import pandas as pd
@@ -11,6 +12,7 @@ import matplotlib.patches as patches
 import matplotlib.cm as cm
 from torch.nn.functional import one_hot
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
+from src.utils.hydra import init_config
 from src.utils.neighbors import knn_2
 from src.utils.graph import to_trimmed
 from src.utils.cpu import available_cpu_count
@@ -30,7 +32,8 @@ from cp_d0_dist import cp_d0_dist
 __all__ = [
     'generate_random_bbox_data', 'generate_random_segment_data',
     'instance_cut_pursuit', 'oracle_superpoint_clustering', 'get_stuff_mask',
-    'compute_panoptic_metrics', 'grid_search_panoptic_partition']
+    'compute_panoptic_metrics', 'compute_metrics_s3dis_6fold',
+    'grid_search_panoptic_partition']
 
 
 _MAX_NUM_EDGES = 4294967295
@@ -890,7 +893,8 @@ def compute_panoptic_metrics(
     # Load a dataset item. This will return the hierarchical partition
     # of an entire tile, within a NAG object
     with torch.no_grad():
-        for nag_list in tqdm(dataloader):
+        enum = tqdm(dataloader) if verbose else dataloader
+        for nag_list in enum:
             nag = NAGBatch.from_nag_list([nag.cuda() for nag in nag_list])
 
             # Apply on-device transforms on the NAG object. For the
@@ -924,14 +928,144 @@ def compute_panoptic_metrics(
 
     for k, v in panoptic.compute().items():
         print(f"{k:<22}: {v}")
-    print()
+
     if not model.no_instance_metrics:
         for k, v in instance.compute().items():
             print(f"{k:<22}: {v}")
-        print()
+
     print(f"mIoU                  : {semantic.miou().cpu().item()}")
 
     return panoptic, instance, semantic
+
+
+def compute_metrics_s3dis_6fold(
+        fold_ckpt,
+        stage='val',
+        graph_kwargs=None,
+        partition_kwargs=None,
+        verbose=False):
+    """Helper function to compute the semantic, instance, panoptic
+    segmentation metrics of a model on a S3DIS 6-fold, for given
+    instance graph and partition parameters.
+
+    :param fold_ckpt: dict
+        Dictionary with S3DIS folds as keys and checkpoint paths as
+        values
+    :param stage: str
+    :param graph_kwargs: dict
+    :param partition_kwargs: dict
+    :param verbose: bool
+    :return:
+    """
+    # Local import to avoid import loop errors
+    from src.metrics import PanopticQuality3D, MeanAveragePrecision3D, \
+        ConfusionMatrix
+
+    # Very ugly fix to ignore lightning's warning messages about the
+    # trainer and modules not being connected
+    import warnings
+    warnings.filterwarnings("ignore")
+
+    panoptic_list = []
+    instance_list = []
+    semantic_list = []
+    no_instance_metrics = None
+    min_instance_size = None
+    num_classes = None
+    stuff_classes = None
+
+    for fold, ckpt_path in fold_ckpt.items():
+
+        if verbose:
+            print(f"\nFold {fold}")
+
+        # Parse the configs using hydra
+        cfg = init_config(overrides=[
+            "experiment=panoptic/s3dis_with_stuff",
+            f"datamodule.fold={fold}",
+            f"ckpt_path={ckpt_path}"])
+
+        # Instantiate the datamodule
+        datamodule = hydra.utils.instantiate(cfg.datamodule)
+        datamodule.prepare_data()
+        datamodule.setup()
+
+        # Instantiate the model
+        model = hydra.utils.instantiate(cfg.model)
+
+        # Load pretrained weights from a checkpoint file
+        model = model.load_from_checkpoint(
+            cfg.ckpt_path,
+            net=model.net,
+            partitioner=model.partitioner,
+            criterion=model.criterion)
+        # model.criterion = hydra.utils.instantiate(cfg.model).criterion
+        model = model.eval().cuda()
+
+        # Compute metrics on the fold
+        panoptic, instance, semantic = compute_panoptic_metrics(
+            model,
+            datamodule,
+            stage=stage,
+            graph_kwargs=graph_kwargs,
+            partition_kwargs=partition_kwargs,
+            verbose=verbose)
+
+        # Gather some details from the model and datamodule before
+        # deleting them
+        no_instance_metrics = model.no_instance_metrics
+        min_instance_size = model.hparams.min_instance_size
+        num_classes = datamodule.train_dataset.num_classes
+        stuff_classes = datamodule.train_dataset.stuff_classes
+
+        del model, datamodule
+
+        # Store the metrics for each fold
+        panoptic_list.append(panoptic)
+        instance_list.append(instance)
+        semantic_list.append(semantic)
+
+    # Initialize the 6-fold metrics
+    panoptic_6fold = PanopticQuality3D(
+        num_classes,
+        ignore_unseen_classes=True,
+        stuff_classes=stuff_classes,
+        compute_on_cpu=True)
+
+    instance_6fold = MeanAveragePrecision3D(
+        num_classes,
+        stuff_classes=stuff_classes,
+        min_size=min_instance_size,
+        compute_on_cpu=True,
+        remove_void=True)
+
+    semantic_6fold = ConfusionMatrix(num_classes)
+
+    # Group together per-fold panoptic and semantic results
+    for i in range(len(panoptic_list)):
+
+        panoptic_6fold.instance_data += panoptic_list[i].instance_data
+        panoptic_6fold.prediction_semantic += panoptic_list[i].prediction_semantic
+
+        if not no_instance_metrics:
+            instance_6fold.prediction_score += instance_list[i].prediction_score
+            instance_6fold.prediction_semantic += instance_list[i].prediction_semantic
+            instance_6fold.instance_data += instance_list[i].instance_data
+
+        semantic_6fold.confmat += semantic_list[i].confmat.cpu()
+
+    # Print computed the metrics
+    print(f"\n6-fold")
+    for k, v in panoptic_6fold.compute().items():
+        print(f"{k:<22}: {v}")
+
+    if not no_instance_metrics:
+        for k, v in instance_6fold.compute().items():
+            print(f"{k:<22}: {v}")
+
+    print(f"mIoU                  : {semantic_6fold.miou().cpu().item()}")
+
+    return (panoptic_6fold, panoptic_list), (instance_6fold, instance_list), (semantic_6fold, semantic_list)
 
 
 def _set_attribute_preserving_transforms(dataset):
