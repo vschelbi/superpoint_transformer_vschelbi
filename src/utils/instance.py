@@ -1041,7 +1041,7 @@ def _forward_multi_partition(
 
         # Ignore predicted semantic labels
         if 's' not in mode.lower():
-            partition_kwargs['p_weight'] = 0
+            partition_kwargs['p_weight'] = [0]
 
         # Oracle node semantics predicts perfect semantic logits for
         # each node
@@ -1060,7 +1060,7 @@ def _forward_multi_partition(
 
         # Ignore positions and predicted offsets
         if 'p' not in mode.lower() and 'o' not in mode.lower():
-            partition_kwargs['x_weight'] = 0
+            partition_kwargs['x_weight'] = [0]
 
         # Compute node offset predictions
         elif 'o' in mode:
