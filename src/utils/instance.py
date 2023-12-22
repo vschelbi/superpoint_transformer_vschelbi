@@ -1261,15 +1261,24 @@ def grid_search_panoptic_partition(
         results[tuple(kwargs.values())] = (panoptic_results, instance_results)
 
         # Track the results to build a global summary DataFrame
-        results_data.append([
-            *kwargs.values(),
-            round(panoptic_results.pq.item() * 100, 2),
-            round(panoptic_results.sq.item() * 100, 2),
-            round(panoptic_results.rq.item() * 100, 2),
-            round(instance_results.map.item() * 100, 2) if instance_results else None,
-            round(instance_results.map_50.item() * 100, 2) if instance_results else None])
+        current_results = [*kwargs.values()]
+        if panoptic:
+            current_results += [
+                round(panoptic_results.pq.item() * 100, 2),
+                round(panoptic_results.sq.item() * 100, 2),
+                round(panoptic_results.rq.item() * 100, 2)]
+        if instance:
+            current_results += [
+                round(instance_results.map.item() * 100, 2),
+                round(instance_results.map_50.item() * 100, 2)]
+        results_data.append(current_results)
 
     # Print a DataFrame summarizing the results
+    metric_columns = []
+    if panoptic:
+        metric_columns += ['PQ', 'SQ', 'RQ']
+    if instance:
+        metric_columns += ['mAP', 'mAP 50']
     with pd.option_context('display.precision', 2):
         print(pd.DataFrame(
             data=results_data,
@@ -1277,7 +1286,8 @@ def grid_search_panoptic_partition(
                 *[
                     x[:max_len - 1] + '.' if len(x) > max_len else x
                     for x in partition_keys
-                ], 'PQ', 'SQ', 'RQ', 'mAP', 'mAP 50']))
+                ],
+                *metric_columns]))
     print()
 
     # Print more details about the best panoptic setup
@@ -1329,10 +1339,12 @@ def grid_search_panoptic_partition(
 
         # Print per-class results
         res = results[best_map_params][1]
+        thing_class_names = [
+            c for i, c in enumerate(dataset.class_names) if i in dataset.thing_classes]
         with pd.option_context('display.precision', 2):
             print(pd.DataFrame(
-                data=torch.column_stack(res.map_per_class.mul(100)),
-                index=dataset.class_names[:-1],
+                data=torch.column_stack([res.map_per_class.mul(100)]),
+                index=thing_class_names,
                 columns=['mAP']))
         print()
 
