@@ -172,13 +172,10 @@ on_device_val_transform:
     - transform: NAGAddSelfLoops
 
     # Compute the instance graph for instantiation
+    # NB: setting `datamodule.instance: False` will skip this step
     - transform: OnTheFlyInstanceGraph
       params:
-        level: ${datamodule.instance_level}
+        level: ${eval:'1 if ${datamodule.instance} else -1'}
         num_classes: ${datamodule.num_classes}
-        adjacency_mode: ${datamodule.instance_adjacency_mode}
         k_max: ${datamodule.instance_k_max}
         radius: ${datamodule.instance_radius}
-        centroid_mode: ${datamodule.instance_centroid_mode}
-        centroid_level: ${datamodule.instance_centroid_level}
-        smooth_affinity: ${datamodule.instance_smooth_affinity}

@@ -33,11 +33,8 @@ model:
     down_num_heads: 32
 
   partitioner:
-    loss_type: 'l2_kl'
     regularization: 20
     x_weight: 0
-    p_weight: 1
-    discrepancy_epsilon: 0.1
 
   edge_affinity_loss_lambda: 10
 

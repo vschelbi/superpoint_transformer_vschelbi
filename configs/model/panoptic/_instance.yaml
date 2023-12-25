@@ -15,20 +15,10 @@ min_instance_size: ${datamodule.min_instance_size}
 # into 32G with the edge affinity head
 _point_mlp: [32, 64, 64]  # point encoder layers
 
-# Instance/panoptic partitioner module
+# Instance/panoptic partitioner module. See the `InstancePartitioner`
+# documentation for more details on the available parameters
 partitioner:
   _target_: src.nn.instance.InstancePartitioner
-  loss_type: 'l2_kl'
-  regularization: 20
-  x_weight: 0.01
-  p_weight: 1
-  cutoff: 1
-  parallel: True
-  iterations: 10
-  trim: False
-  discrepancy_epsilon: 1e-4
-  temperature: 1
-  dampening: 0
 
 # Frequency at which the partition should be computed. If lower or equal
 # to 0, the partition will only be computed at the last training epoch

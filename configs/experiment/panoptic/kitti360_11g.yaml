@@ -47,11 +47,8 @@ model:
     down_ffn_ratio: 1
 
   partitioner:
-    loss_type: 'l2_kl'
     regularization: 5
     x_weight: 1e-6
-    p_weight: 1
-    dampening: 5e-2
 
   partition_every_n_epochs: -1
 

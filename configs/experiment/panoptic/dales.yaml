@@ -20,11 +20,8 @@ model:
     weight_decay: 1e-4
 
   partitioner:
-    loss_type: 'l2_kl'
     regularization: 20
     x_weight: 1e-3
-    p_weight: 1
-    discrepancy_epsilon: 1e-1
 
   partition_every_n_epochs: -1
 

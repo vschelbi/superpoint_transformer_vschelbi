@@ -119,18 +119,6 @@ h_edge_row_drop: 0
 v_edge_row_drop: 0
 drop_to_mean: False
 
-# Instantiation parameters. These are used for instance/panoptic
-# segmentation but will be skipped for semantic segmentation.
-# NB: setting instance_level < 0 will skip OnTheFlyInstanceGraph
-instance_level: -1
-instance_adjacency_mode: 'radius'
-instance_k_max: 30
-instance_radius: 0.1
-instance_centroid_mode: 'iou'
-instance_centroid_level: 1
-instance_smooth_affinity: True
-min_instance_size: 100
-
 # Preprocessing
 pre_transform:
     - transform: DataTo
@@ -405,17 +393,14 @@ on_device_train_transform:
     - transform: NAGAddSelfLoops
 
     # Compute the instance graph for instantiation
+    # NB: setting `datamodule.instance: False` will skip this step
     - transform: OnTheFlyInstanceGraph
       params:
-        level: ${datamodule.instance_level}
+        level: ${eval:'1 if ${datamodule.instance} else -1'}
         num_classes: ${datamodule.num_classes}
-        adjacency_mode: ${datamodule.instance_adjacency_mode}
         k_max: ${datamodule.instance_k_max}
         radius: ${datamodule.instance_radius}
-        centroid_mode: ${datamodule.instance_centroid_mode}
-        centroid_level: ${datamodule.instance_centroid_level}
-        smooth_affinity: ${datamodule.instance_smooth_affinity}
-
+        
 # GPU-based val transforms
 on_device_val_transform:
 
@@ -482,16 +467,13 @@ on_device_val_transform:
     - transform: NAGAddSelfLoops
 
     # Compute the instance graph for instantiation
+    # NB: setting `datamodule.instance: False` will skip this step
     - transform: OnTheFlyInstanceGraph
       params:
-        level: ${datamodule.instance_level}
+        level: ${eval:'1 if ${datamodule.instance} else -1'}
         num_classes: ${datamodule.num_classes}
-        adjacency_mode: ${datamodule.instance_adjacency_mode}
         k_max: ${datamodule.instance_k_max}
         radius: ${datamodule.instance_radius}
-        centroid_mode: ${datamodule.instance_centroid_mode}
-        centroid_level: ${datamodule.instance_centroid_level}
-        smooth_affinity: ${datamodule.instance_smooth_affinity}
-
+        
 # GPU-based test transforms
 on_device_test_transform: ${datamodule.on_device_val_transform}

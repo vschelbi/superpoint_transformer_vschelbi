@@ -58,8 +58,8 @@ class InstancePartitioner(nn.Module):
     def __init__(
             self,
             loss_type='l2_kl',
-            regularization=1e-2,
-            x_weight=1,
+            regularization=10,
+            x_weight=1e-2,
             p_weight=1,
             cutoff=1,
             parallel=True,

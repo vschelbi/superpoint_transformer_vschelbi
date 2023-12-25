@@ -7,14 +7,6 @@ defaults:
 # will avoid unwanted instance-related I/O operations, to save memory
 instance: True
 
-# Instantiation parameters. These are used for instance/panoptic
-# segmentation but will be skipped for semantic segmentation.
-# NB: setting instance_level < 0 will skip OnTheFlyInstanceGraph
-instance_level: 1
-instance_adjacency_mode: 'radius'
-instance_k_max: 30
-instance_radius: 10
-instance_centroid_mode: 'iou'
-instance_centroid_level: 1
-instance_smooth_affinity: True
-min_instance_size: 100
+# Instance graph parameters
+instance_k_max: 30  # maximum number of neighbors for each superpoint in the instance graph
+instance_radius: 5  # maximum distance of neighbors for each superpoint in the instance graph
