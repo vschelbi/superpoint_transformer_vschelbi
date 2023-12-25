@@ -8,5 +8,5 @@ defaults:
 instance: True
 
 # Instance graph parameters
-instance_k_max: 30  # maximum number of neighbors for each superpoint in the instance graph
-instance_radius: 10  # maximum distance of neighbors for each superpoint in the instance graph
+instance_k_max: 20  # maximum number of neighbors for each superpoint in the instance graph
+instance_radius: 20  # maximum distance of neighbors for each superpoint in the instance graph

@@ -25,8 +25,9 @@ model:
   _h_edge_mlp_out: 32
 
   partitioner:
-    regularization: 5
-    x_weight: 1e-6
+    regularization: 10
+    x_weight: 5e-2
+    cutoff: 1
 
   partition_every_n_epochs: -1
 

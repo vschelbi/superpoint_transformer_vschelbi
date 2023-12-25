@@ -40,7 +40,8 @@ model:
 
   partitioner:
     regularization: 20
-    x_weight: 1e-3
+    x_weight: 5e-2
+    cutoff: 100
 
   partition_every_n_epochs: -1
 
