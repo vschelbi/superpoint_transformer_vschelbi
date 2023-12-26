@@ -1,3 +1,4 @@
+import src.nn.norm
 import torch
 import logging
 from torchmetrics import MaxMetric, MeanMetric
@@ -104,6 +105,16 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             else self.net.out_dim
         self.edge_affinity_head = FFN(out_dim * 2, hidden_dim=32, out_dim=1)
         # self.node_offset_head = FFN(out_dim, hidden_dim=32, out_dim=3)
+
+        # -------------------------
+        # from src.nn import MLP, BatchNorm, GraphNorm, LayerNorm
+        # self.edge_affinity_head = MLP(
+        #     [out_dim * 2, 32, 1],
+        #     activation=torch.nn.LeakyReLU(),
+        #     norm=BatchNorm,
+        #     drop=None,
+        #     last_activation=False)
+        # --------------------------
 
         # Custom weight initialization. In particular, this applies
         # Xavier / Glorot initialization on Linear and RPE layers by
@@ -320,7 +331,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         x_edge = x[nag[1].obj_edge_index]
         x_edge = torch.cat(
             ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
-        edge_affinity_logits = self.edge_affinity_head(x_edge).squeeze()
+
+        edge_affinity_logits = self.edge_affinity_head(x_edge, batch=None).squeeze()
+        # -------------------------
+        #norm_index = nag[1].norm_index(mode='graph')
+        #edge_affinity_logits = self.edge_affinity_head(x_edge, batch=norm_index).squeeze()
+        # -------------------------
+
 
         # Gather results in an output object
         output = PanopticSegmentationOutput(
