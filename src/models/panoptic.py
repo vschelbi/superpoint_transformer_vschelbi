@@ -1,4 +1,3 @@
-import src.nn.norm
 import torch
 import logging
 from torchmetrics import MaxMetric, MeanMetric
@@ -10,7 +9,6 @@ from src.metrics import MeanAveragePrecision3D, PanopticQuality3D, \
     ConfusionMatrix
 from src.models.semantic import SemanticSegmentationModule
 from src.loss import BCEWithLogitsLoss
-from src.nn import FFN
 
 
 log = logging.getLogger(__name__)
