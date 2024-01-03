@@ -1,3 +1,4 @@
+import src.nn.norm
 import torch
 import logging
 from torchmetrics import MaxMetric, MeanMetric
@@ -24,6 +25,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
     _IGNORED_HYPERPARAMETERS = [
         'net',
+        'edge_affinity_head',
         'partitioner',
         'criterion',
         'edge_affinity_criterion',
@@ -32,6 +34,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
     def __init__(
             self,
             net,
+            edge_affinity_head,
             partitioner,
             criterion,
             optimizer,
@@ -100,9 +103,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Model heads for edge affinity and node offset predictions
         # Initialize the model segmentation head (or heads)
-        out_dim = self.net.out_dim[0] if self.multi_stage_loss \
-            else self.net.out_dim
-        self.edge_affinity_head = FFN(out_dim * 2, hidden_dim=32, out_dim=1)
+        # out_dim = self.net.out_dim[0] if self.multi_stage_loss \
+        #     else self.net.out_dim
+        # self.edge_affinity_head = FFN(out_dim * 2, hidden_dim=32, out_dim=1)
+        self.edge_affinity_head = edge_affinity_head()
         # self.node_offset_head = FFN(out_dim, hidden_dim=32, out_dim=3)
 
         # Custom weight initialization. In particular, this applies
@@ -320,7 +324,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         x_edge = x[nag[1].obj_edge_index]
         x_edge = torch.cat(
             ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
-        edge_affinity_logits = self.edge_affinity_head(x_edge).squeeze()
+        norm_index = nag[1].norm_index(mode='graph')
+        edge_affinity_logits = self.edge_affinity_head(
+            x_edge, batch=norm_index).squeeze()
 
         # Gather results in an output object
         output = PanopticSegmentationOutput(
