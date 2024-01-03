@@ -322,7 +322,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         x_edge = x[nag[1].obj_edge_index]
         x_edge = torch.cat(
             ((x_edge[0] - x_edge[1]).abs(), (x_edge[0] + x_edge[1]) / 2), dim=1)
-        norm_index = nag[1].norm_index(mode='graph')
+        norm_index = torch.zeros(
+            x_edge.shape[0], device=x_edge.device, dtype=torch.long)
         edge_affinity_logits = self.edge_affinity_head(
             x_edge, batch=norm_index).squeeze()
 
