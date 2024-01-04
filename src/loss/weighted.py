@@ -11,6 +11,8 @@ class WeightedLossMixIn:
 
         # Compute the loss, without reduction
         loss = super().forward(input, target)
+        if loss.dim() == 1:
+            loss = loss.view(-1, 1)
 
         # Sum the loss terms across the spatial dimension, so the
         # downstream averaging does not normalize by the number of
