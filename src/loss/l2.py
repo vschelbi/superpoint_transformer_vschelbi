@@ -1,32 +1,9 @@
 from torch.nn import L1Loss as TorchL1Loss
 from torch.nn import MSELoss as TorchL2Loss
+from src.loss.weighted import WeightedLossMixIn
 
 
 __all__ = ['WeightedL2Loss', 'WeightedL1Loss', 'L2Loss', 'L1Loss']
-
-
-class WeightedLossMixIn:
-    """A mix-in for converting a torch loss into an item-weighted loss.
-    """
-    def forward(self, input, target, weight):
-        if weight is not None:
-            assert weight.ge(0).all(), "Weights must be positive."
-            assert weight.gt(0).any(), "At least one weight must be non-zero."
-
-        # Compute the loss, without reduction
-        loss = super().forward(input, target)
-
-        # Sum the loss terms across the spatial dimension, so the
-        # downstream averaging does not normalize by the number of
-        # dimensions
-        loss = loss.sum(dim=1).view(-1, 1)
-
-        # If weights are None, fallback to normal unweighted L2 loss
-        if weight is None:
-            return loss.mean()
-
-        # Compute the weighted mean
-        return (loss * (weight / weight.sum()).view(-1, 1)).sum()
 
 
 class WeightedL2Loss(WeightedLossMixIn, TorchL2Loss):

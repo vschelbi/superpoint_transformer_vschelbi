@@ -20,7 +20,6 @@ _point_mlp: [32, 64, 64]  # point encoder layers
 # of the first layer is directly computed from the config
 edge_affinity_head:
   _target_: src.nn.MLP
-  _partial_: True
   dims: ${eval:'[ ${model._up_dim}[-1] * 2, 32, 1 ]'}
   activation:
     _target_: torch.nn.LeakyReLU
@@ -51,7 +50,7 @@ no_instance_metrics_on_train_set: True
 # Edge affinity loss
 edge_affinity_criterion:
   _target_: src.loss.BCEWithLogitsLoss
-  pos_weight: null
+  weight: null
 
 # Node offset loss
 node_offset_criterion:

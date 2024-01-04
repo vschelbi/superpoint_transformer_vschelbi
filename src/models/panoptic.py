@@ -104,7 +104,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # out_dim = self.net.out_dim[0] if self.multi_stage_loss \
         #     else self.net.out_dim
         # self.edge_affinity_head = FFN(out_dim * 2, hidden_dim=32, out_dim=1)
-        self.edge_affinity_head = edge_affinity_head()
+        self.edge_affinity_head = edge_affinity_head
         # self.node_offset_head = FFN(out_dim, hidden_dim=32, out_dim=3)
 
         # Custom weight initialization. In particular, this applies
