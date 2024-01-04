@@ -70,6 +70,10 @@ class WeightedFocalLoss(nn.Module):
         :param w: (N, ...) Tensor
             Per-item weights, can be None
         """
+        # Convert y to long. The NLL loss does not support non-integer
+        # target labels
+        y = y.long()
+
         # Convert per-item weights to [0, 1] weights
         if w is None:
             w = torch.ones_like(y).float()
@@ -97,7 +101,7 @@ class WeightedFocalLoss(nn.Module):
         ce = self.nll_loss(log_p, y)
 
         # get true class column from each row
-        log_pt = log_p[:, y.long()]
+        log_pt = log_p[:, y]
 
         # compute focal term: (1 - pt)^gamma
         pt = log_pt.exp()

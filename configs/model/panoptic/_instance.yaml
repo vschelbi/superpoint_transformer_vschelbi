@@ -52,6 +52,13 @@ edge_affinity_criterion:
   _target_: src.loss.BCEWithLogitsLoss
   weight: null
 
+# Weights for insisting on certain cases in the edge affinity loss:
+#  - 0: same-class same-object edges
+#  - 1: same-class different-object edges
+#  - 2: different-class same-object edges
+#  - 3: different-class different-object edges
+edge_affinity_loss_weights: [1, 1, 1, 1]
+
 # Node offset loss
 node_offset_criterion:
   _target_: src.loss.WeightedL2Loss
@@ -60,10 +67,3 @@ node_offset_criterion:
 # offset and edge affinity losses
 edge_affinity_loss_lambda: 1
 node_offset_loss_lambda: 1
-
-# Weights for insisting on certain cases in the edge affinity loss:
-#  - 0: same-class same-object edges
-#  - 1: same-class different-object edges
-#  - 2: different-class same-object edges
-#  - 3: different-class different-object edges
-edge_affinity_loss_weights: [1, 1, 1, 1]
