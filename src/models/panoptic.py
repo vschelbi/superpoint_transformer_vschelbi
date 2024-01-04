@@ -707,14 +707,14 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 map_per_class = instance_results.map_per_class
 
             # Log metrics
-            self.log("train/pq", pq, prog_bar=True)
-            self.log("train/sq", sq, prog_bar=True)
-            self.log("train/rq", rq, prog_bar=True)
-            self.log("train/pq_thing", pq_thing, prog_bar=True)
-            self.log("train/pq_stuff", pq_stuff, prog_bar=True)
-            self.log("train/pqmod", pqmod, prog_bar=True)
-            self.log("train/mprec", mprec, prog_bar=True)
-            self.log("train/mrec", mrec, prog_bar=True)
+            self.log("train/pq", 100 * pq, prog_bar=True)
+            self.log("train/sq", 100 * sq, prog_bar=True)
+            self.log("train/rq", 100 * rq, prog_bar=True)
+            self.log("train/pq_thing", 100 * pq_thing, prog_bar=True)
+            self.log("train/pq_stuff", 100 * pq_stuff, prog_bar=True)
+            self.log("train/pqmod", 100 * pqmod, prog_bar=True)
+            self.log("train/mprec", 100 * mprec, prog_bar=True)
+            self.log("train/mrec", 100 * mrec, prog_bar=True)
             self.log("train/instance_miou", self.train_semantic.miou(), prog_bar=True)
             self.log("train/instance_oa", self.train_semantic.oa(), prog_bar=True)
             self.log("train/instance_macc", self.train_semantic.macc(), prog_bar=True)
@@ -722,14 +722,14 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 if seen:
                     self.log(f"train/instance_iou_{name}", iou, prog_bar=True)
             if self.needs_instance:
-                self.log("train/map", map, prog_bar=True)
-                self.log("train/map_50", map_50, prog_bar=True)
-                self.log("train/map_75", map_75, prog_bar=True)
+                self.log("train/map", 100 * map, prog_bar=True)
+                self.log("train/map_50", 100 * map_50, prog_bar=True)
+                self.log("train/map_75", 100 * map_75, prog_bar=True)
             for pq_c, name in zip(pq_per_class, self.class_names):
-                self.log(f"train/pq_{name}", pq_c, prog_bar=True)
+                self.log(f"train/pq_{name}", 100 * pq_c, prog_bar=True)
             if self.needs_instance:
                 for map_c, name in zip(map_per_class, self.class_names):
-                    self.log(f"train/map_{name}", map_c, prog_bar=True)
+                    self.log(f"train/map_{name}", 100 * map_c, prog_bar=True)
             if setting is not None:
                 for k, v in setting.items():
                     self.log(f"partition_settings/{k}", v, prog_bar=True)
@@ -739,8 +739,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.log("train/offset_wl1", self.train_offset_wl1.compute(), prog_bar=True)
         # self.log("train/offset_l2", self.train_offset_l2.compute(), prog_bar=True)
         # self.log("train/offset_l1", self.train_offset_l1.compute(), prog_bar=True)
-        self.log("train/affinity_oa", self.train_affinity_oa.compute(), prog_bar=True)
-        self.log("train/affinity_f1", self.train_affinity_f1.compute(), prog_bar=True)
+        self.log("train/affinity_oa", 100 * self.train_affinity_oa.compute(), prog_bar=True)
+        self.log("train/affinity_f1", 100 * self.train_affinity_f1.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
         # self.train_offset_wl2.reset()
@@ -933,14 +933,14 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 map_per_class = instance_results.map_per_class
 
             # Log metrics
-            self.log("val/pq", pq, prog_bar=True)
-            self.log("val/sq", sq, prog_bar=True)
-            self.log("val/rq", rq, prog_bar=True)
-            self.log("val/pq_thing", pq_thing, prog_bar=True)
-            self.log("val/pq_stuff", pq_stuff, prog_bar=True)
-            self.log("val/pqmod", pqmod, prog_bar=True)
-            self.log("val/mprec", mprec, prog_bar=True)
-            self.log("val/mrec", mrec, prog_bar=True)
+            self.log("val/pq", 100 * pq, prog_bar=True)
+            self.log("val/sq", 100 * sq, prog_bar=True)
+            self.log("val/rq", 100 * rq, prog_bar=True)
+            self.log("val/pq_thing", 100 * pq_thing, prog_bar=True)
+            self.log("val/pq_stuff", 100 * pq_stuff, prog_bar=True)
+            self.log("val/pqmod", 100 * pqmod, prog_bar=True)
+            self.log("val/mprec", 100 * mprec, prog_bar=True)
+            self.log("val/mrec", 100 * mrec, prog_bar=True)
             instance_miou = self.val_semantic.miou()
             instance_oa = self.val_semantic.oa()
             instance_macc = self.val_semantic.macc()
@@ -951,14 +951,14 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 if seen:
                     self.log(f"val/instance_iou_{name}", iou, prog_bar=True)
             if self.needs_instance:
-                self.log("val/map", map, prog_bar=True)
-                self.log("val/map_50", map_50, prog_bar=True)
-                self.log("val/map_75", map_75, prog_bar=True)
+                self.log("val/map", 100 * map, prog_bar=True)
+                self.log("val/map_50", 100 * map_50, prog_bar=True)
+                self.log("val/map_75", 100 * map_75, prog_bar=True)
             for pq_c, name in zip(pq_per_class, self.class_names):
-                self.log(f"val/pq_{name}", pq_c, prog_bar=True)
+                self.log(f"val/pq_{name}", 100 * pq_c, prog_bar=True)
             if self.needs_instance:
                 for map_c, name in zip(map_per_class, self.class_names):
-                    self.log(f"val/map_{name}", map_c, prog_bar=True)
+                    self.log(f"val/map_{name}", 100 * map_c, prog_bar=True)
 
             # Update best-so-far metrics
             self.val_pq_best(pq)
@@ -974,12 +974,12 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             # Log best-so-far metrics, using `.compute()` instead of passing
             # the whole torchmetrics object, because otherwise metric would
             # be reset by lightning after each epoch
-            self.log("val/pq_best", self.val_pq_best.compute(), prog_bar=True)
-            self.log("val/pqmod_best", self.val_pqmod_best.compute(), prog_bar=True)
-            self.log("val/mprec_best", self.val_mprec_best.compute(), prog_bar=True)
-            self.log("val/mrec_best", self.val_mrec_best.compute(), prog_bar=True)
+            self.log("val/pq_best", 100 * self.val_pq_best.compute(), prog_bar=True)
+            self.log("val/pqmod_best", 100 * self.val_pqmod_best.compute(), prog_bar=True)
+            self.log("val/mprec_best", 100 * self.val_mprec_best.compute(), prog_bar=True)
+            self.log("val/mrec_best", 100 * self.val_mrec_best.compute(), prog_bar=True)
             if self.needs_instance:
-                self.log("val/map_best", self.val_map_best.compute(), prog_bar=True)
+                self.log("val/map_best", 100 * self.val_map_best.compute(), prog_bar=True)
             self.log("val/instance_miou_best", self.val_instance_miou_best.compute(), prog_bar=True)
             self.log("val/instance_oa_best", self.val_instance_oa_best.compute(), prog_bar=True)
             self.log("val/instance_macc_best", self.val_instance_macc_best.compute(), prog_bar=True)
@@ -997,8 +997,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.log("val/offset_wl1", offset_wl1, prog_bar=True)
         # self.log("val/offset_l2", offset_l2, prog_bar=True)
         # self.log("val/offset_l1", offset_l1, prog_bar=True)
-        self.log("val/affinity_oa", affinity_oa, prog_bar=True)
-        self.log("val/affinity_f1", affinity_f1, prog_bar=True)
+        self.log("val/affinity_oa", 100 * affinity_oa, prog_bar=True)
+        self.log("val/affinity_f1", 100 * affinity_f1, prog_bar=True)
 
         # Update best-so-far metrics
         # self.val_offset_wl2_best(offset_wl2)
@@ -1015,8 +1015,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.log("val/offset_wl1_best", self.val_offset_wl1_best.compute(), prog_bar=True)
         # self.log("val/offset_l2_best", self.val_offset_l2_best.compute(), prog_bar=True)
         # self.log("val/offset_l1_best", self.val_offset_l1_best.compute(), prog_bar=True)
-        self.log("val/affinity_oa_best", self.val_affinity_oa_best.compute(), prog_bar=True)
-        self.log("val/affinity_f1_best", self.val_affinity_f1_best.compute(), prog_bar=True)
+        self.log("val/affinity_oa_best", 100 * self.val_affinity_oa_best.compute(), prog_bar=True)
+        self.log("val/affinity_f1_best", 100 * self.val_affinity_f1_best.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
         # self.val_offset_wl2.reset()
@@ -1135,14 +1135,14 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 map_per_class = instance_results.map_per_class
 
             # Log metrics
-            self.log("test/pq", pq, prog_bar=True)
-            self.log("test/sq", sq, prog_bar=True)
-            self.log("test/rq", rq, prog_bar=True)
-            self.log("test/pq_thing", pq_thing, prog_bar=True)
-            self.log("test/pq_stuff", pq_stuff, prog_bar=True)
-            self.log("test/pqmod", pqmod, prog_bar=True)
-            self.log("test/mprec", mprec, prog_bar=True)
-            self.log("test/mrec", mrec, prog_bar=True)
+            self.log("test/pq", 100 * pq, prog_bar=True)
+            self.log("test/sq", 100 * sq, prog_bar=True)
+            self.log("test/rq", 100 * rq, prog_bar=True)
+            self.log("test/pq_thing", 100 * pq_thing, prog_bar=True)
+            self.log("test/pq_stuff", 100 * pq_stuff, prog_bar=True)
+            self.log("test/pqmod", 100 * pqmod, prog_bar=True)
+            self.log("test/mprec", 100 * mprec, prog_bar=True)
+            self.log("test/mrec", 100 * mrec, prog_bar=True)
             self.log("test/instance_miou", self.test_semantic.miou(), prog_bar=True)
             self.log("test/instance_oa", self.test_semantic.oa(), prog_bar=True)
             self.log("test/instance_macc", self.test_semantic.macc(), prog_bar=True)
@@ -1150,22 +1150,22 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
                 if seen:
                     self.log(f"test/instance_iou_{name}", iou, prog_bar=True)
             if self.needs_instance:
-                self.log("test/map", map, prog_bar=True)
-                self.log("test/map_50", map_50, prog_bar=True)
-                self.log("test/map_75", map_75, prog_bar=True)
+                self.log("test/map", 100 * map, prog_bar=True)
+                self.log("test/map_50", 100 * map_50, prog_bar=True)
+                self.log("test/map_75", 100 * map_75, prog_bar=True)
             for pq_c, name in zip(pq_per_class, self.class_names):
-                self.log(f"test/pq_{name}", pq_c, prog_bar=True)
+                self.log(f"test/pq_{name}", 100 * pq_c, prog_bar=True)
             if self.needs_instance:
                 for map_c, name in zip(map_per_class, self.class_names):
-                    self.log(f"test/map_{name}", map_c, prog_bar=True)
+                    self.log(f"test/map_{name}", 100 * map_c, prog_bar=True)
 
         # Log metrics
         # self.log("test/offset_wl2", self.test_offset_wl2.compute(), prog_bar=True)
         # self.log("test/offset_wl1", self.test_offset_wl1.compute(), prog_bar=True)
         # self.log("test/offset_l2", self.test_offset_l2.compute(), prog_bar=True)
         # self.log("test/offset_l1", self.test_offset_l1.compute(), prog_bar=True)
-        self.log("test/affinity_oa", self.test_affinity_oa.compute(), prog_bar=True)
-        self.log("test/affinity_f1", self.test_affinity_f1.compute(), prog_bar=True)
+        self.log("test/affinity_oa", 100 * self.test_affinity_oa.compute(), prog_bar=True)
+        self.log("test/affinity_f1", 100 * self.test_affinity_f1.compute(), prog_bar=True)
 
         # Reset metrics accumulated over the last epoch
         # self.test_offset_wl2.reset()
