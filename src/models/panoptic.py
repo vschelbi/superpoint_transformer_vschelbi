@@ -48,6 +48,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             transformer_lr_scale=1,
             multi_stage_loss_lambdas=None,
             edge_affinity_criterion=None,
+            edge_affinity_loss_weights=None,
             edge_affinity_loss_lambda=1,
             node_offset_criterion=None,
             node_offset_loss_lambda=1,
@@ -543,6 +544,36 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         return output
 
+    def _edge_affinity_weights(self, is_same_class, is_same_obj):
+        """Helper function to compute edge weights to be used by the
+        edge affinity loss. Each edge may have a different weight, based
+        on whether its source and target nodes have the same class or
+        belong to the same object. The weight given to each case
+        (same-class and same-object, same-class and different object,
+        etc..) is specified in `edge_affinity_loss_weights`.
+
+        :param is_same_class: BoolTensor
+            Mask indicating edges between nodes of the same semantic
+            class
+        :param is_same_obj: BoolTensor
+            Mask indicating edges between nodes of the same object
+        """
+        # Recover the weights given to each case
+        w = self.hparams.edge_affinity_loss_weights
+
+        # If edge_affinity_loss_weights was not specified, no weighting
+        # scheme will be applied to the edges
+        if w is None or not len(w) == 4:
+            return None
+
+        # Compute the weight for each edge
+        edge_weight = torch.ones_like(is_same_class).float()
+        edge_weight[is_same_class * is_same_obj] = w[0]
+        edge_weight[is_same_class * ~is_same_obj] = w[1]
+        edge_weight[~is_same_class * is_same_obj] = w[2]
+        edge_weight[~is_same_class * ~is_same_obj] = w[3]
+        return edge_weight
+
     def model_step(self, batch):
         # Loss and predictions for semantic segmentation
         semantic_loss, output = super().model_step(batch)
@@ -556,8 +587,11 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         #     *output.sanitized_node_offsets)
 
         # Compute the edge affinity loss
+        edge_affinity_pred, edge_affinity_target, is_same_class, is_same_obj = \
+            output.sanitized_edge_affinities
+        edge_weight = self._edge_affinity_weights(is_same_class, is_same_obj)
         edge_affinity_loss = self.edge_affinity_criterion(
-            *output.sanitized_edge_affinities)
+            edge_affinity_pred, edge_affinity_target, edge_weight)
 
         # Combine the losses together
         # TODO: remove node offset cleanly
@@ -618,7 +652,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.train_offset_l1(node_offset_pred, node_offset)
 
         # Update edge affinity metrics
-        ea_pred, ea_target = output.sanitized_edge_affinities
+        ea_pred, ea_target, is_same_class, is_same_obj = \
+            output.sanitized_edge_affinities
         ea_pred = ea_pred.detach()
         ea_target_binary = (ea_target.detach() > 0.5).long()
         self.train_affinity_oa(ea_pred, ea_target_binary)
@@ -849,7 +884,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.val_offset_l1(node_offset_pred, node_offset)
 
         # Update edge affinity metrics
-        ea_pred, ea_target = output.sanitized_edge_affinities
+        ea_pred, ea_target, is_same_class, is_same_obj = \
+            output.sanitized_edge_affinities
         ea_pred = ea_pred.detach()
         ea_target_binary = (ea_target.detach() > 0.5).long()
         self.val_affinity_oa(ea_pred, ea_target_binary)
@@ -1031,7 +1067,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # self.test_offset_l1(node_offset_pred, node_offset)
 
         # Update edge affinity metrics
-        ea_pred, ea_target = output.sanitized_edge_affinities
+        ea_pred, ea_target, is_same_class, is_same_obj = \
+            output.sanitized_edge_affinities
         ea_pred = ea_pred.detach()
         ea_target_binary = (ea_target.detach() > 0.5).long()
         self.test_affinity_oa(ea_pred, ea_target_binary)

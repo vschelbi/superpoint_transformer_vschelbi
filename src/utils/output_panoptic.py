@@ -206,8 +206,9 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
     @property
     def sanitized_edge_affinities(self):
-        """Return the predicted and target edge affinities, sanitized
-        for edge affinity loss and metrics computation.
+        """Return the predicted and target edge affinities, along with
+        masks indicating same-class and same-object edges. The output is
+        sanitized for edge affinity loss and metrics computation.
 
         We return the edge affinity logits to the criterion and not
         the actual sigmoid-normalized predictions used for graph
@@ -216,14 +217,26 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         We choose to exclude edges connecting nodes/superpoints with
         more than 50% 'void' points from edge affinity loss and metrics
-        computation.
+        computation. This is what the sanitization step consists in.
 
         To this end, the present function does the following:
           - remove predicted and target edges connecting two 'void'
             nodes (see `self.void_edge_mask`)
         """
+        # Identify the sanitized edges
         idx = torch.where(~self.void_edge_mask)[0]
-        return self.edge_affinity_logits[idx], self.obj_edge_affinity[idx]
+
+        # Compute the boolean masks indicating same-class and
+        # same-object edges. These can be useful for losses with more
+        # weights on hard edges
+        obj, count, y = self.obj.major(num_classes=self.num_classes)
+        is_same_class = y[self.obj_edge_index[0]] == y[self.obj_edge_index[1]]
+        is_same_obj = obj[self.obj_edge_index[0]] == obj[self.obj_edge_index[1]]
+
+        # Return sanitized predicted and target affinities, as well as
+        # edge masks
+        return self.edge_affinity_logits[idx], self.obj_edge_affinity[idx], \
+               is_same_class[idx], is_same_obj[idx]
 
     def get_instance_predictions(self):
         """Return the predicted InstanceData, and the predicted instance

@@ -6,10 +6,10 @@ from torch import nn
 from torch.nn import functional as F
 
 
-__all__ = ['FocalLoss']
+__all__ = ['WeightedFocalLoss']
 
 
-class FocalLoss(nn.Module):
+class WeightedFocalLoss(nn.Module):
     """ Focal Loss, as described in https://arxiv.org/abs/1708.02002.
     It is essentially an enhancement to cross entropy loss and is
     useful for classification tasks when there is a large class imbalance.
@@ -36,14 +36,14 @@ class FocalLoss(nn.Module):
             weight (Tensor, optional): Weights for each class. Defaults to None.
             gamma (float, optional): A constant, as described in the paper.
                 Defaults to 0.
-            reduction (str, optional): 'mean', 'sum' or 'none'.
+            reduction (str, optional): 'mean' or 'none'.
                 Defaults to 'mean'.
             ignore_index (int, optional): class label to ignore.
                 Defaults to -100.
         """
-        if reduction not in ('mean', 'sum', 'none'):
+        if reduction not in ('mean', 'none'):
             raise ValueError(
-                'Reduction must be one of: "mean", "sum", "none".')
+                'Reduction must be one of: "mean", "none".')
 
         super().__init__()
         self.weight = weight
@@ -61,19 +61,35 @@ class FocalLoss(nn.Module):
         arg_str = ', '.join(arg_strs)
         return f'{type(self).__name__}({arg_str})'
 
-    def forward(self, x: Tensor, y: Tensor) -> Tensor:
+    def forward(self, x: Tensor, y: Tensor, w: Tensor) -> Tensor:
+        """
+        :param x: (N, C, ...) Tensor
+            Logits
+        :param y: (N, ...) Tensor
+            Target labels
+        :param w: (N, ...) Tensor
+            Per-item weights, can be None
+        """
+        # Convert per-item weights to [0, 1] weights
+        if w is None:
+            w = torch.ones_like(y).float()
+        w = w / w.sum()
+
         if x.ndim > 2:
             # (N, C, d1, d2, ..., dK) --> (N * d1 * ... * dK, C)
             c = x.shape[1]
             x = x.permute(0, *range(2, x.ndim), 1).reshape(-1, c)
             # (N, d1, d2, ..., dK) --> (N * d1 * ... * dK,)
             y = y.view(-1)
+            # (N, d1, d2, ..., dK) --> (N * d1 * ... * dK,)
+            w = w.view(-1)
 
         unignored_mask = y != self.ignore_index
         y = y[unignored_mask]
         if len(y) == 0:
-            return torch.tensor(0.)
+            return torch.tensor(0., device=x.device)
         x = x[unignored_mask]
+        w = w[unignored_mask]
 
         # compute weighted cross entropy term: -weight * log(pt)
         # (weight is already part of self.nll_loss)
@@ -81,8 +97,7 @@ class FocalLoss(nn.Module):
         ce = self.nll_loss(log_p, y)
 
         # get true class column from each row
-        all_rows = torch.arange(len(x))
-        log_pt = log_p[all_rows, y]
+        log_pt = log_p[:, y.long()]
 
         # compute focal term: (1 - pt)^gamma
         pt = log_pt.exp()
@@ -91,27 +106,28 @@ class FocalLoss(nn.Module):
         # the full loss: -weight * ((1 - pt)^gamma) * log(pt)
         loss = focal_term * ce
 
-        if self.reduction == 'mean':
-            loss = loss.mean()
-        elif self.reduction == 'sum':
-            loss = loss.sum()
+        # Apply the per-item weighting
+        loss = loss * w
 
-        return loss
+        if self.reduction == 'none':
+            return loss
+
+        return loss.sum()
 
 
-def focal_loss(weight: Optional[Sequence] = None,
+def weighted_focal_loss(weight: Optional[Sequence] = None,
                gamma: float = 0.,
                reduction: str = 'mean',
                ignore_index: int = -100,
                device='cpu',
-               dtype=torch.float32) -> FocalLoss:
-    """Factory function for FocalLoss.
+               dtype=torch.float32) -> WeightedFocalLoss:
+    """Factory function for WeightedFocalLoss.
     Args:
         weight (Sequence, optional): Weights for each class. Will be converted
             to a Tensor if not None. Defaults to None.
         gamma (float, optional): A constant, as described in the paper.
             Defaults to 0.
-        reduction (str, optional): 'mean', 'sum' or 'none'.
+        reduction (str, optional): 'mean' or 'none'.
             Defaults to 'mean'.
         ignore_index (int, optional): class label to ignore.
             Defaults to -100.
@@ -119,14 +135,14 @@ def focal_loss(weight: Optional[Sequence] = None,
         dtype (torch.dtype, optional): dtype to cast weight to.
             Defaults to torch.float32.
     Returns:
-        A FocalLoss object
+        A WeightedFocalLoss object
     """
     if weight is not None:
         if not isinstance(weight, Tensor):
             weight = torch.tensor(weight)
         weight = weight.to(device=device, dtype=dtype)
 
-    fl = FocalLoss(
+    fl = WeightedFocalLoss(
         weight=weight,
         gamma=gamma,
         reduction=reduction,
