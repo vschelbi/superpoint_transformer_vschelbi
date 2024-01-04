@@ -5,7 +5,6 @@ from torch import Tensor
 from torch import nn
 from torch.nn import functional as F
 
-
 __all__ = ['WeightedFocalLoss']
 
 
@@ -26,11 +25,12 @@ class WeightedFocalLoss(nn.Module):
         expected by `loss_with_target_histogram`
     """
 
-    def __init__(self,
-                 weight: Optional[Tensor] = None,
-                 gamma: float = 0.,
-                 reduction: str = 'mean',
-                 ignore_index: int = -100):
+    def __init__(
+            self,
+            weight: Optional[Tensor] = None,
+            gamma: float = 0.,
+            reduction: str = 'mean',
+            ignore_index: int = -100):
         """Constructor.
         Args:
             weight (Tensor, optional): Weights for each class. Defaults to None.
@@ -70,6 +70,17 @@ class WeightedFocalLoss(nn.Module):
         :param w: (N, ...) Tensor
             Per-item weights, can be None
         """
+        # Convert 1D x to multiclass x. This is an artificial step for
+        # binary classification (eg affinity loss), where only 1 score
+        # is provided. In this case, we assume that x<0 accounts for y=0
+        # and x>0 accounts for y=1 (ie prepared for sigmoid). Here, we
+        # convert these precitions to 2D for downstream softmax
+        if x.dim() == 1:
+            x_binary = torch.zeros(x.shape[0], 2, dtype=x.dtype, device=x.device)
+            x_binary[x < 0, 0] = -x[x < 0]
+            x_binary[x > 0, 1] = x[x > 0]
+            x = x_binary
+
         # Convert y to long. The NLL loss does not support non-integer
         # target labels
         y = y.long()
@@ -101,11 +112,11 @@ class WeightedFocalLoss(nn.Module):
         ce = self.nll_loss(log_p, y)
 
         # get true class column from each row
-        log_pt = log_p[:, y]
+        log_pt = log_p.gather(dim=1, index=y.view(-1, 1)).squeeze()
 
         # compute focal term: (1 - pt)^gamma
         pt = log_pt.exp()
-        focal_term = (1 - pt)**self.gamma
+        focal_term = (1 - pt) ** self.gamma
 
         # the full loss: -weight * ((1 - pt)^gamma) * log(pt)
         loss = focal_term * ce
@@ -119,12 +130,13 @@ class WeightedFocalLoss(nn.Module):
         return loss.sum()
 
 
-def weighted_focal_loss(weight: Optional[Sequence] = None,
-               gamma: float = 0.,
-               reduction: str = 'mean',
-               ignore_index: int = -100,
-               device='cpu',
-               dtype=torch.float32) -> WeightedFocalLoss:
+def weighted_focal_loss(
+        weight: Optional[Sequence] = None,
+        gamma: float = 0.,
+        reduction: str = 'mean',
+        ignore_index: int = -100,
+        device='cpu',
+        dtype=torch.float32) -> WeightedFocalLoss:
     """Factory function for WeightedFocalLoss.
     Args:
         weight (Sequence, optional): Weights for each class. Will be converted
