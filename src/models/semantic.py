@@ -657,6 +657,10 @@ class SemanticSegmentationModule(LightningModule):
         # Reset metrics accumulated over the last epoch
         self.test_cm.reset()
 
+    def predict_step(self, batch, batch_idx):
+        _, output = self.model_step(batch)
+        return batch, output
+
     def configure_optimizers(self):
         """Choose what optimizers and learning-rate schedulers to use in your optimization.
         Normally you'd need one. But in the case of GANs or similar you might have multiple.
