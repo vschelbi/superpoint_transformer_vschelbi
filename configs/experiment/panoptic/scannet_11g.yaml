@@ -30,7 +30,7 @@ datamodule:
 
 callbacks:
   model_checkpoint:
-    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
+    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epoch})'}
 
   early_stopping:
     strict: False
@@ -68,7 +68,7 @@ model:
 
   edge_affinity_loss_lambda: 10
 
-  partition_every_n_epochs: 10
+  partition_every_n_epoch: 10
 
 logger:
   wandb:

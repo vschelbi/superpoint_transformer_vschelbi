@@ -43,7 +43,7 @@ model:
     x_weight: 5e-2
     cutoff: 300
 
-  partition_every_n_epochs: 5
+  partition_every_n_epoch: 5
 
 logger:
   wandb:
@@ -53,11 +53,11 @@ logger:
 # metric based on which models will be selected
 optimized_metric: "val/pq"
 
-# modify checkpointing callbacks to adapt to partition_every_n_epochs
+# modify checkpointing callbacks to adapt to partition_every_n_epoch
 # being potentially different
 callbacks:
   model_checkpoint:
-    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epochs})'}
+    every_n_epochs: ${eval:'max(${trainer.check_val_every_n_epoch}, ${model.partition_every_n_epoch})'}
 
   early_stopping:
     strict: False

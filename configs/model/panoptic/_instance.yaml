@@ -36,7 +36,7 @@ partitioner:
 
 # Frequency at which the partition should be computed. If lower or equal
 # to 0, the partition will only be computed at the last training epoch
-partition_every_n_epochs: -1
+partition_every_n_epoch: -1
 
 # If True, the instance metrics will never be computed. If only panoptic
 # metrics are of interest, this can save considerable training and

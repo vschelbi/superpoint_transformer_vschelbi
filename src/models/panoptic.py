@@ -54,7 +54,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             node_offset_loss_lambda=1,
             gc_every_n_steps=0,
             min_instance_size=100,
-            partition_every_n_epochs=50,
+            partition_every_n_epoch=50,
             no_instance_metrics=True,
             no_instance_metrics_on_train_set=True,
             **kwargs):
@@ -84,7 +84,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # metrics on the train set. This tuning involves a simple
         # grid-search on a small range of parameters and needs to be
         # called at least once at the very end of training
-        self.partition_every_n_epochs = partition_every_n_epochs
+        self.partition_every_n_epoch = partition_every_n_epoch
         self.no_instance_metrics = no_instance_metrics
         self.no_instance_metrics_on_train_set = no_instance_metrics_on_train_set
         self.partitioner = partitioner
@@ -229,10 +229,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         but learn to predict inputs for the partition step instead. For
         this reason, we save compute and time during training by only
         computing the partition once in a while with
-        `self.partition_every_n_epochs`.
+        `self.partition_every_n_epoch`.
         """
         # Get the current epoch. For the validation set, we alter the
-        # epoch number so that `partition_every_n_epochs` can align
+        # epoch number so that `partition_every_n_epoch` can align
         # with `check_val_every_n_epoch`. Indeed, it seems the epoch
         # number during the validation step is always one increment
         # ahead
@@ -244,13 +244,13 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Come useful checks to decide whether the partition should be
         # triggered
-        k = self.partition_every_n_epochs
+        k = self.partition_every_n_epoch
         last_epoch = epoch == self.trainer.max_epochs
         first_epoch = epoch == 1
         kth_epoch = epoch % k == 0 if k > 0 else False
 
         # For training, the partition is computed based on
-        # `partition_every_n_epochs`, or if we reached the last epoch.
+        # `partition_every_n_epoch`, or if we reached the last epoch.
         # The first epoch will be skipped, because trained weights are
         # unlikely to produce interesting inputs for the partition
         if self.trainer.training:
@@ -258,7 +258,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # For validation, we have the same behavior as training, with
         # the difference that if `check_val_every_n_epoch` is larger
-        # than `partition_every_n_epochs`, we automatically trigger the
+        # than `partition_every_n_epoch`, we automatically trigger the
         # partition
         if self.trainer.validating:
             k_val = self.trainer.check_val_every_n_epoch
