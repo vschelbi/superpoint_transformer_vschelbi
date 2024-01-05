@@ -477,7 +477,7 @@ class InstanceData(CSRData):
             InstanceData will also remove all target objects containing
             'void' points. Importantly, this assumes, however, that the
             raw instance annotations in the datasets are semantically
-            pure: all annotated instance contain points of the same
+            pure: all annotated instances contain points of the same
             class. Said otherwise: IF AN INSTANCE CONTAINS A SINGLE
             'VOID' POINT, THEN ALL OF ITS POINTS ARE 'VOID'.
         """
@@ -560,7 +560,7 @@ class InstanceData(CSRData):
             InstanceData will also remove all target objects containing
             'void' points. Importantly, this assumes, however, that the
             raw instance annotations in the datasets are semantically
-            pure: all annotated instance contain points of the same
+            pure: all annotated instances contain points of the same
             class. Said otherwise: IF AN INSTANCE CONTAINS A SINGLE
             'VOID' POINT, THEN ALL OF ITS POINTS ARE 'VOID'.
         """
