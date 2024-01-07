@@ -37,7 +37,7 @@ model:
 
   edge_affinity_loss_lambda: 10
 
-  partition_every_n_epoch: 10
+  partition_every_n_epoch: 4
 
 logger:
   wandb:
