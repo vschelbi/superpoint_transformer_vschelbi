@@ -1001,6 +1001,7 @@ def compute_metrics_s3dis_6fold(
         model = model.load_from_checkpoint(
             cfg.ckpt_path,
             net=model.net,
+            edge_affinity_head=model.edge_affinity_head,
             partitioner=model.partitioner,
             criterion=model.criterion)
         # model.criterion = hydra.utils.instantiate(cfg.model).criterion
