@@ -39,7 +39,7 @@ model:
     weight_decay: 1e-2
 
   partitioner:
-    regularization: 10
+    regularization: 20
     x_weight: 5e-2
     cutoff: 300
 
