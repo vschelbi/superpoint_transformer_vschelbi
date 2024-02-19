@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 class S3DISRoomDataModule(BaseDataModule):
-    """LightningDataModule for S3DIS dataset.
+    """LightningDataModule for room-wise S3DIS dataset.
 
     A DataModule implements 5 key methods:
 

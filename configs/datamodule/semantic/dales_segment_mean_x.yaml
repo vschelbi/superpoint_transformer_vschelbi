@@ -1,0 +1,12 @@
+# @package datamodule
+defaults:
+  - /datamodule/semantic/dales.yaml
+
+# segment-wise features computed at preprocessing
+segment_mean_hf:
+  - 'linearity'
+  - 'planarity'
+  - 'scattering'
+  - 'verticality'
+  - 'elevation'
+  - 'intensity'

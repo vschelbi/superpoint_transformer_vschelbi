@@ -36,7 +36,7 @@ __all__ = ['KITTI360', 'MiniKITTI360']
 def read_kitti360_window(
         filepath, xyz=True, rgb=True, semantic=True, instance=True,
         remap=False):
-    """Read a KITTI-360 window –ie a tile– saved as PLY.
+    """Read a KITTI-360 window –i.e. a tile– saved as PLY.
 
     :param filepath: str
         Absolute path to the PLY file
@@ -120,21 +120,50 @@ class KITTI360(BaseDataset):
 
     @property
     def class_names(self):
-        """List of string names for dataset classes. This list may be
-        one-item larger than `self.num_classes` if the last label
-        corresponds to 'unlabelled' or 'ignored' indices, indicated as
-        `-1` in the dataset labels.
+        """List of string names for dataset classes. This list must be
+        one-item larger than `self.num_classes`, with the last label
+        corresponding to 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         return CLASS_NAMES
 
     @property
     def num_classes(self):
-        """Number of classes in the dataset. May be one-item smaller
+        """Number of classes in the dataset. Must be one-item smaller
         than `self.class_names`, to account for the last class name
-        being optionally used for 'unlabelled' or 'ignored' classes,
-        indicated as `-1` in the dataset labels.
+        being used for 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         return KITTI360_NUM_CLASSES
+
+    @property
+    def stuff_classes(self):
+        """List of 'stuff' labels for INSTANCE and PANOPTIC
+        SEGMENTATION (setting this is NOT REQUIRED FOR SEMANTIC
+        SEGMENTATION alone). By definition, 'stuff' labels are labels in
+        `[0, self.num_classes-1]` which are not 'thing' labels.
+
+        In instance segmentation, 'stuff' classes are not taken into
+        account in performance metrics computation.
+
+        In panoptic segmentation, 'stuff' classes are taken into account
+        in performance metrics computation. Besides, each cloud/scene
+        can only have at most one instance of each 'stuff' class.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        return STUFF_CLASSES
+
+    @property
+    def class_colors(self):
+        """Colors for visualization, if not None, must have the same
+        length as `self.num_classes`. If None, the visualizer will use
+        the label values in the data to generate random colors.
+        """
+        return CLASS_COLORS
 
     @property
     def all_base_cloud_ids(self):
@@ -162,7 +191,7 @@ class KITTI360(BaseDataset):
             log.error(
                 f"\nKITTI-360 does not support automatic download.\n"
                 f"Please go to the official webpage {self._form_url}, "
-                f"manually download the '{msg}' (ie '{zip_name}') to your "
+                f"manually download the '{msg}' (i.e. '{zip_name}') to your "
                 f"'{self.root}/' directory, and re-run.\n"
                 f"The dataset will automatically be unzipped into the "
                 f"following structure:\n"
@@ -181,8 +210,21 @@ class KITTI360(BaseDataset):
         shutil.rmtree(osp.join(self.raw_dir, 'data_3d_semantics', stage))
 
     def read_single_raw_cloud(self, raw_cloud_path):
-        """Read a single raw cloud and return a Data object, ready to
+        """Read a single raw cloud and return a `Data` object, ready to
         be passed to `self.pre_transform`.
+
+        This `Data` object should contain the following attributes:
+          - `pos`: point coordinates
+          - `y`: OPTIONAL point semantic label
+          - `obj`: OPTIONAL `InstanceData` object with instance labels
+          - `rgb`: OPTIONAL point color
+          - `intensity`: OPTIONAL point LiDAR intensity
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
         """
         return read_kitti360_window(
             raw_cloud_path, semantic=True, instance=True, remap=True)
@@ -256,7 +298,7 @@ class KITTI360(BaseDataset):
         # Read the raw point cloud
         raw_path = osp.join(
             self.raw_dir, self.id_to_relative_raw_path(self.cloud_ids[idx]))
-        data_raw = self.read_single_raw_cloud(raw_path)
+        data_raw = self.sanitized_read_single_raw_cloud(raw_path)
 
         # Search the nearest neighbor of each point and apply the
         # neighbor's class to the points

@@ -1,6 +1,0 @@
-defaults:
-  - spt.yaml
-
-net:
-  down_num_blocks: 0
-  up_num_blocks: 0

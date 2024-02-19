@@ -41,8 +41,10 @@ class Data(PyGData):
         return self['rgb'] if 'rgb' in self._store else None
 
     @property
-    def obj(self):
-        """Cluster object indicating the instance indices for each point."""
+    def obj(self) -> InstanceData:
+        """InstanceData object indicating the instance indices for each
+        node/point/superpoint in the Data.
+        """
         return self['obj'] if 'obj' in self._store else None
 
     @property
@@ -55,7 +57,7 @@ class Data(PyGData):
             else None
 
     @property
-    def sub(self):
+    def sub(self) -> Cluster:
         """Cluster object indicating subpoint indices for each point."""
         return self['sub'] if 'sub' in self._store else None
 
@@ -73,10 +75,10 @@ class Data(PyGData):
         """Index to be used for LayerNorm.
 
         :param mode: str
-            Normalization mode. 'graph' will normalize per graph (ie per
-            cloud, ie per batch). 'node' will normalize per node (ie per
-            point). 'segment' will normalize per segment (ie per
-            cluster)
+            Normalization mode. 'graph' will normalize per graph (i.e.
+            per cloud, i.e. per batch). 'node' will normalize per node
+            (i.e. per point). 'segment' will normalize per segment
+            (i.e.  per cluster)
         """
         if getattr(self, 'batch', None) is not None:
             batch = self.batch
@@ -220,7 +222,7 @@ class Data(PyGData):
             if not is_dense(self.super_index):
                 print(
                     "WARNING: super_index indices are generally expected to be "
-                    "dense (ie all indices in [0, super_index.max()] are used),"
+                    "dense (i.e. all indices in [0, super_index.max()] are used),"
                     " which is not the case here. This may be because you are "
                     "creating a Data object after applying a selection of "
                     "points without updating the cluster indices.")
@@ -263,29 +265,29 @@ class Data(PyGData):
             Data indices to select from 'self'. Must NOT contain
             duplicates
         update_sub: bool
-            If True, the point (ie subpoint) indices will also be
+            If True, the point (i.e. subpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels
             of a NAG.
         update_super: bool
-            If True, the cluster (ie superpoint) indices will also be
+            If True, the cluster (i.e. superpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_super, super_sub)' which can help apply these
             changes to maintain consistency with higher hierarchy levels
             of a NAG.
 
-        :returns data, (idx_sub, sub_super), (idx_super, super_sub)
-        data: Data
-            indexed data
-        idx_sub: torch.LongTensor
-            to be used with 'Data.select()' on the sub-level
-        sub_super: torch.LongTensor
-            to replace 'Data.super_index' on the sub-level
-        idx_super: torch.LongTensor
-            to be used with 'Data.select()' on the super-level
-        super_sub: Cluster
-            to replace 'Data.sub' on the super-level
+        :return: data, (idx_sub, sub_super), (idx_super, super_sub)
+            data: Data
+                indexed data
+            idx_sub: torch.LongTensor
+                to be used with 'Data.select()' on the sub-level
+            sub_super: torch.LongTensor
+                to replace 'Data.super_index' on the sub-level
+            idx_super: torch.LongTensor
+                to be used with 'Data.select()' on the super-level
+            super_sub: Cluster
+                to replace 'Data.sub' on the super-level
         """
         device = self.device
 
@@ -303,7 +305,7 @@ class Data(PyGData):
         # Data like this, as it might cause issues when calling
         # 'data.num_nodes' later on. Need to be careful when calling
         # 'data.num_nodes' before having set any of the pointwise
-        # attributes (eg 'x', 'pos', 'rgb', 'y', etc)
+        # attributes (e.g. 'x', 'pos', 'rgb', 'y', etc)
         data = self.__class__()
 
         # If Data contains edges, we will want to update edge indices
@@ -321,7 +323,7 @@ class Data(PyGData):
                 0, idx, torch.arange(idx.shape[0], device=device))
             edge_index = reindex[self.edge_index]
 
-            # Remove obsolete edges (ie those involving a '-1' index)
+            # Remove obsolete edges (i.e. those involving a '-1' index)
             idx_edge = torch.where((edge_index != -1).all(dim=0))[0]
             data.edge_index = edge_index[:, idx_edge]
 
@@ -374,7 +376,7 @@ class Data(PyGData):
                 continue
 
             # Slice CSRData elements, unless specified otherwise
-            # (eg 'sub')
+            # (e.g. 'sub')
             if isinstance(item, CSRData):
                 data[key] = item[idx]
                 continue
@@ -451,7 +453,12 @@ class Data(PyGData):
         low = self.pos.min(dim=0).values
         r_max = (high - low).norm()
         neighbors, distances = knn_2(
-            self.pos, self.pos[is_out], k + 1, r_max=r_max)
+            self.pos,
+            self.pos[is_out],
+            k + 1,
+            r_max=r_max,
+            batch_search=self.batch,
+            batch_query=self.batch[is_out] if self.batch is not None else None)
         distances = distances[:, 1:]
         neighbors = neighbors[:, 1:]
 
@@ -477,7 +484,7 @@ class Data(PyGData):
         d = (self.pos[s] - self.pos[t]).norm(dim=1)
         d_1 = torch.vstack((d, torch.ones_like(d))).T
 
-        # Least square on d_1.x = w  (ie d.a + b = w)
+        # Least square on d_1.x = w  (i.e. d.a + b = w)
         # NB: CUDA may crash trying to solve this simple system, in
         # which case we will fall back to CPU. Not ideal though
         try:
@@ -622,7 +629,7 @@ class Data(PyGData):
         :param keys: List(str)
             Keys should be loaded from the file, ignoring the rest
         :param update_sub: bool
-            If True, the point (ie subpoint) indices will also be
+            If True, the point (i.e. subpoint) indices will also be
             updated to maintain dense indices. The output will then
             contain '(idx_sub, sub_super)' which can help apply these
             changes to maintain consistency with lower hierarchy levels
@@ -729,6 +736,140 @@ class Data(PyGData):
                     else to_byte_rgb(d_dict[k])
 
         return Data(**d_dict)
+
+    def estimate_instance_centroid(self, mode='iou'):
+        """Estimate the centroid position of each target instance
+        object, based on the position of the clusters.
+
+        Based on the hypothesis that clusters are relatively
+        instance-pure, we approximate the centroid of each object by
+        taking the barycenter of the centroids of the clusters
+        overlapping with each object, weighed down by their respective
+        IoUs.
+
+        NB: This is a proxy and one could design failure cases, when
+        clusters are not pure enough.
+
+        :param mode: str
+            Method used to estimate the centroids. 'iou' will weigh down
+            the centroids of the clusters overlapping each instance by
+            their IoU. 'ratio-product' will use the product of the size
+            ratios of the overlap wrt the cluster and wrt the instance.
+            'overlap' will use the size of the overlap between the
+            cluster and the instance.
+
+        :return obj_pos, obj_idx
+            obj_pos: Tensor
+                Estimated position for each object
+            obj_idx: Tensor
+                Corresponding object indices
+        """
+        if self.obj is None:
+            return None, None
+
+        return self.obj.estimate_centroid(self.pos, mode=mode)
+
+    def semantic_segmentation_oracle(
+            self, num_classes, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for semantic segmentation,
+        when all nodes predict the dominant label among their points.
+        This corresponds to the highest achievable performance with the
+        partition at hand.
+
+        This expects one of the following attributes:
+          - `Data.obj`: holding node overlaps with instance annotations
+          - `Data.y`: holding node label histograms
+
+        :param num_classes: int
+            Number of valid classes. By convention, we assume
+            `y ∈ [0, num_classes-1]` are VALID LABELS, while
+            `y < 0` AND `y >= num_classes` ARE VOID LABELS
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+
+        :return: mIoU, pre-class IoU, OA, mAcc
+        """
+        # Rely on the InstanceData for computation, if any
+        if self.obj is not None:
+            return self.obj.semantic_segmentation_oracle(
+                num_classes, *metric_args, **metric_kwargs)
+
+        # Return None if no labels
+        if getattr(self, 'y', None) is None:
+            return
+
+        # We expect the network to predict the most frequent label. For
+        # clusters where the dominant label is 'void', we expect the
+        # network to predict the second most frequent label. In the
+        # event where the cluster is 100% 'void', the metric will ignore
+        # the prediction, regardless its value
+        pred = self.y[:, :num_classes].argmax(dim=1)
+        target = self.y
+
+        # Performance evaluation
+        from src.metrics import ConfusionMatrix
+        metric = ConfusionMatrix(num_classes, *metric_args, **metric_kwargs)
+        metric(pred.cpu(), target.cpu())
+
+        return metric.miou(), metric.iou(), metric.oa(), metric.macc()
+
+    def instance_segmentation_oracle(self, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for instance segmentation.
+        This is a proxy for the highest achievable performance with the
+        cluster partition at hand.
+
+        More precisely, for the oracle prediction:
+          - each cluster is assigned to the instance it shares the most
+            points with
+          - clusters assigned to the same instance are merged into a
+            single prediction
+          - each predicted instance has a score equal to its IoU with
+            the assigned target instance
+
+        This expects the following attributes:
+          - `Data.obj`: holding node overlaps with instance annotations
+
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+
+        :return: InstanceMetricResults
+        """
+        # Rely on the InstanceData for computation, if any
+        if self.obj is not None:
+            return self.obj.instance_segmentation_oracle(
+                *metric_args, **metric_kwargs)
+        return
+
+    def panoptic_segmentation_oracle(self, *metric_args, **metric_kwargs):
+        """Compute the oracle performance for panoptic segmentation.
+        This is a proxy for the highest achievable performance with the
+        cluster partition at hand.
+
+        More precisely, for the oracle prediction:
+          - each cluster is assigned to the instance it shares the most
+            points with
+          - clusters assigned to the same instance are merged into a
+            single prediction
+
+        This expects the following attributes:
+          - `Data.obj`: holding node overlaps with instance annotations
+
+        :param metric_args:
+            Args for the metrics computation
+        :param metric_kwargs:
+            Kwargs for the metrics computation
+
+        :return: PanopticMetricResults
+        """
+        # Rely on the InstanceData for computation, if any
+        if self.obj is not None:
+            return self.obj.panoptic_segmentation_oracle(
+                *metric_args, **metric_kwargs)
+        return
 
 
 class Batch(PyGBatch):

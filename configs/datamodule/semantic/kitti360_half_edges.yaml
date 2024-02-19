@@ -1,0 +1,5 @@
+# @package datamodule
+defaults:
+  - /datamodule/semantic/kitti360.yaml
+
+graph_gap: [2, 6, 15]

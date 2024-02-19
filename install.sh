@@ -16,7 +16,7 @@ cd $HERE
 # Installation of Superpoint Transformer in a conda environment
 echo "_____________________________________________"
 echo
-echo "         ☁ Superpoint Transformer 🤖         "
+echo "         🧩 Superpoint Transformer 🤖         "
 echo "                  Installer                  "
 echo
 echo "_____________________________________________"
@@ -36,7 +36,7 @@ fi
 while (test -z $CONDA_DIR) || [ ! -d $CONDA_DIR ]
 do
     echo "Could not find conda at: "$CONDA_DIR
-    read -p "Please provide you conda install directory: " CONDA_DIR
+    read -p "Please provide your conda install directory: " CONDA_DIR
     CONDA_DIR=`realpath $CONDA_DIR`
 done
 
@@ -65,8 +65,9 @@ pip install plotly==5.9.0
 pip install "jupyterlab>=3" "ipywidgets>=7.6" jupyter-dash
 pip install "notebook>=5.3" "ipywidgets>=7.5"
 pip install ipykernel
+pip3 install torch torchvision
 pip3 install torch==2.0.* torchvision --index-url https://download.pytorch.org/whl/cu118
-pip install torchmetrics[detection]
+pip install torchmetrics==0.11.4
 #pip install torch==1.12.0 torchvision
 pip install torch_geometric==2.3 pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.0.0+cu118.html
 #pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric==2.3 -f https://data.pyg.org/whl/torch-1.12.0+cu102.html
@@ -84,9 +85,8 @@ pip install hydra-submitit-launcher
 pip install rich
 pip install torch_tb_profiler
 pip install wandb
+pip install open3d
 pip install gdown
-
-#*********************************
 
 echo
 echo
@@ -116,7 +116,7 @@ echo
 echo "⭐ Installing Parallel Cut-Pursuit"
 echo
 # Clone parallel-cut-pursuit and grid-graph repos
-git clone -b improve_merge https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/dependencies/parallel_cut_pursuit
+git clone https://gitlab.com/1a7r0ch3/parallel-cut-pursuit.git src/dependencies/parallel_cut_pursuit
 git clone https://gitlab.com/1a7r0ch3/grid-graph.git src/dependencies/grid_graph
 
 # Compile the projects

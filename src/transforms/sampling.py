@@ -69,7 +69,8 @@ class GridSampling3D(Transform):
     grouped following `mode='last'`.
 
     Besides, for keys where a more subtle histogram mechanism is needed,
-    (eg for 'y'), the 'hist_key' and 'hist_size' arguments can be used.
+    (e.g. for 'y'), the 'hist_key' and 'hist_size' arguments can be
+    used.
 
     Modified from: https://github.com/torch-points3d/torch-points3d
 
@@ -189,15 +190,15 @@ def _group_data(
     grouped following `mode='last'`.
 
     Besides, for keys where a more subtle histogram mechanism is needed,
-    (eg for 'y'), the 'bins' argument can be used.
+    (e.g. for 'y'), the 'bins' argument can be used.
 
     Warning: this function modifies the input Data object in-place.
 
     :param data : Data
-    :param cluster : torch.Tensor
+    :param cluster : Tensor
         Tensor of the same size as the number of points in data. Each
         element is the cluster index of that point.
-    :param unique_pos_indices : torch.tensor
+    :param unique_pos_indices : Tensor
         Tensor containing one index per cluster, this index will be used
         to select features and labels.
     :param mode : str
@@ -226,6 +227,10 @@ def _group_data(
 
     # Keys for which voxel aggregation will be based on majority voting
     _LAST_KEYS = ['batch', SaveNodeIndex.KEY]
+
+    # Keys to be treated as normal vectors, for which the unit-norm must
+    # be preserved
+    _NORMAL_KEYS = ['normal']
 
     # Supported mode for aggregation
     _MODES = ['mean', 'last']
@@ -302,6 +307,10 @@ def _group_data(
         # averaged across the clusters
         else:
             data[key] = scatter_mean(item, cluster, dim=0)
+
+        # For normals, make sure to re-normalize the mean-normal
+        if key in _NORMAL_KEYS:
+            data[key] = data[key] / data[key].norm(dim=1).view(-1, 1)
 
         # Convert back to boolean if need be
         if is_item_bool:
@@ -448,7 +457,7 @@ class SampleSubNodes(Transform):
     :param low: int
         Partition level we will sample from, guided by the `high`
         segments. By default, `high=0` to sample the level-0 points.
-        `low=-1` is accepted when level-0 has a `sub` attribute (ie
+        `low=-1` is accepted when level-0 has a `sub` attribute (i.e.
         level-0 points are themselves segments of `-1` level absent
         from the NAG object).
     :param n_max: int
@@ -456,7 +465,7 @@ class SampleSubNodes(Transform):
         `high`-level segment
     :param n_min: int
         Minimum number of `low`-level elements to sample in each
-        `high`-level segment, within the limits of its size (ie no
+        `high`-level segment, within the limits of its size (i.e. no
         oversampling)
     :param mask: list, np.ndarray, torch.LongTensor, torch.BoolTensor
         Indicates a subset of `low`-level elements to consider. This
@@ -843,7 +852,7 @@ class SampleRadiusSubgraphs(BaseSampleSubgraphs):
         # the optimal search for cluster-cluster distances, but is the
         # fastest for our needs here. If need be, one could make this
         # search more accurate using something like:
-        # `src.utils.neighbors.cluster_radius_nn`
+        # `src.utils.neighbors.cluster_radius_nn_graph`
 
         # TODO: searching using knn_2 was sluggish, switching to brute
         #  force for now. If bottleneck, need to investigate alternative

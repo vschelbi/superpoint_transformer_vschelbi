@@ -29,13 +29,17 @@ class NAG:
         for i in range(self.num_levels):
             yield self[i]
 
-    def get_sub_size(self, high, low=0):
+    def get_sub_size(self, high, low=0, use_level_zero_node_size=True):
         """Compute the number of points of level 'low' contained in
         each superpoint of level 'high'.
 
         Note: 'low=-1' is accepted when level-0 has a 'sub' attribute
-        (ie level-0 points are themselves clusters of '-1' level
+        (i.e. level-0 points are themselves clusters of '-1' level
         absent from the NAG object).
+
+        Note2: if 'low=0', 'use_level_zero_node_size=True', and the
+        level-0 node possess a 'node_size' attribute, this size will be
+        used to represent the size of level-0 nodes.
         """
         assert -1 <= low < high < self.num_levels
         assert 0 <= low or self[0].is_super
@@ -43,7 +47,11 @@ class NAG:
         # Sizes are computed in a bottom-up fashion. Note this scatter
         # operation assumes all levels of hierarchy use dense,
         # consecutive indices which are consistent between levels
-        sub_sizes = self[low + 1].sub.sizes
+        if low == 0 and use_level_zero_node_size \
+                and getattr(self[low + 1], 'node_size', None) is not None:
+            sub_sizes = self[low + 1].node_size
+        else:
+            sub_sizes = self[low + 1].sub.sizes
         for i in range(low + 1, high):
             sub_sizes = scatter_sum(sub_sizes, self[i].super_index, dim=0)
         return sub_sizes
@@ -415,7 +423,7 @@ class NAG:
         :param low: int
             Partition level we will sample from, guided by the `high`
             segments. By default, `high=0` to sample the level-0 points.
-            `low=-1` is accepted when level-0 has a `sub` attribute (ie
+            `low=-1` is accepted when level-0 has a `sub` attribute (i.e.
             level-0 points are themselves segments of `-1` level absent
             from the NAG object).
         :param n_max: int
@@ -423,7 +431,7 @@ class NAG:
             `high`-level segment
         :param n_min: int
             Minimum number of `low`-level elements to sample in each
-            `high`-level segment, within the limits of its size (ie no
+            `high`-level segment, within the limits of its size (i.e. no
             oversampling)
         :param mask: list, np.ndarray, torch.Tensor
             Indicates a subset of `low`-level elements to consider. This

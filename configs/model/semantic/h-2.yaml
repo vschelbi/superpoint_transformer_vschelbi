@@ -1,0 +1,7 @@
+# @package model
+defaults:
+  - /model/semantic/spt-2.yaml
+
+net:
+  down_num_blocks: 0
+  up_num_blocks: 0

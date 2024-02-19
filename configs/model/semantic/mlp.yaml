@@ -1,0 +1,12 @@
+# @package model
+defaults:
+  - /model/semantic/default.yaml
+
+_p: [8, 32, 64, 128]
+_point_hf_dim: ${datamodule.num_hf_point}  # size of handcrafted level-0 node features (points)
+_node_injection_dim: null
+
+net:
+  _target_: src.models.components.mlp.NodeMLP
+  dims: ${eval:'[${model._point_hf_dim}] + ${model._point_mlp}'}
+  level: 0

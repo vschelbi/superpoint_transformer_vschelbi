@@ -119,7 +119,7 @@ class CSRData:
 
     @property
     def sizes(self):
-        """Returns the size of each group (ie the pointer jumps).
+        """Returns the size of each group (i.e. the pointer jumps).
         """
         return self.pointers[1:] - self.pointers[:-1]
 
@@ -300,6 +300,12 @@ class CSRData:
                     print(f'{self.__class__.__name__}.__eq__: values differ')
                 return False
         return True
+
+    def __hash__(self):
+        """Hashing for an CSRData.
+        """
+        return hash((
+            self.__class__.__name__, self.pointers, *(v for v in self.values)))
 
 
 class CSRBatch(CSRData):

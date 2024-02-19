@@ -66,12 +66,34 @@ class S3DISRoom(S3DIS):
                 f'Area_{self.fold}/{r}' for r in ROOMS[f'Area_{self.fold}']]}
 
     def read_single_raw_cloud(self, raw_cloud_path):
-        """Read a single raw cloud and return a Data object, ready to
+        """Read a single raw cloud and return a `Data` object, ready to
         be passed to `self.pre_transform`.
+
+        This `Data` object should contain the following attributes:
+          - `pos`: point coordinates
+          - `y`: OPTIONAL point semantic label
+          - `obj`: OPTIONAL `InstanceData` object with instance labels
+          - `rgb`: OPTIONAL point color
+          - `intensity`: OPTIONAL point LiDAR intensity
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
         """
         return read_s3dis_room(
             raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=True,
             xyz_room=True, align=self.align, is_val=True, verbose=False)
+
+    @property
+    def raw_file_names(self):
+        """The file paths to find in order to skip the download."""
+        room_folders = self.raw_file_names_3d
+        area_folders = [f'Area_{i + 1}' for i in range(6)]
+        alignment_files = [
+            osp.join(a, f"{a}_alignmentAngle.txt") for a in area_folders]
+        return room_folders + alignment_files
 
     def processed_to_raw_path(self, processed_path):
         """Given a processed cloud path from `self.processed_paths`,

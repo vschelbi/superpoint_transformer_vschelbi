@@ -1,10 +1,8 @@
 import sys
 import os.path as osp
-from typing import Any
 
 import torch
 import numpy as np
-from numpy import ndarray
 from torch_scatter import scatter_sum, scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.transforms import Transform
@@ -17,7 +15,7 @@ sys.path.append(osp.join(dependencies_folder, "dependencies/grid_graph/python/bi
 sys.path.append(osp.join(dependencies_folder, "dependencies/parallel_cut_pursuit/python/wrappers"))
 
 from grid_graph import edge_list_to_forward_star
-from cp_kmpp_d0_dist import cp_kmpp_d0_dist
+from cp_d0_dist import cp_d0_dist
 
 __all__ = ['CutPursuitPartition', 'GridPartition']
 
@@ -143,17 +141,28 @@ class CutPursuitPartition(Transform):
                 x = d1.pos - pos_offset
             x = np.asfortranarray(x.cpu().numpy().T)
             node_size = d1.node_size.float().cpu().numpy()
-            coor_weights= np.ones(n_dim + n_feat, dtype=np.float32)
+            coor_weights = np.ones(n_dim + n_feat, dtype=np.float32)
             coor_weights[:n_dim] *= sw
 
             # Partition computation
-            super_index, x_c, cluster, edges, times = cp_kmpp_d0_dist(
-                1, x, source_csr, target, edge_weights=edge_weights,
-                vert_weights=node_size, coor_weights=coor_weights,
-                min_comp_weight=cut, cp_dif_tol=1e-2, cp_it_max=self.iterations,
-                split_damp_ratio=0.7, verbose=self.verbose,
-                max_num_threads=num_threads, balance_parallel_split=True,
-                compute_Time=True, compute_List=True, compute_Graph=True)
+            super_index, x_c, cluster, edges, times = cp_d0_dist(
+                n_dim + n_feat,
+                x,
+                source_csr,
+                target,
+                edge_weights=edge_weights,
+                vert_weights=node_size,
+                coor_weights=coor_weights,
+                min_comp_weight=cut,
+                cp_dif_tol=1e-2,
+                cp_it_max=self.iterations,
+                split_damp_ratio=0.7,
+                verbose=self.verbose,
+                max_num_threads=num_threads,
+                balance_parallel_split=True,
+                compute_Time=True,
+                compute_List=True,
+                compute_Graph=True)
 
             if self.verbose:
                 delta_t = (times[1:] - times[:-1]).round(2)
@@ -199,7 +208,7 @@ class CutPursuitPartition(Transform):
 
             # Aggregate some point attributes into the clusters. This
             # is not performed dynamically since not all attributes can
-            # be aggregated (eg 'neighbor_index', 'neighbor_distance',
+            # be aggregated (e.g. 'neighbor_index', 'neighbor_distance',
             # 'edge_index', 'edge_attr'...)
             if 'y' in d1.keys:
                 assert d1.y.dim() == 2, \

@@ -1,0 +1,26 @@
+# @package model
+defaults:
+  - /model/semantic/spt.yaml
+
+net:
+  pool:
+    _target_: src.nn.AttentivePool
+    _partial_: True  # partial to let pool_factory pass the pool_dim
+    q_in_dim: ${eval:'${model._node_mlp_out} if ${model._node_mlp_out} else ${model._node_hf_dim}'}  # size of parent level-1+ node features
+    num_heads: ${model.net.down_num_heads}
+    in_dim: null
+    out_dim: null  # no MLP here, for simplicity, the DownNFuseStage in_mlp will deal with it
+    qkv_bias: ${model.net.qkv_bias}
+    qk_dim: ${model.net.qk_dim}
+    qk_scale: ${model.net.qk_scale}
+    attn_drop: ${model.net.down_attn_drop}
+    drop: ${model.net.down_residual_drop}
+    in_rpe_dim: ${eval:'${model._v_edge_mlp_out} if ${model._v_edge_mlp_out} else ${model._v_edge_hf_dim}'}  # size of handcrafted vertical edge features
+    k_rpe: ${model.net.k_rpe}
+    q_rpe: ${model.net.q_rpe}
+    v_rpe: ${model.net.v_rpe}
+    k_delta_rpe: ${model.net.k_delta_rpe}
+    q_delta_rpe: ${model.net.q_delta_rpe}
+    qk_share_rpe: ${model.net.qk_share_rpe}
+    q_on_minus_rpe: ${model.net.q_on_minus_rpe}
+    heads_share_rpe: ${model.net.heads_share_rpe}

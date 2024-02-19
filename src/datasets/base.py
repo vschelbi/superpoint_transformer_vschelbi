@@ -3,9 +3,11 @@ import re
 import sys
 import os.path as osp
 import torch
+import random
 import logging
 import hashlib
 import warnings
+from tqdm import tqdm
 from datetime import datetime
 from itertools import product
 from tqdm.auto import tqdm as tq
@@ -13,9 +15,11 @@ from torch_geometric.data import InMemoryDataset
 from torch_geometric.data.dataset import files_exist
 from torch_geometric.data.makedirs import makedirs
 from torch_geometric.data.dataset import _repr
+from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.data import NAG
 from src.transforms import NAGSelectByKey, NAGRemoveKeys, SampleXYTiling, \
     SampleRecursiveMainXYAxisTiling
+from src.visualization import show
 
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
@@ -31,7 +35,8 @@ __all__ = ['BaseDataset']
 class BaseDataset(InMemoryDataset):
     """Base class for datasets.
 
-    Child classes must overwrite the following:
+    Child classes must overwrite the following methods (see respective
+    docstrings for more details):
 
     ```
     MyDataset(BaseDataset):
@@ -40,6 +45,14 @@ class BaseDataset(InMemoryDataset):
             pass
 
         def num_classes(self):
+            pass
+
+        def stuff_classes(self):
+            pass
+
+        def class_colors(self):
+            # Optional: only if you want to customize your color palette
+            # for visualization
             pass
 
         def all_base_cloud_ids(self):
@@ -51,10 +64,7 @@ class BaseDataset(InMemoryDataset):
         def read_single_raw_cloud(self):
             pass
 
-        def processed_to_raw_path(self):
-            pass
-
-        def raw_file_structure(self) (optional):
+        def raw_file_structure(self):
             # Optional: only if your raw or processed file structure
             # differs from the default
             pass
@@ -238,21 +248,89 @@ class BaseDataset(InMemoryDataset):
 
     @property
     def class_names(self):
-        """List of string names for dataset classes. This list may be
-        one-item larger than `self.num_classes` if the last label
-        corresponds to 'unlabelled' or 'ignored' indices, indicated as
-        `-1` in the dataset labels.
+        """List of string names for dataset classes. This list must be
+        one-item larger than `self.num_classes`, with the last label
+        corresponding to 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         raise NotImplementedError
 
     @property
     def num_classes(self):
-        """Number of classes in the dataset. May be one-item smaller
+        """Number of classes in the dataset. Must be one-item smaller
         than `self.class_names`, to account for the last class name
-        being optionally used for 'unlabelled' or 'ignored' classes,
-        indicated as `-1` in the dataset labels.
+        being used for 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         raise NotImplementedError
+
+    @property
+    def stuff_classes(self):
+        """List of 'stuff' labels for INSTANCE and PANOPTIC
+        SEGMENTATION (setting this is NOT REQUIRED FOR SEMANTIC
+        SEGMENTATION alone). By definition, 'stuff' labels are labels in
+        `[0, self.num_classes-1]` which are not 'thing' labels.
+
+        In instance segmentation, 'stuff' classes are not taken into
+        account in performance metrics computation.
+
+        In panoptic segmentation, 'stuff' classes are taken into account
+        in performance metrics computation. Besides, each cloud/scene
+        can only have at most one instance of each 'stuff' class.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        raise NotImplementedError
+
+    @property
+    def thing_classes(self):
+        """List of 'thing' labels for instance and panoptic
+        segmentation. By definition, 'thing' labels are labels in
+        `[0, self.num_classes-1]` which are not 'stuff' labels.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        return [i for i in range(self.num_classes) if i not in self.stuff_classes]
+
+    @property
+    def void_classes(self):
+        """List containing the 'void' labels. By default, we group all
+        void/ignored/unknown class labels into a single
+        `[self.num_classes]` label for simplicity.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        return [self.num_classes]
+
+    @property
+    def class_colors(self):
+        """Colors for visualization, if not None, must have the same
+        length as `self.num_classes`. If None, the visualizer will use
+        the label values in the data to generate random colors.
+        """
+        return
+
+    def print_classes(self):
+        """Show the class names, labels and type (thing, stuff, void).
+        """
+        for i, c in enumerate(self.class_names):
+            try:
+                class_type = \
+                    'stuff' if i in self.stuff_classes \
+                    else 'thing' if i in self.thing_classes \
+                    else 'void'
+            except:
+                class_type = ''
+            print(f"{i:<3} {c:<20} {class_type}")
 
     @property
     def data_subdir_name(self):
@@ -342,7 +420,7 @@ class BaseDataset(InMemoryDataset):
         """String to describe to the user the file structure of your
         dataset, at download time.
         """
-        return None
+        return
 
     @property
     def raw_file_names(self):
@@ -353,8 +431,8 @@ class BaseDataset(InMemoryDataset):
     def raw_file_names_3d(self):
         """Some file paths to find in order to skip the download.
         Those are not directly specified inside `self.raw_file_names`
-        in case `self.raw_file_names` would need to be extended (eg with
-        3D bounding boxes files).
+        in case `self.raw_file_names` would need to be extended (e.g.
+        with 3D bounding boxes files).
         """
         return [self.id_to_relative_raw_path(x) for x in self.cloud_ids]
 
@@ -363,7 +441,7 @@ class BaseDataset(InMemoryDataset):
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
-        return osp.join(self.id_to_base_id(id) + '.ply')
+        return self.id_to_base_id(id) + '.ply'
 
     @property
     def pre_transform_hash(self):
@@ -455,10 +533,10 @@ class BaseDataset(InMemoryDataset):
     def download_warning(self, interactive=False):
         # Warning message for the user about to download
         log.info(
-            f"WARNING: You are about to download {self.__class__.__name__} "
-            f"data.")
+            f"WARNING: You must download the raw data for the "
+            f"{self.__class__.__name__} dataset.")
         if self.raw_file_structure is not None:
-            log.info("Files will be organized in the following structure:")
+            log.info("Files must be organized in the following structure:")
             log.info(self.raw_file_structure)
         log.info("")
         if interactive:
@@ -480,7 +558,7 @@ class BaseDataset(InMemoryDataset):
             warnings.warn(
                 "The `pre_filter` argument differs from the one used in "
                 "the pre-processed version of this dataset. If you want to "
-                "make use of another pre-fitering technique, make sure to "
+                "make use of another pre-filtering technique, make sure to "
                 "delete '{self.processed_dir}' first")
 
         if files_exist(self.processed_paths):  # pragma: no cover
@@ -541,12 +619,7 @@ class BaseDataset(InMemoryDataset):
         # Read the raw cloud corresponding to the final processed
         # `cloud_path` and convert it to a Data object
         raw_path = self.processed_to_raw_path(cloud_path)
-        data = self.read_single_raw_cloud(raw_path)
-
-        # TODO: this is dirty, may cause subsequent collisions with
-        #  self.num_classes ?
-        if getattr(data, 'y', None) is not None:
-            data.y[data.y == -1] = self.num_classes
+        data = self.sanitized_read_single_raw_cloud(raw_path)
 
         # If the cloud path indicates a tiling is needed, apply it here
         if self.xy_tiling is not None:
@@ -605,13 +678,93 @@ class BaseDataset(InMemoryDataset):
             steps = torch.log2(torch.tensor(num)).int().item()
             return (x - 1, steps), prefix, suffix
 
-        return None
+        return
 
     def read_single_raw_cloud(self, raw_cloud_path):
-        """Read a single raw cloud and return a Data object, ready to
+        """Read a single raw cloud and return a `Data` object, ready to
         be passed to `self.pre_transform`.
+
+        This `Data` object should contain the following attributes:
+          - `pos`: point coordinates
+          - `y`: OPTIONAL point semantic label
+          - `obj`: OPTIONAL `InstanceData` object with instance labels
+          - `rgb`: OPTIONAL point color
+          - `intensity`: OPTIONAL point LiDAR intensity
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
         """
         raise NotImplementedError
+
+    def sanitized_read_single_raw_cloud(self, raw_cloud_path):
+        """Wrapper around the actual `self.read_single_raw_cloud`. This
+        function ensures that the semantic and instance segmentation
+        labels returned by the reader are sanitized.
+
+        More specifically, we assume `[0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+
+        To this end, this function maps all labels outside
+        `[0, self.num_classes-1]` to `y = self.num_classes`.
+
+        Hence, we actually have `self.num_classes + 1` labels in the
+        data. This allows identifying the points to be ignored at metric
+        computation time.
+
+        Besides, this function ensures that there is at most 1 instance
+        of each stuff (and void) class in each scene/cloud/tile, as
+        described in:
+          - https://arxiv.org/abs/1801.00868
+          - https://arxiv.org/abs/1905.01220
+        """
+        data = self.read_single_raw_cloud(raw_cloud_path)
+
+        # Set all void labels to self.num_classes in the semantic
+        # segmentation labels
+        if getattr(data, 'y', None) is not None:
+            data.y[data.y < 0] = self.num_classes
+            data.y[data.y > self.num_classes] = self.num_classes
+
+        # Set all void labels to self.num_classes in the
+        # instance/panoptic segmentation annotations
+        if getattr(data, 'obj', None) is not None:
+            data.obj.y[data.obj.y < 0] = self.num_classes
+            data.obj.y[data.obj.y > self.num_classes] = self.num_classes
+
+            # For each cloud/scene and each stuff/void class, group
+            # annotations into a single instance
+            for i in self.stuff_classes + self.void_classes:
+                idx = torch.where(data.obj.y == i)[0]
+                if idx.numel() == 0:
+                    continue
+                data.obj.obj[idx] = data.obj.obj[idx].min()
+
+        return data
+
+    def debug_instance_data(self, level=1):
+        """Sanity check to make sure at most 1 instance of each stuff
+        class per scene/cloud.
+
+        :param level: int
+            NAG level which to inspect
+        """
+        problematic_clouds = []
+        for i_cloud, nag in tqdm(enumerate(self)):
+            _, perm = consecutive_cluster(nag[level].obj.obj)
+            y = nag[level].obj.y[perm]
+            y_count = torch.bincount(y, minlength=self.num_classes + 1)
+            for c in self.stuff_classes + self.void_classes:
+                if y_count[c] > 1:
+                    problematic_clouds.append(i_cloud)
+                    break
+
+        assert len(problematic_clouds) == 0, \
+            f"The following clouds have more than 1 instance of for a stuff " \
+            f"or void class:\n{problematic_clouds}"
 
     def get_class_weight(self, smooth='sqrt'):
         """Compute class weights based on the labels distribution in the
@@ -674,6 +827,9 @@ class BaseDataset(InMemoryDataset):
 
         # Get the processed NAG directly from RAM
         if self.in_memory and not from_hdd:
+            # TODO: careful, this means the transforms are only run
+            #  once. So no augmentations, samplings, etc in the
+            #  transforms...
             return self.in_memory_data[idx]
 
         # Read the NAG from HDD
@@ -700,3 +856,75 @@ class BaseDataset(InMemoryDataset):
         datasets with held-out test sets.
         """
         raise NotImplementedError
+
+    def show_examples(
+            self, label, radius=4, max_examples=5, shuffle=True, **kwargs):
+        """Interactive plots of some examples centered on points of the
+        provided `label`. At most one example per cloud/tile/scene in
+        the dataset will be shown.
+
+        :param label: int
+            Point label we are
+        :param radius: float
+            Radius of the spherical sampling to draw around the point of
+            interest
+        :param max_examples: int
+            Maximum number of samples to draw
+        :param shuffle: bool
+            If True, the candidate samples will be shuffled every time
+        :param kwargs:
+            Kwargs to be passed to the visualization `show()` function
+        :return:
+        """
+        assert label >= 0 and label <= self.num_classes, \
+            f"Label must be within [0, {self.num_classes + 1}]"
+
+        # Gather some clouds ids with the desired class
+        cloud_list = []
+        iterator = list(range(len(self)))
+        if shuffle:
+            random.shuffle(iterator)
+        for i_cloud in iterator:
+            if len(cloud_list) >= max_examples:
+                break
+            if (self[i_cloud][1].y.argmax(dim=1) == label).any():
+                cloud_list.append(i_cloud)
+
+        # If no cloud was found with the desired class, return here
+        if len(cloud_list) == 0:
+            print(
+                f"Could not find any cloud with points of label={label} in the "
+                f"dataset.")
+            return
+
+        # Display some found examples
+        for i, i_cloud in enumerate(cloud_list):
+            if i >= max_examples:
+                break
+
+            # Load the cloud
+            nag = self[i_cloud]
+
+            # Search for points with the desired label
+            point_idx = torch.where(nag[0].y.argmax(dim=1) == label)[0].tolist()
+
+            # Pick only on of the points as visualization center for the
+            # cloud at hand
+            if shuffle:
+                random.shuffle(point_idx)
+            i_point = point_idx[0]
+
+            # Draw the scene
+            center = nag[0].pos[i_point].cpu().tolist()
+            title = f"Label={label} - Cloud={i_cloud} - Center={center}"
+            print(f"\n{title}")
+            show(
+                nag,
+                center=center,
+                radius=radius,
+                title=title,
+                class_names=self.class_names,
+                class_colors=self.class_colors,
+                stuff_classes=self.stuff_classes,
+                num_classes=self.num_classes,
+                **kwargs)

@@ -1,10 +1,16 @@
-# Source: https://github.com/torch-points3d/torch-points3d
-
-import numpy as np
-import torch
 import os
+import torch
+import logging
+import numpy as np
 from torchmetrics.classification import MulticlassConfusionMatrix
 from torch_scatter import scatter_add
+
+
+log = logging.getLogger(__name__)
+
+
+__all__ = ['ConfusionMatrix']
+
 
 class ConfusionMatrix(MulticlassConfusionMatrix):
     """TorchMetrics's MulticlassConfusionMatrix but tailored to our
@@ -14,24 +20,48 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
     speeding up metrics computation without flattening all predictions
     and labels histograms into potentially-huge point-wise tensors.
 
+    NB: Contrary to MulticlassConfusionMatrix, the `ignore_index` is
+        not user-defined. We consider `y ∈ [0, self.num_classes-1]` ARE
+        ALL VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE VOID/IGNORED
+        LABELS. Whether the input target labels are in 1D or passed as a
+        2D histogram, we will exclude ignored labels from metrics
+        computation.
+
     :param num_classes: int
         Number of classes in the confusion matrix
     :param ignore_index: int
         Specifies a target value that is ignored and does not
         contribute to the metric calculation
+    :param compute_on_cpu: bool
+        If True, the accumulated prediction and target data will be
+        stored on CPU, and the metrics computation will be performed
+        on CPU. This can be necessary for particularly large
+        datasets.
+    :param kwargs:
+        Additional keyword arguments, see :ref:`Metric kwargs` for
+        more info.
     """
 
-    def __init__(self, num_classes, ignore_index=None):
+    def __init__(self, num_classes, **kwargs):
         super().__init__(
-            num_classes, ignore_index=ignore_index, normalize=None,
-            validate_args=False)
+            num_classes,
+            ignore_index=num_classes,
+            normalize=None,
+            validate_args=False,
+            **kwargs)
 
-    def update(self, preds, target): # TODO change update to compute metric from histogram rather than brute-force atomic pred...
+    def update(self, preds, target):
         """Update state with predictions and targets. Extends the
         `MulticlassConfusionMatrix.update()` with the possibility to
         pass histograms as targets. This is typically useful for
         computing point-wise metrics from segment-wise predictions and
         label histograms.
+
+        NB: If target label histograms have more than `self.num_class`,
+            columns, only the first `self.num_class` columns will be
+            taken into account in the metrics, the extra columns will be
+            considered 'void'.
 
         :param preds: Tensor
             Predictions
@@ -42,8 +72,9 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         assert preds.shape[0] == target.shape[0]
         assert preds.dim() <= 2
         assert target.dim() <= 2
-        if target.dim() == 2:
-            assert target.shape[1] == 1 or target.shape[1] == self.num_classes
+        assert target.dim() == 1 \
+               or target.shape[1] == 1 \
+               or target.shape[1] >= self.num_classes
 
         # If logits or probas are passed for preds, take the argmax for
         # the majority class
@@ -55,10 +86,9 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         # If target is a 2D histogram of labels, we directly compute the
         # confusion matrix from the histograms without computing the
         # corresponding atomic pred-target 1D-tensor pairs
-        if target.dim() == 2 and target.shape[1] == self.num_classes:
-            if self.ignore_index is not None and \
-                    0 <= self.ignore_index < self.num_classes:
-                target[self.ignore_index] = 0
+        if target.dim() == 2 and target.shape[1] >= self.num_classes:
+            # Exclude 'void'/'ignored' labels counts from the histogram
+            target = target[:, :self.num_classes]
             confmat = scatter_add(
                 target.float(), preds, dim=0, dim_size=self.num_classes)
             self.confmat += confmat.T.long()
@@ -67,6 +97,9 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         # Flatten single-column 2D target
         if target.dim() == 2 and target.shape[1] == 1:
             target = target.squeeze()
+
+        # Set all 'void'/'ignored' target indices to `num_classes`
+        target[target < 0 | target > self.num_classes] = self.num_classes
 
         # Basic parent-class update on 1D tensors
         super().update(preds, target)
@@ -84,6 +117,11 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         """Create a ConfusionMatrix from 2D tensors representing label
         histograms. The metrics are computed assuming the prediction
         associated with each histogram is the dominant label.
+
+        NB: If target label histograms have more than `self.num_class`,
+            columns, only the first `self.num_class` columns will be
+            taken into account in the metrics, the extra columns will be
+            considered 'void'.
         """
         assert h.ndim == 2
         assert not h.is_floating_point()

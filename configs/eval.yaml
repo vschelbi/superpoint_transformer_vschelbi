@@ -2,8 +2,8 @@
 
 defaults:
   - _self_
-  - datamodule: s3dis.yaml
-  - model: spt-2.yaml
+  - datamodule: semantic/s3dis.yaml
+  - model: semantic/spt-2.yaml
   - logger: null
   - trainer: default.yaml
   - paths: default.yaml
@@ -30,4 +30,4 @@ ckpt_path: ???
 
 # float32 precision operations (torch>=2.0)
 # see https://pytorch.org/docs/2.0/generated/torch.set_float32_matmul_precision.html
-float32_matmul_precision: highest
+float32_matmul_precision: high

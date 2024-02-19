@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 
 
 class S3DISDataModule(BaseDataModule):
-    """LightningDataModule for KITTI360 dataset.
+    """LightningDataModule for S3DIS dataset.
 
     A DataModule implements 5 key methods:
 

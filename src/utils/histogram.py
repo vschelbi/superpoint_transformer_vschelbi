@@ -6,7 +6,7 @@ __all__ = ['histogram_to_atomic', 'atomic_to_histogram']
 
 
 def histogram_to_atomic(gt, pred):
-    """Convert ground truth and predictions at a segment level (ie
+    """Convert ground truth and predictions at a segment level (i.e.
     ground truth is 2D tensor carrying histogram of labels in each
     segment), to pointwise 1D ground truth and predictions.
 

@@ -113,6 +113,7 @@ def read_s3dis_room(
         indicating whether they belong to their Area validation split
     :param verbose: bool
         Verbosity
+
     :return: Data
     """
     if verbose:
@@ -140,7 +141,7 @@ def read_s3dis_room(
             log.debug(f"Reading object {i_object}: {object_name}")
 
         # Remove the trailing number in the object name to isolate the
-        # object class (eg 'chair_24' -> 'chair')
+        # object class (e.g. 'chair_24' -> 'chair')
         object_class = object_name.split('_')[0]
 
         # Convert object class string to int label. Note that by default
@@ -244,6 +245,10 @@ class S3DIS(BaseDataset):
         Root directory where the dataset should be saved.
     fold : `int`
         Integer in [1, ..., 6] indicating the Test Area
+    with_stuff: `bool`
+        By default, S3DIS does not have any stuff class. If `with_stuff`
+        is True, the 'ceiling', 'wall', and 'floor' classes will be
+        treated as stuff
     stage : {'train', 'val', 'test', 'trainval'}, optional
     transform : `callable`, optional
         transform function operating on data.
@@ -263,27 +268,68 @@ class S3DIS(BaseDataset):
     _aligned_zip_name = ALIGNED_ZIP_NAME
     _unzip_name = UNZIP_NAME
 
-    def __init__(self, *args, fold=5, **kwargs):
+    def __init__(self, *args, fold=5, with_stuff=False, **kwargs):
         self.fold = fold
+        self.with_stuff = with_stuff
         super().__init__(*args, val_mixed_in_train=True, **kwargs)
 
     @property
+    def pre_transform_hash(self):
+        """Produce a unique but stable hash based on the dataset's
+        `pre_transform` attributes (as exposed by `_repr`).
+
+        For S3DIS, we want the hash to detect if the stuff classes are
+        the default ones.
+        """
+        suffix = '_with_stuff' if self.with_stuff else ''
+        return super().pre_transform_hash + suffix
+
+    @property
     def class_names(self):
-        """List of string names for dataset classes. This list may be
-        one-item larger than `self.num_classes` if the last label
-        corresponds to 'unlabelled' or 'ignored' indices, indicated as
-        `-1` in the dataset labels.
+        """List of string names for dataset classes. This list must be
+        one-item larger than `self.num_classes`, with the last label
+        corresponding to 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         return CLASS_NAMES
 
     @property
     def num_classes(self):
-        """Number of classes in the dataset. May be one-item smaller
+        """Number of classes in the dataset. Must be one-item smaller
         than `self.class_names`, to account for the last class name
-        being optionally used for 'unlabelled' or 'ignored' classes,
-        indicated as `-1` in the dataset labels.
+        being used for 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
         """
         return S3DIS_NUM_CLASSES
+
+    @property
+    def stuff_classes(self):
+        """List of 'stuff' labels for INSTANCE and PANOPTIC
+        SEGMENTATION (setting this is NOT REQUIRED FOR SEMANTIC
+        SEGMENTATION alone). By definition, 'stuff' labels are labels in
+        `[0, self.num_classes-1]` which are not 'thing' labels.
+
+        In instance segmentation, 'stuff' classes are not taken into
+        account in performance metrics computation.
+
+        In panoptic segmentation, 'stuff' classes are taken into account
+        in performance metrics computation. Besides, each cloud/scene
+        can only have at most one instance of each 'stuff' class.
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        return STUFF_CLASSES_MODIFIED if self.with_stuff else STUFF_CLASSES
+
+    @property
+    def class_colors(self):
+        """Colors for visualization, if not None, must have the same
+        length as `self.num_classes`. If None, the visualizer will use
+        the label values in the data to generate random colors.
+        """
+        return CLASS_COLORS
 
     @property
     def all_base_cloud_ids(self):
@@ -326,8 +372,21 @@ class S3DIS(BaseDataset):
         os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
 
     def read_single_raw_cloud(self, raw_cloud_path):
-        """Read a single raw cloud and return a Data object, ready to
+        """Read a single raw cloud and return a `Data` object, ready to
         be passed to `self.pre_transform`.
+
+        This `Data` object should contain the following attributes:
+          - `pos`: point coordinates
+          - `y`: OPTIONAL point semantic label
+          - `obj`: OPTIONAL `InstanceData` object with instance labels
+          - `rgb`: OPTIONAL point color
+          - `intensity`: OPTIONAL point LiDAR intensity
+
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
         """
         return read_s3dis_area(
             raw_cloud_path, xyz=True, rgb=True, semantic=True, instance=True,
@@ -365,7 +424,7 @@ class S3DIS(BaseDataset):
 ########################################################################
 
 class MiniS3DIS(S3DIS):
-    """A mini version of S3DIS with only 2 areas per stage for
+    """A mini version of S3DIS with only 1 area per stage for
     experimentation.
     """
     _NUM_MINI = 1

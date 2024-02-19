@@ -384,5 +384,7 @@ def object_name_to_label(object_class):
 
 # For instance segmentation
 MIN_OBJECT_SIZE = 100
+STUFF_CLASSES = []
 THING_CLASSES = list(range(S3DIS_NUM_CLASSES))
-STUFF_CLASSES = [i for i in range(S3DIS_NUM_CLASSES) if not i in THING_CLASSES]
+STUFF_CLASSES_MODIFIED = [0, 1, 2]
+THING_CLASSES_MODIFIED = list(range(3, S3DIS_NUM_CLASSES))

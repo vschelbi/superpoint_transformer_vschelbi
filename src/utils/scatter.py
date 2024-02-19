@@ -4,7 +4,6 @@ from torch_scatter import scatter_add, scatter_mean, scatter_min
 from itertools import combinations_with_replacement
 from src.utils.edge import edge_wise_points
 from torch_geometric.utils import coalesce
-from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
 __all__ = [
@@ -20,6 +19,7 @@ def scatter_mean_weighted(x, idx, w, dim_size=None):
         "Only supports weighted mean along the first dimension"
 
     # Concatenate w and x in the same tensor to only call scatter once
+    x = x.view(-1, 1) if x.dim() == 1 else x
     w = w.view(-1, 1).float()
     wx = torch.cat((w, x * w), dim=1)
 
