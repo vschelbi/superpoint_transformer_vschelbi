@@ -998,7 +998,7 @@ def compute_metrics_s3dis_6fold(
         model = hydra.utils.instantiate(cfg.model)
 
         # Load pretrained weights from a checkpoint file
-        model = model.load_from_checkpoint(
+        model = model.__class__.load_from_checkpoint(
             cfg.ckpt_path,
             net=model.net,
             edge_affinity_head=model.edge_affinity_head,
