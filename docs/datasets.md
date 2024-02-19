@@ -164,8 +164,8 @@ transforms will not affect your preprocessing hash.
 
 ## Mini datasets
 Each dataset has a "mini" version which only processes a portion of the data, to
-speedup experimentation. To use it, set your the 
-[dataset config](configs/datamodule) of your choice:
+speedup experimentation. To use it, set the
+[dataset config](../configs/datamodule) of your choice:
 ```yaml
 mini: True
 ```
@@ -182,7 +182,7 @@ To create your own dataset, you will need to do the following:
 - create `YourDataModule` class inheriting from `src.datamodules.DataModule`
 - create `configs/datamodule/your_dataset.yaml` config 
  
-Instructions are provided in the docstrings of those classes and you can get
+Instructions are provided in the docstrings of those classes, and you can get
 inspiration from our code for S3DIS, KITTI-360 and DALES to get started. 
 
 We suggest that your config inherits from `configs/datamodule/default.yaml`. See
