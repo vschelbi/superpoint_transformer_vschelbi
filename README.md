@@ -60,8 +60,8 @@ between superpoints at multiple scales.
 
 ## 📰  Updates
 
-- **15.01.2024** Major code release for panoptic segmentation, `predict()` behavior, full-resolution prediction: **early February 2024**
-- **15.10.2023** Our paper **[_Scalable 3D Panoptic Segmentation With Superpoint Graph Clustering_](http://arxiv.org/abs/2401.06704)** was accepted for an **oral** presentation at **[3DV 2024](https://3dvconf.github.io/2024/)** 🥳
+- **15.01.2024** Major code release for panoptic segmentation, `predict()` behavior, full-resolution prediction, and code for **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](http://arxiv.org/abs/2401.06704)**: **mid-February 2024**
+- **15.10.2023** Our paper **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](http://arxiv.org/abs/2401.06704)** was accepted for an **oral** presentation at **[3DV 2024](https://3dvconf.github.io/2024/)** 🥳
 - **06.10.2023** Come see our poster for **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](http://arxiv.org/abs/2306.08045)** at **[ICCV 2023](https://iccv2023.thecvf.com/)**
 - **14.07.2023** Our paper **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](http://arxiv.org/abs/2306.08045)** was accepted at **[ICCV 2023](https://iccv2023.thecvf.com/)** 🥳
 - **15.06.2023** Official release 🌱
@@ -167,13 +167,13 @@ Use the following commands to evaluate SPT from a checkpoint file
 `checkpoint.ckpt`:
 ```bash
 # Evaluate SPT on S3DIS Fold 5
-python src/eval.py experiment=semantic/s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
+python src/eval.py experiment=s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
 
 # Evaluate SPT on KITTI-360 Val
-python src/eval.py experiment=semantic/kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
+python src/eval.py experiment=kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
 
 # Evaluate SPT on DALES
-python src/eval.py experiment=semantic/dales ckpt_path=/path/to/your/checkpoint.ckpt
+python src/eval.py experiment=dales ckpt_path=/path/to/your/checkpoint.ckpt
 ```
 
 > **Note**: The pretrained weights of the **SPT** and **SPT-nano** models for 
@@ -185,26 +185,26 @@ python src/eval.py experiment=semantic/dales ckpt_path=/path/to/your/checkpoint.
 Use the following commands to **train SPT on a 32G-GPU**:
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=semantic/s3dis datamodule.fold=5
+python src/train.py experiment=s3dis datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=semantic/kitti360 
+python src/train.py experiment=kitti360 
 
 # Train SPT on DALES
-python src/train.py experiment=semantic/dales
+python src/train.py experiment=dales
 ```
 
 Use the following to **train SPT on a 11G-GPU 💾** (training time and performance may vary):
 
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=semantic/s3dis_11g datamodule.fold=5
+python src/train.py experiment=s3dis_11g datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=semantic/kitti360_11g 
+python src/train.py experiment=kitti360_11g 
 
 # Train SPT on DALES
-python src/train.py experiment=semantic/dales_11g
+python src/train.py experiment=dales_11g
 ```
 
 > **Note**: Encountering CUDA Out-Of-Memory errors 💀💾 ? See our dedicated 
@@ -265,13 +265,13 @@ training SPT on an **11G-GPU 💾**:
 
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=semantic/s3dis_11g datamodule.fold=5
+python src/train.py experiment=s3dis_11g datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=semantic/kitti360_11g 
+python src/train.py experiment=kitti360_11g 
 
 # Train SPT on DALES
-python src/train.py experiment=semantic/dales_11g
+python src/train.py experiment=dales_11g
 ```
 
 ### CUDA Out-Of-Memory Errors
