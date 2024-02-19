@@ -36,7 +36,7 @@ fi
 while (test -z $CONDA_DIR) || [ ! -d $CONDA_DIR ]
 do
     echo "Could not find conda at: "$CONDA_DIR
-    read -p "Please provide you conda install directory: " CONDA_DIR
+    read -p "Please provide your conda install directory: " CONDA_DIR
     CONDA_DIR=`realpath $CONDA_DIR`
 done
 
@@ -87,8 +87,6 @@ pip install torch_tb_profiler
 pip install wandb
 pip install open3d
 pip install gdown
-
-#*********************************
 
 echo
 echo
