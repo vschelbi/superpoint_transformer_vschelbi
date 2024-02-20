@@ -12,7 +12,7 @@ def make_task_widget():
     """
     w = widgets.ToggleButtons(
         options=['semantic', 'panoptic'],
-        description="👉 Choose your segmentation task:",
+        description="👉 Choose a segmentation task:",
         disabled=False,
         button_style='', # 'success', 'info', 'warning', 'danger' or ''
         tooltips=['Semantic segmentation', 'Panoptic segmentation'])
@@ -27,7 +27,7 @@ def make_dataset_widget():
     """
     w = widgets.ToggleButtons(
         options=['dales', 'kitti360', 's3dis', 's3disroom', 'scannet'],
-        description="👉 Choose your dataset:",
+        description="👉 Choose a dataset:",
         disabled=False,
         button_style='', # 'success', 'info', 'warning', 'danger' or ''
         tooltips=['DALES', 'KITTI-360', 'S3DIS', 'S3DIS room-by-room', 'ScanNet'])
