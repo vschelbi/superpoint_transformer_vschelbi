@@ -12,7 +12,7 @@ def make_task_widget():
     """
     w = widgets.ToggleButtons(
         options=['semantic', 'panoptic'],
-        description='Choose your segmentation task:',
+        description="👉 Choose your segmentation task:",
         disabled=False,
         button_style='', # 'success', 'info', 'warning', 'danger' or ''
         tooltips=['Semantic segmentation', 'Panoptic segmentation'])
@@ -27,7 +27,7 @@ def make_dataset_widget():
     """
     w = widgets.ToggleButtons(
         options=['dales', 'kitti360', 's3dis', 's3disroom', 'scannet'],
-        description="Choose your dataset:",
+        description="👉 Choose your dataset:",
         disabled=False,
         button_style='', # 'success', 'info', 'warning', 'danger' or ''
         tooltips=['DALES', 'KITTI-360', 'S3DIS', 'S3DIS room-by-room', 'ScanNet'])
@@ -72,7 +72,7 @@ def make_checkpoint_file_search_widget():
     # w.filter_pattern = ['*.jpg', '*.png']
     
     # Change the title (use '' to hide)
-    w.title = 'Browse a relevant checkpoint file *.ckpt (you can typically use our pretrained models for this).'
+    w.title = "👉 Browse a checkpoint file *.ckpt (eg use our or your own pretrained models for this):"
     
     # Sample callback function
     def change_title(chooser):
