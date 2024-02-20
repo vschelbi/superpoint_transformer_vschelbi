@@ -18,7 +18,7 @@ cd $HERE
 # Installation of Superpoint Transformer in a conda environment
 echo "_____________________________________________"
 echo
-echo "         🧩 Superpoint Transformer 🤖         "
+echo "         🧩 Superpoint Transformer 🤖        "
 echo "                  Installer                  "
 echo
 echo "_____________________________________________"
@@ -34,7 +34,7 @@ CUDA_MINOR=`echo ${CUDA_VERSION} | sed 's/.*\.//'`
 # If CUDA version not supported, print error and exit
 if [[ ! " ${CUDA_SUPPORTED[*]} " =~ " ${CUDA_VERSION} " ]]
 then
-    echo "Found CUDA ${CUDA_VERSION} installed, is not among tested versions: "`echo ${CUDA_SUPPORTED[*]}`
+    echo "Found CUDA ${CUDA_VERSION} installed, which is not among the supported versions: "`echo ${CUDA_SUPPORTED[*]}`
     echo "Please update CUDA to one of the supported versions."
     exit 1
 fi
@@ -66,7 +66,6 @@ echo
 echo
 echo "⭐ Creating conda environment '${PROJECT_NAME}'"
 echo
-
 # Create deep_view_aggregation environment from yml
 conda create --name ${PROJECT_NAME} python=${PYTHON} -y
 
@@ -104,6 +103,7 @@ pip install torch_tb_profiler
 pip install wandb
 pip install open3d
 pip install gdown
+pip install ipyfilechooser
 
 echo
 echo
