@@ -28,3 +28,4 @@ from .graph import *
 from .instance import *
 from .output_panoptic import *
 from .output_semantic import *
+from .widgets import *
