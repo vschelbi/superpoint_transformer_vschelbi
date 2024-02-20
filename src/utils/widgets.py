@@ -76,7 +76,7 @@ def make_checkpoint_file_search_widget():
     
     # Sample callback function
     def change_title(chooser):
-        chooser.title = '<b>Selected checkpoint:</b>'
+        chooser.title = 'Selected checkpoint:'
     
     # Register callback function
     w.register_callback(change_title)
