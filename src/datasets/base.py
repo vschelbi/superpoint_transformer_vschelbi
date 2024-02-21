@@ -863,8 +863,9 @@ class BaseDataset(InMemoryDataset):
         provided `label`. At most one example per cloud/tile/scene in
         the dataset will be shown.
 
-        :param label: int
-            Point label we are
+        :param label: int or str
+            Label of the class of interest, may be provided as an int or
+            a string corresponding to the class name
         :param radius: float
             Radius of the spherical sampling to draw around the point of
             interest
@@ -876,6 +877,11 @@ class BaseDataset(InMemoryDataset):
             Kwargs to be passed to the visualization `show()` function
         :return:
         """
+        if isinstance(label, str):
+            assert label in self.class_names, \
+                f"Label must be within {self.class_names}]"
+            label = self.class_names.index(label)
+        
         assert label >= 0 and label <= self.num_classes, \
             f"Label must be within [0, {self.num_classes + 1}]"
 
