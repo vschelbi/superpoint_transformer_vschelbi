@@ -5,43 +5,8 @@ from IPython.display import display
 
 
 __all__ = [
-    'make_experiment_widgets', 'make_task_widget', 'make_dataset_widget',
+    'make_experiment_widgets', 'make_task_widget', 'make_dataset_widget', 
     'make_device_widget', 'make_checkpoint_file_search_widget']
-
-
-# Hardcoded list of released experiment configs
-EXPERIMENT_CONFIGS = {
-    'semantic': [
-        'dales',
-        'dales_11g',
-        'dales_nano',
-        'kitti360',
-        'kitti360_11g',
-        'kitti360_nano',
-        's3dis',
-        's3dis_11g',
-        's3dis_nano',
-        's3dis_room',
-        'scannet',
-        'scannet_11g',
-        'scannet_nano'],
-    'panoptic': [
-        'dales',
-        'dales_11g',
-        'dales_nano',
-        'kitti360',
-        'kitti360_11g',
-        'kitti360_nano',
-        's3dis',
-        's3dis_11g',
-        's3dis_11g_with_stuff',
-        's3dis_nano',
-        's3dis_nano_with_stuff',
-        's3dis_room',
-        's3dis_with_stuff',
-        'scannet',
-        'scannet_11g',
-        'scannet_nano']}
 
 
 def make_experiment_widgets():
