@@ -2,6 +2,7 @@ import torch
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import display
+from src.utils.configs import get_config_structure
 
 
 __all__ = [
@@ -14,18 +15,21 @@ def make_experiment_widgets():
     Generate two co-dependent ipywidgets for selecting the task and 
     experiment from a predefined set of experiment configs.
     """
-    default_task = list(EXPERIMENT_CONFIGS.keys())[0]
-    default_expe = EXPERIMENT_CONFIGS[default_task][0]
+    # Parse list of experiment configs
+    experiment_configs = {
+        k: v[1] for k, v in get_config_structure()[0]['experiment'][0].items()}
+    default_task = list(experiment_configs.keys())[0]
+    default_expe = experiment_configs[default_task][0]
     
     w_task = widgets.ToggleButtons(
-        options=EXPERIMENT_CONFIGS.keys(),
+        options=experiment_configs.keys(),
         value=default_task,
         description="👉 Choose a segmentation task:",
         disabled=False,
         button_style='')
 
     w_expe = widgets.ToggleButtons(
-        options=EXPERIMENT_CONFIGS[default_task],
+        options=experiment_configs[default_task],
         value=default_expe,
         description="👉 Choose an experiment:",
         disabled=False,
@@ -35,7 +39,7 @@ def make_experiment_widgets():
     # what we selected for the other
     def update(*args):
         print(f"selected : {w_task.value}")
-        w_expe.options = EXPERIMENT_CONFIGS[w_task.value]
+        w_expe.options = experiment_configs[w_task.value]
         
     w_task.observe(update)
 
