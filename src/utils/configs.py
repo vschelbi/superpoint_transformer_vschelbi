@@ -24,14 +24,14 @@ def get_config_structure(start_directory=None, indent=0, verbose=False):
     struct = ({}, [])
 
     # Recursively gather files and directories in the current directory
-    for item in os.listdir(start_directory):
+    for item in sorted(os.listdir(start_directory)):
         item_path = os.path.join(start_directory, item)
 
         if os.path.isdir(item_path):
             if verbose:
                 print(f"{'  ' * indent}Directory: {item}")
             struct[0][item] = get_config_structure(
-                start_directory=item_path, indent=indent + 1)
+                start_directory=item_path, indent=indent + 1, verbose=verbose)
 
         elif os.path.isfile(item_path):
             filename, extension = osp.splitext(item)
