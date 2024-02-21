@@ -6,8 +6,8 @@ import pyrootutils
 __all__ = ['get_config_structure']
 
 
-def get_config_structure(start_directory=None, indent=0, verbose=False):
-    """Parse a config file structure in search for .yaml files
+def get_config_structure(start_directory=None, indent=0, verbose=False): 
+    """Parse a config file structure in search for .yaml files 
     """
     # If not provided, search the project configs directory
     if start_directory is None:
