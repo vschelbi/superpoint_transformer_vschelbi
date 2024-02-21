@@ -6,8 +6,8 @@ from src.utils.configs import get_config_structure
 
 
 __all__ = [
-    'make_experiment_widgets', 'make_task_widget', 'make_dataset_widget', 
-    'make_device_widget', 'make_checkpoint_file_search_widget']
+    'make_experiment_widgets', 'make_device_widget', 'make_split_widget',
+    'make_checkpoint_file_search_widget']
 
 
 def make_experiment_widgets():
@@ -49,38 +49,6 @@ def make_experiment_widgets():
     return w_task, w_expe
 
 
-
-def make_task_widget():
-    """
-    Generate an ipywidget for selecting the task from a predefined set
-    """
-    w = widgets.ToggleButtons(
-        options=['semantic', 'panoptic'],
-        value='semantic',
-        description="👉 Choose a segmentation task:",
-        disabled=False,
-        button_style='', # 'success', 'info', 'warning', 'danger' or ''
-        tooltips=['Semantic segmentation', 'Panoptic segmentation'])
-    display(w)
-    return w
-
-
-def make_dataset_widget():
-    """
-    Generate an ipywidget for selecting the dataset from a predefined 
-    set
-    """
-    w = widgets.ToggleButtons(
-        options=['dales', 'kitti360', 's3dis', 's3disroom', 'scannet'],
-        value='s3dis',
-        description="👉 Choose a dataset:",
-        disabled=False,
-        button_style='', # 'success', 'info', 'warning', 'danger' or ''
-        tooltips=['DALES', 'KITTI-360', 'S3DIS', 'S3DIS room-by-room', 'ScanNet'])
-    display(w)
-    return w
-
-
 def make_device_widget():
     """
     Generate an ipywidget for selecting the device on which to work
@@ -94,7 +62,25 @@ def make_device_widget():
         description="👉 Choose a device:",
         disabled=False,
         button_style='')
+    
     display(w)
+    
+    return w
+
+
+def make_split_widget():
+    """
+    Generate an ipywidget for selecting the data split on which to work
+    """    
+    w = widgets.ToggleButtons(
+        options=['train', 'val', 'test'],
+        value='val',
+        description="👉 Choose a data split:",
+        disabled=False,
+        button_style='')
+    
+    display(w)
+    
     return w
 
 
