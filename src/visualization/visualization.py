@@ -749,8 +749,11 @@ def visualize_3d(
             # holding plotly-friendly colors
             colors = data_i.super_index[data_i.selected]
             colors = np.repeat(colors, 3)
-            colorscale = rgb_to_plotly_rgb(torch.from_numpy(int_to_plotly_rgb(
-                torch.arange(colors.max()))))
+            n_colors = colors.max().item() + 1
+            edge_colorscale = int_to_plotly_rgb(torch.arange(n_colors))
+            edge_colorscale = [
+                [i / (n_colors - 1), f"rgb({x[0]}, {x[1]}, {x[2]})"]
+                for i, x in enumerate(edge_colorscale)]
 
             # Since plotly 3D lines do not support opacity, we draw
             # these edges as super thin to limit clutter
@@ -771,7 +774,7 @@ def visualize_3d(
                     line=dict(
                         width=edge_width,
                         color=colors,
-                        colorscale=colorscale),
+                        colorscale=edge_colorscale),
                     hoverinfo='skip',
                     showlegend=False,
                     visible=gap is not None, ))
@@ -829,8 +832,7 @@ def visualize_3d(
 
         else:
             colors = feats_to_plotly_rgb(
-                np.zeros(edges.shape[0]), normalize=True, colorscale=colorscale)
-            colors = np.repeat(colors, 3, axis=0)
+                torch.zeros(edges.shape[0]), normalize=True, colorscale=colorscale)
             edge_width = point_size if h_edge_width is None else h_edge_width
 
         selected_edge = input[i_level + 1].selected[se].all(axis=0)

@@ -97,8 +97,8 @@ def feats_to_plotly_rgb(feats, normalize=False, colorscale='Agsunset'):
         if colorscale is None:
             color = feats.repeat_interleave(3, 1)
         else:
-            color = sample_colorscale(
-                get_colorscale(colorscale), feats.squeeze().numpy())
+            color = np.array(sample_colorscale(
+                get_colorscale(colorscale), feats.squeeze().numpy()))
             is_plotly_rgb_string_format = True
 
     elif feats.shape[1] == 2:
