@@ -1,3 +1,4 @@
+import torch
 import ipywidgets as widgets
 from ipyfilechooser import FileChooser
 from IPython.display import display
@@ -6,7 +7,7 @@ from src.utils.configs import get_config_structure
 
 __all__ = [
     'make_experiment_widgets', 'make_task_widget', 'make_dataset_widget', 
-    'make_checkpoint_file_search_widget']
+    'make_device_widget', 'make_checkpoint_file_search_widget']
 
 
 def make_experiment_widgets():
@@ -76,6 +77,23 @@ def make_dataset_widget():
         disabled=False,
         button_style='', # 'success', 'info', 'warning', 'danger' or ''
         tooltips=['DALES', 'KITTI-360', 'S3DIS', 'S3DIS room-by-room', 'ScanNet'])
+    display(w)
+    return w
+
+
+def make_device_widget():
+    """
+    Generate an ipywidget for selecting the device on which to work
+    """
+    devices = [torch.device('cpu')] + [
+        torch.device('cuda', i) for i in range(torch.cuda.device_count())]
+    
+    w = widgets.ToggleButtons(
+        options=devices,
+        value=devices[0],
+        description="👉 Choose a device:",
+        disabled=False,
+        button_style='')
     display(w)
     return w
 
