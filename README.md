@@ -3,29 +3,34 @@
 # Superpoint Transformer
 
 [![python](https://img.shields.io/badge/-Python_3.8+-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![pytorch](https://img.shields.io/badge/PyTorch_1.12+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
-[![lightning](https://img.shields.io/badge/-Lightning_1.6+-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
-[![hydra](https://img.shields.io/badge/Config-Hydra_1.2-89b8cd)](https://hydra.cc/)
+[![pytorch](https://img.shields.io/badge/PyTorch_2.2+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
+[![lightning](https://img.shields.io/badge/-Lightning_2.2+-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
+[![hydra](https://img.shields.io/badge/Config-Hydra_1.3-89b8cd)](https://hydra.cc/)
 [![license](https://img.shields.io/badge/License-MIT-green.svg?labelColor=gray)](https://github.com/ashleve/lightning-hydra-template#license)
 
-[//]: # ([![Paper]&#40;http://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg&#41;]&#40;https://www.nature.com/articles/nature14539&#41;)
-[//]: # ([![Conference]&#40;http://img.shields.io/badge/AnyConference-year-4b44ce.svg&#41;]&#40;https://papers.nips.cc/paper/2020&#41;)
+[//]: # ([![Paper]&#40;https://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg&#41;]&#40;https://www.nature.com/articles/nature14539&#41;)
+[//]: # ([![Conference]&#40;https://img.shields.io/badge/AnyConference-year-4b44ce.svg&#41;]&#40;https://papers.nips.cc/paper/2020&#41;)
 
 
-Official implementation for the ICCV 2023 paper
+Official implementation for
 <br>
-[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](http://arxiv.org/abs/2306.08045)
+<br>
+[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](https://arxiv.org/abs/2306.08045) (ICCV 2023)
+<br>
+[![arXiv](https://img.shields.io/badge/arxiv-2306.08045-b31b1b.svg)](https://arxiv.org/abs/2306.08045)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712)
+[![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/superpoint-transformer)
+<br>
+<br>
+[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704) (3DV 2024 Oral)
+<br>
+[![arXiv](https://img.shields.io/badge/arxiv-2401.06704-b31b1b.svg)](https://arxiv.org/abs/2401.06704)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10689037.svg)](https://doi.org/10.5281/zenodo.10689037)
+[![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/supercluster)
+<br>
 <br>
 🚀⚡🔥
 <br>
-
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/efficient-3d-semantic-segmentation-with-1/semantic-segmentation-on-s3dis)](https://paperswithcode.com/sota/semantic-segmentation-on-s3dis?p=efficient-3d-semantic-segmentation-with-1)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/efficient-3d-semantic-segmentation-with-1/3d-semantic-segmentation-on-dales)](https://paperswithcode.com/sota/3d-semantic-segmentation-on-dales?p=efficient-3d-semantic-segmentation-with-1)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/efficient-3d-semantic-segmentation-with-1/3d-semantic-segmentation-on-kitti-360)](https://paperswithcode.com/sota/3d-semantic-segmentation-on-kitti-360?p=efficient-3d-semantic-segmentation-with-1)
-
-[![arXiv](https://img.shields.io/badge/arxiv-2306.08045-b31b1b.svg)](http://arxiv.org/abs/2306.08045)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712)
-[![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/superpoint-transformer)
 
 </div>
 
@@ -37,8 +42,10 @@ Official implementation for the ICCV 2023 paper
 
 ## 📌  Description
 
-SPT is a superpoint-based transformer 🤖 architecture that efficiently ⚡ 
-performs semantic segmentation on large-scale 3D scenes. This method includes a 
+### Superpoint Transformer
+
+**Superpoint Transformer (SPT)** is a superpoint-based transformer 🤖 architecture that efficiently ⚡ 
+performs **semantic segmentation** on large-scale 3D scenes. This method includes a 
 fast algorithm that partitions 🧩 point clouds into a hierarchical superpoint 
 structure, as well as a self-attention mechanism to exploit the relationships 
 between superpoints at multiple scales. 
@@ -54,16 +61,50 @@ between superpoints at multiple scales.
 | ⚡ S3DIS training in **3h on 1 GPU** ([PointNeXt](https://github.com/guochengqian/PointNeXt) ÷ 7, [Stratified Transformer](https://github.com/dvlab-research/Stratified-Transformer) ÷ 70) | 
 | ⚡ **Preprocessing x7 faster than [SPG](https://github.com/loicland/superpoint_graph)** |
 
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/efficient-3d-semantic-segmentation-with-1/semantic-segmentation-on-s3dis)](https://paperswithcode.com/sota/semantic-segmentation-on-s3dis?p=efficient-3d-semantic-segmentation-with-1)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/efficient-3d-semantic-segmentation-with-1/3d-semantic-segmentation-on-dales)](https://paperswithcode.com/sota/3d-semantic-segmentation-on-dales?p=efficient-3d-semantic-segmentation-with-1)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/efficient-3d-semantic-segmentation-with-1/3d-semantic-segmentation-on-kitti-360)](https://paperswithcode.com/sota/3d-semantic-segmentation-on-kitti-360?p=efficient-3d-semantic-segmentation-with-1)
+
+</div>
+
+### SuperCluster
+
+**SuperCluster** is a superpoint-based architecture for **panoptic segmentation** of (very) large 3D scenes 🐘 based on SPT. 
+We formulate the panoptic segmentation task as a **scalable superpoint graph clustering** task. 
+To this end, our model is trained to predict the input parameters of a graph optimization problem whose solution is a panoptic segmentation.
+This formulation allows supervising our model with per-node and per-edge objectives only, circumventing the need for computing an actual panoptic segmentation and associated matching issues at train time.
+At inference time, our fast parallelized algorithm solves the small graph optimization problem, yielding object instances 👥.
+Due to its lightweight backbone and scalable formulation, SuperCluster can process scenes of unprecedented scale at once, on a single GPU 🚀, with fewer than 1M parameters 🦋.
+
+<div align="center">
+
+| ✨ SuperCluster in numbers ✨ |
+| :---: |
+| 📊 **SOTA on S3DIS 6-Fold** (55.9 PQ) |
+| 📊 **SOTA on S3DIS Area 5** (50.1 PQ) |
+| 📊 **SOTA on ScanNet Val** (58.7 PQ) |
+| 📊 **FIRST on KITTI-360 Val** (48.3 mIoU) |
+| 📊 **FIRST on DALES** (61.2 mIoU) |
+| 🦋 **212k parameters** ([PointGroup](https://github.com/dvlab-research/PointGroup) ÷ 37) | 
+| ⚡ S3DIS training in **4h on 1 GPU** | 
+| ⚡ **7.8km²** tile of **18M** points in **10.1s** on **1 GPU** |
+
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/scalable-3d-panoptic-segmentation-with/panoptic-segmentation-on-s3dis)](https://paperswithcode.com/sota/panoptic-segmentation-on-s3dis?p=scalable-3d-panoptic-segmentation-with)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/scalable-3d-panoptic-segmentation-with/panoptic-segmentation-on-s3dis-area5)](https://paperswithcode.com/sota/panoptic-segmentation-on-s3dis-area5?p=scalable-3d-panoptic-segmentation-with)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/scalable-3d-panoptic-segmentation-with/panoptic-segmentation-on-scannetv2)](https://paperswithcode.com/sota/panoptic-segmentation-on-scannetv2?p=scalable-3d-panoptic-segmentation-with)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/scalable-3d-panoptic-segmentation-with/panoptic-segmentation-on-kitti-360)](https://paperswithcode.com/sota/panoptic-segmentation-on-kitti-360?p=scalable-3d-panoptic-segmentation-with)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/scalable-3d-panoptic-segmentation-with/panoptic-segmentation-on-dales)](https://paperswithcode.com/sota/panoptic-segmentation-on-dales?p=scalable-3d-panoptic-segmentation-with)
+
 </div>
 
 <br>
 
 ## 📰  Updates
 
-- **15.01.2024** Major code release for panoptic segmentation, `predict()` behavior, full-resolution prediction, and code for **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](http://arxiv.org/abs/2401.06704)**: **mid-February 2024**
-- **15.10.2023** Our paper **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](http://arxiv.org/abs/2401.06704)** was accepted for an **oral** presentation at **[3DV 2024](https://3dvconf.github.io/2024/)** 🥳
-- **06.10.2023** Come see our poster for **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](http://arxiv.org/abs/2306.08045)** at **[ICCV 2023](https://iccv2023.thecvf.com/)**
-- **14.07.2023** Our paper **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](http://arxiv.org/abs/2306.08045)** was accepted at **[ICCV 2023](https://iccv2023.thecvf.com/)** 🥳
+- **26.02.2024** Major code release for panoptic segmentation, `predict()` behavior, full-resolution prediction, and code for **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704)**. Some changes in the dependencies and repository structure are not backward-compatible ❗
+- **15.10.2023** Our paper **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704)** was accepted for an **oral** presentation at **[3DV 2024](https://3dvconf.github.io/2024/)** 🥳
+- **06.10.2023** Come see our poster for **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](https://arxiv.org/abs/2306.08045)** at **[ICCV 2023](https://iccv2023.thecvf.com/)**
+- **14.07.2023** Our paper **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](https://arxiv.org/abs/2306.08045)** was accepted at **[ICCV 2023](https://iccv2023.thecvf.com/)** 🥳
 - **15.06.2023** Official release 🌱
 
 <br>
@@ -71,8 +112,9 @@ between superpoints at multiple scales.
 ## 💻  Environment requirements
 This project was tested with:
 - Linux OS
+- **64G** RAM
 - NVIDIA GTX 1080 Ti **11G**, NVIDIA V100 **32G**, NVIDIA A40 **48G**
-- CUDA 11.8 ([`torch-geometric`](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html) does not support CUDA 12.0 yet)
+- CUDA 11.8 and 12.1
 - conda 23.3.1
 
 <br>
@@ -167,13 +209,13 @@ Use the following commands to evaluate SPT from a checkpoint file
 `checkpoint.ckpt`:
 ```bash
 # Evaluate SPT on S3DIS Fold 5
-python src/eval.py experiment=s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
+python src/eval.py experiment=semantic/s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
 
 # Evaluate SPT on KITTI-360 Val
-python src/eval.py experiment=kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
+python src/eval.py experiment=semantic/kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
 
 # Evaluate SPT on DALES
-python src/eval.py experiment=dales ckpt_path=/path/to/your/checkpoint.ckpt
+python src/eval.py experiment=semantic/dales ckpt_path=/path/to/your/checkpoint.ckpt
 ```
 
 > **Note**: The pretrained weights of the **SPT** and **SPT-nano** models for 
@@ -185,26 +227,26 @@ python src/eval.py experiment=dales ckpt_path=/path/to/your/checkpoint.ckpt
 Use the following commands to **train SPT on a 32G-GPU**:
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=s3dis datamodule.fold=5
+python src/train.py experiment=semantic/s3dis datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=kitti360 
+python src/train.py experiment=semantic/kitti360 
 
 # Train SPT on DALES
-python src/train.py experiment=dales
+python src/train.py experiment=semantic/dales
 ```
 
 Use the following to **train SPT on a 11G-GPU 💾** (training time and performance may vary):
 
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=s3dis_11g datamodule.fold=5
+python src/train.py experiment=semantic/s3dis_11g datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=kitti360_11g 
+python src/train.py experiment=semantic/kitti360_11g 
 
 # Train SPT on DALES
-python src/train.py experiment=dales_11g
+python src/train.py experiment=semantic/dales_11g
 ```
 
 > **Note**: Encountering CUDA Out-Of-Memory errors 💀💾 ? See our dedicated 
@@ -265,13 +307,13 @@ training SPT on an **11G-GPU 💾**:
 
 ```bash
 # Train SPT on S3DIS Fold 5
-python src/train.py experiment=s3dis_11g datamodule.fold=5
+python src/train.py experiment=semantic/s3dis_11g datamodule.fold=5
 
 # Train SPT on KITTI-360 Val
-python src/train.py experiment=kitti360_11g 
+python src/train.py experiment=semantic/kitti360_11g 
 
 # Train SPT on DALES
-python src/train.py experiment=dales_11g
+python src/train.py experiment=semantic/dales_11g
 ```
 
 ### CUDA Out-Of-Memory Errors
@@ -331,6 +373,6 @@ If your work uses all or part of the present code, please include the following 
 }
 ```
 
-You can find our [paper on arxiv 📄](http://arxiv.org/abs/2306.08045).
+You can find our [paper on arxiv 📄](https://arxiv.org/abs/2306.08045).
 
 Also, if you like this project, don't forget to give it a :star:, it means a lot to us !
