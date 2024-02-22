@@ -29,7 +29,7 @@ Official implementation for
 [![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/supercluster)
 <br>
 <br>
-If you ♥️ or use this project, don't forget to give it a ⭐, it means a lot to us !
+If you ❤️ or use this project, don't forget to give it a ⭐, it means a lot to us !
 <br>
 </div>
 
@@ -469,4 +469,4 @@ If your work uses all or part of the present code, please include the following 
 
 You can find our [SPT paper 📄](https://arxiv.org/abs/2306.08045) and [SuperCluster paper 📄](https://arxiv.org/abs/2401.06704) on arxiv.
 
-Also, if you ♥️ or use this project, don't forget to give it a ⭐, it means a lot to us !
+Also, if you ❤️ or use this project, don't forget to give it a ⭐, it means a lot to us !
