@@ -43,6 +43,6 @@ if __name__ == "__main__":
     import pyrootutils
 
     root = str(pyrootutils.setup_root(__file__, pythonpath=True))
-    cfg = omegaconf.OmegaConf.load(root + "/configs/datamodule/s3dis.yaml")
+    cfg = omegaconf.OmegaConf.load(root + "/configs/datamodule/semantic/s3dis.yaml")
     cfg.data_dir = root + "/data"
     _ = hydra.utils.instantiate(cfg)
