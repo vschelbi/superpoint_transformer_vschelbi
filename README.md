@@ -28,19 +28,18 @@ Official implementation for
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10689037.svg)](https://doi.org/10.5281/zenodo.10689037)
 [![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/supercluster)
 <br>
-<br>
 
 </div>
-
-<p align="center">
-    <img width="80%" src="./media/teaser.png">
-</p>
 
 <br>
 
 ## 📌  Description
 
 ### Superpoint Transformer
+
+<p align="center">
+  <img width="80%" src="./media/teaser_spt.png">
+</p>
 
 **Superpoint Transformer (SPT)** is a superpoint-based transformer 🤖 architecture that efficiently ⚡ 
 performs **semantic segmentation** on large-scale 3D scenes. This method includes a 
@@ -66,6 +65,10 @@ between superpoints at multiple scales.
 </div>
 
 ### SuperCluster
+
+<p align="center">
+  <img width="80%" src="./media/teaser_superclsuter.png">
+</p>
 
 **SuperCluster** is a superpoint-based architecture for **panoptic segmentation** of (very) large 3D scenes 🐘 based on SPT. 
 We formulate the panoptic segmentation task as a **scalable superpoint graph clustering** task. 
