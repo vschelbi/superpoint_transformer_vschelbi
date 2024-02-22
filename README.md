@@ -29,13 +29,11 @@ Official implementation for
 [![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/supercluster)
 <br>
 <br>
-🚀⚡🔥
-<br>
 
 </div>
 
 <p align="center">
-    <img width="90%" src="./media/teaser.jpg">
+    <img width="80%" src="./media/teaser.png">
 </p>
 
 <br>
