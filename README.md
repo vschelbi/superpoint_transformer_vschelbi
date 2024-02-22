@@ -28,7 +28,9 @@ Official implementation for
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10689037.svg)](https://doi.org/10.5281/zenodo.10689037)
 [![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/supercluster)
 <br>
-
+<br>
+If you ♥️ or use this project, don't forget to give it a ⭐, it means a lot to us !
+<br>
 </div>
 
 <br>
@@ -72,7 +74,7 @@ between superpoints at multiple scales.
 
 **SuperCluster** is a superpoint-based architecture for **panoptic segmentation** of (very) large 3D scenes 🐘 based on SPT. 
 We formulate the panoptic segmentation task as a **scalable superpoint graph clustering** task. 
-To this end, our model is trained to predict the input parameters of a graph optimization problem whose solution is a panoptic segmentation.
+To this end, our model is trained to predict the input parameters of a graph optimization problem whose solution is a panoptic segmentation 💡.
 This formulation allows supervising our model with per-node and per-edge objectives only, circumventing the need for computing an actual panoptic segmentation and associated matching issues at train time.
 At inference time, our fast parallelized algorithm solves the small graph optimization problem, yielding object instances 👥.
 Due to its lightweight backbone and scalable formulation, SuperCluster can process scenes of unprecedented scale at once, on a single GPU 🚀, with fewer than 1M parameters 🦋.
@@ -272,6 +274,69 @@ python src/train.py experiment=semantic/dales_11g
 >[Lightning-Hydra](https://github.com/ashleve/lightning-hydra-template) for more
 >information on the logging options.
 
+### Evaluating SuperCluster
+Use the following commands to evaluate SuperCluster from a checkpoint file 
+`checkpoint.ckpt`:
+```bash
+# Evaluate SPT on S3DIS Fold 5
+python src/eval.py experiment=panoptic/s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Evaluate SPT on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
+python src/eval.py experiment=panoptic/s3dis_with_stuff datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Evaluate SPT on ScanNet Val
+python src/eval.py experiment=panoptic/scannet ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Evaluate SPT on KITTI-360 Val
+python src/eval.py experiment=panoptic/kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
+
+# Evaluate SPT on DALES
+python src/eval.py experiment=panoptic/dales ckpt_path=/path/to/your/checkpoint.ckpt
+```
+
+> **Note**: The pretrained weights of the **SuperCluster** models for 
+>**S3DIS 6-Fold**, **S3DIS 6-Fold with stuff**, **ScanNet Val**,, **KITTI-360 Val**, and **DALES** are available at:
+>
+>[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10689037.svg)](https://doi.org/10.5281/zenodo.10689037)
+
+### Training SuperCluster
+Use the following commands to **train SuperCluster on a 32G-GPU**:
+```bash
+# Train SuperCluster on S3DIS Fold 5
+python src/train.py experiment=panoptic/s3dis datamodule.fold=5
+
+# Train SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
+python src/train.py experiment=panoptic/s3dis_with_stuff datamodule.fold=5
+
+# Train SuperCluster on ScanNet Val
+python src/train.py experiment=panoptic/scannet
+
+# Train SuperCluster on KITTI-360 Val
+python src/train.py experiment=panoptic/kitti360 
+
+# Train SuperCluster on DALES
+python src/train.py experiment=panoptic/dales
+```
+
+Use the following to **train SuperCluster on a 11G-GPU 💾** (training time and performance may vary):
+
+```bash
+# Train SuperCluster on S3DIS Fold 5
+python src/train.py experiment=panoptic/s3dis_11g datamodule.fold=5
+
+# Train SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
+python src/train.py experiment=panoptic/s3dis_11g_with_stuff datamodule.fold=5
+
+# Train SuperCluster on ScanNet Val
+python src/train.py experiment=panoptic/scannet_11g
+
+# Train SuperCluster on KITTI-360 Val
+python src/train.py experiment=panoptic/kitti360_11g 
+
+# Train SuperCluster on DALES
+python src/train.py experiment=panoptic/dales_11g
+```
+
 ### Notebooks & visualization
 We provide [notebooks](notebooks) to help you get started with manipulating our 
 core data structures, configs loading, dataset and model instantiation, 
@@ -299,11 +364,11 @@ provided in [media/visualizations.7z](media/visualizations.7z)
 ## 👩‍🔧  Troubleshooting
 Here are some common issues and tips for tackling them.
 
-### SPT on an 11G-GPU 
-Our default configurations are designed for a 32G-GPU. Yet, SPT can run 
+### SPT or SuperCluster on an 11G-GPU 
+Our default configurations are designed for a 32G-GPU. Yet, SPT and SuperCluster can run 
 on an **11G-GPU 💾**, with minor time and performance variations.
 
-We provide configs in [`configs/experiment/`](configs/experiment) for 
+We provide configs in [`configs/experiment/semantic`](configs/experiment/semantic) for 
 training SPT on an **11G-GPU 💾**:
 
 ```bash
@@ -316,6 +381,27 @@ python src/train.py experiment=semantic/kitti360_11g
 # Train SPT on DALES
 python src/train.py experiment=semantic/dales_11g
 ```
+
+Similarly, we provide configs in [`configs/experiment/panoptic`](configs/experiment/panoptic) for 
+training SuperCluster on an **11G-GPU 💾**:
+
+```bash
+# Train SuperCluster on S3DIS Fold 5
+python src/train.py experiment=panoptic/s3dis_11g datamodule.fold=5
+
+# Train SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
+python src/train.py experiment=panoptic/s3dis_11g_with_stuff datamodule.fold=5
+
+# Train SuperCluster on ScanNet Val
+python src/train.py experiment=panoptic/scannet_11g
+
+# Train SuperCluster on KITTI-360 Val
+python src/train.py experiment=panoptic/kitti360_11g 
+
+# Train SuperCluster on DALES
+python src/train.py experiment=panoptic/dales_11g
+```
+
 
 ### CUDA Out-Of-Memory Errors
 Having some CUDA OOM errors 💀💾 ? Here are some parameters you can play 
@@ -358,7 +444,7 @@ with to mitigate GPU memory use, based on when the error occurs.
 - Some point cloud operations were inspired from the [Torch-Points3D framework](https://github.com/nicolas-chaulet/torch-points3d), although not merged with the official project at this point. 
 - For the KITTI-360 dataset, some code from the official [KITTI-360](https://github.com/autonomousvision/kitti360Scripts) was used.
 - Some superpoint-graph-related operations were inspired from [Superpoint Graph](https://github.com/loicland/superpoint_graph)
-- The hierarchical superpoint partition is computed using [Parallel Cut-Pursuit](https://gitlab.com/1a7r0ch3/parallel-cut-pursuit)
+- The hierarchical superpoint partition and graph clustering are computed using [Parallel Cut-Pursuit](https://gitlab.com/1a7r0ch3/parallel-cut-pursuit)
 
 <br>
 
@@ -366,14 +452,21 @@ with to mitigate GPU memory use, based on when the error occurs.
 If your work uses all or part of the present code, please include the following a citation:
 
 ```
-@inproceedings{robert2023spt,
+@article{robert2023spt,
   title={Efficient 3D Semantic Segmentation with Superpoint Transformer},
   author={Robert, Damien and Raguet, Hugo and Landrieu, Loic},
   journal={Proceedings of the IEEE/CVF International Conference on Computer Vision},
   year={2023}
 }
+
+@article{robert2024scalable,
+  title={Scalable 3D Panoptic Segmentation With Superpoint Graph Clustering},
+  author={Robert, Damien and Raguet, Hugo and Landrieu, Loic},
+  journal={Proceedings of the IEEE International Conference on 3D Vision},
+  year={2024}
+}
 ```
 
-You can find our [paper on arxiv 📄](https://arxiv.org/abs/2306.08045).
+You can find our [SPT paper 📄](https://arxiv.org/abs/2306.08045) and [SuperCluster paper 📄](https://arxiv.org/abs/2401.06704) on arxiv.
 
-Also, if you like this project, don't forget to give it a :star:, it means a lot to us !
+Also, if you ♥️ or use this project, don't forget to give it a ⭐, it means a lot to us !
