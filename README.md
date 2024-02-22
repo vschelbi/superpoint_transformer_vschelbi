@@ -67,7 +67,7 @@ between superpoints at multiple scales.
 ### SuperCluster
 
 <p align="center">
-  <img width="80%" src="./media/teaser_superclsuter.png">
+  <img width="80%" src="./media/teaser_supercluster.png">
 </p>
 
 **SuperCluster** is a superpoint-based architecture for **panoptic segmentation** of (very) large 3D scenes 🐘 based on SPT. 
