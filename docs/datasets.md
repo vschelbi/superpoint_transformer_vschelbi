@@ -297,7 +297,7 @@ def all_base_cloud_ids(self):
 ```
 
 You must specify one of the following in your 
-`configs/datamodule/your_task_your_dataset.yaml` datamodule config:
+`configs/datamodule/your_task/your_dataset.yaml` datamodule config:
 
 ```yaml
 val_mixed_in_train: True  # if some preprocessed clouds contain both validation and train points
