@@ -1,6 +1,8 @@
 # Data structures
 
-The main data structures of this project are `Data` and `NAG`.
+This project relies on specific data structures for manipulating hierarchical partitions.
+As a basic user, you will most likely be exposed to `Data` and `NAG`.
+As you go deeper into the project, you may need to familiarize yourself with `CSRData`, `Cluster`, `InstanceData`, and all the associated batching structures. 
 
 ## `Data`
 A `Data` object stores a single-level graph. 
@@ -53,4 +55,4 @@ Finally, when two `InstanceData` are batched in an `InstanceBatch`, the `obj` in
 See the `notebooks/demo_nag.ipyng` notebook to play with and visualize a 
 provided `NAG`, without needing a whole dataset.
 
-For more information, have a look at the docstrings of each data structure, these are fairly commented and should help you gain a deeper understanding of their mechanisms.
+For more information, have a look at the docstrings and code of each data structure, these are fairly commented and should help you gain a deeper understanding of their mechanisms.
