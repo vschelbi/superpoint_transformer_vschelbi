@@ -33,7 +33,7 @@ class InstanceData(CSRData):
 
     :param pointers: torch.LongTensor
         Pointers to address the data in the associated value tensors.
-        `values[Pointers[i]:Pointers[i+1]]` old the values for the ith
+        `values[Pointers[i]:Pointers[i+1]]` hold the values for the ith
         cluster. If `dense=True`, the `pointers` are actually the dense
         indices to be converted to pointer format.
     :param obj: torch.LongTensor
