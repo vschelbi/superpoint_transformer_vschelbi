@@ -238,7 +238,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         return self.edge_affinity_logits[idx], self.obj_edge_affinity[idx], \
                is_same_class[idx], is_same_obj[idx]
 
-    @proerty
+    @property
     def weighted_instance_semantic_preds(self):
         """Compute the predicted semantic label, score and logits for
         each predicted instance. This involves computing, for each
