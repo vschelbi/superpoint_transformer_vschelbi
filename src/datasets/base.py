@@ -179,7 +179,7 @@ class BaseDataset(InMemoryDataset):
         self._save_y_to_csr = save_y_to_csr
         self._save_pos_dtype = save_pos_dtype
         self._save_fp_dtype = save_fp_dtype
-        self.on_device_transform = on_device_transform
+        self._on_device_transform = on_device_transform
         self._val_mixed_in_train = val_mixed_in_train
         self._test_mixed_in_val = test_mixed_in_val
         self._custom_hash = custom_hash
@@ -249,8 +249,8 @@ class BaseDataset(InMemoryDataset):
         if not any(
                 isinstance(odt, NAGSelectByKey) and odt.key == 'is_val'
                 for odt in self.on_device_transform.transforms):
-            self.on_device_transform.transforms = \
-                [t] + self.on_device_transform.transforms
+            self._on_device_transform.transforms = \
+                [t] + self._on_device_transform.transforms
 
         # Load the processed data, if the dataset must be in memory
         if self.in_memory:
