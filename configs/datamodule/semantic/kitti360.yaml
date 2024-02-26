@@ -119,6 +119,9 @@ drop_to_mean: False
 
 # Preprocessing
 pre_transform:
+    - transform: SaveNodeIndex
+      params:
+        key: 'sub'
     - transform: DataTo
       params:
         device: 'cuda'

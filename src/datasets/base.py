@@ -123,6 +123,26 @@ class BaseDataset(InMemoryDataset):
         object will affect the `in_memory_data` too. Be careful to clone
         the object before modifying it. Besides, the `transform` are
         pre-applied to the in_memory data
+    point_save_keys: list[str], optional
+        List of point (ie level-0) attribute keys to save to disk at 
+        the end of preprocessing. Leaving to `None` will save all 
+        attributes by default
+    point_no_save_keys: list[str], optional
+        List of point (ie level-0) attribute keys to NOT save to disk at
+        the end of preprocessing
+    point_load_keys: list[str], optional
+        List of point (ie level-0) attribute keys to load when reading 
+        data from disk
+    segment_save_keys: list[str], optional
+        List of segment (ie level-1+) attribute keys to save to disk 
+        at the end of preprocessing. Leaving to `None` will save all 
+        attributes by default
+    segment_no_save_keys: list[str], optional
+        List of segment (ie level-1+) attribute keys to NOT save to disk 
+        at the end of preprocessing
+    segment_load_keys: list[str], optional
+        List of segment (ie level-1+) attribute keys to load when 
+        reading data from disk 
     """
 
     def __init__(
@@ -156,20 +176,20 @@ class BaseDataset(InMemoryDataset):
         # some attributes will be needed in parent `download` and
         # `process` methods
         self._stage = stage
-        self.save_y_to_csr = save_y_to_csr
-        self.save_pos_dtype = save_pos_dtype
-        self.save_fp_dtype = save_fp_dtype
+        self._save_y_to_csr = save_y_to_csr
+        self._save_pos_dtype = save_pos_dtype
+        self._save_fp_dtype = save_fp_dtype
         self.on_device_transform = on_device_transform
-        self.val_mixed_in_train = val_mixed_in_train
-        self.test_mixed_in_val = test_mixed_in_val
-        self.custom_hash = custom_hash
-        self.in_memory = in_memory
-        self.point_save_keys = point_save_keys
-        self.point_no_save_keys = point_no_save_keys
-        self.point_load_keys = point_load_keys
-        self.segment_save_keys = segment_save_keys
-        self.segment_no_save_keys = segment_no_save_keys
-        self.segment_load_keys = segment_load_keys
+        self._val_mixed_in_train = val_mixed_in_train
+        self._test_mixed_in_val = test_mixed_in_val
+        self._custom_hash = custom_hash
+        self._in_memory = in_memory
+        self._point_save_keys = point_save_keys
+        self._point_no_save_keys = point_no_save_keys
+        self._point_load_keys = point_load_keys
+        self._segment_save_keys = segment_save_keys
+        self._segment_no_save_keys = segment_no_save_keys
+        self._segment_load_keys = segment_load_keys
 
         # Prepare tiling arguments. Can either be XY tiling of PC
         # tiling but not both. XY tiling will apply a regular grid along
@@ -342,7 +362,63 @@ class BaseDataset(InMemoryDataset):
         or 'test'
         """
         return self._stage
+    
+    @property
+    def save_y_to_csr(self):
+        return self._save_y_to_csr
 
+    @property
+    def save_pos_dtype(self):
+        return self._save_pos_dtype
+
+    @property
+    def save_fp_dtype(self):
+        return self._save_fp_dtype
+
+    @property
+    def on_device_transform(self):
+        return self._on_device_transform
+
+    @property
+    def val_mixed_in_train(self):
+        return self._val_mixed_in_train
+
+    @property
+    def test_mixed_in_val(self):
+        return self._test_mixed_in_val
+
+    @property
+    def custom_hash(self):
+        return self._custom_hash
+
+    @property
+    def in_memory(self):
+        return self._in_memory
+
+    @property
+    def point_save_keys(self):
+        return self._point_save_keys
+
+    @property
+    def point_no_save_keys(self):
+        return self._point_no_save_keys
+
+    @property
+    def point_load_keys(self):
+        return self._point_load_keys
+
+    @property
+    def segment_save_keys(self):
+        return self._segment_save_keys
+
+    @property
+    def segment_no_save_keys(self):
+        return self._segment_no_save_keys
+
+    @property
+    def segment_load_keys(self):
+        return self._segment_load_keys
+        
     @property
     def all_base_cloud_ids(self):
         """Dictionary holding lists of clouds ids, for each

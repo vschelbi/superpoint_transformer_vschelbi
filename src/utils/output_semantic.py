@@ -98,3 +98,67 @@ class SemanticSegmentationOutput:
 
     def __repr__(self):
         return f"{self.__class__.__name__}()"
+    
+    def voxel_preds(self, super_index=None, sub=None):
+        """Final semantic segmentation predictions are the argmax of the
+        first-level partition logits. This function then distributes 
+        these predictions to each level-0 point (ie voxel in our 
+        framework).
+        
+        :param super_index: LongTensor
+            Tensor holding, for each level-0 point (ie voxel), the index
+            of the level-1 superpoint it belongs to
+        :param sub: Cluster
+            Cluster object indicating, for each level-1 superpoint, 
+            the indices of the level-0 points (ie voxels) it contains    
+        """
+        assert super_index is not None or sub is not None, \
+            "Must provide either `super_index` or `sub`"
+        
+        # If super_index is not provided, build it from sub
+        if super_index is None:
+            super_index = sub.to_super_index()
+        
+        # Distribute the level-1 superpoint predictions to the voxels
+        return self.preds[super_index]
+
+    def full_res_preds(
+            self, 
+            super_index_level0_to_level1=None, 
+            super_index_raw_to_level0=None, 
+            sub_level1_to_level0=None, 
+            sub_level0_to_raw=None):
+        """Final semantic segmentation predictions are the argmax of the
+        first-level partition logits. This function then distributes 
+        these predictions to each raw point (ie full-resolution point 
+        cloud before voxelization in our framework).
+        
+        :param super_index_level0_to_level1: LongTensor
+            Tensor holding, for each level-0 point (ie voxel), the index
+            of the level-1 superpoint it belongs to
+        :param super_index_raw_to_level0: LongTensor
+            Tensor holding, for each raw full-resolution point, the 
+            index of the level-0 point (ie voxel) it belongs to
+        :param sub_level1_to_level0: Cluster
+            Cluster object indicating, for each level-1 superpoint, 
+            the indices of the level-0 points (ie voxels) it contains  
+        :param sub_level0_to_raw: Cluster
+            Cluster object indicating, for each level-0 point (ie 
+            voxel), the indices of the raw full-resolution points it 
+            contains    
+        """
+        assert super_index_level0_to_level1 is not None or sub_level1_to_level0 is not None, \
+            "Must provide either `super_index_level0_to_level1` or `sub_level1_to_level0`"
+    
+        assert super_index_raw_to_level0 is not None or sub_level0_to_raw is not None, \
+            "Must provide either `super_index_raw_to_level0` or `sub_level0_to_raw`"
+        
+        # If super_index are not provided, build them from sub
+        if super_index_level0_to_level1 is None:
+            super_index_level0_to_level1 = sub_level1_to_level0.to_super_index()
+        if super_index_raw_to_level0 is None:
+            super_index_raw_to_level0 = sub_level0_to_raw.to_super_index()
+        
+        # Distribute the level-1 superpoint predictions to the 
+        # full-resolution points
+        return self.preds[super_index_level0_to_level1][super_index_raw_to_level0]

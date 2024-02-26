@@ -51,6 +51,19 @@ in_memory: False
 # faster, hence faster training and inference
 lite_preprocessing: True
 
+# Full-resolution prediction
+# By default, we do not need to load the full-resolution input point 
+# cloud for training, validating, and testing, because we compute 
+# metrics and losses based on hisograms of full-resolution labels inside
+# voxels and superpoints. Yet, for some inference applications, it may 
+# be needed to produce a full-resolution prediction. To this end, 
+# setting load_full_res_idx to True will load, for each preprocessed 
+# voxel, the indices of the full-resolution points it contains. This 
+# information can then be used by our model when required to produce a 
+# full-resolution prediction. Leaving load_full_res_idx to False by 
+# default avoids unnecessary I/O disk operations and saves RAM
+load_full_res_idx: False
+
 # GPU memory
 # The following parameters are not the only ones affecting GPU memory.
 # Several strategies can be deployed to mitigate memory impact, from

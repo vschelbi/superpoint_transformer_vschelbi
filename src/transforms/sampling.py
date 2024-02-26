@@ -7,7 +7,7 @@ from torch_scatter import scatter_mean
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.utils import fast_randperm, sparse_sample, scatter_pca, sanitize_keys
 from src.transforms import Transform
-from src.data import Data, NAG, NAGBatch, CSRData, InstanceData
+from src.data import Data, NAG, NAGBatch, CSRData, InstanceData, Cluster
 from src.utils.histogram import atomic_to_histogram
 
 
@@ -185,8 +185,11 @@ def _group_data(
     By default, some special keys undergo dedicated grouping mechanisms.
     The `_VOTING_KEYS=['y', 'super_index', 'is_val']` keys are grouped
     by their majority label. The `_INSTANCE_KEYS=['obj']` keys are
-    grouped into an InstanceData, which stores all values in CSR format.
-    The `_LAST_KEYS = ['batch', SaveNodeIndex.KEY]` keys are by default
+    grouped into an `InstanceData`, which stores all instance/panoptic
+    overlap data values in CSR format. The `_CLUSTER_KEYS=['point_id']` 
+    keys are grouped into a `Cluster` object, which stores indices of 
+    child elements for parent clusters in CSR format. The 
+    `_LAST_KEYS = ['batch', SaveNodeIndex.KEY]` keys are by default
     grouped following `mode='last'`.
 
     Besides, for keys where a more subtle histogram mechanism is needed,
@@ -224,6 +227,10 @@ def _group_data(
     # Keys for which voxel aggregation will use an InstanceData object,
     # which store all input information in CSR format
     _INSTANCE_KEYS = ['obj']
+
+    # Keys for which voxel aggregation will use a Cluster object, which 
+    # store all input information in CSR format
+    _CLUSTER_KEYS=['sub']
 
     # Keys for which voxel aggregation will be based on majority voting
     _LAST_KEYS = ['batch', SaveNodeIndex.KEY]
@@ -269,6 +276,16 @@ def _group_data(
                     else torch.zeros_like(item)
                 data[key] = InstanceData(cluster, item, count, y, dense=True)
             continue
+        
+        # For point indices to be grouped in Cluster. This allows 
+        # backtracking full-resolution point indices to the voxels
+        if key in _CLUSTER_KEYS:
+            if isinstance(item, torch.LongTensor) and item.dim() == 1:
+                data[key] = Cluster(cluster, item, dense=True)
+            else:
+                raise NotImplementedError(
+                    f"Cannot merge '{key}' with data type: {type(item)} into "
+                    f"a Cluster object. Only supports 1D LongTensor.")
 
         # TODO: adapt to make use of CSRData batching ?
         if isinstance(item, CSRData):
