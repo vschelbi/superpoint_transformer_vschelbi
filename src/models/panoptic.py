@@ -617,7 +617,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update instance and panoptic metrics
         if self.needs_partition and not output.has_multi_instance_pred:
-            obj_score, obj_y, instance_data = output.get_instance_predictions()
+            obj_score, obj_y, instance_data = output.panoptic_preds
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
@@ -809,7 +809,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             # Accumulate batch predictions in the meter
             for storage in self.train_multi_partition_storage:
                 obj_score, obj_y, instance_data = \
-                    storage.get_instance_predictions(s)
+                    storage.panoptic_preds(s)
                 if task == 'panoptic':
                     meter.update(obj_y, instance_data)
                 else:
@@ -839,7 +839,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # prediction per batch
         for storage in self.train_multi_partition_storage:
             obj_score, obj_y, instance_data = \
-                storage.get_instance_predictions(best_setting)
+                storage.panoptic_preds(best_setting)
             obj_hist = instance_data.target_label_histogram(self.num_classes)
             self.train_panoptic.update(obj_y, instance_data)
             self.train_semantic(
@@ -859,7 +859,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update instance and panoptic metrics
         if self.needs_partition:
-            obj_score, obj_y, instance_data = output.get_instance_predictions()
+            obj_score, obj_y, instance_data = output.panoptic_preds
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
@@ -1042,7 +1042,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
 
         # Update instance and panoptic metrics
         if self.needs_partition:
-            obj_score, obj_y, instance_data = output.get_instance_predictions()
+            obj_score, obj_y, instance_data = output.panoptic_preds
             obj_score = obj_score.detach().cpu()
             obj_y = obj_y.detach()
             obj_hist = instance_data.target_label_histogram(self.num_classes)
