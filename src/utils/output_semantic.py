@@ -40,7 +40,8 @@ class SemanticSegmentationOutput:
         all other output variables held by the object are also on the
         same device.
         """
-        return self.logits.device
+        logits = self.logits[0] if self.multi_stage else self.logits
+        return logits.device
 
     @property
     def has_target(self):

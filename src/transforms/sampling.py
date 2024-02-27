@@ -230,7 +230,7 @@ def _group_data(
 
     # Keys for which voxel aggregation will use a Cluster object, which 
     # store all input information in CSR format
-    _CLUSTER_KEYS=['sub']
+    _CLUSTER_KEYS = ['sub']
 
     # Keys for which voxel aggregation will be based on majority voting
     _LAST_KEYS = ['batch', SaveNodeIndex.KEY]
