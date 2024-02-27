@@ -37,7 +37,8 @@ class SaveNodeIndex(Transform):
         self.key = key if key is not None else self.DEFAULT_KEY
 
     def _process(self, data):
-        setattr(data, self.key, torch.arange(0, data.pos.shape[0]))
+        idx = torch.arange(0, data.pos.shape[0], device=data.device)
+        setattr(data, self.key, idx)
         return data
 
 
@@ -277,12 +278,13 @@ def _group_data(
         # For point indices to be grouped in Cluster. This allows 
         # backtracking full-resolution point indices to the voxels
         if key in _CLUSTER_KEYS:
-            if isinstance(item, torch.LongTensor) and item.dim() == 1:
+            if (isinstance(item, torch.Tensor) and item.dim() == 1
+                    and not item.is_floating_point()):
                 data[key] = Cluster(cluster, item, dense=True)
             else:
                 raise NotImplementedError(
                     f"Cannot merge '{key}' with data type: {type(item)} into "
-                    f"a Cluster object. Only supports 1D LongTensor.")
+                    f"a Cluster object. Only supports 1D Tensor of integers.")
 
         # TODO: adapt to make use of CSRData batching ?
         if isinstance(item, CSRData):
