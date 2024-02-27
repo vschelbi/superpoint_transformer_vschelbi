@@ -59,10 +59,11 @@ def visualize_3d(
     :param height: int
         Figure height
     :param class_names: List(str)
-        Names for point labels found in attributes 'y' and 'pred'
+        Names for point labels found in attributes 'y' and
+        'semantic_pred'
     :param class_colors: List(List(int, int, int))
         Colors palette for point labels found in attributes 'y' and
-        'pred'
+        'semantic_pred'
     :param stuff_classes: List(int)
         Semantic labels of the classes considered as 'stuff' for
         instance and panoptic segmentation. If 'y' and 'obj' are found
@@ -120,9 +121,9 @@ def visualize_3d(
         None). If None, alpha will be used as fallback
     :param alpha_stuff:
         Float ruling the whitening of stuff points (only if the input
-        points have 'obj' and 'pred' attributes, and 'stuff_classes' or
-        'num_classes' is specified). If None, `alpha` will be used as
-        fallback
+        points have 'obj' and 'semantic_pred' attributes, and
+        'stuff_classes' or 'num_classes' is specified). If None,
+        `alpha` will be used as fallback
     :param point_symbol: str
         Marker symbol used for points. Must be one of
         ['circle', 'circle-open', 'square', 'square-open', 'diamond',
@@ -379,8 +380,8 @@ def visualize_3d(
 
     # Color the points with predicted semantic labels. If labels are
     # expressed as histograms, keep the most frequent one
-    if data_0.pred is not None:
-        pred = data_0.pred
+    if data_0.semantic_pred is not None:
+        pred = data_0.semantic_pred
         pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
 
         # If the ground truth labels are available, we use them to
@@ -863,14 +864,14 @@ def visualize_3d(
     # Add a trace for prediction errors. NB: it is important that this
     # trace is created last, as the button behavior for this one is
     # particular
-    has_error = data_0.y is not None and data_0.pred is not None
+    has_error = data_0.y is not None and data_0.semantic_pred is not None
     if has_error:
 
         # Recover prediction and ground truth and deal with potential
         # histograms
         y = data_0.y
         y = y.argmax(1).numpy() if y.dim() == 2 else y.numpy()
-        pred = data_0.pred
+        pred = data_0.semantic_pred
         pred = pred.argmax(1).numpy() if pred.dim() == 2 else pred.numpy()
 
         # Identify erroneous point indices

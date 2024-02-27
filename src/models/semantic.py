@@ -493,7 +493,7 @@ class SemanticSegmentationModule(LightningModule):
         the output object.
         """
         self.train_loss(loss.detach())
-        self.train_cm(output.preds.detach(), output.targets.detach())
+        self.train_cm(output.semantic_pred.detach(), output.semantic_target.detach())
 
     def train_step_log_metrics(self):
         """Log train metrics after a single step with the content of the
@@ -530,7 +530,7 @@ class SemanticSegmentationModule(LightningModule):
         object.
         """
         self.val_loss(loss.detach())
-        self.val_cm(output.preds.detach(), output.targets.detach())
+        self.val_cm(output.semantic_pred.detach(), output.semantic_target.detach())
 
     def validation_step_log_metrics(self):
         """Log validation metrics after a single step with the content
@@ -598,9 +598,9 @@ class SemanticSegmentationModule(LightningModule):
         if self.trainer.datamodule.hparams.submit:
             nag = batch if isinstance(batch, NAG) else batch[0]
             l0_pos = nag[0].pos.detach().cpu()
-            l0_preds = output.preds[nag[0].super_index].detach().cpu()
+            l0_pred = output.semantic_pred[nag[0].super_index].detach().cpu()
             self.trainer.datamodule.test_dataset.make_submission(
-                batch_idx, l0_preds, l0_pos, submission_dir=self.submission_dir)
+                batch_idx, l0_pred, l0_pos, submission_dir=self.submission_dir)
 
         # Explicitly delete the output, for memory release
         del output
@@ -614,7 +614,7 @@ class SemanticSegmentationModule(LightningModule):
             return
 
         self.test_loss(loss.detach())
-        self.test_cm(output.preds.detach(), output.targets.detach())
+        self.test_cm(output.semantic_pred.detach(), output.semantic_target.detach())
 
     def test_step_log_metrics(self):
         """Log test metrics after a single step with the content of the

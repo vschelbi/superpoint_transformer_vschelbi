@@ -51,7 +51,7 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
             validate_args=False,
             **kwargs)
 
-    def update(self, preds, target):
+    def update(self, pred, target):
         """Update state with predictions and targets. Extends the
         `MulticlassConfusionMatrix.update()` with the possibility to
         pass histograms as targets. This is typically useful for
@@ -63,25 +63,25 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
             taken into account in the metrics, the extra columns will be
             considered 'void'.
 
-        :param preds: Tensor
+        :param pred: Tensor
             Predictions
         :param target: Tensor
             Ground truth
         """
         assert not target.is_floating_point()
-        assert preds.shape[0] == target.shape[0]
-        assert preds.dim() <= 2
+        assert pred.shape[0] == target.shape[0]
+        assert pred.dim() <= 2
         assert target.dim() <= 2
         assert target.dim() == 1 \
                or target.shape[1] == 1 \
                or target.shape[1] >= self.num_classes
 
-        # If logits or probas are passed for preds, take the argmax for
+        # If logits or probas are passed for pred, take the argmax for
         # the majority class
-        if preds.dim() == 2:
-            preds = preds.argmax(dim=1)
-        if preds.is_floating_point():
-            preds = preds.long()
+        if pred.dim() == 2:
+            pred = pred.argmax(dim=1)
+        if pred.is_floating_point():
+            pred = pred.long()
 
         # If target is a 2D histogram of labels, we directly compute the
         # confusion matrix from the histograms without computing the
@@ -90,7 +90,7 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
             # Exclude 'void'/'ignored' labels counts from the histogram
             target = target[:, :self.num_classes]
             confmat = scatter_add(
-                target.float(), preds, dim=0, dim_size=self.num_classes)
+                target.float(), pred, dim=0, dim_size=self.num_classes)
             self.confmat += confmat.T.long()
             return
 
@@ -102,7 +102,7 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         target[target < 0 | target > self.num_classes] = self.num_classes
 
         # Basic parent-class update on 1D tensors
-        super().update(preds, target)
+        super().update(pred, target)
 
     @classmethod
     def from_confusion_matrix(cls, confusion_matrix):

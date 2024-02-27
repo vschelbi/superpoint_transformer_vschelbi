@@ -218,12 +218,12 @@ class CutPursuitPartition(Transform):
                     d1.y.cuda(), d1.super_index.cuda(), dim=0).cpu()
                 torch.cuda.empty_cache()
 
-            if 'pred' in d1.keys:
-                assert d1.pred.dim() == 2, \
-                    "Expected Data.pred to hold `(num_nodes, num_classes)` " \
+            if 'semantic_pred' in d1.keys:
+                assert d1.semantic_pred.dim() == 2, \
+                    "Expected Data.semantic_pred to hold `(num_nodes, num_classes)` " \
                     "histograms, not single labels"
-                d2.pred = scatter_sum(
-                    d1.pred.cuda(), d1.super_index.cuda(), dim=0).cpu()
+                d2.semantic_pred = scatter_sum(
+                    d1.semantic_pred.cuda(), d1.super_index.cuda(), dim=0).cpu()
                 torch.cuda.empty_cache()
 
             # TODO: aggregate other attributes ?
