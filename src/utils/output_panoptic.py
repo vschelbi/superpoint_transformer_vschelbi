@@ -261,8 +261,11 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
     @property
     def panoptic_preds(self):
-        """Return the predicted InstanceData, and the semantic label and
-        score for each predicted instance.
+        """Panoptic predictions on the level-1 superpoints.
+
+        Return the predicted semantic score and label for each predicted
+        instance, along with the InstanceData object summarizing
+        predictions.
         """
         if not self.has_instance_pred:
             return None, None, None
@@ -319,7 +322,11 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         return obj_score, obj_y, instance_data
 
     def voxel_panoptic_preds(self, super_index=None, sub=None):
-        """Final panoptic segmentation predictions are computed with
+        """Panoptic predictions on the level-0 voxels. Returns the
+        predicted semantic label and instance index for each voxel,
+        along with the voxel-wise InstanceData summarizing predictions.
+
+        Final panoptic segmentation predictions are computed with
         respect to predicted instances, after level-1 superpoint-graph
         clustering.
 
@@ -359,7 +366,23 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         vox_y = sp_y[super_index]
         vox_index = self.obj_index_pred[super_index]
 
-        return vox_y, vox_index
+        # Local import to avoid import loop errors
+        from src.data import InstanceData
+
+        # Compute the voxel-wise InstanceData carrying voxel predictions
+        # NB: we make an approximation here: each voxel is given a count
+        # of 1 point, neglecting the actual number of points in each
+        # voxel. This may slightly affect the metrics, compared to
+        # the true full-resolution predictions
+        num_voxels = super_index.shape[0]
+        vox_obj_pred = InstanceData(
+            torch.arange(num_voxels, device=self.device),
+            vox_index,
+            torch.ones(num_voxels, device=self.device, dtype=torch.long),
+            self.voxel_preds(super_index=super_index),
+            dense=True)
+
+        return vox_y, vox_index, vox_obj_pred
 
     def full_res_preds(
             self,
@@ -367,7 +390,12 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             super_index_raw_to_level0=None,
             sub_level1_to_level0=None,
             sub_level0_to_raw=None):
-        """Final panoptic segmentation predictions are computed with
+        """Panoptic predictions on the full-resolution input point
+        cloud. Returns the predicted semantic label and instance index
+        for each point, along with the point-wise InstanceData
+        summarizing predictions.
+
+        Final panoptic segmentation predictions are computed with
         respect to predicted instances, after level-1 superpoint-graph
         clustering.
 
@@ -418,7 +446,25 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         raw_y = vox_y[super_index_raw_to_level0]
         raw_index = vox_index[super_index_raw_to_level0]
 
-        return raw_y, raw_index
+        # Local import to avoid import loop errors
+        from src.data import InstanceData
+
+        # Compute the voxel-wise InstanceData carrying voxel predictions
+        # NB: we make an approximation here: each voxel is given a count
+        # of 1 point, neglecting the actual number of points in each
+        # voxel. This may slightly affect the metrics, compared to
+        # the true full-resolution predictions
+        num_points = super_index_raw_to_level0.shape[0]
+        raw_obj_pred = InstanceData(
+            torch.arange(num_points, device=self.device),
+            raw_index,
+            torch.ones(num_points, device=self.device, dtype=torch.long),
+            self.voxel_preds(super_index=super_index_raw_to_level0),
+            self.full_res_preds(
+                super_index_level0_to_level1=super_index_level0_to_level1,
+                super_index_raw_to_level0=super_index_raw_to_level0))
+
+        return raw_y, raw_index, raw_obj_pred
 
 
 class PartitionParameterSearchStorage:

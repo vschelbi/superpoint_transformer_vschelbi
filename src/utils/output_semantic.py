@@ -35,6 +35,14 @@ class SemanticSegmentationOutput:
                 assert self.y_hist.shape[0] == self.logits.shape[0]
 
     @property
+    def device(self):
+        """Returns the device on which the logits are stored, assuming
+        all other output variables held by the object are also on the
+        same device.
+        """
+        return self.logits.device
+
+    @property
     def has_target(self):
         """Check whether `self` contains target data for semantic
         segmentation.
@@ -66,7 +74,9 @@ class SemanticSegmentationOutput:
 
     @property
     def preds(self):
-        """Final semantic segmentation predictions are the argmax of the
+        """Semantic predictions on the level-1 superpoint.
+
+        Final semantic segmentation predictions are the argmax of the
         first-level partition logits.
         """
         logits = self.logits[0] if self.multi_stage else self.logits
@@ -74,7 +84,9 @@ class SemanticSegmentationOutput:
 
     @property
     def targets(self):
-        """Final semantic segmentation targets are the label histogram
+        """Semantic targets on the level-1 superpoint.
+
+        Final semantic segmentation targets are the label histogram
         of the first-level partition logits.
         """
         return self.y_hist[0] if self.multi_stage else self.y_hist
@@ -100,7 +112,9 @@ class SemanticSegmentationOutput:
         return f"{self.__class__.__name__}()"
     
     def voxel_preds(self, super_index=None, sub=None):
-        """Final semantic segmentation predictions are the argmax of the
+        """Semantic predictions on the level-0 voxels.
+
+        Final semantic segmentation predictions are the argmax of the
         first-level partition logits. This function then distributes 
         these predictions to each level-0 point (ie voxel in our 
         framework).
@@ -128,7 +142,10 @@ class SemanticSegmentationOutput:
             super_index_raw_to_level0=None, 
             sub_level1_to_level0=None, 
             sub_level0_to_raw=None):
-        """Final semantic segmentation predictions are the argmax of the
+        """Semantic predictions on the full-resolution input point
+        cloud.
+
+        Final semantic segmentation predictions are the argmax of the
         first-level partition logits. This function then distributes 
         these predictions to each raw point (ie full-resolution point 
         cloud before voxelization in our framework).
