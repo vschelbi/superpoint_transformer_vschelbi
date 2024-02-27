@@ -871,6 +871,12 @@ class Data(PyGData):
                 *metric_args, **metric_kwargs)
         return
 
+    def show(self, **kwargs):
+        """See `src.visualization.show`."""
+        # Local import to avoid import loop errors
+        from src.visualization import show
+        return show(self, **kwargs)
+
 
 class Batch(PyGBatch):
     """Inherit from torch_geometric.Batch with extensions tailored to
