@@ -1,9 +1,8 @@
-import plotly.validators.layout.colorscale
 import torch
 import numpy as np
 import os.path as osp
 import plotly.graph_objects as go
-from src.data import Data, NAG, Cluster, InstanceData
+from src.data import Data, NAG, Cluster
 from src.transforms import GridSampling3D, SaveNodeIndex
 from src.utils import fast_randperm, to_trimmed
 from torch_scatter import scatter_mean
