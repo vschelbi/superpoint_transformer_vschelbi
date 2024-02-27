@@ -384,7 +384,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         return vox_y, vox_index, vox_obj_pred
 
-    def full_res_preds(
+    def full_res_panoptic_preds(
             self,
             super_index_level0_to_level1=None,
             super_index_raw_to_level0=None,
