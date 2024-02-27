@@ -379,7 +379,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             torch.arange(num_voxels, device=self.device),
             vox_index,
             torch.ones(num_voxels, device=self.device, dtype=torch.long),
-            self.voxel_semantic_preds(super_index=super_index),
+            vox_y,
             dense=True)
 
         return vox_y, vox_index, vox_obj_pred
@@ -438,7 +438,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         # Distribute the level-1 superpoint semantic predictions and
         # instance indices to the voxels
-        vox_y, vox_index = self.voxel_panoptic_preds(
+        vox_y, vox_index, vox_obj_pred = self.voxel_panoptic_preds(
             super_index=super_index_level0_to_level1)
 
         # Distribute the level-1 superpoint predictions to the
@@ -459,10 +459,8 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             torch.arange(num_points, device=self.device),
             raw_index,
             torch.ones(num_points, device=self.device, dtype=torch.long),
-            self.voxel_semantic_preds(super_index=super_index_raw_to_level0),
-            self.full_res_semantic_preds(
-                super_index_level0_to_level1=super_index_level0_to_level1,
-                super_index_raw_to_level0=super_index_raw_to_level0))
+            raw_y,
+            dense=True)
 
         return raw_y, raw_index, raw_obj_pred
 
