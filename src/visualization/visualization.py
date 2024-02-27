@@ -211,7 +211,7 @@ def visualize_3d(
         # has been selected
         for i in range(num_levels):
             selected = torch.zeros(input[i].num_nodes, dtype=torch.bool)
-            selected[nag_temp[i][SaveNodeIndex.KEY]] = True
+            selected[nag_temp[i][SaveNodeIndex.DEFAULT_KEY]] = True
             input[i].selected = selected
 
         del nag_temp, selected
@@ -227,7 +227,7 @@ def visualize_3d(
         # Indicate, for each node of the hierarchical graph, whether it
         # has been selected
         selected = torch.zeros(input.num_nodes, dtype=torch.bool)
-        selected[data_temp[SaveNodeIndex.KEY]] = True
+        selected[data_temp[SaveNodeIndex.DEFAULT_KEY]] = True
         input.selected = selected
 
         del data_temp, selected
@@ -259,7 +259,7 @@ def visualize_3d(
     if voxel > 0:
         data_temp = SaveNodeIndex()(Data(pos=data_0.pos.clone()))
         data_temp = GridSampling3D(voxel, mode='last')(data_temp)
-        idx = data_temp[SaveNodeIndex.KEY]
+        idx = data_temp[SaveNodeIndex.DEFAULT_KEY]
         del data_temp
 
     # If the cloud is too large with respect to required 'max_points',

@@ -31,16 +31,16 @@ class SaveNodeIndex(Transform):
     allows tracking nodes from the output back to the input Data object.
     """
 
-    KEY = 'node_id'
+    DEFAULT_KEY = 'node_id'
 
     def __init__(self, key=None):
-        self.KEY = key if key is not None else self.KEY
+        self.key = key if key is not None else self.DEFAULT_KEY
 
     def _process(self, data):
-        if hasattr(data, self.KEY):
+        if hasattr(data, self.key) and data[self.key] is not None:
             return data
 
-        setattr(data, self.KEY, torch.arange(0, data.pos.shape[0]))
+        setattr(data, self.key, torch.arange(0, data.pos.shape[0]))
         return data
 
 
@@ -52,7 +52,7 @@ class NAGSaveNodeIndex(SaveNodeIndex):
     _OUT_TYPE = NAG
 
     def _process(self, nag):
-        transform = SaveNodeIndex(key=self.KEY)
+        transform = SaveNodeIndex(key=self.key)
         for i_level in range(nag.num_levels):
             nag._list[i_level] = transform(nag._list[i_level])
         return nag
@@ -65,8 +65,8 @@ class GridSampling3D(Transform):
     The `_VOTING_KEYS=['y', 'super_index', 'is_val']` keys are grouped
     by their majority label. The `_INSTANCE_KEYS=['obj']` keys are
     grouped into an InstanceData, which stores all values in CSR format.
-    The `_LAST_KEYS = ['batch', SaveNodeIndex.KEY]` keys are by default
-    grouped following `mode='last'`.
+    The `_LAST_KEYS = ['batch', SaveNodeIndex.DEFAULT_KEY]` keys are by
+    default grouped following `mode='last'`.
 
     Besides, for keys where a more subtle histogram mechanism is needed,
     (e.g. for 'y'), the 'hist_key' and 'hist_size' arguments can be
@@ -189,8 +189,8 @@ def _group_data(
     overlap data values in CSR format. The `_CLUSTER_KEYS=['point_id']` 
     keys are grouped into a `Cluster` object, which stores indices of 
     child elements for parent clusters in CSR format. The 
-    `_LAST_KEYS = ['batch', SaveNodeIndex.KEY]` keys are by default
-    grouped following `mode='last'`.
+    `_LAST_KEYS = ['batch', SaveNodeIndex.DEFAULT_KEY]` keys are by
+    default grouped following `mode='last'`.
 
     Besides, for keys where a more subtle histogram mechanism is needed,
     (e.g. for 'y'), the 'bins' argument can be used.
@@ -233,7 +233,7 @@ def _group_data(
     _CLUSTER_KEYS = ['sub']
 
     # Keys for which voxel aggregation will be based on majority voting
-    _LAST_KEYS = ['batch', SaveNodeIndex.KEY]
+    _LAST_KEYS = ['batch', SaveNodeIndex.DEFAULT_KEY]
 
     # Keys to be treated as normal vectors, for which the unit-norm must
     # be preserved
