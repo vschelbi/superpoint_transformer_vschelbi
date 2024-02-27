@@ -285,6 +285,7 @@ def _group_data(
                 raise NotImplementedError(
                     f"Cannot merge '{key}' with data type: {type(item)} into "
                     f"a Cluster object. Only supports 1D Tensor of integers.")
+            continue
 
         # TODO: adapt to make use of CSRData batching ?
         if isinstance(item, CSRData):
