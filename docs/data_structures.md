@@ -16,6 +16,7 @@ Important specificities of our `Data` object are:
 - `Data.to_trimmed()` works like `torch_geometric`'s `Data.coalesce()` with the additional constraint that (i,j) and (j,i) edges are considered duplicates
 - `Data.save()` and `Data.load()` allow optimized, memory-friendly I/O operations
 - `Data.select()` indexes the nodes à la numpy
+- `Data.show()` for interactive visualization (see `src.visualization` for documentation)
 
 We created the `Batch` structure for batching `Data` objects together, while preserving their advanced mechanisms without index collisions. 
 
@@ -29,6 +30,7 @@ Important specificities of our `Data` object are:
 - `NAG.get_sampling()` produces indices for sampling the superpoints with certain constraints
 - `NAG.save()` and `NAG.load()` allow optimized, memory-friedly I/O operations
 - `NAG.select()` indexes the nodes of a specified partition level à la numpy and updates the rest of the `NAG` structure accordingly
+- `NAG.show()` for interactive visualization (see `src.visualization` for documentation)
 
 ## `CSRData`
 `CSRData` is the data structure we use for manipulating sparse information. This implements the [CSR (Compressed Sparse Row)](https://en.wikipedia.org/wiki/Sparse_matrix) representation. Simply put, this struture stores a list of tensor objects as `values`, and a `pointers` 1D tensor for indexing `values`. The `j`th tensor values related to element `i`, are stored in: `CSRData.values[j][CSRData.pointers[i]:CSRData.pointers[i+1]`.
