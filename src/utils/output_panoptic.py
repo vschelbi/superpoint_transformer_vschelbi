@@ -80,14 +80,14 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
                 assert item[1].dim() == 1
                 assert item[1].shape[0] == self.num_nodes
 
-        # Instance targets
+        # Instance target
         items = [
             self.obj_edge_index, self.obj_edge_affinity, self.pos, self.obj_pos]
-        without_instance_targets = all(x is None for x in items)
-        with_instance_targets = all(x is not None for x in items)
-        assert without_instance_targets or with_instance_targets
+        without_instance_target = all(x is None for x in items)
+        with_instance_target = all(x is not None for x in items)
+        assert without_instance_target or with_instance_target
 
-        if without_instance_targets:
+        if without_instance_target:
             return
 
         # Local import to avoid import loop errors
@@ -147,7 +147,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
     #     return self.obj_pos - self.pos
 
     @property
-    def edge_affinity_preds(self):
+    def edge_affinity_pred(self):
         """Simply applies a sigmoid on `edge_affinity_logits` to produce
         the actual affinity predictions to be used for superpoint
         graph clustering.
@@ -239,7 +239,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
                is_same_class[idx], is_same_obj[idx]
 
     @property
-    def weighted_instance_semantic_preds(self):
+    def weighted_instance_semantic_pred(self):
         """Compute the predicted semantic label, score and logits for
         each predicted instance. This involves computing, for each
         predicted instance, the weighted average of the logits of the
@@ -260,7 +260,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         return obj_y, obj_semantic_score, obj_logits
 
     @property
-    def panoptic_preds(self):
+    def panoptic_pred(self):
         """Panoptic predictions on the level-1 superpoints.
 
         Return the predicted semantic score and label for each predicted
@@ -278,7 +278,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         # Compute the semantic prediction for each predicted object,
         # weighted by the node sizes
         obj_y, obj_semantic_score, obj_logits = \
-            self.weighted_instance_semantic_preds
+            self.weighted_instance_semantic_pred
 
         # # Compute the mean node offset, weighted by node sizes, for each
         # # object
@@ -303,7 +303,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         intra = ie[0] == ie[1]
         idx = ie.flatten()
         intra = intra.repeat(2)
-        a = self.edge_affinity_preds.repeat(2)
+        a = self.edge_affinity_pred.repeat(2)
         n = self.obj_index_pred.max() + 1
         obj_mean_intra = scatter_mean(a[intra], idx[intra], dim_size=n)
         obj_mean_inter = scatter_mean(a[~intra], idx[~intra], dim_size=n)
@@ -321,7 +321,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         return obj_score, obj_y, instance_data
 
-    def voxel_panoptic_preds(self, super_index=None, sub=None):
+    def voxel_panoptic_pred(self, super_index=None, sub=None):
         """Panoptic predictions on the level-0 voxels. Returns the
         predicted semantic label and instance index for each voxel,
         along with the voxel-wise InstanceData summarizing predictions.
@@ -335,7 +335,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         by the superpoint sizes. These instance-aggregated semantic
         predictions may (slightly) differ from the per-superpoint
         semantic segmentation prediction obtained from
-        `self.voxel_preds()`.
+        `self.voxel_semantic_pred()`.
 
         This function then distributes semantic and instance index
         predictions to each level-0 point (ie voxel in our framework).
@@ -356,7 +356,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         # Compute the semantic prediction for each predicted object,
         # weighted by the node sizes
-        obj_y, _, _ = self.weighted_instance_semantic_preds
+        obj_y, _, _ = self.weighted_instance_semantic_pred
 
         # Distribute the per-instance predictions to level-1 superpoints
         sp_y = obj_y[self.obj_index_pred]
@@ -384,7 +384,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         return vox_y, vox_index, vox_obj_pred
 
-    def full_res_panoptic_preds(
+    def full_res_panoptic_pred(
             self,
             super_index_level0_to_level1=None,
             super_index_raw_to_level0=None,
@@ -404,7 +404,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
         by the superpoint sizes. These instance-aggregated semantic
         predictions may (slightly) differ from the per-superpoint
         semantic segmentation prediction obtained from
-        `self.voxel_preds()`.
+        `self.full_res_semantic_pred()`.
 
         This function then distributes these predictions to each raw
         point (ie full-resolution point cloud before voxelization in our
@@ -438,7 +438,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
 
         # Distribute the level-1 superpoint semantic predictions and
         # instance indices to the voxels
-        vox_y, vox_index, vox_obj_pred = self.voxel_panoptic_preds(
+        vox_y, vox_index, vox_obj_pred = self.voxel_panoptic_pred(
             super_index=super_index_level0_to_level1)
 
         # Distribute the level-1 superpoint predictions to the
@@ -473,7 +473,7 @@ class PartitionParameterSearchStorage:
     cannot store the whole content of the `PanopticSegmentationOutput`
     of each batch. This holder is used to store the strict necessary
     from the `PanopticSegmentationOutput` of each batch, to be able to
-    call `PanopticSegmentationOutput.panoptic_preds` at
+    call `PanopticSegmentationOutput.panoptic_pred` at
     the end of an epoch and pass its output to an instance or panoptic
     segmentation metric object.
 
@@ -511,7 +511,7 @@ class PartitionParameterSearchStorage:
         """
         return len(self.settings)
 
-    def panoptic_preds(self, setting):
+    def panoptic_pred(self, setting):
         """Return the predicted InstanceData, and the predicted instance
         semantic label and score, for a given batch item and a given
         partition setting.
@@ -530,4 +530,4 @@ class PartitionParameterSearchStorage:
             obj_index_pred=self.obj_index_pred[i_setting][1])
 
         # Compute inputs for an instance or panoptic segmentation metric
-        return output.panoptic_preds
+        return output.panoptic_pred

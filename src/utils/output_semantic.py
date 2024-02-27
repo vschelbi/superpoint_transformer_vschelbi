@@ -74,7 +74,7 @@ class SemanticSegmentationOutput:
         return logits.shape[0]
 
     @property
-    def preds(self):
+    def pred(self):
         """Semantic predictions on the level-1 superpoint.
 
         Final semantic segmentation predictions are the argmax of the
@@ -84,10 +84,10 @@ class SemanticSegmentationOutput:
         return torch.argmax(logits, dim=1)
 
     @property
-    def targets(self):
-        """Semantic targets on the level-1 superpoint.
+    def target(self):
+        """Semantic target on the level-1 superpoint.
 
-        Final semantic segmentation targets are the label histogram
+        Final semantic segmentation target are the label histogram
         of the first-level partition logits.
         """
         return self.y_hist[0] if self.multi_stage else self.y_hist
@@ -104,7 +104,7 @@ class SemanticSegmentationOutput:
             return
 
         # For simplicity, we only return the mask for the level-1
-        y_hist = self.targets
+        y_hist = self.target
         total_count = y_hist.sum(dim=1)
         void_count = y_hist[:, -1]
         return void_count / total_count > 0.5
@@ -112,7 +112,7 @@ class SemanticSegmentationOutput:
     def __repr__(self):
         return f"{self.__class__.__name__}()"
     
-    def voxel_semantic_preds(self, super_index=None, sub=None):
+    def voxel_semantic_pred(self, super_index=None, sub=None):
         """Semantic predictions on the level-0 voxels.
 
         Final semantic segmentation predictions are the argmax of the
@@ -135,9 +135,9 @@ class SemanticSegmentationOutput:
             super_index = sub.to_super_index()
         
         # Distribute the level-1 superpoint predictions to the voxels
-        return self.preds[super_index]
+        return self.pred[super_index]
 
-    def full_res_semantic_preds(
+    def full_res_semantic_pred(
             self, 
             super_index_level0_to_level1=None, 
             super_index_raw_to_level0=None, 
@@ -179,4 +179,4 @@ class SemanticSegmentationOutput:
         
         # Distribute the level-1 superpoint predictions to the 
         # full-resolution points
-        return self.preds[super_index_level0_to_level1][super_index_raw_to_level0]
+        return self.pred[super_index_level0_to_level1][super_index_raw_to_level0]
