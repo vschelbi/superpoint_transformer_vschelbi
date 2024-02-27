@@ -197,7 +197,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
     #     idx = torch.where(~self.void_mask)[0]
     #
     #     # Set target offsets to 0 when predicted semantic is stuff
-    #     y_hist = self.targets
+    #     y_hist = self.target
     #     is_stuff = get_stuff_mask(y_hist, self.stuff_classes)
     #     node_offset = self.node_offset
     #     node_offset[is_stuff] = 0

@@ -48,8 +48,8 @@ class Data(PyGData):
         return self['obj'] if 'obj' in self._store else None
 
     @property
-    def pred(self):
-        return self['pred'] if 'pred' in self._store else None
+    def semantic_pred(self):
+        return self['semantic_pred'] if 'semantic_pred' in self._store else None
 
     @property
     def neighbor_index(self):

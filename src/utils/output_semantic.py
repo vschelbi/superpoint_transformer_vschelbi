@@ -74,7 +74,7 @@ class SemanticSegmentationOutput:
         return logits.shape[0]
 
     @property
-    def pred(self):
+    def semantic_pred(self):
         """Semantic predictions on the level-1 superpoint.
 
         Final semantic segmentation predictions are the argmax of the
@@ -84,7 +84,7 @@ class SemanticSegmentationOutput:
         return torch.argmax(logits, dim=1)
 
     @property
-    def target(self):
+    def semantic_target(self):
         """Semantic target on the level-1 superpoint.
 
         Final semantic segmentation target are the label histogram
@@ -104,7 +104,7 @@ class SemanticSegmentationOutput:
             return
 
         # For simplicity, we only return the mask for the level-1
-        y_hist = self.target
+        y_hist = self.semantic_target
         total_count = y_hist.sum(dim=1)
         void_count = y_hist[:, -1]
         return void_count / total_count > 0.5
@@ -135,7 +135,7 @@ class SemanticSegmentationOutput:
             super_index = sub.to_super_index()
         
         # Distribute the level-1 superpoint predictions to the voxels
-        return self.pred[super_index]
+        return self.semantic_pred[super_index]
 
     def full_res_semantic_pred(
             self, 
@@ -179,4 +179,4 @@ class SemanticSegmentationOutput:
         
         # Distribute the level-1 superpoint predictions to the 
         # full-resolution points
-        return self.pred[super_index_level0_to_level1][super_index_raw_to_level0]
+        return self.semantic_pred[super_index_level0_to_level1][super_index_raw_to_level0]
