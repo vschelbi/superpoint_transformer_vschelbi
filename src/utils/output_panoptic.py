@@ -379,7 +379,7 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             torch.arange(num_voxels, device=self.device),
             vox_index,
             torch.ones(num_voxels, device=self.device, dtype=torch.long),
-            self.voxel_preds(super_index=super_index),
+            self.voxel_semantic_preds(super_index=super_index),
             dense=True)
 
         return vox_y, vox_index, vox_obj_pred
@@ -459,8 +459,8 @@ class PanopticSegmentationOutput(SemanticSegmentationOutput):
             torch.arange(num_points, device=self.device),
             raw_index,
             torch.ones(num_points, device=self.device, dtype=torch.long),
-            self.voxel_preds(super_index=super_index_raw_to_level0),
-            self.full_res_preds(
+            self.voxel_semantic_preds(super_index=super_index_raw_to_level0),
+            self.full_res_semantic_preds(
                 super_index_level0_to_level1=super_index_level0_to_level1,
                 super_index_raw_to_level0=super_index_raw_to_level0))
 

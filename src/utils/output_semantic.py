@@ -112,7 +112,7 @@ class SemanticSegmentationOutput:
     def __repr__(self):
         return f"{self.__class__.__name__}()"
     
-    def voxel_preds(self, super_index=None, sub=None):
+    def voxel_semantic_preds(self, super_index=None, sub=None):
         """Semantic predictions on the level-0 voxels.
 
         Final semantic segmentation predictions are the argmax of the
@@ -137,7 +137,7 @@ class SemanticSegmentationOutput:
         # Distribute the level-1 superpoint predictions to the voxels
         return self.preds[super_index]
 
-    def full_res_preds(
+    def full_res_semantic_preds(
             self, 
             super_index_level0_to_level1=None, 
             super_index_raw_to_level0=None, 
