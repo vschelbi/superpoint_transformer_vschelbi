@@ -37,9 +37,6 @@ class SaveNodeIndex(Transform):
         self.key = key if key is not None else self.DEFAULT_KEY
 
     def _process(self, data):
-        if hasattr(data, self.key) and data[self.key] is not None:
-            return data
-
         setattr(data, self.key, torch.arange(0, data.pos.shape[0]))
         return data
 
