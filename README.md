@@ -104,7 +104,12 @@ Due to its lightweight backbone and scalable formulation, SuperCluster can proce
 
 ## 📰  Updates
 
-- **26.02.2024** Major code release for panoptic segmentation, `predict()` behavior, full-resolution prediction, and code for **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704)**. Some changes in the dependencies and repository structure are not backward-compatible ❗
+- **26.02.2024** Major code release for **panoptic segmentation**, implementing 
+**[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704)**.
+This new version also implements long-awaited features such as lightning's
+`predict()` behavior, **voxel-resolution and full-resolution prediction**.
+Some changes in the dependencies and repository structure are **not 
+backward-compatible**. If you were already using anterior code versions, this means we recommend re-installing your conda environment and re-running the preprocessing or your datasets❗
 - **15.10.2023** Our paper **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704)** was accepted for an **oral** presentation at **[3DV 2024](https://3dvconf.github.io/2024/)** 🥳
 - **06.10.2023** Come see our poster for **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](https://arxiv.org/abs/2306.08045)** at **[ICCV 2023](https://iccv2023.thecvf.com/)**
 - **14.07.2023** Our paper **[_Efficient 3D Semantic Segmentation with Superpoint Transformer_](https://arxiv.org/abs/2306.08045)** was accepted at **[ICCV 2023](https://iccv2023.thecvf.com/)** 🥳
