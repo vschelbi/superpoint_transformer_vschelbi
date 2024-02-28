@@ -1,7 +1,0 @@
-# @package datamodule
-defaults:
-  - /datamodule/semantic/s3dis.yaml
-
-# point features used for training
-point_hf:
-  - 'rgb'

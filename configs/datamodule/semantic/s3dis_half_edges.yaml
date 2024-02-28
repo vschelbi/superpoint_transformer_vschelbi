@@ -1,5 +1,0 @@
-# @package datamodule
-defaults:
-  - /datamodule/semantic/s3dis.yaml
-
-graph_gap: [0.1, 0.2, 0.3]

@@ -1,6 +1,0 @@
-# @package model
-defaults:
-  - /model/semantic/s1-h.yaml
-
-net:
-  down_num_blocks: 0  # no attention blocks for this model

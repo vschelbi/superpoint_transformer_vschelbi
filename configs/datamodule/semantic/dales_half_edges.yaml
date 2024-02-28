@@ -1,5 +1,0 @@
-# @package datamodule
-defaults:
-  - /datamodule/semantic/dales.yaml
-
-graph_gap: [3, 20, 30]

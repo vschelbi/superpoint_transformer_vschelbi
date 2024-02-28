@@ -1,10 +1,10 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=panoptic/s3dis_nano_with_stuff
+# python train.py experiment=panoptic/s3dis_with_stuff_nano
 
 defaults:
-  - override /datamodule: panoptic/s3dis_nano_with_stuff.yaml
+  - override /datamodule: panoptic/s3dis_with_stuff_nano.yaml
   - override /model: panoptic/nano-2.yaml
   - override /trainer: gpu.yaml
 
