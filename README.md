@@ -33,6 +33,23 @@ If you ❤️ or use this project, don't forget to give it a ⭐, it means a lot
 <br>
 </div>
 
+```
+@article{robert2023spt,
+  title={Efficient 3D Semantic Segmentation with Superpoint Transformer},
+  author={Robert, Damien and Raguet, Hugo and Landrieu, Loic},
+  journal={Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  year={2023}
+}
+```
+```
+@article{robert2024scalable,
+  title={Scalable 3D Panoptic Segmentation With Superpoint Graph Clustering},
+  author={Robert, Damien and Raguet, Hugo and Landrieu, Loic},
+  journal={Proceedings of the IEEE International Conference on 3D Vision},
+  year={2024}
+}
+```
+
 <br>
 
 ## 📌  Description
