@@ -342,6 +342,38 @@ python src/train.py experiment=panoptic/kitti360_11g
 python src/train.py experiment=panoptic/dales_11g
 ```
 
+### PyTorch Lightning `predict()`
+Both SPT and SuperCluster implement `predict_step()`, which permits using 
+[PyTorch Lightning's `Trainer.predict()` mechanism](https://lightning.ai/docs/pytorch/stable/deploy/production_basic.html).
+
+```python
+from src.models.semantic import SemanticSegmentationModule
+
+data_loader = DataLoader(...)
+model = SemanticSegmentationModule(...)
+trainer = Trainer(...)
+predictions = trainer.predict(model, data_loader)
+```
+
+This, however, still requires you to instantiate a `Trainer`, a `DataLoader`, 
+and a model with relevant parameters.
+
+For more details on how to instantiate these, as well as the output format
+of our model, we strongly encourage you to play with our [demo notebook](notebooks/demo.ipynb).
+
+### Full-resolution prediction
+By design, our models only need to produce predictions for the superpoints of 
+the $P_1$ partition level during training. 
+All our losses and metrics are formulated as superpoint-wise objectives. 
+This conveniently saves compute and memory at training and evaluation time.
+
+At inference time, however, we often need the **predictions on the voxels** of the
+$P_0$ partition level or on the **full-resolution input point cloud**.
+To this end, we provide helper functions to recover voxel-wise and full-resolution
+predictions.
+
+See our [demo notebook](notebooks/demo.ipynb) for more details on these.
+
 ### Notebooks & visualization
 We provide [notebooks](notebooks) to help you get started with manipulating our 
 core data structures, configs loading, dataset and model instantiation, 
