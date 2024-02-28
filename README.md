@@ -121,7 +121,7 @@ Due to its lightweight backbone and scalable formulation, SuperCluster can proce
 
 ## 📰  Updates
 
-- **26.02.2024** Major code release for **panoptic segmentation**, implementing 
+- **28.02.2024** Major code release for **panoptic segmentation**, implementing 
 **[_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704)**.
 This new version also implements long-awaited features such as lightning's
 `predict()` behavior, **voxel-resolution and full-resolution prediction**.
