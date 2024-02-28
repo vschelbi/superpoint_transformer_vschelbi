@@ -405,6 +405,19 @@ predictions.
 
 See our [demo notebook](notebooks/demo.ipynb) for more details on these.
 
+### Parameterizing SuperCluster graph clustering
+One specificity of SuperCluster is that the model is not trained to explicitly 
+do panoptic segmentation, but to predict the input parameters of a superpoint 
+graph clustering problem whose solution is a panoptic segmentation.
+
+For this reason, the hyperparameters for this graph optimization problem are 
+selected after training, with a grid search on the training or validation set.
+We find that fairly similar hyperparameters yield the best performance on all 
+our datasets (see our [paper](https://arxiv.org/abs/2401.06704)'s appendix). Yet, you may want to explore 
+these hyperparameters for your own dataset. To this end, see our 
+[demo notebook](notebooks/demo_panoptic_parametrization.ipynb) for 
+parameterizing the panoptic segmentation.
+
 ### Notebooks & visualization
 We provide [notebooks](notebooks) to help you get started with manipulating our 
 core data structures, configs loading, dataset and model instantiation, 
