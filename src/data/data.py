@@ -593,7 +593,9 @@ class Data(PyGData):
         assert isinstance(f, (h5py.File, h5py.Group))
 
         for k, val in self.items():
-            if k == 'pos':
+            if k == 'pos_offset':
+                save_tensor(val, f, k, fp_dtype=torch.double)
+            elif k == 'pos':
                 save_tensor(val, f, k, fp_dtype=pos_dtype)
             elif k == 'y' and val.dim() > 1 and y_to_csr:
                 sg = f.create_group(f"{f.name}/_csr_/{k}")

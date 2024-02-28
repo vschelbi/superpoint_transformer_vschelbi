@@ -55,9 +55,12 @@ def read_dales_tile(
         tile = PlyData.read(f)
 
         if xyz:
-            data.pos = torch.stack([
+            pos = torch.stack([
                 torch.FloatTensor(tile[key][axis])
                 for axis in ["x", "y", "z"]], dim=-1)
+            pos_offset = pos[0]
+            data.pos = pos - pos_offset
+            data.pos_offset = pos_offset
 
         if intensity:
             # Heuristic to bring the intensity distribution in [0, 1]

@@ -96,14 +96,16 @@ def read_scannet_scan(
     if stage_dirname == 'scans':
         pos, color, n, y, obj = read_one_scan(stage_dir, scan_name, label_map_file)
         y = torch.from_numpy(NYU40_2_SCANNET)[y] if remap else y
-        data = Data(pos=pos, rgb=color, normal=n, y=y)
+        pos_offset = torch.zeros_like(pos[0])
+        data = Data(pos=pos, pos_offset=pos_offset, rgb=color, normal=n, y=y)
         idx = torch.arange(data.num_points)
         obj = consecutive_cluster(obj)[0]
         count = torch.ones_like(obj)
         data.obj = InstanceData(idx, obj, count, y, dense=True)
     else:
         pos, color, n = read_one_test_scan(stage_dir, scan_name)
-        data = Data(pos=pos, rgb=color, normal=n)
+        pos_offset = torch.zeros_like(pos[0])
+        data = Data(pos=pos, pos_offset=pos_offset, rgb=color, normal=n)
 
     # Sometimes the returned normals may be 0. Since normals are assumed
     # to have unit-norm, and to avoid downstream errors, we arbitrarily

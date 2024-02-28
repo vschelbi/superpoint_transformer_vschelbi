@@ -59,9 +59,12 @@ def read_kitti360_window(
         attributes = [p.name for p in window['vertex'].properties]
 
         if xyz:
-            data.pos = torch.stack([
+            pos = torch.stack([
                 torch.FloatTensor(window["vertex"][axis])
                 for axis in ["x", "y", "z"]], dim=-1)
+            pos_offset = pos[0]
+            data.pos = pos - pos_offset
+            data.pos_offset = pos_offset
 
         if rgb:
             data.rgb = to_float_rgb(torch.stack([

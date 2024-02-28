@@ -176,7 +176,8 @@ def read_s3dis_room(
     y_data = torch.from_numpy(np.concatenate(y_list, 0)) if semantic else None
 
     # Store into a Data object
-    data = Data(pos=xyz_data, rgb=rgb_data, y=y_data)
+    pos_offset = torch.zeros_like(xyz_data[0]) if xyz else None
+    data = Data(pos=xyz_data, pos_offset=pos_offset, rgb=rgb_data, y=y_data)
 
     # Store instance labels in InstanceData format
     if instance:
