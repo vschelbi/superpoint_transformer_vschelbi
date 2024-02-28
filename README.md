@@ -212,9 +212,18 @@ named `spt`.
 ### Datasets
 See the [Datasets page](docs/datasets.md) to set up your datasets. 
 
-### Evaluating SPT
-Use the following commands to evaluate SPT from a checkpoint file 
-`checkpoint.ckpt`:
+### Evaluation
+Use the following command structure for evaluating our models from a checkpoint 
+file `checkpoint.ckpt`, where `<task>` should be `semantic` for using SPT and `panoptic` for using 
+SuperCluster:
+
+```bash
+# Evaluate for <task> segmentation on <dataset>
+python src/eval.py experiment=<task>/<dataset> ckpt_path=/path/to/your/checkpoint.ckpt
+```
+
+Some examples:
+
 ```bash
 # Evaluate SPT on S3DIS Fold 5
 python src/eval.py experiment=semantic/s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
@@ -224,15 +233,47 @@ python src/eval.py experiment=semantic/kitti360  ckpt_path=/path/to/your/checkpo
 
 # Evaluate SPT on DALES
 python src/eval.py experiment=semantic/dales ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Evaluate SuperCluster on S3DIS Fold 5
+python src/eval.py experiment=panoptic/s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Evaluate SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
+python src/eval.py experiment=panoptic/s3dis_with_stuff datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Evaluate SuperCluster on ScanNet Val
+python src/eval.py experiment=panoptic/scannet ckpt_path=/path/to/your/checkpoint.ckpt
+
+# Evaluate SuperCluster on KITTI-360 Val
+python src/eval.py experiment=panoptic/kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
+
+# Evaluate SuperCluster on DALES
+python src/eval.py experiment=panoptic/dales ckpt_path=/path/to/your/checkpoint.ckpt
 ```
 
-> **Note**: The pretrained weights of the **SPT** and **SPT-nano** models for 
+> **Note**: 
+> 
+> The pretrained weights of the **SPT** and **SPT-nano** models for 
 >**S3DIS 6-Fold**, **KITTI-360 Val**, and **DALES** are available at:
 >
->[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712)
+> [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712)
+> 
+> The pretrained weights of the **SuperCluster** models for 
+>**S3DIS 6-Fold**, **S3DIS 6-Fold with stuff**, **ScanNet Val**,, **KITTI-360 Val**, and **DALES** are available at:
+>
+> [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10689037.svg)](https://doi.org/10.5281/zenodo.10689037)
 
-### Training SPT
-Use the following commands to **train SPT on a 32G-GPU**:
+### Training
+Use the following command structure for **train our models on a 32G-GPU**, 
+where `<task>` should be `semantic` for using SPT and `panoptic` for using 
+SuperCluster:
+
+```bash
+# Train for <task> segmentation on <dataset>
+python src/train.py experiment=<task>/<dataset>
+```
+
+Some examples:
+
 ```bash
 # Train SPT on S3DIS Fold 5
 python src/train.py experiment=semantic/s3dis datamodule.fold=5
@@ -242,9 +283,25 @@ python src/train.py experiment=semantic/kitti360
 
 # Train SPT on DALES
 python src/train.py experiment=semantic/dales
+
+# Train SuperCluster on S3DIS Fold 5
+python src/train.py experiment=panoptic/s3dis datamodule.fold=5
+
+# Train SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
+python src/train.py experiment=panoptic/s3dis_with_stuff datamodule.fold=5
+
+# Train SuperCluster on ScanNet Val
+python src/train.py experiment=panoptic/scannet
+
+# Train SuperCluster on KITTI-360 Val
+python src/train.py experiment=panoptic/kitti360 
+
+# Train SuperCluster on DALES
+python src/train.py experiment=panoptic/dales
 ```
 
-Use the following to **train SPT on a 11G-GPU 💾** (training time and performance may vary):
+Use the following to **train on a 11G-GPU 💾** (training time and performance 
+may vary):
 
 ```bash
 # Train SPT on S3DIS Fold 5
@@ -255,6 +312,21 @@ python src/train.py experiment=semantic/kitti360_11g
 
 # Train SPT on DALES
 python src/train.py experiment=semantic/dales_11g
+
+# Train SuperCluster on S3DIS Fold 5
+python src/train.py experiment=panoptic/s3dis_11g datamodule.fold=5
+
+# Train SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
+python src/train.py experiment=panoptic/s3dis_11g_with_stuff datamodule.fold=5
+
+# Train SuperCluster on ScanNet Val
+python src/train.py experiment=panoptic/scannet_11g
+
+# Train SuperCluster on KITTI-360 Val
+python src/train.py experiment=panoptic/kitti360_11g 
+
+# Train SuperCluster on DALES
+python src/train.py experiment=panoptic/dales_11g
 ```
 
 > **Note**: Encountering CUDA Out-Of-Memory errors 💀💾 ? See our dedicated 
@@ -278,69 +350,6 @@ python src/train.py experiment=semantic/dales_11g
 >[`configs/logger/`](configs/logger). See 
 >[Lightning-Hydra](https://github.com/ashleve/lightning-hydra-template) for more
 >information on the logging options.
-
-### Evaluating SuperCluster
-Use the following commands to evaluate SuperCluster from a checkpoint file 
-`checkpoint.ckpt`:
-```bash
-# Evaluate SPT on S3DIS Fold 5
-python src/eval.py experiment=panoptic/s3dis datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
-
-# Evaluate SPT on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
-python src/eval.py experiment=panoptic/s3dis_with_stuff datamodule.fold=5 ckpt_path=/path/to/your/checkpoint.ckpt
-
-# Evaluate SPT on ScanNet Val
-python src/eval.py experiment=panoptic/scannet ckpt_path=/path/to/your/checkpoint.ckpt
-
-# Evaluate SPT on KITTI-360 Val
-python src/eval.py experiment=panoptic/kitti360  ckpt_path=/path/to/your/checkpoint.ckpt 
-
-# Evaluate SPT on DALES
-python src/eval.py experiment=panoptic/dales ckpt_path=/path/to/your/checkpoint.ckpt
-```
-
-> **Note**: The pretrained weights of the **SuperCluster** models for 
->**S3DIS 6-Fold**, **S3DIS 6-Fold with stuff**, **ScanNet Val**,, **KITTI-360 Val**, and **DALES** are available at:
->
->[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10689037.svg)](https://doi.org/10.5281/zenodo.10689037)
-
-### Training SuperCluster
-Use the following commands to **train SuperCluster on a 32G-GPU**:
-```bash
-# Train SuperCluster on S3DIS Fold 5
-python src/train.py experiment=panoptic/s3dis datamodule.fold=5
-
-# Train SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
-python src/train.py experiment=panoptic/s3dis_with_stuff datamodule.fold=5
-
-# Train SuperCluster on ScanNet Val
-python src/train.py experiment=panoptic/scannet
-
-# Train SuperCluster on KITTI-360 Val
-python src/train.py experiment=panoptic/kitti360 
-
-# Train SuperCluster on DALES
-python src/train.py experiment=panoptic/dales
-```
-
-Use the following to **train SuperCluster on a 11G-GPU 💾** (training time and performance may vary):
-
-```bash
-# Train SuperCluster on S3DIS Fold 5
-python src/train.py experiment=panoptic/s3dis_11g datamodule.fold=5
-
-# Train SuperCluster on S3DIS Fold 5 with {wall, floor, ceiling} as 'stuff'
-python src/train.py experiment=panoptic/s3dis_11g_with_stuff datamodule.fold=5
-
-# Train SuperCluster on ScanNet Val
-python src/train.py experiment=panoptic/scannet_11g
-
-# Train SuperCluster on KITTI-360 Val
-python src/train.py experiment=panoptic/kitti360_11g 
-
-# Train SuperCluster on DALES
-python src/train.py experiment=panoptic/dales_11g
-```
 
 ### PyTorch Lightning `predict()`
 Both SPT and SuperCluster inherit from `LightningModule` and implement `predict_step()`, which permits using 
