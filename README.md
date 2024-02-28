@@ -343,25 +343,47 @@ python src/train.py experiment=panoptic/dales_11g
 ```
 
 ### PyTorch Lightning `predict()`
-Both SPT and SuperCluster implement `predict_step()`, which permits using 
+Both SPT and SuperCluster inherit from `LightningModule` and implement `predict_step()`, which permits using 
 [PyTorch Lightning's `Trainer.predict()` mechanism](https://lightning.ai/docs/pytorch/stable/deploy/production_basic.html).
 
 ```python
 from src.models.semantic import SemanticSegmentationModule
+from src.datamodules.s3dis import S3DISDataModule
+from pytorch_lightning import Trainer
 
-data_loader = DataLoader(...)
+# Predict behavior for semantic segmentation on S3DIS
+dataloader = S3DISDataModule(...)
 model = SemanticSegmentationModule(...)
 trainer = Trainer(...)
-predictions = trainer.predict(model, data_loader)
+batch, output = trainer.predict(model=model, dataloaders=dataloader)
 ```
 
 This, however, still requires you to instantiate a `Trainer`, a `DataLoader`, 
 and a model with relevant parameters.
 
-For more details on how to instantiate these, as well as the output format
-of our model, we strongly encourage you to play with our [demo notebook](notebooks/demo.ipynb).
+For a little more simplicity, all our datasets inherit from 
+`LightningDataModule` and implement `predict_dataloader()` by pointing to their 
+corresponding test set by default. This permits directly passing a datamodule to
+[PyTorch Lightning's `Trainer.predict()`](https://lightning.ai/docs/pytorch/stable/common/trainer.html#predict)
+without explicitly instantiating a `DataLoader`.
 
-### Full-resolution prediction
+```python
+from src.models.semantic import SemanticSegmentationModule
+from src.datamodules.s3dis import S3DISDataModule
+from pytorch_lightning import Trainer
+
+# Predict behavior for semantic segmentation on S3DIS
+datamodule = S3DISDataModule(...)
+model = SemanticSegmentationModule(...)
+trainer = Trainer(...)
+batch, output = trainer.predict(model=model, datamodule=datamodule)
+```
+
+For more details on how to instantiate these, as well as the output format
+of our model, we strongly encourage you to play with our 
+[demo notebook](notebooks/demo.ipynb) and have a look at the [`src/eval.py`](src/eval.py) script.
+
+### Full-resolution predictions
 By design, our models only need to produce predictions for the superpoints of 
 the $P_1$ partition level during training. 
 All our losses and metrics are formulated as superpoint-wise objectives. 
