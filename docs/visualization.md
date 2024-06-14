@@ -220,7 +220,7 @@ Here is the list of supported parameters for `show()`:
 
 
 ## 🚀  Getting started with visualization
-See the `notebooks/demo_nag.ipyng` notebook to play with our visualization tool 
+See the [`notebooks/demo_nag.ipynb`](../notebooks/demo_nag.ipynb) notebook to play with our visualization tool 
 on a provided `NAG`, without needing a whole dataset.
 
 For more information, have a look at the code in `src.visualization`, it is

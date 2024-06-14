@@ -66,7 +66,7 @@ It is not required for the labels of object instances in `obj` to be contiguous 
 Finally, when two `InstanceData` are batched in an `InstanceBatch`, the `obj` indices will be updated to avoid collision between the batch items.
 
 ## 🚀  Getting familiar with the data structures
-See the `notebooks/demo_nag.ipyng` notebook to play with and visualize a 
+See the [`notebooks/demo_nag.ipynb`](../notebooks/demo_nag.ipynb) notebook to play with and visualize a 
 provided `NAG`, without needing a whole dataset.
 
 For more information, have a look at the docstrings and code of each data structure, these are fairly commented and should help you gain a deeper understanding of their mechanisms.
