@@ -16,6 +16,7 @@ from src.utils.color import *
 
 def visualize_3d(
         input,
+        keys=None,
         figsize=1000,
         width=None,
         height=None,
@@ -30,9 +31,11 @@ def visualize_3d(
         centroid_size=None,
         error_color=None,
         centroids=False,
-        v_edge=False,
         h_edge=False,
         h_edge_attr=False,
+        h_edge_width=None,
+        v_edge=False,
+        v_edge_width=None,
         gap=None,
         radius=None,
         center=None,
@@ -40,16 +43,27 @@ def visualize_3d(
         alpha=0.1,
         alpha_super=None,
         alpha_stuff=0.2,
-        h_edge_width=None,
-        v_edge_width=None,
         point_symbol='circle',
         centroid_symbol='circle',
         colorscale='Agsunset',
-        keys=None,
         **kwargs):
     """3D data interactive visualization.
 
     :param input: Data or NAG object
+    :param keys: List(str) or str
+        By default, the following attributes will be parsed in `input`
+        for visualization {`pos`, `rgb`, `y`, `obj`, `semantic_pred`,
+        `obj_pred`}. Yet, if `input` contains other attributes that you
+        want to visualize, these can be passed as `keys`. This only
+        supports point-wise attributes stored as 1D or 2D tensors.
+        If the tensor contains only 1 channel, the attribute will be
+        represented with a grayscale colormap. If the tensor contains
+        2 or 3 channels, these will be represented as RGB, with
+        an additional all-1 channel if need be. If the tensor contains
+        more than 3 channels, a PCA projection to RGB will be shown. In
+        any case, the attribute values will be rescaled with respect to
+        their statistics before visualization, meaning that colors may
+        not compare between two different plots
     :param figsize: int
         Figure dimensions will be (figsize, figsize/2) if `width` and
         `height` are not specified
@@ -73,6 +87,8 @@ def visualize_3d(
         Number of valid classes. By convention, we assume
         `y ∈ [0, num_classes-1]` are VALID LABELS, while
         `y < 0` AND `y >= num_classes` ARE VOID LABELS
+    :param hide_void_pred: bool
+        Whether predictions on points labeled as VOID be visualized
     :param voxel: float
         Voxel size to subsample the point cloud to facilitate
         visualization
@@ -86,15 +102,23 @@ def visualize_3d(
         Color used to identify mis-predicted points
     :param centroids: bool
         Whether superpoint centroids should be displayed
-    :param v_edge: bool
-        Whether vertical edges should be displayed (only if
-        centroids=True and gap is not None)
     :param h_edge: bool
         Whether horizontal edges should be displayed (only if
-        centroids=True)
+        `centroids=True`)
     :param h_edge_attr: bool
         Whether the edges should be colored by their features found in
         'edge_attr' (only if h_edge=True)
+    :param h_edge_width: float
+        Width of the horizontal edges, if `h_edge=True`. Defaults to
+        `None`, in which case `point_size` will be used for the edge
+        width
+    :param v_edge: bool
+        Whether vertical edges should be displayed (only if
+        `centroids=True` and gap is not None)
+    :param v_edge_width: float
+        Width of the vertical edges, if `v_edge=True`. Defaults to
+        `None`, in which case `point_size` will be used for the edge
+        width
     :param gap: List(float, float, float)
         If None, the hierarchical graphs will be overlaid on the points.
         If not None, a 3D tensor indicating the offset by which the
@@ -115,11 +139,11 @@ def visualize_3d(
     :param alpha: float
         Rules the whitening of selected points, nodes and edges (only if
          select is not None)
-    :param alpha_super:
-        Float ruling the whitening of superpoints (only if select is not
+    :param alpha_super: float
+        Rules the whitening of superpoints (only if select is not
         None). If None, alpha will be used as fallback
-    :param alpha_stuff:
-        Float ruling the whitening of stuff points (only if the input
+    :param alpha_stuff: float
+        Rules the whitening of stuff points (only if the input
         points have 'obj' and 'semantic_pred' attributes, and
         'stuff_classes' or 'num_classes' is specified). If None,
         `alpha` will be used as fallback
