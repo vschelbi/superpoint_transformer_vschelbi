@@ -18,7 +18,7 @@ from src.visualization import show
 show(data)
 ```
 
-It is also possible to directly call `show()` as a `Data` or`NAG` method:
+It is also possible to directly call `show()` as a `Data` or `NAG` method:
 
 ```python
 # Visualize a Data object
@@ -29,8 +29,8 @@ nag.show()
 ```
 
 Datasets inheriting from our `BaseDataset` class also have a `show_examples()` 
-method that returns some samples for a given class, randomly picked across the 
-dataset.
+method that returns some spherical samples for a given class, randomly picked 
+across the dataset.
 
 ```python
 # Visualize `max_examples` random spherical samples of size `radius`, 
@@ -44,9 +44,8 @@ some specific point attributes. It generates an interactive
 [Plotly](https://plotly.com/python) graph with intuitive navigation controls and
 buttons for accessing different **visualization modes 🔘**.
 
-The `pos` attribute is used to plot point positions. By default, the 
-🔘`Position RGB` mode will display points colored with respect to their location 
-in the scene.
+The `pos` attribute is used to plot point positions. The 🔘`Position RGB` mode 
+will display points colored with respect to their location in the scene.
 
 <p align="center">
   <img width="80%" src="../media/viz_pos.png">
@@ -72,14 +71,16 @@ _thing_, _stuff_, and _void_ classes are displayed.
 </p>
 
 If the points carry some features in the `x` attribute, the 🔘`Features 3D` mode
-will display them. This only supports point-wise features stored as 1D or 2D 
-tensors. If the tensor contains only 1 channel, the attribute will be 
-represented with a grayscale colormap. If the tensor contains 2 or 3 channels,
-these will be represented as RGB, with an additional all-1 channel if need be.
-If the tensor contains more than 3 channels, a PCA projection to RGB will be 
-shown. In any case, the attribute values will be rescaled with respect to their
-statistics before visualization, meaning that colors may not compare between two
-different plots.
+will display them. 
+
+> **Note**: This only supports point-wise features stored as 1D or 2D 
+> tensors. If the tensor contains only 1 channel, the attribute will be 
+> represented with a grayscale colormap. If the tensor contains 2 or 3 channels,
+> these will be represented as RGB, with an additional all-1 channel if need be.
+> If the tensor contains more than 3 channels, a PCA projection to RGB will be 
+> shown. In any case, the attribute values will be rescaled with respect to their
+> statistics before visualization, meaning that colors may not compare between two
+> different plots.
 
 <p align="center">
   <img width="80%" src="../media/viz_x.png">
@@ -89,7 +90,9 @@ If the points carry superpoint partition indices in the `super_index` attribute,
 the 🔘`Level i` modes will display partition level `i`. Several options can be 
 passed to `show()` to adjust how partitions are shown: with centroids, with 
 horizontal graph edges, with vertical graph edges, with feature-colored edges, 
-etc. See the exhaustive list of parameters of `show()` for more details.
+etc. See the
+[exhaustive list of parameters of `show()`](#exhaustive-parameter-list-for-show)
+for more details.
 
 <p align="center">
   <img width="80%" src="../media/viz_p2.png">
@@ -107,7 +110,8 @@ Similarly, `panoptic_pred` attributes can be visualized in the
 </p>
 
 > **Tip 💡**: **Want to visualize other point attributes stored in your `Data` 
-> object ?** Pass them to `show(keys=...)` to have them displayed !
+> object ?** Pass them to `show(keys=...)` to have them displayed ! The same
+> coloring rules as for the `x` attribute will be used.
 
 ## Points selection for visualization
 Our [Plotly](https://plotly.com/python)-based visualization is mostly meant for
