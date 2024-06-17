@@ -1058,6 +1058,12 @@ def show(input, path=None, title=None, no_output=True, pt_path=None, **kwargs):
         Figure title
     :param no_output: bool
         Set to True if you want to return the 3D Plotly figure objects
+    :param pt_path:str
+        Path to save the visualization-ready `Data` object as a `*.pt`.
+        In this `Data` object, the `pos` and all `*color*` attributes
+        will be saved, the rest is discarded. This is typically useful
+        for exporting the visualization layers to another visualization
+        tool
     :param kwargs:
     :return:
     """
