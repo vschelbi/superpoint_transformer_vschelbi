@@ -23,6 +23,12 @@ for more details.
 <summary><b>S3DIS data directory structure.</b></summary>
 <br><br>
 
+<p align="center">
+    <img width="33%" src="../media/s3dis/input.png">
+    <img width="33%" src="../media/s3dis/sem_gt.png">
+    <img width="33%" src="../media/s3dis/pano_gt.png">
+</p>
+
 ```
 └── data
     └── s3dis                                                     # Structure for S3DIS
@@ -50,6 +56,12 @@ for more details.
 <details>
 <summary><b>ScanNetV2 data directory structure.</b></summary>
 <br><br>
+
+<p align="center">
+    <img width="33%" src="../media/scannet/input.png">
+    <img width="33%" src="../media/scannet/sem_gt.png">
+    <img width="33%" src="../media/scannet/pano_gt.png">
+</p>
 
 ```
 └── data
@@ -79,6 +91,12 @@ for more details.
 <summary><b>KITTI-360 data directory structure.</b></summary>
 <br><br>
 
+<p align="center">
+    <img width="33%" src="../media/kitti360/input.png">
+    <img width="33%" src="../media/kitti360/sem_gt.png">
+    <img width="33%" src="../media/kitti360/pano_gt.png">
+</p>
+
 ```
 └── data
     └─── kitti360                                     # Structure for KITTI-360
@@ -102,6 +120,12 @@ for more details.
 <details>
 <summary><b>DALES data directory structure.</b></summary>
 <br><br>
+
+<p align="center">
+    <img width="33%" src="../media/dales/input.png">
+    <img width="33%" src="../media/dales/sem_gt.png">
+    <img width="33%" src="../media/dales/pano_gt.png">
+</p>
 
 ```
 └── data
