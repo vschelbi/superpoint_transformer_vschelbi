@@ -252,11 +252,11 @@ the `num_classes` you define in your `YourDataset`.
 - **All labels $[0, C - 1]$ are assumed to be present in your dataset**. As 
 such, they will all be used in metrics and losses computation.
 - A point with the **$C$ label will be considered void/ignored/unlabeled** 
-(whichever you call it). As such, it will be excluded from from metrics and 
+(whichever you call it). As such, it will be excluded from metrics and 
 losses computation
 
 Hence, make sure the **output of your `YourDataset.read_single_raw_cloud()` 
-reader method never returns labels outside of your $[0, C]$ range**. Besides, 
+reader method never returns labels outside your $[0, C]$ range**. Besides, 
 if some labels in $[0, C - 1]$ are not useful to you (ie absent from your 
 dataset), we recommend you remap your labels to a new $[0, C' - 1]$ range
 (`torch_geometric.nn.pool.consecutive.consecutive_cluster` can help you with 
