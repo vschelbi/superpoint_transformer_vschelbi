@@ -162,6 +162,18 @@ def visualize_3d(
 
     :return:
     """
+    # Data attributes plotted by default if found in the input
+    _DEFAULT_KEYS = [
+        'pos',
+        'rgb',
+        'y',
+        'semantic_pred',
+        'obj',
+        'obj_pred',
+        'x',
+        'super_sampling',
+        'super_index']
+
     # assert isinstance(input, (Data, NAG))
     gap = torch.tensor(gap) if gap is not None else gap
     assert gap is None or gap.shape == torch.Size([3])
@@ -614,20 +626,26 @@ def visualize_3d(
         trace_modes[i_unselected_point_trace]['Features 3D'] = {
             'marker.color': colors[~data_0.selected], 'hovertext': None}
 
-    # Draw a trace for each key specified in keys
+    # Draw a trace for each key specified in keys. Only displays
+    # point-wise tensor attributes that have not already been plotted
+    # (ie not in `_DEFAULT_KEYS`)
     if keys is None:
         keys = []
     elif isinstance(keys, str):
         keys = [keys]
+    keys = [k for k in keys if k not in _DEFAULT_KEYS]
     for key in keys:
-        if getattr(data_0, key, None) is not None:
-            colors = feats_to_plotly_rgb(
-                data_0[key], normalize=True, colorscale=colorscale)
-            data_0[f"{key}_colors"] = colors
-            trace_modes[i_point_trace][str(key).title()] = {
-                'marker.color': colors[data_0.selected], 'hovertext': None}
-            trace_modes[i_unselected_point_trace][str(key).title()] = {
-                'marker.color': colors[~data_0.selected], 'hovertext': None}
+        val = getattr(data_0, key, None)
+        if (val is None or not torch.is_tensor(val)
+                or val.shape[0] != data_0.num_points):
+            continue
+        colors = feats_to_plotly_rgb(
+            val, normalize=True, colorscale=colorscale)
+        data_0[f"{key}_colors"] = colors
+        trace_modes[i_point_trace][str(key).title()] = {
+            'marker.color': colors[data_0.selected], 'hovertext': None}
+        trace_modes[i_unselected_point_trace][str(key).title()] = {
+            'marker.color': colors[~data_0.selected], 'hovertext': None}
 
     # Draw a trace for 3D point cloud sampling (for sampling debugging)
     if 'super_sampling' in data_0.keys:
