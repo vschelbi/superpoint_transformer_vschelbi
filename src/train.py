@@ -17,7 +17,7 @@ root = str(pyrootutils.setup_root(
 # - automatically loads environment variables from ".env" file if exists
 #
 # how it works:
-# - the line above recursively searches for either ".git" or "pyproject.toml" in present
+# - the line above recursively searches for either ".git" or "README.md" in present
 #   and parent dirs, to determine the project root dir
 # - adds root dir to the PYTHONPATH (if `pythonpath=True`), so this file can be run from
 #   any place without installing project as a package
