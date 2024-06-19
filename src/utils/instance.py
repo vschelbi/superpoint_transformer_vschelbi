@@ -1001,12 +1001,7 @@ def compute_panoptic_metrics_s3dis_6fold(
         model = hydra.utils.instantiate(cfg.model)
 
         # Load pretrained weights from a checkpoint file
-        model = model.__class__.load_from_checkpoint(
-            cfg.ckpt_path,
-            net=model.net,
-            edge_affinity_head=model.edge_affinity_head,
-            partitioner=model.partitioner,
-            criterion=model.criterion)
+        model = model._load_from_checkpoint(cfg.ckpt_path)
         model = model.eval().cuda()
 
         # Compute metrics on the fold

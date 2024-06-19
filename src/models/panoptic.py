@@ -1204,6 +1204,19 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.edge_affinity_criterion.pos_weight = pos_weight \
                 if pos_weight is not None else pos_weight_bckp
 
+    def _load_from_checkpoint(self, checkpoint_path, **kwargs):
+        """Simpler version of `LightningModule.load_from_checkpoint()`
+        for easier use: no need to explicitly pass `model.net`,
+        `model.criterion`, etc.
+        """
+        return self.__class__.load_from_checkpoint(
+            checkpoint_path,
+            net=self.net,
+            edge_affinity_head=self.edge_affinity_head,
+            partitioner=self.partitioner,
+            criterion=self.criterion,
+            **kwargs)
+
 
 # TODO: gridsearch instance partition parameters
 
