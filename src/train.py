@@ -51,7 +51,8 @@ from src import utils
 # Registering the "eval" resolver allows for advanced config
 # interpolation with arithmetic operations:
 # https://omegaconf.readthedocs.io/en/2.3_branch/how_to_guides.html
-OmegaConf.register_new_resolver("eval", eval)
+if not OmegaConf.has_resolver('eval'):
+    OmegaConf.register_new_resolver('eval', eval)
 
 log = utils.get_pylogger(__name__)
 

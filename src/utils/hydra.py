@@ -11,7 +11,8 @@ def init_config(config_name='train.yaml', overrides=[]):
     # interpolation with arithmetic operations:
     # https://omegaconf.readthedocs.io/en/2.3_branch/how_to_guides.html
     from omegaconf import OmegaConf
-    OmegaConf.register_new_resolver("eval", eval)
+    if not OmegaConf.has_resolver('eval'):
+        OmegaConf.register_new_resolver('eval', eval)
 
     GlobalHydra.instance().clear()
     pyrootutils.setup_root(".", pythonpath=True)
