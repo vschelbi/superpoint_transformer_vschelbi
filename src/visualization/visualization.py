@@ -339,6 +339,9 @@ def visualize_3d(
     i_point_trace = 0
     i_unselected_point_trace = 1
 
+    # Initialize `void_classes`
+    void_classes = [num_classes] if num_classes else []
+
     # Draw a trace for position-colored 3D point cloud
     mini = data_0.pos.min(dim=0).values
     maxi = data_0.pos.max(dim=0).values
@@ -429,7 +432,6 @@ def visualize_3d(
             # Create a mask over the points identifying those whose
             # ground truth label is void
             is_void = np.zeros(y_gt.max() + 1, dtype='bool')
-            void_classes = [num_classes] if num_classes else []
             for i in void_classes:
                 if i < is_void.shape[0]:
                     is_void[i] = True
@@ -479,7 +481,6 @@ def visualize_3d(
         # the expected behavior is the same, except that we will ensure
         # that the hover text distinguishes between stuff and void
         stuff_classes = stuff_classes if stuff_classes is not None else []
-        void_classes = [num_classes] if num_classes else []
         stuff_classes = list(set(stuff_classes).union(set(void_classes)))
 
         # Colors and text for stuff points
@@ -551,7 +552,6 @@ def visualize_3d(
         # the expected behavior is the same, except that we will ensure
         # that the hover text distinguishes between stuff and void
         stuff_classes = stuff_classes if stuff_classes is not None else []
-        void_classes = [num_classes] if num_classes else []
         stuff_classes = list(set(stuff_classes).union(set(void_classes)))
 
         # If the ground truth labels are available, we use them to
