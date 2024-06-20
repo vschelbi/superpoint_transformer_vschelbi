@@ -20,7 +20,8 @@ class SemanticMetricResults(BaseMetricResults):
         'oa',
         'macc',
         'miou',
-        'iou_per_class')
+        'iou_per_class',
+        'seen_class')
 
 
 class ConfusionMatrix(MulticlassConfusionMatrix):
@@ -253,7 +254,9 @@ class ConfusionMatrix(MulticlassConfusionMatrix):
         metrics.oa = self.oa(as_percent=as_percent)
         metrics.macc = self.macc(as_percent=as_percent)
         metrics.miou = self.miou(as_percent=as_percent)
-        metrics.iou_per_class = self.iou(as_percent=as_percent)
+        iou, seen = self.iou(as_percent=as_percent)
+        metrics.iou_per_class = iou
+        metrics.seen_class = seen
         return metrics
 
 
