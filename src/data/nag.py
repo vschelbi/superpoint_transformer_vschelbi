@@ -94,9 +94,9 @@ class NAG:
         levels. This can be useful for investigating how much each
         partition level 'compresses' the previous one.
         """
-        return [
-            self.num_points[i] / self.num_points[i + 1]
-            for i in range(self.num_levels - 1)]
+        return {
+            f"|P_{i}| / |P_{i+1}|": self.num_points[i] / self.num_points[i + 1]
+            for i in range(self.num_levels - 1)}
 
     def to_list(self):
         """Return the Data list"""
