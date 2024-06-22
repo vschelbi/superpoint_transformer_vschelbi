@@ -224,9 +224,9 @@ named `spt`.
 
 ```
 
-> **Note**: See the [Datasets page](docs/datasets.md) for further details on `data/``. 
+> **Note**: See the [Datasets page](docs/datasets.md) for further details on `data/`. 
 
-> **Note**: See the [Logs page](docs/logging.md) for further details on `logs/``. 
+> **Note**: See the [Logs page](docs/logging.md) for further details on `logs/`. 
 
 <br>
 

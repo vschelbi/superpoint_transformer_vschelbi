@@ -1,6 +1,6 @@
 # Visualization
 
-We provide a tool fo interactive 3D visualization of `Data` and `NAG` objects. 
+We provide a tool for interactive 3D visualization of `Data` and `NAG` objects. 
 This allows you to inspect what your `Data` attributes look like, check whether your model's 
 predictions make sense, and even share your interactive visualizations as 
 simple, portable, HTML files. 
@@ -59,11 +59,11 @@ them.
 </p>
 
 If the points carry semantic segmentation labels in the `y` attribute, the 
-🔘`Labels` mode  will display them. In addition, `class_colors` and `class_names` 
-can be passed to `show()` to adjust the color palette and the name displayed 
+🔘`Labels` mode  will display them. In addition, `show(class_colors=..., class_names=...)` 
+can be passed to adjust the color palette and the name displayed 
 when mouse hovering the graph. Similarly, if the points carry panoptic 
 segmentation labels in the `obj` attribute, the 🔘`Panoptic` mode will show them.
-Passing `stuff_classes` and `num_classes` to `show()` allows for adjusting how
+Passing `show(stuff_classes=..., num_classes=...)` allows for adjusting how
 _thing_, _stuff_, and _void_ classes are displayed.
 
 <p align="center">
@@ -87,7 +87,7 @@ will display them.
 </p>
 
 If the points carry superpoint partition indices in the `super_index` attribute,
-the 🔘`Level i` modes will display partition level `i`. Several options can be 
+the 🔘`Level i` mode will display partition level `i`. Several options can be 
 passed to `show()` to adjust how partitions are shown: with centroids, with 
 horizontal graph edges, with vertical graph edges, with feature-colored edges, 
 etc. See the
@@ -111,11 +111,11 @@ Similarly, `panoptic_pred` attributes can be visualized in the
 
 > **Tip 💡**: **Want to visualize other point attributes stored in your `Data` 
 > object ?** Pass them to `show(keys=...)` to have them displayed ! The same
-> coloring rules as for the `x` attribute will be used.
+> coloring mechanisms as mentioned above for the `x` attribute will be used.
 
 ## Points selection for visualization
 Our [Plotly](https://plotly.com/python)-based visualization is mostly meant for
-quick interactive experiments with ~10⁵ points. While it is possible to 
+quick interactive experiments with up to ~10⁵ points. While it is possible to 
 visualize more points at once, Plotly will take a while to generate the plot. We 
 provide several tools for reducing the number of point displayed, hence 
 accelerating the visualization speed.
@@ -174,7 +174,7 @@ You can export your Plotly figure as an HTML file which can be conveniently
 opened by virtually anyone with a browser. To this end, simply specify a `path` 
 to which your HTML should be saved, along with a figure `title`, if need be: 
 ```python
-show(path=None, title=None)
+show(path=..., title=...)
 ```
 
 
