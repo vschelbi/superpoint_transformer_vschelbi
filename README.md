@@ -121,6 +121,9 @@ Due to its lightweight backbone and scalable formulation, SuperCluster can proce
 
 ## 📰  Updates
 
+- **27.06.2024** Released 🧑‍🏫 tutorial 
+[slides](media/superpoint_transformer_tutorial.pdf) and 
+[notebook](notebooks/superpoint_transformer_tutorial.ipynb). 
 - **21.06.2024** [Damien](https://github.com/drprojects) will be giving a 
 **🧑‍🏫 tutorial on Superpoint Transformer on 📅 27.06.2024 at 1pm CEST**. 
 Make sure to come if you want to gain some hands-on experience with the project !
