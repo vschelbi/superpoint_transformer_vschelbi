@@ -167,4 +167,5 @@ src/dependencies/
 *.cmake
 *__pycache__*
 *.ipynb*
+!notebooks/SuperTree.ipynb
 notebooks/*
