@@ -5,7 +5,7 @@ import numpy as np
 #                         Download information                         #
 ########################################################################
 
-FROM_URL = 'https://zenodo.org/records/8287792'
+DOWNLOAD_URL = 'https://zenodo.org/records/8287792'
 
 # FOR-instance in LAS format
 LAS_ZIP_NAME = 'FORinstance_dataset.zip'
@@ -160,7 +160,7 @@ FORInstance_NUM_CLASSES = 3
 
 ID2TRAINID = np.asarray([3, 1, 0, 3, 2, 2, 2])
 
-FORInstance_CLASS_NAMES = [
+CLASS_NAMES = [
     'Terrain',          # 2 Terrain
     'Low vegetation',   # 1 Low vegetation
     'Tree',             # 4 Stem, 5 Live branches, 6 Woody branches

@@ -8,7 +8,7 @@ import laspy
 from src.datasets import BaseDataset
 from src.data import Data, InstanceData
 from src.datasets.forinstance_config import *
-from torch_geometric.data import extract_tar
+from torch_geometric.data import extract_zip
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 
 
@@ -51,11 +51,45 @@ def read_FORinstance_plot(
         to [0, 1]
     """
     data = Data()
-    key = 'testing'
+    las = laspy.read(filepath)
 
+    # populate the Data object with point coordinates
+    if xyz:
+        # Apply the scale provided by the LAS header
+        pos = torch.stack([
+            torch.tensor(las[axis].copy())
+            for axis in ["X", "Y", "Z"]], dim=-1)
+        pos *= las.header.scale
+        pos_offset = pos[0]
+        data.pos = (pos - pos_offset).float()
+        data.pos_offset = pos_offset
+    
+    # Populate data with point LiDAR intensity
+    if intensity:
+        # Heuristic to bring the intensity distribution in [0, 1]
+        data.intensity = torch.FloatTensor(
+            las['intensity'].astype('float32')
+        ).clip(min=0, max=max_intensity) / max_intensity
+
+    # Populate data with point semantic segmentation labels
+    if semantic:
+        y = torch.LongTensor(las['classification'])
+        data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
+
+    if instance:
+        idx = torch.arange(data.num_points)
+        obj = torch.LongTensor(las['treeID'])
+        obj = consecutive_cluster(obj)[0]
+        count = torch.ones_like(obj)
+        y = torch.LongTensor(las['classification'])
+        y = torch.from_numpy(ID2TRAINID)[y] if remap else y
+        data.obj = InstanceData(idx, obj, count, y, dense=True)
+
+    return data
+    
 
 ########################################################################
-#                                FOR-instance                          #
+#                                FORinstance                           #
 ########################################################################
 class FORinstance(BaseDataset):
     """ FOR-instance dataset.
@@ -80,24 +114,144 @@ class FORinstance(BaseDataset):
         want to run in CPU-based DataLoaders
     """
 
-    # TODO 
+    _download_url = DOWNLOAD_URL
+    _las_name = LAS_ZIP_NAME
+    _unzip_name = LAS_UNZIP_NAME
 
+    @property
+    def class_names(self):
+        """List of string names for dataset classes. This list must be
+        one-item larger than `self.num_classes`, with the last label
+        corresponding to 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
+        """
+        return CLASS_NAMES
 
+    @property
+    def num_classes(self):
+        """Number of classes in the dataset. Must be one-item smaller
+        than `self.class_names`, to account for the last class name
+        being used for 'void', 'unlabelled', 'ignored' classes,
+        indicated as `y=self.num_classes` in the dataset labels.
+        """
+        return FORInstance_NUM_CLASSES
+    
+    @property
+    def stuff_classes(self):
+        """List of 'stuff' labels for INSTANCE and PANOPTIC
+        SEGMENTATION (setting this is NOT REQUIRED FOR SEMANTIC
+        SEGMENTATION alone). By definition, 'stuff' labels are labels in
+        `[0, self.num_classes-1]` which are not 'thing' labels.
 
+        In instance segmentation, 'stuff' classes are not taken into
+        account in performance metrics computation.
 
+        In panoptic segmentation, 'stuff' classes are taken into account
+        in performance metrics computation. Besides, each cloud/scene
+        can only have at most one instance of each 'stuff' class.
 
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc), while
+        `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        """
+        return STUFF_CLASSES
 
+    @property
+    def class_colors(self):
+        """Colors for visualization, if not None, must have the same
+        length as `self.num_classes`. If None, the visualizer will use
+        the label values in the data to generate random colors.
+        """
+        return CLASS_COLORS
+    
+    @property
+    def all_base_cloud_ids(self):
+        """Dictionary holding lists of paths to the clouds, for each
+        stage.
 
+        The following structure is expected:
+            `{'train': [...], 'val': [...], 'test': [...]}`
+        """
+        return TILES
+    
+    def download_dataset(self):
+        """Download the FOR-instance dataset."""
+        if not osp.exists(osp.join(self.root, self._zip_name)):
+            log.error(
+                f"\FOR-instance does not support automatic download.\n"
+                f"Please download the dataset from {self._download_url} and "
+                f"save it to {self.root}/ directory and re-run.\n"
+                f"The dataset will automatically be unzipped into the "
+                f"following structure:\n"
+                f"{self.raw_file_structure}"
+            )
+            sys.exit(1)
+    
+        # Unzip the file and rename it into the 'root/raw' directory
+        extract_zip(osp.join(self.root, self._zip_name), self.root)
+        shutil.rmtree(self.raw_dir)
+        os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
 
+    def read_single_raw_cloud(self, raw_cloud_path):
+        """Read a single raw cloud and return a `Data` object, ready to
+        be passed to `self.pre_transform`.
 
+        This `Data` object should contain the following attributes:
+          - `pos`: point coordinates
+          - `y`: OPTIONAL point semantic label
+          - `obj`: OPTIONAL `InstanceData` object with instance labels
+          - `rgb`: OPTIONAL point color
+          - `intensity`: OPTIONAL point LiDAR intensity
 
+        IMPORTANT:
+        By convention, we assume `y ∈ [0, self.num_classes-1]` ARE ALL
+        VALID LABELS (i.e. not 'ignored', 'void', 'unknown', etc),
+        while `y < 0` AND `y >= self.num_classes` ARE VOID LABELS.
+        This applies to both `Data.y` and `Data.obj.y`.
+        """
+        return read_FORinstance_plot(
+            raw_cloud_path, intensity=True, semantic=True, instance=True, 
+            remap=True)
 
+    @property
+    def raw_file_structure(self):
+        """Return a string representing the expected raw file structure
+        for the dataset. This string is used in the download instructions
+        when the dataset is not found in the root directory.
+        """
+        return (
+            f"{self.root}/\n"
+            f"└── {self._unzip_name}/\n"
+            f"    └── raw/\n"
+            f"        ├── CULS/\n"
+            f"        │   ├── plot_1_annotated.las\n"
+            f"        │   ├── plot_2_annotated.las\n"
+            f"        │   ├── ...\n"
+            f"        ├── NIBIO/\n"
+            f"        │   ├── plot_1_annotated.las\n"
+            f"        │   ├── plot_2_annotated.las\n"
+            f"        │   ├── ...\n"
+            f"        ├── RMIT/\n"
+            f"        │   ├── train.las\n"
+            f"        │   ├── test.las\n"
+            f"        ├── SCION/\n"
+            f"        │   ├── plot_31_annotated.las\n"
+            f"        │   ├── plot_35_annotated.las\n"
+            f"        │   ├── ...\n"
+            f"        └── TUWIEN/\n"
+            f"            ├── train.las\n"
+            f"            ├── test.las\n"
+        )
+        
 
+    # TODO
+    # file paths etc. correct?
 
 
 
 ########################################################################
-#                              MiniDALES                               #
+#                              MiniFORinstance                         #
 ########################################################################
 
 class MiniFORinstance(FORinstance):
@@ -106,4 +260,20 @@ class MiniFORinstance(FORinstance):
     """
     _NUM_MINI = 2
 
-    # TODO
+    @property
+    def all_cloud_ids(self):
+        return {k: v[:self._NUM_MINI] for k, v in super().all_cloud_ids.items()}
+
+    @property
+    def data_subdir_name(self):
+        return self.__class__.__bases__[0].__name__.lower()
+
+    # We have to include this method, otherwise the parent class skips
+    # processing
+    def process(self):
+        super().process()
+
+    # We have to include this method, otherwise the parent class skips
+    # processing
+    def download(self):
+        super().download()
