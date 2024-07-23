@@ -20,7 +20,7 @@ LAS_UNZIP_NAME = "forinstance"
 # dataset. When there is only one tile, it is used for training.
 TILES = {
     'train': [
-        'CULS/plot_1_annotated.las',
+        'CULS/plot_3_annotated.las',
         'NIBIO/plot_10_annotated.las',
         'NIBIO/plot_11_annotated.las',
         'NIBIO/plot_12_annotated.las',
@@ -40,7 +40,7 @@ TILES = {
     ],
 
     'val': [
-        'CULS/plot_3_annotated.las',
+        'CULS/plot_1_annotated.las',
         'NIBIO/plot_8_annotated.las',
         'NIBIO/plot_9_annotated.las',
         'SCION/plot_87_annotated.las'
@@ -167,7 +167,7 @@ CLASS_NAMES = [
     'Unknown'           # 0 Unclassified, 3 Out-points
 ]
 
-CLASS_COLORS = np.ararray([
+CLASS_COLORS = np.asarray([
     [243, 214, 171],    # Terrain
     [141, 222, 29],     # Low vegetation
     [ 70, 115,  66],    # Tree
