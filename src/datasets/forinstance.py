@@ -28,6 +28,8 @@ __all__ = ['FORinstance', 'MiniFORinstance']
 ########################################################################
 #                                 Utils                                #
 ########################################################################
+
+# TODO need to update read function according to SuperTree notebook
 def read_FORinstance_plot(
         filepath, xyz=True, intensity=True, semantic=True, instance=True, 
         remap=True, max_intensity=600):
@@ -246,7 +248,7 @@ class FORinstance(BaseDataset):
         
 
     # TODO
-    # file paths etc. correct?
+    # file paths etc. correct? => need to overwrite some default methods
 
 
 
