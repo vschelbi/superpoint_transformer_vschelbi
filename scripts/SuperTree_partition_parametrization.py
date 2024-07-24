@@ -1,10 +1,12 @@
 import os
 import sys
+import itertools
 import laspy
 import torch
 import numpy as np
-
 import time
+from datetime import datetime
+import json
 
 # Add the project's files to the python path
 file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -49,69 +51,64 @@ filepaths = [
 #############################
 # PARTITION PARAMETRIZATION #
 #############################
+param_values = {
+    # Voxelization (GridSampling3D)
+    'voxel_size': [0.1, 0.2],    # size of the voxels in the partitions in meters. The voxel size is the same for all the plots
 
-# Voxelization (GridSampling3D)
-voxel_size = 0.5    # size of the voxels in the partitions in meters. The voxel size is the same for all the plots
-                    # {0.1, 0.2}
+    # KNN
+    'k': [20, 25],               # number of nearest neighbors to consider in the KNN search => only 25 or 25 and 40
+    'r_max': [3, 5],          # search nearest neighbors within this radius in meters
 
-# KNN
-k = 25              # number of nearest neighbors to consider in the KNN search
-                    # {20, 25}
-r_max = 2           # search nearest neighbors within this radius in meters
-                    # {2, 3, 5}
+    # GroundElevation
+    'threshold': [5],            # ground as a planar surface located within `threshold` of the lowest point in the cloud.
+    'scale': [20],               # Pointwise distance to the plane is normalized by `scale`
 
-# GroundElevation
-threshold = 6       # ground as a planar surface located within `threshold` of the lowest point in the cloud.
-scale = 20          # Pointwise distance to the plane is normalized by `scale`
+    # PointFeatures
+    'features': [('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation')],
+                                 # handcrafted geometric features characterizing each point's neighborhood. The following features are currently supported:
+                                 #    - density
+                                 #    - linearity
+                                 #    - planarity
+                                 #    - scattering
+                                 #    - verticality
+                                 #    - normal
+                                 #    - length
+                                 #    - surface
+                                 #    - volume
+                                 #    - curvature
+                                 #    - elevation
+                                 #    - (RGB color)  
+                                 #    - (HSV color)  
+                                 #    - (LAB color)
+                                 #
+                                 # can specify a k_min below which a point will receive 0 geometric features to mitigate low-quality features for sparse neighborhoods
+                                 # `PointFeatures(k_step=..., k_min_search=...)` will search for the optimal neighborhood size among available neighbors for each point, based on eigenfeatures entropy
 
-# PointFeatures
-features = ('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation')
-                    # handcrafted geometric features characterizing each point's neighborhood. The following features are currently supported:
-                    #    - density
-                    #    - linearity
-                    #    - planarity
-                    #    - scattering
-                    #    - verticality
-                    #    - normal
-                    #    - length
-                    #    - surface
-                    #    - volume
-                    #    - curvature
-                    #    - elevation
-                    #    - (RGB color)  
-                    #    - (HSV color)  
-                    #    - (LAB color)
+    # AdjacencyGraph
+    'k_adj_graph': [5, 10],      # use edges of the `k`_adj_graph nearest neighbors
+    'w': [1],                    # weight of the edges in the adjacency graph with w
 
-                    # can specify a k_min below which a point will receive 0 geometric features to mitigate low-quality features for sparse neighborhoods
-                    # `PointFeatures(k_step=..., k_min_search=...)` will search for the optimal neighborhood size among available neighbors for each point, based on eigenfeatures entropy
+    # AddKeysTo
+    # features that we want to use for the partition generation, same features available as in PointFeatures
+    'features_to_x': [
+        ('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation'),
+        ('density', 'intensity', 'elevation', 'planarity', 'scattering', 'verticality'),
+        ('density', 'elevation', 'linearity', 'planarity', 'scattering', 'verticality'),
+        ('density', 'intensity', 'linearity', 'planarity', 'scattering', 'verticality'),
+        ('density', 'intensity', 'elevation', 'linearity', 'planarity', 'scattering', 'verticality')
+    ],
 
-# AdjacencyGraph
-k_adj_graph = 10    # use edges of the `k`_adj_graph nearest neighbors
-                    # [5, 10]
-w = 1               # weight of the edges in the adjacency graph with w
-
-# AddKeysTo         features that we want to use for the partition generation
-features_to_x = ('elevation', 'linearity', 'planarity', 'scattering', 'verticality')
-                    # same features available as in PointFeatures
-                    # ('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation')
-                    # ('density', 'volume', 'intensity', 'elevation', 'planarity', 'scattering', 'verticality')
-                    # ('density', 'volume', 'elevation', 'linearity', 'planarity', 'scattering', 'verticality')
-                    # ('density', 'volume', 'intensity', 'linearity', 'planarity', 'scattering', 'verticality')
-                    # ('density', 'volume', 'intensity', 'elevation', 'linearity', 'planarity', 'scattering', 'verticality')
-                    # ('density', 'volume', 'curvature', 'elevation', 'linearity', 'planarity', 'scattering', 'verticality')
+    # CutPursuitPartition
+    'regularization': [[0.05, 0.1], [0.1, 0.2], [0.2, 0.5]],   # List of increasing float values determining the granularity of hierarchical superpoint partitions.
+    'spatial_weight': [[0.1, 0.01], [1, 0.1]],                 # Float value indicating the importance of point coordinates relative to point features in grouping points.
+    'cutoff': [[10, 30], [20, 50]],                            # Integer specifying the minimum number of points in each superpoint, ensuring small superpoints are merged with others.
+    'iterations': [15],                                        # Integer specifying the number of iterations for the Cut Pursuit algorithm.
+    'k_adjacency': [5, 10]                                     # Integer preventing superpoints from being isolated.
+}
 
 
-# CutPursuitPartition
-regularization = [0.1, 0.2]     # List of increasing float values determining the granularity of hierarchical superpoint partitions.
-                                # [0.05, 0.1], [0.1, 0.2], [0.2, 0.5]
-spatial_weight = [0.1, 0.01]    # Float value indicating the importance of point coordinates relative to point features in grouping points.
-                                # [0.1, 0.01], [1, 0.1]
-cutoff = [10, 30]               # Integer specifying the minimum number of points in each superpoint, ensuring small superpoints are merged with others.
-                                # [10, 30], [20, 50]
-iterations = 15                 # Integer specifying the number of iterations for the Cut Pursuit algorithm.
-k_adjacency = 10                # Integer preventing superpoints from being isolated.
-                                # [5, 10]
-
+# Generate all parameter combinations
+param_combinations = list(itertools.product(*param_values.values()))
 
 #############
 # FUNCTIONS #
@@ -197,7 +194,7 @@ def apply_transform(data, transform, *args, **kwargs):
     """
     return transform(*args, **kwargs)(data)
 
-def pre_transform_performance(data_list, plot_titles):
+def pre_transform_performance(data_list, plot_titles, param_set):
     """
     Pre-transform all the data in the list with the specified parameters and return the oracle performance metrics.
 
@@ -209,6 +206,9 @@ def pre_transform_performance(data_list, plot_titles):
     Parameters:
     data_list (list): A list of data objects to be transformed and evaluated.
     plot_titles (list): A list of strings representing the titles of each plot, used as keys in the resulting dictionary.
+    param_set (tuple): A tuple containing the parameters for the transformations in the following order:
+                          (voxel_size, k, r_max, threshold, scale, features, k_adj_graph, w, features_to_x, regularization,
+                            spatial_weight, cutoff, iterations, k_adjacency)
 
     Returns:
     dict: A nested dictionary containing the performance metrics for each plot title and the mean metrics across all plots.
@@ -243,16 +243,21 @@ def pre_transform_performance(data_list, plot_titles):
           }
     """
 
+    # Extract parameters
+    (voxel_size, k, r_max, threshold, scale, features, k_adj_graph, w, features_to_x, 
+         regularization, spatial_weight, cutoff, iterations, k_adjacency) = param_set
+
     performance_metrics = {}
 
     for i in range(len(data_list)):
-        data_list[i] = apply_transform(data_list[i], GridSampling3D, size=voxel_size, hist_key='y', hist_size=FOR_Instance_num_classes + 1)
-        data_list[i] = apply_transform(data_list[i], KNN, k, r_max)
-        data_list[i] = apply_transform(data_list[i], GroundElevation, threshold, scale)
-        data_list[i] = apply_transform(data_list[i], PointFeatures, keys=features)
-        data_list[i] = apply_transform(data_list[i], AdjacencyGraph, k_adj_graph, w)
-        data_list[i] = apply_transform(data_list[i], AddKeysTo, keys=features_to_x, to='x', delete_after=False)
-        data_list[i] = apply_transform(data_list[i], CutPursuitPartition, regularization=regularization, \
+        data = data_list[i].clone()
+        data = apply_transform(data, GridSampling3D, size=voxel_size, hist_key='y', hist_size=FOR_Instance_num_classes + 1)
+        data = apply_transform(data, KNN, k, r_max)
+        data = apply_transform(data, GroundElevation, threshold, scale)
+        data = apply_transform(data, PointFeatures, keys=features)
+        data = apply_transform(data, AdjacencyGraph, k_adj_graph, w)
+        data = apply_transform(data, AddKeysTo, keys=features_to_x, to='x', delete_after=False)
+        data = apply_transform(data, CutPursuitPartition, regularization=regularization, \
                                        spatial_weight=spatial_weight, cutoff=cutoff, iterations=iterations, k_adjacency=k_adjacency)
 
         plot_title = plot_titles[i]
@@ -260,34 +265,37 @@ def pre_transform_performance(data_list, plot_titles):
 
         # Extract level ratios
         performance_metrics[plot_title]['level_ratios'] = {
-            '|P_0| / |P_1|': data_list[i].level_ratios['|P_0| / |P_1|'],
-            '|P_1| / |P_2|': data_list[i].level_ratios['|P_1| / |P_2|']
+            '|P_0| / |P_1|': data.level_ratios['|P_0| / |P_1|'],
+            '|P_1| / |P_2|': data.level_ratios['|P_1| / |P_2|']
         }
 
         # Extract miou for semantic segmentation (P1)
-        semantic_segmentation_p1 = data_list[i][1].semantic_segmentation_oracle(FOR_Instance_num_classes)
+        semantic_segmentation_p1 = data[1].semantic_segmentation_oracle(FOR_Instance_num_classes)
         performance_metrics[plot_title]['semantic_segmentation_miou_p1'] = semantic_segmentation_p1['miou'].item()
 
         # Extract map for instance segmentation (P1)
-        instance_segmentation_p1 = data_list[i][1].instance_segmentation_oracle(FOR_Instance_num_classes)
+        instance_segmentation_p1 = data[1].instance_segmentation_oracle(FOR_Instance_num_classes)
         performance_metrics[plot_title]['instance_segmentation_map_p1'] = instance_segmentation_p1['map'].item()
 
         # Extract pq for panoptic segmentation (P1)
-        panoptic_segmentation_p1 = data_list[i][1].panoptic_segmentation_oracle(FOR_Instance_num_classes)
+        panoptic_segmentation_p1 = data[1].panoptic_segmentation_oracle(FOR_Instance_num_classes)
         performance_metrics[plot_title]['panoptic_segmentation_pq_p1'] = panoptic_segmentation_p1['pq'].item()
 
         # Extract miou for semantic segmentation (P2)
-        semantic_segmentation_p2 = data_list[i][2].semantic_segmentation_oracle(FOR_Instance_num_classes)
+        semantic_segmentation_p2 = data[2].semantic_segmentation_oracle(FOR_Instance_num_classes)
         performance_metrics[plot_title]['semantic_segmentation_miou_p2'] = semantic_segmentation_p2['miou'].item()
 
         # Extract map for instance segmentation (P2)
-        instance_segmentation_p2 = data_list[i][2].instance_segmentation_oracle(FOR_Instance_num_classes)
+        instance_segmentation_p2 = data[2].instance_segmentation_oracle(FOR_Instance_num_classes)
         performance_metrics[plot_title]['instance_segmentation_map_p2'] = instance_segmentation_p2['map'].item()
 
         # Extract pq for panoptic segmentation (P2)
-        panoptic_segmentation_p2 = data_list[i][2].panoptic_segmentation_oracle(FOR_Instance_num_classes)
+        panoptic_segmentation_p2 = data[2].panoptic_segmentation_oracle(FOR_Instance_num_classes)
         performance_metrics[plot_title]['panoptic_segmentation_pq_p2'] = panoptic_segmentation_p2['pq'].item()
-    
+
+        del data
+        torch.cuda.empty_cache()
+
     # Calculate the mean of each metric across all plots
     mean_metrics = {
         'level_ratios': {
@@ -307,14 +315,53 @@ def pre_transform_performance(data_list, plot_titles):
     return performance_metrics
 
 
+##########################
+# FILE OPERATION METHODS #
+##########################
+def initialize_file_with_metadata(filename, metadata):
+    # Check if file exists, if not, create it with metadata
+    if not os.path.exists(filename):
+        with open(filename, 'w') as f:
+            json.dump(metadata, f)
+            f.write('\n')
+
+def append_result(param_set, performance_metrics, filename='logs/partition_parametrization.jsonl'):
+    with open(filename, 'a') as f:
+        json.dump({'param_set': param_set, 'performance_metrics': performance_metrics}, f)
+        f.write('\n')
+
+def save_current_iteration(iteration, filename='logs/current_iteration.txt'):
+    with open(filename, 'w') as f:
+        f.write(str(iteration))
+
+def load_current_iteration(filename='logs/current_iteration.txt'):
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            return int(f.read().strip())
+    return 0
+
+
+
 ########################
 # SUPERPOINT TRANSFORM #
 ########################
 if __name__ == '__main__':
+    version = '1.0'
+    json_file_name = '/home/valerio/git/superpoint_transformer_vschelbi/logs/partition_parametrization_{version}.jsonl'
+    curr_iteration_file_name = '/home/valerio/git/superpoint_transformer_vschelbi/logs/current_iteration_{version}.txt'
+    metadata = {
+        "description": "This file contains results of the superpoint transform experiment",
+        "version": version,
+        "author": "Valerio Schelbert",
+        "date": datetime.now().strftime("%Y-%m-%d")
+    }
+
+    # Initialize file with metadata if it does not exist
+    initialize_file_with_metadata(json_file_name, metadata)
+
+    start_iteration = load_current_iteration(curr_iteration_file_name)
     plot_titles = []
     data_list = []
-
-    performance_metrics = {}
 
     for filepath in filepaths:
         plot_title = os.path.join(os.path.basename(os.path.dirname(filepath)), os.path.splitext(os.path.basename(filepath))[0])
@@ -322,10 +369,17 @@ if __name__ == '__main__':
 
         data = read_FORinstance_plot(filepath, instance=True)
         data_list.append(data)
-    
-    # calculate the point density for the specified voxel sizes
-    #point_density_experiments(data_list, plot_titles)
-    
-    # create the hierarchical partition for each plot and print the oracle performance
-    performance_metrics = pre_transform_performance(data_list, plot_titles)
-    print(performance_metrics)
+
+    # create a copy of the data to keep the original data
+    data_list_temp = [data.clone() for data in data_list]
+
+    # iterate through all parameter combinations starting from the last saved iteration
+    for i, param_set in enumerate(param_combinations[start_iteration:], start=start_iteration):
+        print(f"Iteration {i + 1}/{len(param_combinations)}")
+        performance_metrics = pre_transform_performance(data_list, plot_titles, param_set)
+        # append param_set and performance_metrics to the file
+        append_result(param_set, performance_metrics, json_file_name)
+        # save current iteration
+        save_current_iteration(i + 1, curr_iteration_file_name)
+
+    print("Process completed.")
