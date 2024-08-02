@@ -15,7 +15,7 @@ from torch_geometric.nn.pool.consecutive import consecutive_cluster
 DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
 
-
+# TODO check if this is necessary also for FORinstance:
 # Occasional Dataloader issues with DALES on some machines. Hack to
 # solve this:
 # https://stackoverflow.com/questions/73125231/pytorch-dataloaders-bad-file-descriptor-and-eof-for-workers0
@@ -29,11 +29,11 @@ __all__ = ['FORinstance', 'MiniFORinstance']
 #                                 Utils                                #
 ########################################################################
 
-# TODO need to update read function according to SuperTree notebook
-def read_FORinstance_plot(
-        filepath, xyz=True, intensity=True, semantic=True, instance=True, 
-        remap=True, max_intensity=600):
-    """Read a FORinstance file saved as LAS.
+def read_FORinstance_plot(filepath, xyz=True, intensity=True, 
+                           semantic=True, instance=True, remap=True, 
+                           max_intensity=None):
+    """
+    Read a FORinstance plot from a LAS file and return the data object.
 
     :param filepath: str
         Absolute path to the LAS file
@@ -55,38 +55,50 @@ def read_FORinstance_plot(
     data = Data()
     las = laspy.read(filepath)
 
-    # populate the Data object with point coordinates
     if xyz:
-        # Apply the scale provided by the LAS header
         pos = torch.stack([
-            torch.tensor(las[axis].copy())
+            torch.as_tensor(np.array(las[axis]))
             for axis in ["X", "Y", "Z"]], dim=-1)
         pos *= las.header.scale
         pos_offset = pos[0]
         data.pos = (pos - pos_offset).float()
         data.pos_offset = pos_offset
     
-    # Populate data with point LiDAR intensity
+    intensity_remaped = True
     if intensity:
-        # Heuristic to bring the intensity distribution in [0, 1]
         data.intensity = torch.FloatTensor(
             las['intensity'].astype('float32')
-        ).clip(min=0, max=max_intensity) / max_intensity
+        )
+        if intensity_remaped:
+            if max_intensity is None:
+                max_intensity = data.intensity.max()
+            data.intensity = data.intensity.clip(min=0, max=max_intensity) / max_intensity
 
-    # Populate data with point semantic segmentation labels
     if semantic:
-        y = torch.LongTensor(las['classification'])
+        y = torch.LongTensor(np.array(las['classification']))
         data.y = torch.from_numpy(ID2TRAINID)[y] if remap else y
 
     if instance:
         idx = torch.arange(data.num_points)
-        obj = torch.LongTensor(las['treeID'])
+        obj = torch.LongTensor(np.array(las['treeID']))
+        
+        y = torch.LongTensor(np.array(las['classification']))
+        y = torch.from_numpy(ID2TRAINID)[y] if remap else y
+
+        if remap:
+            ground_mask = (obj == 0) & (y == 0)
+            low_veg_mask = (obj == 0) & (y == 1)
+            if low_veg_mask.any() or ground_mask.any():
+                ground_instance_label = obj.max().item() + 1
+                low_veg_instance_label = ground_instance_label + 1
+                obj[ground_mask] = ground_instance_label
+                obj[low_veg_mask] = low_veg_instance_label
+
         obj = consecutive_cluster(obj)[0]
         count = torch.ones_like(obj)
-        y = torch.LongTensor(las['classification'])
-        y = torch.from_numpy(ID2TRAINID)[y] if remap else y
-        data.obj = InstanceData(idx, obj, count, y, dense=True)
 
+        data.obj = InstanceData(idx, obj, count, y, dense=True)
+    
     return data
     
 
@@ -179,7 +191,7 @@ class FORinstance(BaseDataset):
     
     def download_dataset(self):
         """Download the FOR-instance dataset."""
-        if not osp.exists(osp.join(self.root, self._zip_name)):
+        if not osp.exists(osp.join(self.root, self._las_name)):
             log.error(
                 f"\FOR-instance does not support automatic download.\n"
                 f"Please download the dataset from {self._download_url} and "
@@ -190,8 +202,8 @@ class FORinstance(BaseDataset):
             )
             sys.exit(1)
     
-        # Unzip the file and rename it into the 'root/raw' directory
-        extract_zip(osp.join(self.root, self._zip_name), self.root)
+        # Unzip the file and rename it into the 'root/raw/' directory
+        extract_zip(osp.join(self.root, self._las_name), self.root)
         shutil.rmtree(self.raw_dir)
         os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
 
@@ -224,31 +236,56 @@ class FORinstance(BaseDataset):
         """
         return (
             f"{self.root}/\n"
-            f"└── {self._unzip_name}/\n"
-            f"    └── raw/\n"
-            f"        ├── CULS/\n"
-            f"        │   ├── plot_1_annotated.las\n"
-            f"        │   ├── plot_2_annotated.las\n"
-            f"        │   ├── ...\n"
-            f"        ├── NIBIO/\n"
-            f"        │   ├── plot_1_annotated.las\n"
-            f"        │   ├── plot_2_annotated.las\n"
-            f"        │   ├── ...\n"
-            f"        ├── RMIT/\n"
-            f"        │   ├── train.las\n"
-            f"        │   ├── test.las\n"
-            f"        ├── SCION/\n"
-            f"        │   ├── plot_31_annotated.las\n"
-            f"        │   ├── plot_35_annotated.las\n"
-            f"        │   ├── ...\n"
-            f"        └── TUWIEN/\n"
-            f"            ├── train.las\n"
-            f"            ├── test.las\n"
+            f" └── raw/\n"
+            f"     ├── CULS/\n"
+            f"     │   ├── plot_1_annotated.las\n"
+            f"     │   ├── plot_2_annotated.las\n"
+            f"     │   ├── ...\n"
+            f"     ├── NIBIO/\n"
+            f"     │   ├── plot_1_annotated.las\n"
+            f"     │   ├── plot_2_annotated.las\n"
+            f"     │   ├── ...\n"
+            f"     ├── RMIT/\n"
+            f"     │   ├── train.las\n"
+            f"     │   ├── test.las\n"
+            f"     ├── SCION/\n"
+            f"     │   ├── plot_31_annotated.las\n"
+            f"     │   ├── plot_35_annotated.las\n"
+            f"     │   ├── ...\n"
+            f"     └── TUWIEN/\n"
+            f"         ├── train.las\n"
+            f"         ├── test.las\n"
         )
         
-
-    # TODO
+    # TODO check if this implementation is works
     # file paths etc. correct? => need to overwrite some default methods
+    def id_to_relative_raw_path(self, id):
+        """Given a cloud id as stored in `self.cloud_ids`, return the
+        path (relative to `self.raw_dir`) of the corresponding raw
+        cloud.
+        """
+        # remove tiling information
+        base_id = self.id_to_base_id(id)
+        #print(f"id_to_relative_raw_path: ", {base_id})
+        # the id's are already in the correct path structure
+        return base_id + '.las'
+
+    def processed_to_raw_path(self, processed_path):
+        """Given a processed cloud path from `self.processed_paths`,
+        return the absolute path to the corresponding raw cloud.
+        """
+        hash_dir, area, cloud_id = \
+            osp.splitext(processed_path)[0].split(os.sep)[-3:]
+        #print("processed_to_raw_path")
+        #print(f"hash_dir: ", {hash_dir})
+        #print(f"area: ", {area})
+        #print(f"cloud_id: ", {cloud_id})
+        base_cloud_id = self.id_to_base_id(cloud_id)
+        relative_raw_path = osp.join(area, base_cloud_id) + '.las'
+        #print(f"relative_raw_path: ", {relative_raw_path})
+        raw_path = osp.join(self.raw_dir, relative_raw_path)
+
+        return raw_path
 
 
 

@@ -9,7 +9,7 @@ DOWNLOAD_URL = 'https://zenodo.org/records/8287792'
 
 # FOR-instance in LAS format
 LAS_ZIP_NAME = 'FORinstance_dataset.zip'
-LAS_UNZIP_NAME = "forinstance"
+LAS_UNZIP_NAME = "FORinstance_dataset"
 
 
 ########################################################################
@@ -161,14 +161,14 @@ FORInstance_NUM_CLASSES = 3
 ID2TRAINID = np.asarray([3, 1, 0, 3, 2, 2, 2])
 
 CLASS_NAMES = [
-    'Terrain',          # 2 Terrain
+    'Ground',           # 2 Ground
     'Low vegetation',   # 1 Low vegetation
     'Tree',             # 4 Stem, 5 Live branches, 6 Woody branches
     'Unknown'           # 0 Unclassified, 3 Out-points
 ]
 
 CLASS_COLORS = np.asarray([
-    [243, 214, 171],    # Terrain
+    [243, 214, 171],    # Ground
     [141, 222, 29],     # Low vegetation
     [ 70, 115,  66],    # Tree
     [  0,   8, 116]     # Unknown
