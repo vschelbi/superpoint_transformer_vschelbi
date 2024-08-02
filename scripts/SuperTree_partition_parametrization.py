@@ -64,7 +64,7 @@ param_values = {
     'scale': [20],               # Pointwise distance to the plane is normalized by `scale`
 
     # PointFeatures
-    'features': [('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation')],
+    'features': [('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation')],        ## TODO add all features
                                  # handcrafted geometric features characterizing each point's neighborhood. The following features are currently supported:
                                  #    - density
                                  #    - linearity
@@ -91,16 +91,15 @@ param_values = {
     # AddKeysTo
     # features that we want to use for the partition generation, same features available as in PointFeatures
     'features_to_x': [
+        ('linearity', 'planarity', 'scattering', 'verticality', 'elevation'),
         ('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation'),
-        ('density', 'intensity', 'elevation', 'planarity', 'scattering', 'verticality'),
-        ('density', 'elevation', 'linearity', 'planarity', 'scattering', 'verticality'),
-        ('density', 'intensity', 'linearity', 'planarity', 'scattering', 'verticality'),
-        ('density', 'intensity', 'elevation', 'linearity', 'planarity', 'scattering', 'verticality')
+        ('density', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation'),
+        ('linearity', 'planarity', 'scattering', 'verticality'),
     ],
 
     # CutPursuitPartition
     'regularization': [[0.05, 0.1], [0.1, 0.2], [0.2, 0.5]],   # List of increasing float values determining the granularity of hierarchical superpoint partitions.
-    'spatial_weight': [[0.1, 0.01], [1, 0.1]],                 # Float value indicating the importance of point coordinates relative to point features in grouping points.
+    'spatial_weight': [[0.1, 0.01], [1, 0.1], [0.1, 0.1]],                 # Float value indicating the importance of point coordinates relative to point features in grouping points.
     'cutoff': [[10, 30], [20, 50]],                            # Integer specifying the minimum number of points in each superpoint, ensuring small superpoints are merged with others.
     'iterations': [15],                                        # Integer specifying the number of iterations for the Cut Pursuit algorithm.
     'k_adjacency': [5, 10]                                     # Integer preventing superpoints from being isolated.
@@ -254,7 +253,7 @@ def pre_transform_performance(data_list, plot_titles, param_set):
         data = apply_transform(data, GridSampling3D, size=voxel_size, hist_key='y', hist_size=FOR_Instance_num_classes + 1)
         data = apply_transform(data, KNN, k, r_max)
         data = apply_transform(data, GroundElevation, threshold, scale)
-        data = apply_transform(data, PointFeatures, keys=features)
+        data = apply_transform(data, PointFeatures, keys=features_to_x)
         data = apply_transform(data, AdjacencyGraph, k_adj_graph, w)
         data = apply_transform(data, AddKeysTo, keys=features_to_x, to='x', delete_after=False)
         data = apply_transform(data, CutPursuitPartition, regularization=regularization, \
@@ -341,16 +340,15 @@ def load_current_iteration(filename='logs/current_iteration.txt'):
     return 0
 
 
-
 ########################
 # SUPERPOINT TRANSFORM #
 ########################
 if __name__ == '__main__':
-    version = '1.0'
-    json_file_name = '/home/valerio/git/superpoint_transformer_vschelbi/logs/partition_parametrization_{version}.jsonl'
-    curr_iteration_file_name = '/home/valerio/git/superpoint_transformer_vschelbi/logs/current_iteration_{version}.txt'
+    version = '2.0'
+    json_file_name = f'/home/valerio/git/superpoint_transformer_vschelbi/logs/partition_parametrization_{version}.jsonl'
+    curr_iteration_file_name = f'/home/valerio/git/superpoint_transformer_vschelbi/logs/current_iteration_{version}.txt'
     metadata = {
-        "description": "This file contains results of the superpoint transform experiment",
+        "description": "This file contains results of the superpoint transform experiment. Changed the features to try out, and added one more set for spatial weight.",
         "version": version,
         "author": "Valerio Schelbert",
         "date": datetime.now().strftime("%Y-%m-%d")
@@ -369,9 +367,6 @@ if __name__ == '__main__':
 
         data = read_FORinstance_plot(filepath, instance=True)
         data_list.append(data)
-
-    # create a copy of the data to keep the original data
-    data_list_temp = [data.clone() for data in data_list]
 
     # iterate through all parameter combinations starting from the last saved iteration
     for i, param_set in enumerate(param_combinations[start_iteration:], start=start_iteration):
