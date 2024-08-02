@@ -20,6 +20,7 @@ Official implementation for
 [![arXiv](https://img.shields.io/badge/arxiv-2306.08045-b31b1b.svg)](https://arxiv.org/abs/2306.08045)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8042712.svg)](https://doi.org/10.5281/zenodo.8042712)
 [![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/superpoint-transformer)
+[![Tutorial](https://img.shields.io/badge/Tutorial-FFC300)](https://www.youtube.com/watch?v=2qKhpQs9gJw)
 <br>
 <br>
 [_Scalable 3D Panoptic Segmentation As Superpoint Graph Clustering_](https://arxiv.org/abs/2401.06704) (3DV 2024 Oral)
@@ -29,7 +30,8 @@ Official implementation for
 [![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://drprojects.github.io/supercluster)
 <br>
 <br>
-If you ❤️ or use this project, don't forget to give it a ⭐, it means a lot to us !
+**If you ❤️ or simply use this project, don't forget to give the repository a ⭐,
+it means a lot to us !**
 <br>
 </div>
 
@@ -120,10 +122,10 @@ Due to its lightweight backbone and scalable formulation, SuperCluster can proce
 <br>
 
 ## 📰  Updates
-
-- **27.06.2024** Released 🧑‍🏫 tutorial 
-[slides](media/superpoint_transformer_tutorial.pdf) and 
-[notebook](notebooks/superpoint_transformer_tutorial.ipynb). 
+- **27.06.2024** Released our Superpoint Transformer 🧑‍🏫 tutorial 
+[slides](media/superpoint_transformer_tutorial.pdf), 
+[notebook](notebooks/superpoint_transformer_tutorial.ipynb), and [video](https://www.youtube.com/watch?v=2qKhpQs9gJw). 
+Check these out if you are getting started with the project ! 
 - **21.06.2024** [Damien](https://github.com/drprojects) will be giving a 
 **🧑‍🏫 tutorial on Superpoint Transformer on 📅 27.06.2024 at 1pm CEST**. 
 Make sure to come if you want to gain some hands-on experience with the project !
@@ -430,6 +432,21 @@ predictions.
 
 See our [demo notebook](notebooks/demo.ipynb) for more details on these.
 
+### Using a pretrained model on custom data
+For running a pretrained model on your own point cloud, please refer to our 
+tutorial [slides](media/superpoint_transformer_tutorial.pdf), 
+[notebook](notebooks/superpoint_transformer_tutorial.ipynb), 
+and [video](https://www.youtube.com/watch?v=2qKhpQs9gJw).
+
+### Parametrizing the superpoint partition on custom data
+Our hierarchical superpoint partition is computed at preprocessing time. Its
+construction involves several steps whose parametrization must be adapted to
+your specific dataset and task. Please refer to our 
+tutorial [slides](media/superpoint_transformer_tutorial.pdf), 
+[notebook](notebooks/superpoint_transformer_tutorial.ipynb), 
+and [video](https://www.youtube.com/watch?v=2qKhpQs9gJw) for better 
+understanding this process and tuning it to your needs.
+
 ### Parameterizing SuperCluster graph clustering
 One specificity of SuperCluster is that the model is not trained to explicitly 
 do panoptic segmentation, but to predict the input parameters of a superpoint 
@@ -456,15 +473,20 @@ provided in [media/visualizations.7z](media/visualizations.7z)
 <br>
 
 ## 📚  Documentation
-- [README](README.md) - General introduction to the project
-- [Data](docs/data_structures.md) - Introduction to `NAG` and `Data`, the core data structures of this project
-- [Datasets](docs/datasets.md) - Introduction to `Datasets` and the project's `data/` structure
-- [Logging](docs/logging.md) - Introduction to logging and the project's `logs/` structure
-- [Visualization](docs/visualization.md) - Introduction to our interactive 3D visualization tool
+
+| Location                                          | Content                                                                                                                     |
+|:--------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------|
+| [README](README.md)                               | General introduction to the project                                                                                         |
+| [`docs/data_structures`](docs/data_structures.md) | Introduction to the core data structures of this project: `Data`, `NAG`, `Cluster`, and `InstanceData`                      |
+| [`docs/datasets`](docs/datasets.md)               | Introduction to our implemented datasets, to our `BaseDataset` class, and how to create your own dataset inheriting from it |
+| [`docs/logging`](docs/logging.md)                 | Introduction to logging and the project's `logs/` structure                                                                 |
+| [`docs/visualization`](docs/visualization.md)     | Introduction to our interactive 3D visualization tool                                                                       |
 
 > **Note**: We endeavoured to **comment our code** as much as possible to make 
-> this project usable. Still, if you find some parts are unclear or some more 
-> documentation would be needed, feel free to let us know by creating an issue ! 
+> this project usable. If you don't find the answer you are looking for in the 
+> `docs/`, make sure to **have a look at the source code and past issues**. 
+> Still, if you find some parts are unclear or some more documentation would be 
+> needed, feel free to let us know by creating an issue ! 
 
 <br>
 
@@ -576,4 +598,5 @@ If your work uses all or part of the present code, please include the following 
 
 You can find our [SPT paper 📄](https://arxiv.org/abs/2306.08045) and [SuperCluster paper 📄](https://arxiv.org/abs/2401.06704) on arxiv.
 
-Also, if you ❤️ or use this project, don't forget to give it a ⭐, it means a lot to us !
+Also, **if you ❤️ or simply use this project, don't forget to give the 
+repository a ⭐, it means a lot to us !**

@@ -25,11 +25,14 @@ class AdjacencyGraph(Transform):
     """Create the adjacency graph in `edge_index` and `edge_attr` based
     on the `Data.neighbor_index` and `Data.neighbor_distance`.
 
-    NB: this graph is directed wrt Pytorch Geometric, but cut-pursuit
-    happily takes this as an input.
+    NB: the produced graph is directed wrt Pytorch Geometric, but
+    `CutPursuitPartition` happily takes it as an input.
 
     :param k: int
-        Number of neighbors to consider for the adjacency graph
+        Number of neighbors to consider for the adjacency graph. In view
+        of calling `CutPursuitPartition`, note the higher the number of
+        neighbors/edges per node, the longer the partition computation.
+        Yet, if the number of neighbors is not sufficient, the
     :param w: float
         Scalar used to modulate the edge weight. If `w <= 0`, all edges
         will have a weight of 1. Otherwise, edges weights will follow:
@@ -904,8 +907,8 @@ def _minimalistic_horizontal_edge_features(
     # Compute std of the offset, in a base built around the mean offset
     base = base_vectors_3d(se_mean_off)[se_id]
     u = (offset * base[:, 0]).sum(dim=1).view(-1, 1)
-    v = (offset * base[:, 0]).sum(dim=1).view(-1, 1)
-    w = (offset * base[:, 0]).sum(dim=1).view(-1, 1)
+    v = (offset * base[:, 1]).sum(dim=1).view(-1, 1)
+    w = (offset * base[:, 2]).sum(dim=1).view(-1, 1)
     se_std_off = scatter_std(torch.cat((u, v, w), dim=1), se_id, dim=0)
     se_std_off = se_std_off.clip(-2, 2)
 
