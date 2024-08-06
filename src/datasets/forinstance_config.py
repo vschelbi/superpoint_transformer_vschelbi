@@ -156,25 +156,23 @@ TILES_WITH_NIBIO2 = {
 ########################################################################
 #                                Labels                                #
 ########################################################################
-FORInstance_NUM_CLASSES = 3
+FORInstance_NUM_CLASSES = 2
 
-ID2TRAINID = np.asarray([3, 1, 0, 3, 2, 2, 2])
+ID2TRAINID = np.asarray([2, 0, 0, 2, 1, 1, 1])
 
 CLASS_NAMES = [
-    'Ground',           # 2 Ground
-    'Low vegetation',   # 1 Low vegetation
-    'Tree',             # 4 Stem, 5 Live branches, 6 Woody branches
-    'Unknown'           # 0 Unclassified, 3 Out-points
+    'Ground and low vegetation',  # 2 Ground, 1 Low vegetation
+    'Tree',                       # 4 Stem, 5 Live branches, 6 Woody branches
+    'Unknown'                     # 0 Unclassified, 3 Out-points
 ]
 
 CLASS_COLORS = np.asarray([
-    [243, 214, 171],    # Ground
-    [141, 222, 29],     # Low vegetation
+    [243, 214, 171],    # Ground and Low vegetation
     [ 70, 115,  66],    # Tree
     [  0,   8, 116]     # Unknown
 ])
 
 # For instance segmentation
 MIN_OBJECT_SIZE = 100
-THING_CLASSES = [2]
-STUFF_CLASSES = [0, 1]
+THING_CLASSES = [1]
+STUFF_CLASSES = [0]

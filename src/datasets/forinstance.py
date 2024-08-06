@@ -90,7 +90,7 @@ def read_FORinstance_plot(filepath, xyz=True, intensity=True,
             low_veg_mask = (obj == 0) & (y == 1)
             if low_veg_mask.any() or ground_mask.any():
                 ground_instance_label = obj.max().item() + 1
-                low_veg_instance_label = ground_instance_label + 1
+                low_veg_instance_label = ground_instance_label  # for separate ground and low vegetation classes: ground_instance_label + 1
                 obj[ground_mask] = ground_instance_label
                 obj[low_veg_mask] = low_veg_instance_label
 
@@ -100,7 +100,7 @@ def read_FORinstance_plot(filepath, xyz=True, intensity=True,
         data.obj = InstanceData(idx, obj, count, y, dense=True)
     
     return data
-    
+
 
 ########################################################################
 #                                FORinstance                           #
