@@ -9,5 +9,5 @@ from .forinstance import *
 from .culs import *
 from .nibio import *
 from .rmit import *
-from .scannet import *
+from .scion import *
 from .tuwien import *

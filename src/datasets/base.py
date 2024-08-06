@@ -597,6 +597,9 @@ class BaseDataset(InMemoryDataset):
         return path
 
     def download(self):
+        # Small check here to bypass error when a dataset has no data
+        if len(self.raw_file_names) == 0:
+            return
         self.download_warning()
         self.download_dataset()
 
