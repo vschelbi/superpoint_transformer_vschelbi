@@ -206,9 +206,9 @@ class FORinstance(BaseDataset):
             sys.exit(1)
     
         # Unzip the file and rename it into the 'root/raw/' directory
-        extract_zip(osp.join(self.root, self._las_name), self.root)
         shutil.rmtree(self.raw_dir)
-        os.rename(osp.join(self.root, self._unzip_name), self.raw_dir)
+        os.mkdir(self.raw_dir)
+        extract_zip(osp.join(self.root, self._las_name), self.raw_dir)
 
     def read_single_raw_cloud(self, raw_cloud_path):
         """Read a single raw cloud and return a `Data` object, ready to
