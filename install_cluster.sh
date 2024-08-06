@@ -41,26 +41,17 @@ fi
 
 echo
 echo
-echo "⭐ Searching for installed conda"
+echo "⭐ Using loaded conda from module"
 echo
-# Recover the path to conda on your machine
-# First search the default '~/miniconda3' and '~/anaconda3' paths. If
-# those do not exist, ask for user input
-CONDA_DIR=`realpath ~/miniconda3`
-if (test -z $CONDA_DIR) || [ ! -d $CONDA_DIR ]
+
+# Ensure the conda command is available
+if ! command -v conda &> /dev/null
 then
-  CONDA_DIR=`realpath ~/anaconda3`
+    echo "Conda could not be found. Make sure the Anaconda module is loaded. Use 'module load anaconda3', you can also specifiy a conda version."
+    exit 1
 fi
 
-while (test -z $CONDA_DIR) || [ ! -d $CONDA_DIR ]
-do
-    echo "Could not find conda at: "$CONDA_DIR
-    read -p "Please provide your conda install directory: " CONDA_DIR
-    CONDA_DIR=`realpath $CONDA_DIR`
-done
-
-echo "Using conda conda found at: ${CONDA_DIR}/etc/profile.d/conda.sh"
-source ${CONDA_DIR}/etc/profile.d/conda.sh
+echo "Using conda found at: $(which conda)"
 
 echo
 echo
@@ -71,7 +62,7 @@ conda create --name ${PROJECT_NAME} python=${PYTHON} -y
 
 # Activate the env
 source ${CONDA_DIR}/etc/profile.d/conda.sh  
-conda activate ${PROJECT_NAME}
+source activate ${PROJECT_NAME}
 
 echo
 echo

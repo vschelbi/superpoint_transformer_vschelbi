@@ -173,6 +173,6 @@ CLASS_COLORS = np.asarray([
 ])
 
 # For instance segmentation
-MIN_OBJECT_SIZE = 100
+MIN_OBJECT_SIZE = 100   # not used, but same value to the "cutoff" 
 THING_CLASSES = [1]
 STUFF_CLASSES = [0]
