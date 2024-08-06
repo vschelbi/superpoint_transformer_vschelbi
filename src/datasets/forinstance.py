@@ -16,11 +16,10 @@ DIR = os.path.dirname(os.path.realpath(__file__))
 log = logging.getLogger(__name__)
 
 # TODO check if this is necessary also for FORinstance:
-# Occasional Dataloader issues with DALES on some machines. Hack to
-# solve this:
+# Occasional Dataloader issues on some machines. Hack to solve this:
 # https://stackoverflow.com/questions/73125231/pytorch-dataloaders-bad-file-descriptor-and-eof-for-workers0
-#import torch.multiprocessing
-#torch.multiprocessing.set_sharing_strategy('file_system')
+# import torch.multiprocessing
+# torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 __all__ = ['FORinstance', 'MiniFORinstance']
@@ -72,7 +71,8 @@ def read_FORinstance_plot(filepath, xyz=True, intensity=True,
         if intensity_remaped:
             if max_intensity is None:
                 max_intensity = data.intensity.max()
-            data.intensity = data.intensity.clip(min=0, max=max_intensity) / max_intensity
+            data.intensity = data.intensity.clip(
+                min=0, max=max_intensity) / max_intensity
 
     if semantic:
         y = torch.LongTensor(np.array(las['classification']))
@@ -90,7 +90,9 @@ def read_FORinstance_plot(filepath, xyz=True, intensity=True,
             low_veg_mask = (obj == 0) & (y == 1)
             if low_veg_mask.any() or ground_mask.any():
                 ground_instance_label = obj.max().item() + 1
-                low_veg_instance_label = ground_instance_label  # for separate ground and low vegetation classes: ground_instance_label + 1
+                # for separate ground and low vegetation classes:
+                # ground_instance_label + 1
+                low_veg_instance_label = ground_instance_label
                 obj[ground_mask] = ground_instance_label
                 obj[low_veg_mask] = low_veg_instance_label
 
@@ -103,12 +105,13 @@ def read_FORinstance_plot(filepath, xyz=True, intensity=True,
 
 
 ########################################################################
-#                                FORinstance                           #
+#                             FOR-Instance                             #
 ########################################################################
-class FORinstance(BaseDataset):
-    """ FOR-instance dataset.
 
-    Dataset link: https://paperswithcode.com/dataset/for-instance
+class FORinstance(BaseDataset):
+    """FOR-Instance dataset.
+
+    Dataset link: https://paperswithcode.com/dataset/FOR-Instance
 
     Parameters
     ----------
@@ -190,12 +193,12 @@ class FORinstance(BaseDataset):
         return TILES
     
     def download_dataset(self):
-        """Download the FOR-instance dataset."""
+        """Download the FOR-Instance dataset."""
         if not osp.exists(osp.join(self.root, self._las_name)):
             log.error(
-                f"\FOR-instance does not support automatic download.\n"
-                f"Please download the dataset from {self._download_url} and "
-                f"save it to {self.root}/ directory and re-run.\n"
+                f"\FOR-Instance does not support automatic download.\n"
+                f"Please download the dataset from {self._download_url} "
+                f"and save it to {self.root}/ directory and re-run.\n"
                 f"The dataset will automatically be unzipped into the "
                 f"following structure:\n"
                 f"{self.raw_file_structure}"
@@ -231,8 +234,9 @@ class FORinstance(BaseDataset):
     @property
     def raw_file_structure(self):
         """Return a string representing the expected raw file structure
-        for the dataset. This string is used in the download instructions
-        when the dataset is not found in the root directory.
+        for the dataset. This string is used in the download
+        instructions when the dataset is not found in the root
+        directory.
         """
         return (
             f"{self.root}/\n"
@@ -256,19 +260,13 @@ class FORinstance(BaseDataset):
             f"         ├── train.las\n"
             f"         ├── test.las\n"
         )
-        
-    # TODO check if this implementation is works
-    # file paths etc. correct? => need to overwrite some default methods
+
     def id_to_relative_raw_path(self, id):
         """Given a cloud id as stored in `self.cloud_ids`, return the
         path (relative to `self.raw_dir`) of the corresponding raw
         cloud.
         """
-        # remove tiling information
-        base_id = self.id_to_base_id(id)
-        #print(f"id_to_relative_raw_path: ", {base_id})
-        # the id's are already in the correct path structure
-        return base_id + '.las'
+        return self.id_to_base_id(id) + '.las'
 
     def processed_to_raw_path(self, processed_path):
         """Given a processed cloud path from `self.processed_paths`,
@@ -276,17 +274,10 @@ class FORinstance(BaseDataset):
         """
         hash_dir, area, cloud_id = \
             osp.splitext(processed_path)[0].split(os.sep)[-3:]
-        #print("processed_to_raw_path")
-        #print(f"hash_dir: ", {hash_dir})
-        #print(f"area: ", {area})
-        #print(f"cloud_id: ", {cloud_id})
         base_cloud_id = self.id_to_base_id(cloud_id)
-        relative_raw_path = osp.join(area, base_cloud_id) + '.las'
-        #print(f"relative_raw_path: ", {relative_raw_path})
-        raw_path = osp.join(self.raw_dir, relative_raw_path)
+        raw_path = osp.join(self.raw_dir, area, base_cloud_id) + '.las'
 
         return raw_path
-
 
 
 ########################################################################
@@ -294,7 +285,7 @@ class FORinstance(BaseDataset):
 ########################################################################
 
 class MiniFORinstance(FORinstance):
-    """A mini version of FOR-instance with only a few windows for
+    """A mini version of FOR-Instance with only a few plots for
     experimentation.
     """
     _NUM_MINI = 2

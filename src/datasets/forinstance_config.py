@@ -7,7 +7,7 @@ import numpy as np
 
 DOWNLOAD_URL = 'https://zenodo.org/records/8287792'
 
-# FOR-instance in LAS format
+# FOR-Instance in LAS format
 LAS_ZIP_NAME = 'FORinstance_dataset.zip'
 LAS_UNZIP_NAME = "FORinstance_dataset"
 

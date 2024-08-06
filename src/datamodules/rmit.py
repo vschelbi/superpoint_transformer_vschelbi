@@ -1,13 +1,14 @@
 import logging
 from src.datamodules.base import BaseDataModule
-from src.datasets import FORinstance, MiniFORinstance
+from src.datasets import RMIT, MiniRMIT
 
 
 log = logging.getLogger(__name__)
 
 
-class FORinstanceDataModule(BaseDataModule):
-    """LightningDataModule for FOR-Instance dataset.
+class RMITDataModule(BaseDataModule):
+    """LightningDataModule for RMIT dataset, extracted from
+    FOR-Instance.
 
     A DataModule implements 5 key methods:
 
@@ -33,8 +34,8 @@ class FORinstanceDataModule(BaseDataModule):
     Read the docs:
         https://pytorch-lightning.readthedocs.io/en/latest/data/datamodule.html
     """
-    _DATASET_CLASS = FORinstance
-    _MINIDATASET_CLASS = MiniFORinstance
+    _DATASET_CLASS = RMIT
+    _MINIDATASET_CLASS = MiniRMIT
 
 
 if __name__ == "__main__":
@@ -43,6 +44,6 @@ if __name__ == "__main__":
     import pyrootutils
 
     root = str(pyrootutils.setup_root(__file__, pythonpath=True))
-    cfg = omegaconf.OmegaConf.load(root + "/configs/datamodule/semantic/forinstance.yaml")
+    cfg = omegaconf.OmegaConf.load(root + "/configs/datamodule/panoptic/rmit.yaml")
     cfg.data_dir = root + "/data"
     _ = hydra.utils.instantiate(cfg)
