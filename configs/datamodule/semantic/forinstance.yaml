@@ -6,8 +6,8 @@ _target_: src.datamodules.forinstance.FORinstanceDataModule
 
 # These parameters are not actually used by the DataModule, but are used
 # here to facilitate model parameterization with config interpolation
-num_classes: 3
-stuff_classes: [0, 1]
+num_classes: 2
+stuff_classes: [0]
 trainval: True
 val_on_test: False
 xy_tiling: null   # no tiling as the files are pretty small
