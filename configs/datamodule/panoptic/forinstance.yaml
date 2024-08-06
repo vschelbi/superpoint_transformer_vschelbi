@@ -13,7 +13,7 @@ with_stuff: True
 
 # For now, we also need to specify the stuff labels here, not for the
 # datamodule, but rather for the model config to catch
-stuff_classes: [0, 1]
+stuff_classes: [0]
 
 # Instance graph parameters
 instance_k_max: 20  # maximum number of neighbors for each superpoint in the instance graph
