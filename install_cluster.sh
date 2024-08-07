@@ -47,7 +47,7 @@ echo
 # Ensure the conda command is available
 if ! command -v conda &> /dev/null
 then
-    echo "Conda could not be found. Make sure the Anaconda module is loaded."
+    echo "Conda could not be found. Make sure the Anaconda module is loaded. Use 'module load anaconda3', you can also specifiy a conda version."
     exit 1
 fi
 

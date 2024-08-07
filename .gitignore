@@ -150,6 +150,7 @@ data/
 logs/
 .env
 .autoenv
+pretrained_models/
 
 
 # Superpoint Transformer project
