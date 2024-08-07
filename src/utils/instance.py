@@ -852,6 +852,17 @@ def get_stuff_mask(y, stuff_classes):
     return torch.isin(labels, stuff_classes)
 
 
+def compute_panoptic_metrics_per_subset():
+    compute_panoptic_metrics(
+        model,
+        datamodule,
+        stage='val',
+        graph_kwargs=None,
+        partition_kwargs=None,
+        verbose=True)
+
+
+
 def compute_panoptic_metrics(
         model,
         datamodule,

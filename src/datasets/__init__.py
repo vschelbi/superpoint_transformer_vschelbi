@@ -6,3 +6,8 @@ from .s3dis import *
 from .s3dis_room import *
 from .scannet import *
 from .forinstance import *
+from .culs import *
+from .nibio import *
+from .rmit import *
+from .scion import *
+from .tuwien import *

@@ -7,7 +7,7 @@ import numpy as np
 
 DOWNLOAD_URL = 'https://zenodo.org/records/8287792'
 
-# FOR-instance in LAS format
+# FOR-Instance in LAS format
 LAS_ZIP_NAME = 'FORinstance_dataset.zip'
 LAS_UNZIP_NAME = "FORinstance_dataset"
 
@@ -173,6 +173,6 @@ CLASS_COLORS = np.asarray([
 ])
 
 # For instance segmentation
-MIN_OBJECT_SIZE = 100   # not used, but same value to the "cutoff" 
+MIN_OBJECT_SIZE = 100   # not used, but same value to the "cutoff"
 THING_CLASSES = [1]
 STUFF_CLASSES = [0]

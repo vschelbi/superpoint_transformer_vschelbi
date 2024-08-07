@@ -7,7 +7,7 @@ defaults:
 # will avoid unwanted instance-related I/O operations, to save memory
 instance: True
 
-# Specify whether FOR-instance should have only 'thing' classes (default) or if
+# Specify whether FOR-Instance should have only 'thing' classes (default) or if
 # 'terrain' and 'low vegetation' should be treated as 'stuff'
 with_stuff: True
 

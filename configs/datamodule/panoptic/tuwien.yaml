@@ -1,0 +1,5 @@
+# @package datamodule
+defaults:
+  - /datamodule/panoptic/forinstance.yaml
+
+_target_: src.datamodules.tuwien.TUWIENDataModule
