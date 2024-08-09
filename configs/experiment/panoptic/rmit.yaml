@@ -34,7 +34,7 @@ logger:
     name: "SPT-64"
 
 # metric based on which models will be selected
-optimized_metric: "val/pq"
+optimized_metric: "val/f1_Tree"
 
 # modify checkpointing callbacks to adapt to partition_every_n_epoch
 # being potentially different

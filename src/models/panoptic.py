@@ -208,6 +208,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         # For tracking best-so-far validation metrics
         self.val_map_best = MaxMetric()
         self.val_pq_best = MaxMetric()
+        self.val_f1_Tree_best = MaxMetric()
+        self.val_recall_Tree_best = MaxMetric()
+        self.val_precision_Tree_best = MaxMetric()
         self.val_pqmod_best = MaxMetric()
         self.val_mprec_best = MaxMetric()
         self.val_mrec_best = MaxMetric()
@@ -700,6 +703,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mprec = panoptic_results.mean_precision
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
+            recall_Tree = panoptic_results.recall_per_class[1]
+            precision_Tree = panoptic_results.precision_per_class[2]
+            # f1 score for Tree class
+            f1_Tree = 2 * (precision_Tree * recall_Tree) / (precision_Tree + recall_Tree)
             if self.needs_instance:
                 map = instance_results.map
                 map_50 = instance_results.map_50
@@ -715,6 +722,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("train/pqmod", 100 * pqmod, prog_bar=True)
             self.log("train/mprec", 100 * mprec, prog_bar=True)
             self.log("train/mrec", 100 * mrec, prog_bar=True)
+            self.log("train/recall_Tree", 100 * recall_Tree, prog_bar=True)
+            self.log("train/precision_Tree", 100 * precision_Tree, prog_bar=True)
+            self.log("train/f1_Tree", 100 * f1_Tree, prog_bar=True)
             self.log("train/instance_miou", self.train_semantic.miou(), prog_bar=True)
             self.log("train/instance_oa", self.train_semantic.oa(), prog_bar=True)
             self.log("train/instance_macc", self.train_semantic.macc(), prog_bar=True)
@@ -926,6 +936,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mprec = panoptic_results.mean_precision
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
+            recall_Tree = panoptic_results.recall_per_class[1]
+            precision_Tree = panoptic_results.precision_per_class[2]
+            # f1 score for Tree class
+            f1_Tree = 2 * (precision_Tree * recall_Tree) / (precision_Tree + recall_Tree)
             if self.needs_instance:
                 map = instance_results.map
                 map_50 = instance_results.map_50
@@ -941,6 +955,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("val/pqmod", 100 * pqmod, prog_bar=True)
             self.log("val/mprec", 100 * mprec, prog_bar=True)
             self.log("val/mrec", 100 * mrec, prog_bar=True)
+            self.log("val/recall_Tree", 100 * recall_Tree, prog_bar=True)
+            self.log("val/precision_Tree", 100 * precision_Tree, prog_bar=True)
+            self.log("val/f1_Tree", 100 * f1_Tree, prog_bar=True)
             instance_miou = self.val_semantic.miou()
             instance_oa = self.val_semantic.oa()
             instance_macc = self.val_semantic.macc()
@@ -965,6 +982,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.val_pqmod_best(pqmod)
             self.val_mprec_best(mprec)
             self.val_mrec_best(mrec)
+            self.val_recall_Tree_best(recall_Tree)
+            self.val_precision_Tree_best(precision_Tree)
+            self.val_f1_Tree_best(f1_Tree)
             if self.needs_instance:
                 self.val_map_best(map)
             self.val_instance_miou_best(instance_miou)
@@ -978,6 +998,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("val/pqmod_best", 100 * self.val_pqmod_best.compute(), prog_bar=True)
             self.log("val/mprec_best", 100 * self.val_mprec_best.compute(), prog_bar=True)
             self.log("val/mrec_best", 100 * self.val_mrec_best.compute(), prog_bar=True)
+            self.log("val/recall_Tree_best", 100 * self.val_recall_Tree_best.compute(), prog_bar=True)
+            self.log("val/precision_Tree_best", 100 * self.val_precision_Tree_best.compute(), prog_bar=True)
+            self.log("val/f1_Tree_best", 100 * self.val_f1_Tree_best.compute(), prog_bar=True)
             if self.needs_instance:
                 self.log("val/map_best", 100 * self.val_map_best.compute(), prog_bar=True)
             self.log("val/instance_miou_best", self.val_instance_miou_best.compute(), prog_bar=True)
@@ -1128,6 +1151,10 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mprec = panoptic_results.mean_precision
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
+            recall_Tree = panoptic_results.recall_per_class[1]
+            precision_Tree = panoptic_results.precision_per_class[2]
+            # f1 score for Tree class
+            f1_Tree = 2 * (precision_Tree * recall_Tree) / (precision_Tree + recall_Tree)
             if self.needs_instance:
                 map = instance_results.map
                 map_50 = instance_results.map_50
@@ -1143,6 +1170,9 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             self.log("test/pqmod", 100 * pqmod, prog_bar=True)
             self.log("test/mprec", 100 * mprec, prog_bar=True)
             self.log("test/mrec", 100 * mrec, prog_bar=True)
+            self.log("test/recall_Tree", 100 * recall_Tree, prog_bar=True)
+            self.log("test/precision_Tree", 100 * precision_Tree, prog_bar=True)
+            self.log("test/f1_Tree", 100 * f1_Tree, prog_bar=True)
             self.log("test/instance_miou", self.test_semantic.miou(), prog_bar=True)
             self.log("test/instance_oa", self.test_semantic.oa(), prog_bar=True)
             self.log("test/instance_macc", self.test_semantic.macc(), prog_bar=True)
