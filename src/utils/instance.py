@@ -34,7 +34,8 @@ __all__ = [
     'generate_random_bbox_data', 'generate_random_segment_data',
     'instance_cut_pursuit', 'oracle_superpoint_clustering', 'get_stuff_mask',
     'compute_panoptic_metrics', 'compute_panoptic_metrics_s3dis_6fold',
-    'grid_search_panoptic_partition']
+    'grid_search_panoptic_partition', 'panoptic_partition_FORinstance', 
+    'grid_search_panoptic_partition_FORinstance', 'bayesian_optimize_panoptic_partition_FORinstance']
 
 
 _MAX_NUM_EDGES = 4294967295
@@ -852,17 +853,6 @@ def get_stuff_mask(y, stuff_classes):
     return torch.isin(labels, stuff_classes)
 
 
-def compute_panoptic_metrics_per_subset():
-    compute_panoptic_metrics(
-        model,
-        datamodule,
-        stage='val',
-        graph_kwargs=None,
-        partition_kwargs=None,
-        verbose=True)
-
-
-
 def compute_panoptic_metrics(
         model,
         datamodule,
@@ -1222,7 +1212,7 @@ def _forward_multi_partition(
             {k: v for k, v in zip(partition_keys, values)}
             for values in product(*partition_kwargs.values())]
         partitions = {}
-        for kwargs in tqdm(enum):
+        for kwargs in enum:
 
             # Apply the kwargs to the partitioner
             model, backup_kwargs = _set_partitioner_parameters(model, kwargs)
@@ -1481,3 +1471,358 @@ def grid_search_panoptic_partition(
         print()
 
     return output, partitions, results
+
+
+def panoptic_partition_FORinstance(
+        model,
+        dataset,
+        i_cloud=0,
+        graph_kwargs=None,
+        partition_kwargs=None,
+        mode='pas'):
+    """Computes the panoptic partition result based on the input parameters on a given sample `dataset[i_cloud]`.
+
+    :param model: PanopticSegmentationModule
+    :param dataset: BaseDataset
+    :param i_cloud: int
+        The computation will be done on `dataset[i_cloud]`
+    :param graph_kwargs: dict
+        Dictionary of parameters to be passed to the instance graph
+        constructor `OnTheFlyInstanceGraph`.
+    :param partition_kwargs: dict
+        Dictionary of parameters to be passed to `model.partitioner`.
+    :param mode: str
+        String characterizing whether edge affinities, node semantics,
+        positions and offsets should be used in the graph clustering.
+    """
+    # Local import to avoid import loop errors
+    from src.metrics import PanopticQuality3D
+
+    # Prevent `NAGAddKeysTo` from removing attributes to allow
+    # visualizing them after model inference
+    dataset = _set_attribute_preserving_transforms(dataset)
+
+    # Set the instance graph construction parameters
+    dataset = _set_graph_construction_parameters(dataset, graph_kwargs)
+
+    # Load a dataset item. This will return the hierarchical partition
+    # of an entire tile, within a NAG object
+    nag = dataset[i_cloud]
+
+    # Apply on-device transforms on the NAG object. For the train
+    # dataset, this will select a spherical sample of the larger tile
+    # and apply some data augmentations. For the validation and test
+    # datasets, this will prepare an entire tile for inference
+    nag = dataset.on_device_transform(nag.cuda())
+
+    # Compute the partition for the given parameterization
+    output, partitions, partition_keys = _forward_multi_partition(
+        model,
+        nag,
+        partition_kwargs,
+        mode=mode)
+
+    # Get the target labels
+    output = model.get_target(nag, output)
+
+    # Create the metrics tracking objects
+    panoptic_metrics = PanopticQuality3D(
+        model.num_classes,
+        ignore_unseen_classes=True,
+        stuff_classes=model.stuff_classes,
+        compute_on_cpu=True)
+
+    # Retrieve the partition setup
+    kwargs = partition_kwargs
+    obj_index_pred = partitions[tuple(kwargs.values())]
+
+    output.obj_index_pred = obj_index_pred
+
+    obj_score, obj_y, instance_data = output.panoptic_pred
+    obj_score = obj_score.detach().cpu()
+    obj_y = obj_y.detach().cpu()
+
+    panoptic_results = None
+
+    panoptic_metrics.update(obj_y, instance_data.cpu())
+    panoptic_results = panoptic_metrics.compute()
+    panoptic_metrics.reset()
+
+    return output, partitions, panoptic_results
+
+def grid_search_panoptic_partition_FORinstance(
+        model,
+        dataset,
+        i_cloud=0,
+        graph_kwargs=None,
+        partition_kwargs=None,
+        mode='pas',
+        verbose=False):
+    """Runs a grid search on the graph AND partition parameters to find the best
+    setup based on tree F1 score on a given sample `dataset[i_cloud]`.
+
+    :param model: PanopticSegmentationModule
+    :param dataset: BaseDataset
+    :param i_cloud: int
+        The grid search will be computed on `dataset[i_cloud]`
+    :param graph_kwargs: dict
+        Dictionary of parameters to be passed to the instance graph
+        constructor `OnTheFlyInstanceGraph`. Passing a list of values for a given parameter will trigger the
+        grid search across these values. Beware of the combinatorial
+        explosion!
+    :param partition_kwargs: dict
+        Dictionary of parameters to be passed to `model.partitioner`.
+        Passing a list of values for a given parameter will trigger the
+        grid search across these values. Beware of the combinatorial
+        explosion!
+    :param mode: str
+        String characterizing whether edge affinities, node semantics,
+        positions and offsets should be used in the graph clustering.
+        'p': use node position.
+        'o': use predicted node offset.
+        'O': use oracle offset.
+        'a': use predicted edge affinity.
+        'A': use oracle edge affinities.
+        's': use predicted node semantics.
+        'S': use oracle node semantics.
+        In contrast, not setting 'p', 'o', nor 'O' is equivalent to
+        setting all node positions and offsets to 0.
+        Similarly, not setting 'a' nor 'A' will set the same weight to
+        all the edges.
+        Finally, not setting 's', nor 'S' will set the same class to all
+        the nodes.
+    :return:
+    """
+    max_len = 9  # Adjust this value based on your preference
+
+    # Initialize variables to store the best results
+    best_output = None
+    best_partitions = None
+    best_results = None
+    best_f1 = -float('inf')
+    best_combination = None
+    results_data = []
+
+    # Combine all parameter keys and values
+    combined_kwargs = {**graph_kwargs, **partition_kwargs}
+    combined_keys = list(combined_kwargs.keys())
+    combined_values = list(combined_kwargs.values())
+    
+    # Prepare parameter combinations for grid search
+    param_combinations = list(product(*combined_values))
+
+    # Perform grid search
+    for combination in tqdm(param_combinations, desc="Param Combinations"):
+        # Split the combination into graph and partition parameters
+        combination_dict = dict(zip(combined_keys, combination))
+        graph_comb_dict = {k: combination_dict[k] for k in graph_kwargs.keys()}
+        partition_comb_dict = {k: combination_dict[k] for k in partition_kwargs.keys()}
+
+        # Run panoptic partition
+        output, partitions, results = panoptic_partition_FORinstance(
+            model, dataset, i_cloud, graph_comb_dict, partition_comb_dict, mode)
+        
+        # Calculate precision, recall, and F1 score
+        precision = results.precision_per_class[1].item()
+        recall = results.recall_per_class[1].item()
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+        # Gather results
+        current_results = list(combination)
+        current_results += [
+            round(results.pq.item() * 100, 2),
+            round(f1 * 100, 2),
+            results.tp_per_class[1].item(),
+            results.fp_per_class[1].item(),
+            results.fn_per_class[1].item()
+        ]
+        results_data.append(current_results)
+
+        # Check if this is the best F1 score so far
+        if f1 > best_f1:
+            best_output = output
+            best_partitions = partitions
+            best_results = results
+            best_f1 = f1
+            best_combination = combination
+
+    if verbose:
+        # Prepare and print summary DataFrame
+        metric_columns = ['PQ', 'F1', 'TP', 'FP', 'FN']
+        result_columns = [
+            x[:max_len - 1] + '.' if len(x) > max_len else x
+            for x in combined_keys
+        ] + metric_columns
+        
+        with pd.option_context('display.precision', 2):
+            print(pd.DataFrame(
+                data=results_data,
+                columns=result_columns
+            ))
+    
+    if best_results:
+        if verbose:
+            best_tree_f1_params = [item for sublist in list(zip(best_combination)) for item in sublist]
+            # print type of best_tree_f1_params        
+            print()
+            # Print global results
+            print("Best panoptic setup: ")
+            print(f"Tree F1={100 * best_f1:0.2f}")
+            with pd.option_context('display.precision', 2):
+                print(pd.DataFrame(
+                    data=[best_tree_f1_params],
+                    columns=[
+                        x[:max_len - 1] + '.' if len(x) > max_len else x
+                        for x in combined_keys
+                    ]
+                ))
+            
+            print()
+
+        # add the best tree f1 to the results
+        best_results['tree_f1'] = best_f1
+
+        if verbose:
+            # Print per-class results
+            res = best_results
+            per_class_data = torch.column_stack([
+                res['pq_per_class'].mul(100),
+                res['precision_per_class'].mul(100),
+                res['recall_per_class'].mul(100),
+                (2 * (res['precision_per_class'] * res['recall_per_class']) / (res['precision_per_class'] + res['recall_per_class'] + 1e-8)).mul(100),
+                res['tp_per_class'],
+                res['fp_per_class'],
+                res['fn_per_class']
+            ])
+
+            with pd.option_context('display.precision', 2):
+                print(pd.DataFrame(
+                    data=per_class_data,
+                    index=dataset.class_names[:-1],
+                    columns=['PQ', 'PREC.', 'REC.', 'F1', 'TP', 'FP', 'FN']
+                ))
+    
+    return best_output, best_partitions, best_results, best_combination
+
+
+
+def bayesian_optimize_panoptic_partition_FORinstance(
+        model,
+        dataset,
+        i_cloud=0,
+        graph_kwargs=None,
+        partition_kwargs=None,
+        mode='pas',
+        verbose=False,
+        n_calls=50):
+    """Runs Bayesian Optimization on the graph AND partition parameters to find the best
+    setup based on F1 score on a given sample `dataset[i_cloud]`.
+
+    :param model: PanopticSegmentationModule
+    :param dataset: BaseDataset
+    :param i_cloud: int
+        The optimization will be computed on `dataset[i_cloud]`
+    :param graph_kwargs: dict
+        Dictionary of parameters to be passed to the instance graph constructor `OnTheFlyInstanceGraph`.
+    :param partition_kwargs: dict
+        Dictionary of parameters to be passed to `model.partitioner`.
+    :param mode: str
+        String characterizing whether edge affinities, node semantics, positions and offsets should be used in the graph clustering.
+    :param n_calls: int
+        Number of iterations for the Bayesian optimization process.
+    :param print_combination_results: bool
+        Whether to print the results of each parameter combination tried during the optimization process.
+    :return:
+    """
+
+    from skopt import gp_minimize
+    from skopt.space import Real, Integer, Categorical
+    from skopt.utils import use_named_args
+
+
+    max_len = 9  # Adjust this value based on your preference
+
+    # Define the search space
+    search_space = []
+    for key, values in {**graph_kwargs, **partition_kwargs}.items():
+        if isinstance(values, list):
+            if all(isinstance(v, int) for v in values):
+                search_space.append(Integer(min(values), max(values), name=key))
+            elif all(isinstance(v, float) for v in values):
+                search_space.append(Real(min(values), max(values), name=key))
+            else:
+                search_space.append(Categorical(values, name=key))
+        else:
+            search_space.append(Categorical([values], name=key))
+
+    # Combine all parameter keys
+    combined_keys = list(graph_kwargs.keys()) + list(partition_kwargs.keys())
+
+    # Objective function to minimize
+    @use_named_args(search_space)
+    def objective(**params):
+        graph_comb_dict = {k: params[k] for k in graph_kwargs.keys()}
+        partition_comb_dict = {k: params[k] for k in partition_kwargs.keys()}
+
+        # Run panoptic partition
+        output, partitions, results = panoptic_partition_FORinstance(
+            model, dataset, i_cloud, graph_comb_dict, partition_comb_dict, mode)
+        
+        # Calculate precision, recall, and F1 score
+        precision = results.precision_per_class[1].item()
+        recall = results.recall_per_class[1].item()
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+
+        return -f1  # We minimize the negative F1 score to maximize the F1 score
+
+    # Perform Bayesian optimization
+    res = gp_minimize(objective, search_space, n_calls=n_calls, verbose=verbose)
+
+    # Extract the best parameters and results
+    best_params = {combined_keys[i]: res.x[i] for i in range(len(res.x))}
+    best_f1 = -res.fun
+
+    # Run the best configuration to get the final output, partitions, and results
+    best_graph_comb_dict = {k: best_params[k] for k in graph_kwargs.keys()}
+    best_partition_comb_dict = {k: best_params[k] for k in partition_kwargs.keys()}
+
+    best_output, best_partitions, best_results = panoptic_partition_FORinstance(
+        model, dataset, i_cloud, best_graph_comb_dict, best_partition_comb_dict, mode)
+
+    if verbose:
+        # Prepare and print summary DataFrame
+        metric_columns = ['PQ', 'F1', 'TP', 'FP', 'FN']
+        result_columns = [
+            x[:max_len - 1] + '.' if len(x) > max_len else x
+            for x in combined_keys
+        ] + metric_columns
+        
+        with pd.option_context('display.precision', 2):
+            print(pd.DataFrame(
+                data=[best_params.values()],
+                columns=result_columns
+            ))
+
+    print("Best panoptic setup: ")
+    print(f"Tree F1={100 * best_f1:0.2f}")
+
+    # Print per-class results
+    res = best_results
+    per_class_data = torch.column_stack([
+        res['pq_per_class'].mul(100),
+        res['precision_per_class'].mul(100),
+        res['recall_per_class'].mul(100),
+        (2 * (res['precision_per_class'] * res['recall_per_class']) / (res['precision_per_class'] + res['recall_per_class'] + 1e-8)).mul(100),
+        res['tp_per_class'],
+        res['fp_per_class'],
+        res['fn_per_class']
+    ])
+
+    with pd.option_context('display.precision', 2):
+        print(pd.DataFrame(
+            data=per_class_data,
+            index=dataset.class_names[:-1],
+            columns=['PQ', 'PREC.', 'REC.', 'F1', 'TP', 'FP', 'FN']
+        ))
+
+    return best_output, best_partitions, best_results

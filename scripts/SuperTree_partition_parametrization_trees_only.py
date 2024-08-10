@@ -42,11 +42,11 @@ FOR_Instance_CLASS_COLORS = np.asarray([
 ])
 
 filepaths = [
-    "/home/valerio/git/superpoint_transformer_vschelbi/data/FORinstance/raw/CULS/plot_3_annotated.las",
-    "/home/valerio/git/superpoint_transformer_vschelbi/data/FORinstance/raw/NIBIO/plot_10_annotated.las",
-    "/home/valerio/git/superpoint_transformer_vschelbi/data/FORinstance/raw/RMIT/train.las",
-    "/home/valerio/git/superpoint_transformer_vschelbi/data/FORinstance/raw/SCION/plot_35_annotated.las",
-    "/home/valerio/git/superpoint_transformer_vschelbi/data/FORinstance/raw/TUWIEN/train.las"
+    "/home/valerio/git/superpoint_transformer_vschelbi/data/forinstance/raw/CULS/plot_3_annotated.las",
+    "/home/valerio/git/superpoint_transformer_vschelbi/data/forinstance/raw/NIBIO/plot_10_annotated.las",
+    "/home/valerio/git/superpoint_transformer_vschelbi/data/forinstance/raw/RMIT/train.las",
+    "/home/valerio/git/superpoint_transformer_vschelbi/data/forinstance/raw/SCION/plot_35_annotated.las",
+    "/home/valerio/git/superpoint_transformer_vschelbi/data/forinstance/raw/TUWIEN/train.las"
 ]
 
 #############################
@@ -54,18 +54,18 @@ filepaths = [
 #############################
 param_values = {
     # Voxelization (GridSampling3D)
-    'voxel_size': [0.1],    # size of the voxels in the partitions in meters. The voxel size is the same for all the plots
+    'voxel_size': [0.5],    # size of the voxels in the partitions in meters. The voxel size is the same for all the plots
 
     # KNN
     'k': [20],               # number of nearest neighbors to consider in the KNN search => only 25 or 25 and 40
-    'r_max': [3, 5],          # search nearest neighbors within this radius in meters
+    'r_max': [5],          # search nearest neighbors within this radius in meters
 
     # GroundElevation
     'threshold': [5],            # ground as a planar surface located within `threshold` of the lowest point in the cloud.
     'scale': [20],               # Pointwise distance to the plane is normalized by `scale`
                       
     # AdjacencyGraph
-    'k_adj_graph': [5, 10],      # use edges of the `k`_adj_graph nearest neighbors
+    'k_adj_graph': [10],      # use edges of the `k`_adj_graph nearest neighbors
     'w': [1],                    # weight of the edges in the adjacency graph with w
 
     # AddKeysTo
@@ -89,17 +89,15 @@ param_values = {
              #
              # can specify a k_min below which a point will receive 0 geometric features to mitigate low-quality features for sparse neighborhoods
              # `PointFeatures(k_step=..., k_min_search=...)` will search for the optimal neighborhood size among available neighbors for each point, based on eigenfeatures entropy
-        ('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation'),
-        ('density', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation'),
-        ('linearity', 'planarity', 'scattering', 'verticality'),
+        ('intensity', 'linearity', 'planarity', 'scattering', 'verticality', 'elevation')
     ],
 
     # CutPursuitPartition
-    'regularization': [[0.05, 0.1], [0.1, 0.2], [0.2, 0.5]],   # List of increasing float values determining the granularity of hierarchical superpoint partitions.
+    'regularization': [[0.03, 0.1], [0.05, 0.1], [0.1, 0.2], [0.2, 0.5]],   # List of increasing float values determining the granularity of hierarchical superpoint partitions.
     'spatial_weight': [[0.1, 0.01], [1, 0.1], [0.1, 0.1]],                 # Float value indicating the importance of point coordinates relative to point features in grouping points.
-    'cutoff': [[10, 30], [20, 50]],                            # Integer specifying the minimum number of points in each superpoint, ensuring small superpoints are merged with others.
+    'cutoff': [[5, 20], [10, 30]],                            # Integer specifying the minimum number of points in each superpoint, ensuring small superpoints are merged with others.
     'iterations': [15],                                        # Integer specifying the number of iterations for the Cut Pursuit algorithm.
-    'k_adjacency': [5, 10]                                     # Integer preventing superpoints from being isolated.
+    'k_adjacency': [5, 10, 15]                                     # Integer preventing superpoints from being isolated.
 }
 
 # Generate all parameter combinations
@@ -297,11 +295,11 @@ def load_current_iteration(filename='logs/current_iteration.txt'):
 # SUPERPOINT TRANSFORM #
 ########################
 if __name__ == '__main__':
-    version = '3.0'
+    version = '4.0'
     csv_file_name = f'/home/valerio/git/superpoint_transformer_vschelbi/logs/partition_parametrization_{version}.csv'
     curr_iteration_file_name = f'/home/valerio/git/superpoint_transformer_vschelbi/logs/current_iteration_{version}.txt'
     metadata = {
-        "description": "This file contains results of the superpoint transform experiment. Changed the features to try out, and added one more set for spatial weight.",
+        "description": "This file contains results of the superpoint transform experiment. Changed the voxel size to 0.5 and removed some other combinations.",
         "version": version,
         "author": "Valerio Schelbert",
         "date": datetime.now().strftime("%Y-%m-%d")
