@@ -1,0 +1,60 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=panoptic/forinstance_20edgeaffloss_2e-1voxel_20kadj_800epochs_panoptic1
+
+defaults:
+  - /experiment/panoptic/forinstance.yaml
+
+logger:
+  wandb:
+    project: "spt_forinstance"
+    name: "20edgeaffloss_2e-1voxel_20kadj_800epochs_panoptic1"
+
+trainer:
+  max_epochs: 800
+
+model:
+  partitioner:
+    regularization: 20
+    x_weight: 1e-1
+    cutoff: 1000
+
+  edge_affinity_loss_lambda: 20
+
+datamodule:
+  # Instance graph parameters
+  instance_k_max: 20  # maximum number of neighbors for each superpoint in the instance graph
+  instance_radius: 3  # maximum distance of neighbors for each superpoint in the instance graph
+
+  # point features used for the partition
+  partition_hf:
+    - 'intensity'
+    - 'linearity'
+    - 'planarity'
+    - 'scattering'
+    - 'verticality'
+    - 'elevation'
+
+  # point features used for training
+  point_hf:
+    - 'intensity'
+    - 'linearity'
+    - 'planarity'
+    - 'scattering'
+    - 'verticality'
+    - 'elevation'
+
+  # PRE TRANSFORM PARAMETERS
+  voxel: 0.2  # changed
+  knn: 20   # changed
+  knn_r: 3  # changed
+  knn_step: -1  
+  knn_min_search: 10  
+  ground_threshold: 5  # changed
+  ground_scale: 20  # changed
+  pcp_regularization: [0.2, 0.5, 0.5] # changed
+  pcp_spatial_weight: [1, 0.1, 0.01] # changed
+  pcp_cutoff: [20, 50, 100]   # changed
+  pcp_k_adjacency: 20  # changed
+  pcp_w_adjacency: 1  # changed

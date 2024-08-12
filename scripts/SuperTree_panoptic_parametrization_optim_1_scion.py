@@ -70,7 +70,7 @@ def perform_optimization(experiment, ckpt_path, stage='train', i_cloud=0):
     else:
         raise ValueError("Invalid stage")
         
-    dataset.print_classes()
+    # dataset.print_classes()
 
     model = hydra.utils.instantiate(cfg.model)
     if ckpt_path is not None:
@@ -97,35 +97,77 @@ def perform_optimization(experiment, ckpt_path, stage='train', i_cloud=0):
 
 
 if __name__ == '__main__':
-    version = '1'
+    version = '1_scion'
 
-    experiment_tags = ['100edgeaffloss_5e-2LR_2e-1voxel_20kadj_800epochs_panoptic1', '5e-2LR_2e-1voxel_20kadj_800epochs_panoptic1'] # list of experiments / models to test
-    #areas = ['culs', 'nibio', 'rmit', 'scion', 'tuwien'] # Each area must have a corresponding config file in experiment/panoptic.
-    areas = ['forinstance']
+    experiment_tags = ['100edgeaffloss_5e-2LR_2e-1voxel_20kadj_800epochs_panoptic1',
+                        '5e-2LR_2e-1voxel_20kadj_800epochs_panoptic1',
+                        '159lvlratio_2e-1voxel_update',
+                        '20edgeaffloss_2e-1voxel_20kadj_800epochs_panoptic1',
+                        #'1e-1LR_2e-1voxel_20kadj_800epochs_panoptic1',
+                        '57lvlratio_5e-1voxel'
+                        ] # list of experiments / models to test
+    
+    # I only test on CULS and TUWIEN due to combinatorial explosion [CULS, NIBIO, RMIT, SCION, TUWIEN]
+    areas = ['SCION'] # Each area must have a corresponding config file in experiment/panoptic.
+    i_clouds_train_forinstance = [14] #, [0, 1, 13, 14, 16]     # mapping of train files to areas for grid search (hacky)
+    dataset_name = ['forinstance']
 
-    k_max = [1, 10, 20]
-    radius = [1, 3, 5, 10]
-    regularization = [3, 10, 20]
+    k_max = [10, 20]
+    radius = [3, 5, 10]
+    regularization = [10, 20]
     x_weight = [1e-3, 1e-1, 1]
     cutoff = [10000, 1000, 100]
 
-    i_cloud = 0
+    # For testing:
+    #k_max = [10]
+    #radius = [3, 5]
+    #regularization = [10, 20]
+    #x_weight = [1e-1]
+    #cutoff = [1000]
+
     split = 'train'  # do not use 'test' split
-    base_ckpt_file_path = ['/home/vaschel/data/projects/superpoint_transformer_vschelbi/pretrained_models']  # ckpt paths are: base_ckpt_file_path + experiment_tags[i] + '.ckpt'
+    base_ckpt_file_path = '/home/vaschel/data/projects/superpoint_transformer_vschelbi/pretrained_models/'  # ckpt paths are: base_ckpt_file_path + experiment_tags[i] + '.ckpt'
     best_results_overall = {}     # Keep track of the best hyperparam combination, exp_tag, and results for each area
     all_results = {}
-    all_results_file_path = f'/home/vaschel/data/projects/superpoint_transformer_vschelbi/pretrained_models/logs/panoptic_parametrization/grid_search_{version}.csv'
+    all_results_file_path = f'/home/vaschel/data/projects/superpoint_transformer_vschelbi/logs/panoptic_parametrization/grid_search_{version}.csv'
     # max printing length
     max_len = 15
 
+    combination_keys = ['k_max', 'radius', 'regulari.', 'x_weight', 'cutoff']
+
+    print("PANOPTIC PARAMETRIZATION OPTIMIZATION")
+    print("EXPERIMENTS:")
+    print(experiment_tags)
+    print()
+    print("AREAS:")
+    print(areas)
+    print(i_clouds_train_forinstance)
+    print()
+    print("PARAMETER SPACE:")
+    print(f"k_max: {k_max}")
+    print(f"radius: {radius}")
+    print(f"regularization: {regularization}")
+    print(f"x_weight: {x_weight}")
+    print(f"cutoff: {cutoff}")
+    print()
+    print("starting panoptic parametrization optimization...")
+
     for exp_tag in experiment_tags:
         ckpt_path = base_ckpt_file_path + exp_tag + '.ckpt'
-        for area in areas:
+        for area, i_cloud in zip(areas, i_clouds_train_forinstance):
             print()
             print(f"EXPERIMENT: {exp_tag}, AREA: {area}")
-            experiment = area + exp_tag
-            output, partitions, results, combination = perform_optimization(experiment, ckpt_path, split, i_cloud)
+            experiment = 'forinstance_' + exp_tag
+            output, partitions, results, combination_list = perform_optimization(experiment, ckpt_path, split, i_cloud)
             
+            combination = dict(zip(combination_keys, combination_list))
+
+            if area not in all_results:
+                all_results[area] = {}
+            
+            if exp_tag not in all_results[area]:
+                all_results[area][exp_tag] = {}
+
             # keep all results and save in a csv file
             all_results[area][exp_tag] = {
                 'results': results,
@@ -133,7 +175,6 @@ if __name__ == '__main__':
                 'model': exp_tag
             }
             add_results_to_csv(all_results_file_path, area, exp_tag, all_results[area][exp_tag])
-            
 
             # keep best results if better tree f1 score is found
             if area not in best_results_overall or results['tree_f1'] > best_results_overall[area]['best_results']['tree_f1']:
@@ -144,17 +185,20 @@ if __name__ == '__main__':
                 }
 
         # output an intermediate result for each experiment
+        print()
         print(f"Results for experiment {exp_tag}:")
         for area in areas:
-            print(f"Area: {area}")
-            print(best_results_overall[area]['best_results']['tree_f1'])
-            print(best_results_overall[area]['best_combination'])
-            print(best_results_overall[area]['best_model'])
+            print(f"AREA: {area}")
+            print(f"Current best Tree F1: {best_results_overall[area]['best_results']['tree_f1']}")
+            print(f"Best combination: {best_results_overall[area]['best_combination']}")
+            print(f"Best model: {best_results_overall[area]['best_model']}")
             print()
     
 
     # output the final best results
-    print("Final best results:")
+    print("-----------------------------------------------------------------")
+    print("FINAL BEST RESULTS:")
+    print()
     for area in areas:
         print(f"Area: {area}")
         print("Best panoptic setup: ")
@@ -185,4 +229,5 @@ if __name__ == '__main__':
                 index=['Ground and low vegetation', 'Tree'],
                 columns=['PQ', 'PREC.', 'REC.', 'F1', 'TP', 'FP', 'FN']
             ))
-            
+    print()
+    print("Panoptic parametrization optimization finished.")

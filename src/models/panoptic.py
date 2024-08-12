@@ -704,7 +704,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
             recall_Tree = panoptic_results.recall_per_class[1]
-            precision_Tree = panoptic_results.precision_per_class[2]
+            precision_Tree = panoptic_results.precision_per_class[1]
             # f1 score for Tree class
             f1_Tree = 2 * (precision_Tree * recall_Tree) / (precision_Tree + recall_Tree)
             if self.needs_instance:
@@ -937,7 +937,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
             recall_Tree = panoptic_results.recall_per_class[1]
-            precision_Tree = panoptic_results.precision_per_class[2]
+            precision_Tree = panoptic_results.precision_per_class[1]
             # f1 score for Tree class
             f1_Tree = 2 * (precision_Tree * recall_Tree) / (precision_Tree + recall_Tree)
             if self.needs_instance:
@@ -1152,7 +1152,7 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             mrec = panoptic_results.mean_recall
             pq_per_class = panoptic_results.pq_per_class
             recall_Tree = panoptic_results.recall_per_class[1]
-            precision_Tree = panoptic_results.precision_per_class[2]
+            precision_Tree = panoptic_results.precision_per_class[1]
             # f1 score for Tree class
             f1_Tree = 2 * (precision_Tree * recall_Tree) / (precision_Tree + recall_Tree)
             if self.needs_instance:

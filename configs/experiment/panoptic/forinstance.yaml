@@ -23,7 +23,7 @@ model:
     regularization: 10
     x_weight: 5e-2
     cutoff: 100
-
+  
   edge_affinity_loss_lambda: 10
 
   partition_every_n_epoch: 10
