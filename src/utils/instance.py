@@ -1662,22 +1662,23 @@ def grid_search_panoptic_partition_FORinstance(
     
     if best_results:
         if verbose:
-            best_tree_f1_params = [item for sublist in list(zip(best_combination)) for item in sublist]
-            # print type of best_tree_f1_params        
-            print()
-            # Print global results
-            print("Best panoptic setup: ")
-            print(f"Tree F1={100 * best_f1:0.2f}")
-            with pd.option_context('display.precision', 2):
-                print(pd.DataFrame(
-                    data=[best_tree_f1_params],
-                    columns=[
-                        x[:max_len - 1] + '.' if len(x) > max_len else x
-                        for x in combined_keys
-                    ]
-                ))
-            
-            print()
+            pass
+        best_tree_f1_params = [item for sublist in list(zip(best_combination)) for item in sublist]
+        # print type of best_tree_f1_params        
+        print()
+        # Print global results
+        print("Best panoptic setup: ")
+        print(f"Tree F1={100 * best_f1:0.2f}")
+        with pd.option_context('display.precision', 2):
+            print(pd.DataFrame(
+                data=[best_tree_f1_params],
+                columns=[
+                    x[:max_len - 1] + '.' if len(x) > max_len else x
+                    for x in combined_keys
+                ]
+            ))
+        
+        print()
 
         # add the best tree f1 to the results
         best_results['tree_f1'] = best_f1

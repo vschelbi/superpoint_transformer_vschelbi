@@ -1,4 +1,5 @@
 import pyrootutils
+import time
 
 root = str(pyrootutils.setup_root(
     search_from=__file__,
@@ -68,6 +69,8 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
     Returns:
         Tuple[dict, dict]: Dict with metrics and dict with all instantiated objects.
     """
+    log.info("Starting timing...")
+    start_time = time.time() # Start timing
 
     assert cfg.ckpt_path
 
@@ -109,6 +112,9 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
     # predictions = trainer.predict(model=model, dataloaders=dataloaders, ckpt_path=cfg.ckpt_path)
 
     metric_dict = trainer.callback_metrics
+
+    end_time = time.time() # End timing
+    log.info(f"Total inference time: {end_time - start_time:.2f} seconds")
 
     return metric_dict, object_dict
 
