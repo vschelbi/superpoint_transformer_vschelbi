@@ -1,5 +1,10 @@
 import pyrootutils
 import time
+import torch
+import platform
+import os
+import cpuinfo  # Import cpuinfo for detailed CPU information
+import psutil
 
 root = str(pyrootutils.setup_root(
     search_from=__file__,
@@ -56,6 +61,24 @@ if not OmegaConf.has_resolver('eval'):
 log = utils.get_pylogger(__name__)
 
 
+def log_system_info():
+    """Logs the system's GPU and CPU information."""
+    if torch.cuda.is_available():
+        num_gpus = torch.cuda.device_count()
+        gpu_name = torch.cuda.get_device_name(0)
+        log.info(f"Using GPU: {gpu_name} with {num_gpus} GPUs available")
+    else:
+        log.info("No GPU available, using CPU")
+
+    num_cpus = len(os.sched_getaffinity(0))
+    cpu_info = cpuinfo.get_cpu_info()
+    cpu_model = cpu_info['brand_raw']
+    physical_cores = psutil.cpu_count(logical=False)
+    logical_cores = psutil.cpu_count(logical=True)
+    cores_total = psutil.cpu_count()
+    log.info(f"Using CPU: {cpu_model} with {num_cpus} physical CPUs and {physical_cores} physical cores.")
+    log.info(f"Logical cores: {logical_cores}. Cores total: {cores_total}")
+
 @utils.task_wrapper
 def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
     """Evaluates given checkpoint on a datamodule testset.
@@ -69,8 +92,10 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
     Returns:
         Tuple[dict, dict]: Dict with metrics and dict with all instantiated objects.
     """
+    
     log.info("Starting timing...")
     start_time = time.time() # Start timing
+    log_system_info()  # Log the system info
 
     assert cfg.ckpt_path
 
