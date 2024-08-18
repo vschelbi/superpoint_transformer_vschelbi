@@ -1,15 +1,15 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=panoptic/forinstance_best
+# python train.py experiment=panoptic/culs_tuned
 
 defaults:
-  - /experiment/panoptic/forinstance.yaml
+  - /experiment/panoptic/culs.yaml
 
 logger:
   wandb:
-    project: "spt_forinstance"
-    name: "forinstance_best"
+    project: "spt_culs"
+    name: "culs_tuned"
 
 trainer:
   max_epochs: 800
@@ -18,7 +18,7 @@ model:
   optimizer:
     lr: 0.05
   partitioner:
-    regularization: 20
+    regularization: 10
     x_weight: 1e-1
     cutoff: 1000
 
@@ -26,7 +26,7 @@ model:
 
 datamodule:
   # Instance graph parameters
-  instance_k_max: 20  # maximum number of neighbors for each superpoint in the instance graph
+  instance_k_max: 10  # maximum number of neighbors for each superpoint in the instance graph
   instance_radius: 3  # maximum distance of neighbors for each superpoint in the instance graph
 
   # point features used for the partition

@@ -1,15 +1,15 @@
 # @package _global_
 
 # to execute this experiment run:
-# python train.py experiment=panoptic/forinstance_best
+# python train.py experiment=panoptic/tuwien_best
 
 defaults:
-  - /experiment/panoptic/forinstance.yaml
+  - /experiment/panoptic/tuwien.yaml
 
 logger:
   wandb:
-    project: "spt_forinstance"
-    name: "forinstance_best"
+    project: "spt_tuwien"
+    name: "tuwien_best"
 
 trainer:
   max_epochs: 800
@@ -20,14 +20,14 @@ model:
   partitioner:
     regularization: 20
     x_weight: 1e-1
-    cutoff: 1000
+    cutoff: 100
 
   edge_affinity_loss_lambda: 100
 
 datamodule:
   # Instance graph parameters
   instance_k_max: 20  # maximum number of neighbors for each superpoint in the instance graph
-  instance_radius: 3  # maximum distance of neighbors for each superpoint in the instance graph
+  instance_radius: 5  # maximum distance of neighbors for each superpoint in the instance graph
 
   # point features used for the partition
   partition_hf:
