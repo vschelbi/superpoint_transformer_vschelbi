@@ -374,6 +374,16 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
         node_logits = output.logits[0] if output.multi_stage else output.logits
         edge_index = nag[1].obj_edge_index
         edge_affinity_logits = output.edge_affinity_logits
+        
+        
+        # reducing importance of z coordinate (by factor of 3, compared to x,y coordinate)
+        node_x[:, 2] /= 3
+
+        # cutting edges manually below certain threshold
+        cut_threshold = -2
+        edge_mask = edge_affinity_logits > cut_threshold
+        edge_affinity_logits = edge_affinity_logits[edge_mask]
+        edge_index = edge_index[:, edge_mask]
 
         # Compute the instance partition
         # NB: we detach the tensors here: this operation runs on CPU and
@@ -387,6 +397,8 @@ class PanopticSegmentationModule(SemanticSegmentationModule):
             edge_index,
             edge_affinity_logits.detach(),
             grid=grid)
+
+        node_x[:, 2] *= 3
 
         # Store the results in the output object
         output.obj_index_pred = obj_index
