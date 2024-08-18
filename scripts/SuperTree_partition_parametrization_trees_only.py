@@ -17,28 +17,20 @@ from src.data import Data, InstanceData
 from torch_geometric.nn.pool.consecutive import consecutive_cluster
 from src.transforms import *
 
-FOR_Instance_num_classes = 3
-ID2TRAINID = np.asarray([
-    FOR_Instance_num_classes,   # 0 Unclassified        ->  3 Ignored
-    1,                          # 1 Low vegetation      ->  1 Low vegetation
-    0,                          # 2 Terrain             ->  0 Ground
-    FOR_Instance_num_classes,   # 3 Out-points          ->  3 Ignored
-    2,                          # 4 Stem                ->  2 Tree
-    2,                          # 5 Live branches       ->  2 Tree
-    2,                          # 6 Woody branches      ->  2 Tree
-])
+FOR_Instance_num_classes = 2
 
-FOR_Instance_CLASS_NAMES = [
-    'Ground',
-    'Low vegetation',
-    'Tree',
-    'Ignored']
+ID2TRAINID = np.asarray([2, 0, 0, 2, 1, 1, 1])
 
-FOR_Instance_CLASS_COLORS = np.asarray([
-    [243, 214, 171],    # Ground
-    [204, 213, 174],    # Low vegetation
+CLASS_NAMES = [
+    'Ground and low vegetation',  # 2 Ground, 1 Low vegetation
+    'Tree',                       # 4 Stem, 5 Live branches, 6 Woody branches
+    'Unknown'                     # 0 Unclassified, 3 Out-points
+]
+
+CLASS_COLORS = np.asarray([
+    [243, 214, 171],    # Ground and Low vegetation
     [ 70, 115,  66],    # Tree
-    [  0,   0,   0]     # Ignored
+    [  0,   8, 116]     # Unknown
 ])
 
 filepaths = [
@@ -54,11 +46,11 @@ filepaths = [
 #############################
 param_values = {
     # Voxelization (GridSampling3D)
-    'voxel_size': [0.5],    # size of the voxels in the partitions in meters. The voxel size is the same for all the plots
+    'voxel_size': [0.2],    # size of the voxels in the partitions in meters. The voxel size is the same for all the plots
 
     # KNN
     'k': [20],               # number of nearest neighbors to consider in the KNN search => only 25 or 25 and 40
-    'r_max': [5],          # search nearest neighbors within this radius in meters
+    'r_max': [3],          # search nearest neighbors within this radius in meters
 
     # GroundElevation
     'threshold': [5],            # ground as a planar surface located within `threshold` of the lowest point in the cloud.
@@ -93,11 +85,11 @@ param_values = {
     ],
 
     # CutPursuitPartition
-    'regularization': [[0.03, 0.1], [0.05, 0.1], [0.1, 0.2], [0.2, 0.5]],   # List of increasing float values determining the granularity of hierarchical superpoint partitions.
-    'spatial_weight': [[0.1, 0.01], [1, 0.1], [0.1, 0.1]],                 # Float value indicating the importance of point coordinates relative to point features in grouping points.
-    'cutoff': [[5, 20], [10, 30]],                            # Integer specifying the minimum number of points in each superpoint, ensuring small superpoints are merged with others.
+    'regularization': [[0.2, 0.5]],   # List of increasing float values determining the granularity of hierarchical superpoint partitions.
+    'spatial_weight': [[0.1, 0.01]],                 # Float value indicating the importance of point coordinates relative to point features in grouping points.
+    'cutoff': [[10, 30]],                            # Integer specifying the minimum number of points in each superpoint, ensuring small superpoints are merged with others.
     'iterations': [15],                                        # Integer specifying the number of iterations for the Cut Pursuit algorithm.
-    'k_adjacency': [5, 10, 15]                                     # Integer preventing superpoints from being isolated.
+    'k_adjacency': [10]                                     # Integer preventing superpoints from being isolated.
 }
 
 # Generate all parameter combinations
@@ -295,7 +287,7 @@ def load_current_iteration(filename='logs/current_iteration.txt'):
 # SUPERPOINT TRANSFORM #
 ########################
 if __name__ == '__main__':
-    version = '4.0'
+    version = '6.0'
     csv_file_name = f'/home/valerio/git/superpoint_transformer_vschelbi/logs/partition_parametrization_{version}.csv'
     curr_iteration_file_name = f'/home/valerio/git/superpoint_transformer_vschelbi/logs/current_iteration_{version}.txt'
     metadata = {
