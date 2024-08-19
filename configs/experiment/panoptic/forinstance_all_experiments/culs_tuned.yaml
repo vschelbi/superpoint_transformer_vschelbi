@@ -1,0 +1,60 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=panoptic/culs_tuned
+
+defaults:
+  - /experiment/panoptic/culs.yaml
+
+logger:
+  wandb:
+    project: "spt_culs"
+    name: "culs_tuned"
+
+trainer:
+  max_epochs: 800
+
+model:
+  optimizer:
+    lr: 0.05
+  partitioner:
+    regularization: 10
+    x_weight: 1e-1
+    cutoff: 1000
+
+  edge_affinity_loss_lambda: 100
+
+datamodule:
+  # Instance graph parameters
+  instance_k_max: 10  # maximum number of neighbors for each superpoint in the instance graph
+  instance_radius: 3  # maximum distance of neighbors for each superpoint in the instance graph
+
+  # point features used for the partition
+  partition_hf:
+    - 'intensity'
+    - 'linearity'
+    - 'planarity'
+    - 'scattering'
+    - 'verticality'
+
+  # point features used for training
+  point_hf:
+    - 'intensity'
+    - 'linearity'
+    - 'planarity'
+    - 'scattering'
+    - 'verticality'
+
+  # PRE TRANSFORM PARAMETERS
+  voxel: 0.2  
+  knn: 20   
+  knn_r: 3  
+  knn_step: -1  
+  knn_min_search: 10  
+  ground_threshold: 5  
+  ground_scale: 20  
+  pcp_regularization: [0.2, 0.5, 0.5] 
+  pcp_spatial_weight: [1, 0.1, 0.01] 
+  pcp_cutoff: [20, 50, 100]   
+  pcp_k_adjacency: 20  
+  pcp_w_adjacency: 1  
